@@ -15,6 +15,7 @@
 
     let isScraping = false;
     let loadingEpisode = 0;
+    let playingEpisode = 0;
 
     // New State Variable for the Video Player
     let streamUrl: string | null = null;
@@ -22,6 +23,7 @@
     function goBack() {
         // If they leave the theater, stop the video and go back to discovery
         streamUrl = null;
+        playingEpisode = 0;
         dispatch("back");
     }
 
@@ -31,7 +33,7 @@
     );
 
     async function playEpisode(epNum: number) {
-        const titleToSearch = anime.title?.english || anime.title?.romaji || "";
+        const titleToSearch = anime.title?.romaji || anime.title?.english || "";
         if (!titleToSearch) return;
 
         isScraping = true;
@@ -48,12 +50,14 @@
             const url = await StreamTorrent(torrent.magnetLink);
 
             // 3. Mount the video player
+            playingEpisode = epNum;
             streamUrl = url;
             console.log("Streaming from:", streamUrl);
         } catch (err) {
-            console.error(err);
+            console.log(err);
             alert(
-                `Could not stream Episode ${epNum}. Check console for details.`,
+                `Could not stream Episode ${epNum}. Check console for details.\n` +
+                    err,
             );
         } finally {
             isScraping = false;
@@ -113,10 +117,13 @@
                             class="text-xl font-semibold text-slate-200 flex items-center"
                         >
                             <Play size={20} class="mr-2 text-indigo-400" />
-                            Now Playing: Episode {loadingEpisode || "Stream"}
+                            Now Playing: Episode {playingEpisode}
                         </h3>
                         <button
-                            on:click={() => (streamUrl = null)}
+                            on:click={() => {
+                                streamUrl = null;
+                                playingEpisode = 0;
+                            }}
                             class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
                         >
                             &larr; Back to Episodes

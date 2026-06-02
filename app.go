@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/anacrolix/torrent"
@@ -156,9 +158,10 @@ type TorrentResult struct {
 	Size       string `json:"size"`
 }
 
-// GetEpisodeMagnet searches Nyaa.si for a specific episode and returns the best magnet link.
+// GetEpisodeMagnet searches Nyaa.si and uses a smart Regex heuristic to score episodes
 func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentResult, error) {
 	epStr := fmt.Sprintf("%02d", episodeNumber)
+
 	searchQuery := fmt.Sprintf("%s %s 1080p", animeTitle, epStr)
 	encodedQuery := url.QueryEscape(searchQuery)
 	feedURL := fmt.Sprintf("https://nyaa.si/?page=rss&q=%s&c=1_2&f=0", encodedQuery)
@@ -173,11 +176,68 @@ func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentRe
 		return nil, fmt.Errorf("no torrents found for %s episode %s", animeTitle, epStr)
 	}
 
-	bestItem := feed.Items[0]
+	// --- SMART SCORING ALGORITHM ---
+	var bestItem *gofeed.Item
+	var highestScore int = -1
+	queryTitleLow := strings.ToLower(animeTitle)
+
+	// Regex pattern to detect ANY sequel indicator: Season 2-99, S2-S99, 2nd-99th Season, Part 2-99, Cour 2-99
+	// It safely ignores numbers that are part of the anime's actual name (like "Mob Psycho 100")
+	sequelPattern := regexp.MustCompile(`(?i)(season\s*([2-9]|[1-9]\d+)|\bs([2-9]|[1-9]\d+)\b|([2-9]|[1-9]\d+)(nd|rd|th)\s+season|(part|cour)\s*([2-9]|[1-9]\d+))`)
+
+	// Check if the anime we are actually looking for is a sequel
+	isQuerySequel := sequelPattern.MatchString(queryTitleLow)
+
+	for _, item := range feed.Items {
+		score := 100
+		titleLow := strings.ToLower(item.Title)
+
+		// 1. DYNAMIC SEQUEL PENALTY
+		// If we are looking for a base season, aggressively penalize ANY torrent that identifies as a sequel.
+		if !isQuerySequel && sequelPattern.MatchString(titleLow) {
+			score -= 100
+		}
+
+		// 2. PENALTIES: Spin-offs/OVAs/Movies
+		if !strings.Contains(queryTitleLow, "vigilante") && strings.Contains(titleLow, "vigilante") {
+			score -= 100
+		}
+		if !strings.Contains(queryTitleLow, "ova") && strings.Contains(titleLow, "ova") {
+			score -= 100
+		}
+		if !strings.Contains(queryTitleLow, "movie") && strings.Contains(titleLow, "movie") {
+			score -= 100
+		}
+
+		// 3. BOOSTS: Prioritize standard episodic formatting (e.g., "- 01")
+		if strings.Contains(titleLow, fmt.Sprintf("- %s", epStr)) || strings.Contains(titleLow, fmt.Sprintf(" %s ", epStr)) {
+			score += 20
+		}
+
+		// 4. BOOSTS: Prioritize trusted, high-quality release groups
+		if strings.Contains(titleLow, "subsplease") || strings.Contains(titleLow, "erai-raws") || strings.Contains(titleLow, "horriblesubs") {
+			score += 30
+		}
+
+		if score > highestScore {
+			highestScore = score
+			bestItem = item
+		}
+	}
+
+	if bestItem == nil || highestScore < 0 {
+		return nil, fmt.Errorf("found torrents, but none matched the exact season criteria for %s", animeTitle)
+	}
+	// -------------------------------
 
 	seeders := "Unknown"
 	size := "Unknown"
+	infoHash := ""
+
 	if nyaaExt, ok := bestItem.Extensions["nyaa"]; ok {
+		if hashNode, exists := nyaaExt["infoHash"]; exists && len(hashNode) > 0 {
+			infoHash = hashNode[0].Value
+		}
 		if seedNode, exists := nyaaExt["seeders"]; exists && len(seedNode) > 0 {
 			seeders = seedNode[0].Value
 		}
@@ -186,9 +246,28 @@ func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentRe
 		}
 	}
 
+	if infoHash == "" {
+		return nil, fmt.Errorf("no infoHash found in nyaa feed for %s", animeTitle)
+	}
+
+	magnetLink := fmt.Sprintf("magnet:?xt=urn:btih:%s&dn=%s", infoHash, url.QueryEscape(bestItem.Title))
+
+	trackers := []string{
+		"http://nyaa.tracker.wf:7777/announce",
+		"udp://open.stealth.si:80/announce",
+		"udp://tracker.opentrackr.org:1337/announce",
+		"udp://exodus.desync.com:6969/announce",
+		"udp://tracker.torrent.eu.org:451/announce",
+	}
+	for _, tr := range trackers {
+		magnetLink += fmt.Sprintf("&tr=%s", url.QueryEscape(tr))
+	}
+
+	fmt.Printf("Selected Release: %s (Score: %d)\n", bestItem.Title, highestScore)
+
 	result := &TorrentResult{
 		Title:      bestItem.Title,
-		MagnetLink: bestItem.Link,
+		MagnetLink: magnetLink,
 		Seeders:    seeders,
 		Size:       size,
 	}
@@ -207,8 +286,14 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 		return "", fmt.Errorf("failed to add magnet: %w", err)
 	}
 
-	// Wait for the P2P swarm to send us the metadata
-	<-t.GotInfo()
+	// Wait for the P2P swarm to send us the metadata, with a timeout
+	select {
+	case <-t.GotInfo():
+		// metadata received, proceed
+	case <-time.After(30 * time.Second):
+		t.Drop()
+		return "", fmt.Errorf("timed out waiting for torrent metadata — no peers responded")
+	}
 
 	var targetFile *torrent.File
 	var maxSize int64
