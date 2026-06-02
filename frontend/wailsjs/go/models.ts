@@ -1,11 +1,35 @@
 export namespace main {
 	
+	export class AnimeCover {
+	    large: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AnimeCover(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.large = source["large"];
+	    }
+	}
+	export class AnimeTitle {
+	    romaji: string;
+	    english: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AnimeTitle(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.romaji = source["romaji"];
+	        this.english = source["english"];
+	    }
+	}
 	export class Anime {
 	    id: number;
-	    // Go type: struct { Romaji string "json:\"romaji\""; English string "json:\"english\"" }
-	    title: any;
-	    // Go type: struct { Large string "json:\"large\"" }
-	    coverImage: any;
+	    title: AnimeTitle;
+	    coverImage: AnimeCover;
 	    episodes: number;
 	    status: string;
 	    description: string;
@@ -17,8 +41,8 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
-	        this.title = this.convertValues(source["title"], Object);
-	        this.coverImage = this.convertValues(source["coverImage"], Object);
+	        this.title = this.convertValues(source["title"], AnimeTitle);
+	        this.coverImage = this.convertValues(source["coverImage"], AnimeCover);
 	        this.episodes = source["episodes"];
 	        this.status = source["status"];
 	        this.description = source["description"];
@@ -41,6 +65,26 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	
+	
+	export class TorrentResult {
+	    title: string;
+	    magnetLink: string;
+	    seeders: string;
+	    size: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TorrentResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.title = source["title"];
+	        this.magnetLink = source["magnetLink"];
+	        this.seeders = source["seeders"];
+	        this.size = source["size"];
+	    }
 	}
 
 }

@@ -1,5 +1,3 @@
-readme_v2_content = """# AniStream 🎬
-
 An ultra-lightweight, high-performance desktop application designed for streaming anime torrents sequentially. Built from the ground up using **Go (Golang)**, **Wails v2**, **Svelte**, and **TailwindCSS**.
 
 AniStream bypasses the bloat of traditional Electron-based applications, achieving immediate video playback of P2P media streams while maintaining a microscopic memory and storage footprint.
