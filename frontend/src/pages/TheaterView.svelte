@@ -260,7 +260,6 @@
                 <h3
                     class="text-xl font-semibold text-slate-200 mb-4 flex items-center"
                 >
-                    <Play size={20} class="mr-2 text-indigo-400" />
                     Select Episode
                 </h3>
                 <div
