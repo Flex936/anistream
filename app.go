@@ -5,16 +5,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/anacrolix/torrent"
+	"github.com/dexterlb/mpvipc"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -24,25 +28,25 @@ import (
 
 // App struct holds the application state and torrent engine
 type App struct {
-	ctx           context.Context
-	torrentClient *torrent.Client
-	activeFile    *torrent.File
+	ctx       context.Context
+	mpvCmd    *exec.Cmd
+	mpvClient *mpvipc.Connection
+	mpvMutex  sync.Mutex
+	mpvStdout io.ReadCloser
+	clients   map[chan []byte]bool
+	clientsMu sync.Mutex
 }
 
 // NewApp creates a new App application struct and boots the background services
 func NewApp() *App {
-	// Initialize the torrent client
-	clientConfig := torrent.NewDefaultClientConfig()
-	clientConfig.DataDir = "./tmp_downloads" // Temporarily store video chunks here
-	client, _ := torrent.NewClient(clientConfig)
+	initTorrentEngine() // Initialize global torrent engine
 
-	app := &App{
-		torrentClient: client,
-	}
+	app := &App{}
 
 	// Start the local HTTP streaming server in the background
 	go func() {
 		http.HandleFunc("/stream", app.streamHandler)
+		http.HandleFunc("/mpv-frame-stream", app.mpvFrameStreamHandler)
 		http.ListenAndServe(":8080", nil)
 	}()
 
@@ -52,6 +56,23 @@ func NewApp() *App {
 // startup is called when the app starts. The context is saved so we can call runtime methods.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	if err := a.initMpv(); err != nil {
+		log.Printf("[MPV] Failed to initialize mpv: %v", err)
+	}
+}
+
+func (a *App) shutdown(ctx context.Context) {
+	a.mpvMutex.Lock()
+	defer a.mpvMutex.Unlock()
+
+	if a.mpvClient != nil {
+		a.mpvClient.Close()
+	}
+
+	if a.mpvCmd != nil && a.mpvCmd.Process != nil {
+		log.Println("[MPV] Terminating background video player process...")
+		_ = a.mpvCmd.Process.Kill()
+	}
 }
 
 // ==========================================
@@ -304,50 +325,230 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 
 // StreamTorrent takes a magnet link, finds the video file, and starts downloading
 func (a *App) StreamTorrent(magnetLink string) (string, error) {
-	t, err := a.torrentClient.AddMagnet(magnetLink)
+	streamURL, err := internalStreamTorrent(magnetLink)
 	if err != nil {
-		return "", fmt.Errorf("failed to add magnet: %w", err)
+		return "", err
 	}
 
-	// Wait for the P2P swarm to send us the metadata, with a timeout
-	select {
-	case <-t.GotInfo():
-		// metadata received, proceed
-	case <-time.After(30 * time.Second):
-		t.Drop()
-		return "", fmt.Errorf("timed out waiting for torrent metadata — no peers responded")
+	a.mpvMutex.Lock()
+	defer a.mpvMutex.Unlock()
+
+	// Clean up any previously running player instances cleanly
+	if a.mpvClient != nil {
+		a.mpvClient.Close()
+		a.mpvClient = nil
+	}
+	if a.mpvCmd != nil && a.mpvCmd.Process != nil {
+		_ = a.mpvCmd.Process.Kill()
+		_ = a.mpvCmd.Wait()
+	}
+	if a.mpvStdout != nil {
+		a.mpvStdout.Close()
+		a.mpvStdout = nil
 	}
 
-	var targetFile *torrent.File
-	var maxSize int64
-	for _, f := range t.Files() {
-		if f.Length() > maxSize {
-			maxSize = f.Length()
-			targetFile = f
-		}
+	ipcSocket := "/tmp/wails-mpv.sock"
+	if runtime.GOOS == "windows" {
+		ipcSocket = `\\.\pipe\wails-mpv-pipe`
 	}
 
-	if targetFile == nil {
-		return "", fmt.Errorf("no valid video file found in torrent")
+	// Launch MPV headlessly, encoding playback directly into standard output as MJPEG
+	a.mpvCmd = exec.Command("mpv",
+		streamURL,
+		"--o=-",               // Target stdout instead of a native window context
+		"--of=mjpeg",          // Set container envelope format to MJPEG
+		"--ovc=mjpeg",         // Set video encoding codec
+		"--ovcopts=strict=-2", // Bypass strict compliance rules for non-standard full-range YUV in MJPEG
+		"--sub-auto=all",      // Automatically bundle available subtitle files
+		fmt.Sprintf("--input-ipc-server=%s", ipcSocket),
+	)
+
+	stdout, err := a.mpvCmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to open video stdout stream pipe: %w", err)
+	}
+	a.mpvStdout = stdout
+
+	if err := a.mpvCmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start headless mpv transcoder: %w", err)
 	}
 
-	a.activeFile = targetFile
-	targetFile.Download()
+	// Spin off broadcaster to handle frame reading and client dissemination
+	go a.startFrameBroadcaster(stdout)
 
-	return "http://localhost:8080/stream", nil
+	// Give the operating system time to initialize the IPC pipe channel
+	time.Sleep(600 * time.Millisecond)
+
+	client := mpvipc.NewConnection(ipcSocket)
+	if err := client.Open(); err != nil {
+		log.Printf("[MPV] Note: Control IPC unattached, commands unavailable: %v", err)
+	} else {
+		a.mpvClient = client
+	}
+
+	// Return the static local stream URL context to signal Svelte to mount the canvas
+	return "http://localhost:8080/mpv-frame-stream", nil
 }
 
 // streamHandler feeds the downloading torrent bytes to the Svelte video player
 func (a *App) streamHandler(w http.ResponseWriter, r *http.Request) {
-	if a.activeFile == nil {
-		http.Error(w, "No active stream", http.StatusNotFound)
-		return
+	internalStreamHandler(w, r)
+}
+func (a *App) initMpv() error {
+	a.mpvMutex.Lock()
+	defer a.mpvMutex.Unlock()
+
+	// 1. Establish platform-safe socket naming conventions
+	ipcSocket := "/tmp/wails-mpv.sock"
+	if runtime.GOOS == "windows" {
+		ipcSocket = `\\.\pipe\wails-mpv-pipe`
 	}
 
-	reader := a.activeFile.NewReader()
-	reader.SetResponsive()
-	defer reader.Close()
+	log.Printf("[MPV] Launching background player instance targeting: %s", ipcSocket)
 
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	http.ServeContent(w, r, a.activeFile.DisplayPath(), time.Time{}, reader)
+	// 2. Start mpv as a headless slave process
+	// Adjust flags like '--vo=null' depending on your canvas vs native window setup strategy
+	a.mpvCmd = exec.Command("mpv",
+		"--idle",
+		fmt.Sprintf("--input-ipc-server=%s", ipcSocket),
+		"--vo=gpu", // Use hardware-accelerated native window rendering
+	)
+
+	if err := a.mpvCmd.Start(); err != nil {
+		return fmt.Errorf("could not launch mpv process: %w", err)
+	}
+
+	// 3. Briefly pause to let the operating system spin up the socket descriptor
+	time.Sleep(600 * time.Millisecond)
+
+	// 4. Dial into the newly initialized IPC line
+	client := mpvipc.NewConnection(ipcSocket)
+	if err := client.Open(); err != nil {
+		_ = a.mpvCmd.Process.Kill()
+		return fmt.Errorf("failed to bind connection onto mpv IPC line: %w", err)
+	}
+
+	a.mpvClient = client
+	log.Println("[MPV] IPC pipeline established successfully.")
+
+	// 5. Spin off an asynchronous consumer routine to monitor playback events
+	go a.listenToMpvEvents()
+
+	return nil
+}
+
+func (a *App) listenToMpvEvents() {
+	events, stopListening := a.mpvClient.NewEventListener()
+	defer close(stopListening)
+
+	log.Println("[MPV] Listening for internal runtime player updates...")
+
+	for event := range events {
+		// Log important lifecycle transitions or pipe them straight down to Svelte
+		if event.Name != "tick" {
+			log.Printf("[MPV Event] Received event token: %s", event.Name)
+			// Example: forward event directly to frontend
+			// wailsRuntime.EventsEmit(a.ctx, "mpv-state-change", event)
+		}
+	}
+}
+
+func (a *App) startFrameBroadcaster(stdout io.ReadCloser) {
+	buf := make([]byte, 8192)
+	var frameBuffer []byte
+
+	for {
+		n, err := stdout.Read(buf)
+		if err != nil {
+			break
+		}
+		frameBuffer = append(frameBuffer, buf[:n]...)
+
+		for {
+			// Locate JPEG SOI (Start of Image) token marker
+			start := bytes.Index(frameBuffer, []byte{0xFF, 0xD8})
+			if start == -1 {
+				if len(frameBuffer) > 0 {
+					frameBuffer = frameBuffer[len(frameBuffer)-1:]
+				}
+				break
+			}
+
+			// Locate JPEG EOI (End of Image) token marker
+			end := bytes.Index(frameBuffer[start:], []byte{0xFF, 0xD9})
+			if end == -1 {
+				if start > 0 {
+					frameBuffer = frameBuffer[start:]
+				}
+				break
+			}
+
+			actualEnd := start + end + 2
+			jpegData := frameBuffer[start:actualEnd]
+
+			// Broadcast frame to all active client channels
+			a.broadcastFrame(jpegData)
+
+			frameBuffer = frameBuffer[actualEnd:] // Shift remaining data forward
+		}
+	}
+	stdout.Close()
+}
+
+func (a *App) broadcastFrame(jpegData []byte) {
+	a.clientsMu.Lock()
+	defer a.clientsMu.Unlock()
+	for clientChan := range a.clients {
+		select {
+		case clientChan <- jpegData:
+		default:
+			// Non-blocking: drop frame if the client is too slow to read
+		}
+	}
+}
+
+func (a *App) mpvFrameStreamHandler(w http.ResponseWriter, r *http.Request) {
+	// Configure stream headers for live image delivery
+	w.Header().Set("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+	w.Header().Set("Cache-Control", "no-cache, private")
+	w.Header().Set("Connection", "keep-alive")
+
+	frameChan := make(chan []byte, 10)
+
+	// Register client channel
+	a.clientsMu.Lock()
+	if a.clients == nil {
+		a.clients = make(map[chan []byte]bool)
+	}
+	a.clients[frameChan] = true
+	a.clientsMu.Unlock()
+
+	defer func() {
+		a.clientsMu.Lock()
+		delete(a.clients, frameChan)
+		a.clientsMu.Unlock()
+	}()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case jpegData, ok := <-frameChan:
+			if !ok {
+				return
+			}
+			// Package frame into standard multipart chunk structure
+			_, err := fmt.Fprintf(w, "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", len(jpegData))
+			if err != nil {
+				return
+			}
+			if _, err = w.Write(jpegData); err != nil {
+				return
+			}
+			if _, err = fmt.Fprintf(w, "\r\n"); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		}
+	}
 }

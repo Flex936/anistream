@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onDestroy } from "svelte";
     import {
         ArrowLeft,
         Play,
@@ -28,15 +28,65 @@
     let fetchedTorrents: main.TorrentResult[] = [];
     let torrentSearch = "";
 
+    // Canvas Frame Loop References
+    let canvasRef: HTMLCanvasElement;
+    let hiddenImg: HTMLImageElement | null = null;
+    let animationFrameId: number;
+
     $: episodeList = Array.from(
         { length: anime.episodes || 12 },
         (_, i) => i + 1,
     );
 
-    // Reactive filter for the torrent search bar
     $: filteredTorrents = fetchedTorrents.filter((t) =>
         t.title.toLowerCase().includes(torrentSearch.toLowerCase()),
     );
+
+    // Watcher: Automatically handle initialization/destruction of the canvas loop based on stream state
+    $: if (streamUrl && canvasRef) {
+        initCanvasLoop();
+    } else {
+        stopCanvasLoop();
+    }
+
+    function initCanvasLoop() {
+        stopCanvasLoop();
+
+        hiddenImg = new Image();
+        hiddenImg.src = "http://localhost:8080/mpv-frame-stream";
+
+        const ctx = canvasRef.getContext("2d");
+
+        // Match explicit standard high-definition output limits
+        canvasRef.width = 1920;
+        canvasRef.height = 1080;
+
+        function renderLoop() {
+            if (!streamUrl || !canvasRef || !ctx || !hiddenImg) return;
+
+            // Draw the current frame directly onto the canvas layout
+            try {
+                if (hiddenImg.width > 0 && hiddenImg.height > 0) {
+                    ctx.drawImage(hiddenImg, 0, 0, canvasRef.width, canvasRef.height);
+                }
+            } catch (e) {
+                // Ignore drawing exceptions during startup/transition phases
+            }
+            animationFrameId = requestAnimationFrame(renderLoop);
+        }
+
+        animationFrameId = requestAnimationFrame(renderLoop);
+    }
+
+    function stopCanvasLoop() {
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        if (hiddenImg) {
+            hiddenImg.src = "";
+            hiddenImg = null;
+        }
+    }
 
     function goBack() {
         streamUrl = null;
@@ -45,7 +95,6 @@
         dispatch("back");
     }
 
-    // Step 1: Click an episode to fetch the torrent list
     async function fetchTorrents(epNum: number) {
         const titleToSearch = anime.title?.romaji || anime.title?.english || "";
         if (!titleToSearch) return;
@@ -57,7 +106,7 @@
 
         try {
             const results = await GetEpisodeTorrents(titleToSearch, epNum);
-            fetchedTorrents = results; // Populates the new view
+            fetchedTorrents = results;
         } catch (err) {
             console.error(err);
             alert(`Could not find torrents for Episode ${epNum}.\n${err}`);
@@ -66,13 +115,12 @@
         }
     }
 
-    // Step 2: Click a specific torrent to start streaming
     async function startStream(magnet: string) {
         isStartingStream = true;
         try {
             const url = await StreamTorrent(magnet);
             playingEpisode = loadingEpisode;
-            streamUrl = url; // Mounts the video player
+            streamUrl = url;
         } catch (err) {
             console.error(err);
             alert(`Failed to connect to peers.\n${err}`);
@@ -80,6 +128,10 @@
             isStartingStream = false;
         }
     }
+
+    onDestroy(() => {
+        stopCanvasLoop();
+    });
 </script>
 
 <div
@@ -144,21 +196,14 @@
                             &larr; Back to Release List
                         </button>
                     </div>
+
                     <div
                         class="w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-slate-800 aspect-video animate-in fade-in zoom-in-95"
                     >
-                        <video
-                            src={streamUrl}
-                            controls
-                            autoplay
-                            class="w-full h-full"
-                        >
-                            <track
-                                kind="captions"
-                                srclang="en"
-                                label="English"
-                            />
-                        </video>
+                        <canvas
+                            bind:this={canvasRef}
+                            class="w-full h-full object-contain bg-slate-950"
+                        ></canvas>
                     </div>
                 </div>
             {:else if fetchedTorrents.length > 0}
@@ -199,8 +244,8 @@
                 >
                     {#each filteredTorrents as torrent, index}
                         <div
-                            class="flex items-center justify-between p-4 border-b border-slate-800/50 transition-colors hover:bg-slate-800/80
-                            {index === 0 && !torrentSearch
+                            class="flex items-center justify-between p-4 border-b border-slate-800/50 transition-colors hover:bg-slate-800/80 {index ===
+                                0 && !torrentSearch
                                 ? 'bg-indigo-950/30 border-l-4 border-l-indigo-500'
                                 : ''}"
                         >
@@ -225,8 +270,10 @@
                                     class="flex items-center space-x-4 mt-2 text-xs font-mono text-slate-500"
                                 >
                                     <span class="flex items-center"
-                                        ><HardDrive size={12} class="mr-1" />
-                                        {torrent.size}</span
+                                        ><HardDrive
+                                            size={12}
+                                            class="mr-1"
+                                        />{torrent.size}</span
                                     >
                                     <span class="text-green-400/80"
                                         >▲ {torrent.seeders} Seeders</span
