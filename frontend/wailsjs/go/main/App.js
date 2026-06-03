@@ -6,6 +6,10 @@ export function GetEpisodeTorrents(arg1, arg2) {
   return window['go']['main']['App']['GetEpisodeTorrents'](arg1, arg2);
 }
 
+export function GetTrendingAnime() {
+  return window['go']['main']['App']['GetTrendingAnime']();
+}
+
 export function SearchAnime(arg1) {
   return window['go']['main']['App']['SearchAnime'](arg1);
 }

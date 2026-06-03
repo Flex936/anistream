@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { SearchAnime } from "../wailsjs/go/main/App";
+  import { onMount } from "svelte";
+  import { SearchAnime, GetTrendingAnime } from "../wailsjs/go/main/App";
   import type { main } from "../wailsjs/go/models";
 
   import NavBar from "./components/NavBar.svelte";
@@ -12,12 +13,27 @@
   let searchResults: main.Anime[] = [];
   let searchTimeout: ReturnType<typeof setTimeout>;
 
+  onMount(async () => {
+    await loadHomePage();
+  });
+
+  async function loadHomePage() {
+    isSearching = true;
+    try {
+      searchResults = await GetTrendingAnime();
+    } catch (error) {
+      console.error("Failed to load trending anime:", error);
+    } finally {
+      isSearching = false;
+    }
+  }
+
   // Routing State
   let selectedAnime: main.Anime | null = null;
 
   async function performSearch() {
-    if (searchQuery.trim().length < 3) {
-      searchResults = [];
+    if (searchQuery.length == 0) {
+      searchResults = await GetTrendingAnime();
       return;
     }
     isSearching = true;
