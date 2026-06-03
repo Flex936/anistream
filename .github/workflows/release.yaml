@@ -4,6 +4,10 @@ on:
   push:
     tags: ['v*']
 
+# Explicitly grant the GITHUB_TOKEN write access to create releases
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
