@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -158,13 +159,15 @@ type TorrentResult struct {
 	Size       string `json:"size"`
 }
 
-// GetEpisodeMagnet searches Nyaa.si and uses a smart Regex heuristic to score episodes
+// GetEpisodeMagnet searches Nyaa.si and uses a smart Regex extraction heuristic to score episodes
 func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentResult, error) {
 	epStr := fmt.Sprintf("%02d", episodeNumber)
 
-	searchQuery := fmt.Sprintf("%s %s 1080p", animeTitle, epStr)
+	searchQuery := fmt.Sprintf("%s %s", animeTitle, epStr)
 	encodedQuery := url.QueryEscape(searchQuery)
 	feedURL := fmt.Sprintf("https://nyaa.si/?page=rss&q=%s&c=1_2&f=0", encodedQuery)
+
+	log.Printf("[SCRAPER] Searching Nyaa for: '%s'", searchQuery)
 
 	fp := gofeed.NewParser()
 	feed, err := fp.ParseURL(feedURL)
@@ -176,26 +179,42 @@ func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentRe
 		return nil, fmt.Errorf("no torrents found for %s episode %s", animeTitle, epStr)
 	}
 
+	// Helper function: Extracts the season number from a string, safely ignoring regular numbers.
+	extractSeason := func(title string) int {
+		// Matches: "Season 2", "S2", "2nd Season", "Part 2"
+		re := regexp.MustCompile(`(?i)(?:season\s*(\d+)|\bs(\d+)\b|(\d+)(?:st|nd|rd|th)\s+season|(?:part|cour)\s*(\d+))`)
+		matches := re.FindStringSubmatch(title)
+		if len(matches) > 0 {
+			for i := 1; i < len(matches); i++ {
+				if matches[i] != "" {
+					var s int
+					fmt.Sscanf(matches[i], "%d", &s)
+					return s
+				}
+			}
+		}
+		return 0 // If no explicit season is mentioned, assume nothing
+	}
+
 	// --- SMART SCORING ALGORITHM ---
 	var bestItem *gofeed.Item
 	var highestScore int = -1
+
 	queryTitleLow := strings.ToLower(animeTitle)
+	targetSeason := extractSeason(queryTitleLow)
 
-	// Regex pattern to detect ANY sequel indicator: Season 2-99, S2-S99, 2nd-99th Season, Part 2-99, Cour 2-99
-	// It safely ignores numbers that are part of the anime's actual name (like "Mob Psycho 100")
-	sequelPattern := regexp.MustCompile(`(?i)(season\s*([2-9]|[1-9]\d+)|\bs([2-9]|[1-9]\d+)\b|([2-9]|[1-9]\d+)(nd|rd|th)\s+season|(part|cour)\s*([2-9]|[1-9]\d+))`)
-
-	// Check if the anime we are actually looking for is a sequel
-	isQuerySequel := sequelPattern.MatchString(queryTitleLow)
+	log.Printf("[SCRAPER] Inferred Target Season: %d", targetSeason)
 
 	for _, item := range feed.Items {
 		score := 100
 		titleLow := strings.ToLower(item.Title)
+		torrentSeason := extractSeason(titleLow)
 
-		// 1. DYNAMIC SEQUEL PENALTY
-		// If we are looking for a base season, aggressively penalize ANY torrent that identifies as a sequel.
-		if !isQuerySequel && sequelPattern.MatchString(titleLow) {
-			score -= 100
+		// 1. DYNAMIC SEASON MATCHER
+		if targetSeason != torrentSeason {
+			score -= 100 // Heavy penalty for wrong season
+		} else {
+			score += 50 // Massive boost for correctly matching the season
 		}
 
 		// 2. PENALTIES: Spin-offs/OVAs/Movies
@@ -203,6 +222,9 @@ func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentRe
 			score -= 100
 		}
 		if !strings.Contains(queryTitleLow, "ova") && strings.Contains(titleLow, "ova") {
+			score -= 100
+		}
+		if !strings.Contains(queryTitleLow, "ona") && strings.Contains(titleLow, "ona") {
 			score -= 100
 		}
 		if !strings.Contains(queryTitleLow, "movie") && strings.Contains(titleLow, "movie") {
@@ -215,9 +237,24 @@ func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentRe
 		}
 
 		// 4. BOOSTS: Prioritize trusted, high-quality release groups
-		if strings.Contains(titleLow, "subsplease") || strings.Contains(titleLow, "erai-raws") || strings.Contains(titleLow, "horriblesubs") {
+		/* if strings.Contains(titleLow, "subsplease") || strings.Contains(titleLow, "erai-raws") || strings.Contains(titleLow, "horriblesubs") {
 			score += 30
+		} */
+
+		// 5. Check quality preference (1080p -> 720p)
+		if !strings.Contains(titleLow, "1080p") && !strings.Contains(titleLow, "720p") {
+			score -= 20
+		} else if strings.Contains(titleLow, "720p") {
+			score -= 10
 		}
+
+		// 6. Check if we are on the final season and if the torrent is the final season
+		if strings.Contains(titleLow, "final season") {
+			score -= 100
+		}
+
+		// Log the individual score for debugging
+		log.Printf("  -> [Score: %3d] (Season %d) %s", score, torrentSeason, item.Title)
 
 		if score > highestScore {
 			highestScore = score
@@ -225,10 +262,12 @@ func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentRe
 		}
 	}
 
-	if bestItem == nil || highestScore < 0 {
-		return nil, fmt.Errorf("found torrents, but none matched the exact season criteria for %s", animeTitle)
+	if bestItem == nil || highestScore <= 0 {
+		return nil, fmt.Errorf("found torrents, but none matched the exact criteria for %s", animeTitle)
 	}
 	// -------------------------------
+
+	log.Printf("[WINNER] Selected: %s (Score: %d)", bestItem.Title, highestScore)
 
 	seeders := "Unknown"
 	size := "Unknown"
@@ -262,8 +301,6 @@ func (a *App) GetEpisodeMagnet(animeTitle string, episodeNumber int) (*TorrentRe
 	for _, tr := range trackers {
 		magnetLink += fmt.Sprintf("&tr=%s", url.QueryEscape(tr))
 	}
-
-	fmt.Printf("Selected Release: %s (Score: %d)\n", bestItem.Title, highestScore)
 
 	result := &TorrentResult{
 		Title:      bestItem.Title,
