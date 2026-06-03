@@ -49,12 +49,18 @@ jobs:
         run: |
           go get github.com/anacrolix/torrent@latest
           go mod tidy
-          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          
+          # Clone Wails and bump x/tools to fix the Go 1.24+ parser bug
+          git clone --depth 1 https://github.com/wailsapp/wails.git /tmp/wails
+          cd /tmp/wails/v2
+          go get golang.org/x/tools@latest
+          go mod tidy
+          go install ./cmd/wails
 
       - name: Build App
         env:
           GOAMD64: ${{ matrix.go_amd || 'v1' }}
-        run: wails build -skipbindings -platform ${{ matrix.platform }} ${{ matrix.tags }}
+        run: wails build -platform ${{ matrix.platform }} ${{ matrix.tags }}
 
       - name: Package & Rename
         shell: bash
