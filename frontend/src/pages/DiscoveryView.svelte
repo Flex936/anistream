@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import AnimeCard from "./AnimeCard.svelte";
+    import AnimeCard from "../components/AnimeCard.svelte";
     import { LoaderCircle } from "lucide-svelte";
     import type { main } from "../../wailsjs/go/models";
 

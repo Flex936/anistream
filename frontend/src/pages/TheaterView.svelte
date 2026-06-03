@@ -131,8 +131,7 @@
                         <h3
                             class="text-xl font-semibold text-slate-200 flex items-center"
                         >
-                            <Play size={20} class="mr-2 text-indigo-400" />
-                            Now Playing: Episode {playingEpisode}
+                            Episode {playingEpisode}
                         </h3>
                         <button
                             on:click={() => {

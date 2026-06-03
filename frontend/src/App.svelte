@@ -3,8 +3,8 @@
   import type { main } from "../wailsjs/go/models";
 
   import NavBar from "./components/NavBar.svelte";
-  import DiscoveryView from "./components/DiscoveryView.svelte";
-  import TheaterView from "./components/TheaterView.svelte";
+  import DiscoveryView from "./pages/DiscoveryView.svelte";
+  import TheaterView from "./pages/TheaterView.svelte";
 
   // State Variables
   let searchQuery = "";
