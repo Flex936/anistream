@@ -9,12 +9,5 @@
   "author": {
     "name": "Tancsik Alex",
     "email": "tancsik.alex@gmail.com"
-  },
-  "info": {
-    "productName": "AniStream",
-    "productVersion": "0.0.1.7",
-    "copyright": ""
-  },
-  "wailsjsdir": "./frontend/wailsjs",
-  "build:generatebindings": false
+  }
 }

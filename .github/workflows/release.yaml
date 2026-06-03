@@ -54,7 +54,7 @@ jobs:
       - name: Build App
         env:
           GOAMD64: ${{ matrix.go_amd || 'v1' }}
-        run: wails build -platform ${{ matrix.platform }} ${{ matrix.tags }}
+        run: wails build -skipbindings -platform ${{ matrix.platform }} ${{ matrix.tags }}
 
       - name: Package & Rename
         shell: bash
