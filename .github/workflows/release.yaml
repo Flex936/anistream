@@ -1,44 +1,90 @@
-name: Wails build
+name: Build and Release AniStream
 
 on:
   push:
     tags:
-    # Match any new tag
       - 'v*'
 
 env:
-  # Necessary for most environments as build failure can occur due to OOM issues
   NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
   build:
     strategy:
-    # Failure in one platform build won't impact the others
       fail-fast: false
       matrix:
         build:
-          - name: 'App'
-            platform:  'linux/amd64'
-            os: 'ubuntu-latest'
-          - name: 'App'
-            platform:  'windows/amd64'
-            os: 'windows-latest'
-          - name: 'App'
-            platform:  'darwin/universal'
-            os: 'macos-latest'
+          - name: anistream-linux-amd64
+            os: ubuntu-latest
+            platform: linux/amd64
+            build_flags: "-tags webkit2_41"
+            go_amd: "v1" 
+          - name: anistream-cachyos-amd64-v3
+            os: ubuntu-latest
+            platform: linux/amd64
+            build_flags: "-tags webkit2_41"
+            go_amd: "v3" 
+          - name: anistream-windows-amd64.exe
+            os: windows-latest
+            platform: windows/amd64
+            build_flags: ""
+            go_amd: "v1"
+          - name: anistream-macos-universal.zip
+            os: macos-latest
+            platform: darwin/universal
+            build_flags: ""
+            go_amd: "v1"
 
     runs-on: ${{ matrix.build.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          submodules: recursive
 
-      - name: Build wails
-        uses: dAppServer/wails-build-action@v2.2
-        id: build
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Go
+        uses: actions/setup-go@v6.4.0
         with:
-          build-name: ${{ matrix.build.name }}
-          build-platform: ${{ matrix.build.platform }}
-          package: false
-          go-version: '1.20'
+          go-version: '1.23.x' 
+          cache: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24
+
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Setup Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build Wails App
+        env:
+          GOAMD64: ${{ matrix.build.go_amd }}
+        run: wails build -platform ${{ matrix.build.platform }} -skipbindings ${{ matrix.build.build_flags }}
+
+      # Rename standard binaries (Linux / Windows)
+      - name: Rename Binary
+        if: runner.os != 'macOS'
+        run: |
+          cd build/bin
+          mv * ${{ matrix.build.name }}
+        shell: bash
+
+      # Mac creates an .app folder which GitHub Releases cannot upload natively. We must zip it!
+      - name: Package Mac Binary
+        if: runner.os == 'macOS'
+        run: |
+          cd build/bin
+          zip -r ${{ matrix.build.name }} anistream.app
+        shell: bash
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/bin/${{ matrix.build.name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
