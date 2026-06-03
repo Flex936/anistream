@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# Explicitly grant the GITHUB_TOKEN write access to create releases
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux/amd64
+            name: anistream-linux-amd64
+            tags: "-tags webkit2_41"
+          - os: ubuntu-latest
+            platform: linux/amd64
+            name: anistream-cachyos-amd64-v3
+            tags: "-tags webkit2_41"
+            go_amd: "v3"
+          - os: windows-latest
+            platform: windows/amd64
+            name: anistream-windows-amd64.exe
+            tags: ""
+            cgo_ldflags: "-static"
+          - os: macos-latest
+            platform: darwin/universal
+            name: anistream-macos-universal.zip
+            tags: ""
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # STRICTLY 1.23.x. Wails v2 cannot compile under Go 1.24 yet.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Update Torrent & Install Wails
+        run: |
+          go get github.com/anacrolix/torrent@latest
+          go mod tidy
+          
+          # Clone Wails and update the x/tools parser to support Go 1.24
+          git clone --depth 1 https://github.com/wailsapp/wails.git /tmp/wails
+          cd /tmp/wails/v2
+          go get golang.org/x/tools@latest
+          go mod tidy
+          go install ./cmd/wails
+
+      - name: Build App
+        env:
+          GOAMD64: ${{ matrix.go_amd || 'v1' }}
+          CGO_LDFLAGS: ${{ matrix.cgo_ldflags || '' }}
+        run: wails build -platform ${{ matrix.platform }} ${{ matrix.tags }}
+
+      - name: Package & Rename
+        shell: bash
+        run: |
+          cd build/bin
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            zip -r ${{ matrix.name }} anistream.app
+          else
+            mv * ${{ matrix.name }}
+          fi
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/bin/${{ matrix.name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
