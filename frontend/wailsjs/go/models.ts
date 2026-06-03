@@ -73,6 +73,7 @@ export namespace main {
 	    magnetLink: string;
 	    seeders: string;
 	    size: string;
+	    score: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new TorrentResult(source);
@@ -84,6 +85,7 @@ export namespace main {
 	        this.magnetLink = source["magnetLink"];
 	        this.seeders = source["seeders"];
 	        this.size = source["size"];
+	        this.score = source["score"];
 	    }
 	}
 
