@@ -260,8 +260,11 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 					seedCount = 0
 				}
 
-				// 5. BOOSTS: Seeder amount (descending)
+				// 5. BOOSTS: Seeder amount
 				score += float64(seedCount) * 0.2
+				if seedCount == 0 {
+					continue
+				}
 			}
 			if sizeNode, exists := nyaaExt["size"]; exists && len(sizeNode) > 0 {
 				size = sizeNode[0].Value
