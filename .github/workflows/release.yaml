@@ -27,6 +27,7 @@ jobs:
             platform: windows/amd64
             name: anistream-windows-amd64.exe
             tags: ""
+            cgo_ldflags: "-static"
           - os: macos-latest
             platform: darwin/universal
             name: anistream-macos-universal.zip
@@ -64,6 +65,7 @@ jobs:
       - name: Build App
         env:
           GOAMD64: ${{ matrix.go_amd || 'v1' }}
+          CGO_LDFLAGS: ${{ matrix.cgo_ldflags || '' }}
         run: wails build -platform ${{ matrix.platform }} ${{ matrix.tags }}
 
       - name: Package & Rename
