@@ -50,7 +50,7 @@ jobs:
           go get github.com/anacrolix/torrent@latest
           go mod tidy
           
-          # Clone Wails and bump x/tools to fix the Go 1.24+ parser bug
+          # Clone Wails and update the x/tools parser to support Go 1.24
           git clone --depth 1 https://github.com/wailsapp/wails.git /tmp/wails
           cd /tmp/wails/v2
           go get golang.org/x/tools@latest
