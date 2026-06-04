@@ -13,8 +13,9 @@
 </script>
 
 <article
-    class="group relative flex flex-col cursor-pointer transition-all duration-300 hover:scale-[1.02]"
+    class="group relative flex flex-col cursor-pointer ..."
     on:click={selectAnime}
+    on:keydown={(e) => (e.key === "Enter" || e.key === " ") && selectAnime()}
 >
     <div
         class="relative w-full aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-slate-800 bg-slate-900 group-hover:border-indigo-500/50 transition-colors"

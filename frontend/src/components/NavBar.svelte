@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from "svelte";
+    import { createEventDispatcher, onMount, onDestroy } from "svelte";
     import {
         Search,
         Settings,
@@ -20,8 +20,18 @@
     const dispatch = createEventDispatcher();
     let isMaximised = false;
 
-    onMount(async () => {
+    async function syncMaximisedState() {
         isMaximised = await WindowIsMaximised();
+    }
+
+    onMount(async () => {
+        await syncMaximisedState();
+        // Keep icon in sync when OS resizes the window
+        window.addEventListener("resize", syncMaximisedState);
+    });
+
+    onDestroy(() => {
+        window.removeEventListener("resize", syncMaximisedState);
     });
 
     function handleInput() {
@@ -29,9 +39,8 @@
     }
 
     async function handleWindowMaximise() {
-        const currentlyMaximised = await WindowIsMaximised();
-
-        if (currentlyMaximised) {
+        // Don't trust local state for the decision
+        if (await WindowIsMaximised()) {
             WindowUnmaximise();
             isMaximised = false;
         } else {

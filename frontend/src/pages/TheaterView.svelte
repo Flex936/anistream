@@ -20,6 +20,7 @@
 
     // State Variables
     let isScraping = false;
+    let scrapingGen = 0;
     let isStartingStream = false;
     let loadingEpisode = 0;
     let playingEpisode = 0;
@@ -28,10 +29,9 @@
     let fetchedTorrents: main.TorrentResult[] = [];
     let torrentSearch = "";
 
-    $: episodeList = Array.from(
-        { length: anime.episodes || 12 },
-        (_, i) => i + 1,
-    );
+    $: episodeList = anime.episodes
+        ? Array.from({ length: anime.episodes }, (_, i) => i + 1)
+        : [];
 
     // Reactive filter for the torrent search bar
     $: filteredTorrents = fetchedTorrents.filter((t) =>
@@ -39,17 +39,23 @@
     );
 
     function goBack() {
+        // Invalidate any in-flight requests
+        scrapingGen++;
+
         streamUrl = null;
         fetchedTorrents = [];
         playingEpisode = 0;
+        loadingEpisode = 0;
+        isScraping = false;
         dispatch("back");
     }
 
-    // Step 1: Click an episode to fetch the torrent list
+    // Click an episode to fetch the torrent list
     async function fetchTorrents(epNum: number) {
         const titleToSearch = anime.title?.romaji || anime.title?.english || "";
         if (!titleToSearch) return;
 
+        const gen = ++scrapingGen; // capture generation before any await
         isScraping = true;
         loadingEpisode = epNum;
         fetchedTorrents = [];
@@ -57,16 +63,20 @@
 
         try {
             const results = await GetEpisodeTorrents(titleToSearch, epNum);
-            fetchedTorrents = results; // Populates the new view
+            if (gen === scrapingGen) {
+                fetchedTorrents = results;
+            }
         } catch (err) {
-            console.error(err);
-            alert(`Could not find torrents for Episode ${epNum}.\n${err}`);
+            if (gen === scrapingGen) {
+                console.error(err);
+                alert(`Could not find torrents for Episode ${epNum}.\n${err}`);
+            }
         } finally {
-            isScraping = false;
+            if (gen === scrapingGen) isScraping = false;
         }
     }
 
-    // Step 2: Click a specific torrent to start streaming
+    // Click a specific torrent to start streaming
     async function startStream(magnet: string) {
         isStartingStream = true;
         try {
@@ -79,6 +89,11 @@
         } finally {
             isStartingStream = false;
         }
+    }
+
+    // Naive but effective for AniList's known output
+    function sanitize(html: string) {
+        return html.replace(/<(?!\/?(br|i|b|em|strong)\b)[^>]+>/gi, "");
     }
 </script>
 
@@ -119,7 +134,9 @@
                 <div
                     class="text-slate-400 text-sm leading-relaxed line-clamp-6 text-justify"
                 >
-                    {@html anime.description || "No synopsis available."}
+                    {@html sanitize(
+                        anime.description || "No synopsis available.",
+                    )}
                 </div>
             </div>
         </div>
@@ -281,8 +298,7 @@
                             </div>
                             <button
                                 on:click={() => fetchTorrents(epNum)}
-                                disabled={isScraping &&
-                                    loadingEpisode === epNum}
+                                disabled={isScraping}
                                 class="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg font-medium transition-colors"
                             >
                                 {#if isScraping && loadingEpisode === epNum}

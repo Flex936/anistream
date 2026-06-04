@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { SearchAnime, GetTrendingAnime } from "../wailsjs/go/main/App";
   import type { main } from "../wailsjs/go/models";
 
@@ -12,9 +12,15 @@
   let isSearching = false;
   let searchResults: main.Anime[] = [];
   let searchTimeout: ReturnType<typeof setTimeout>;
+  let searchGen = 0;
 
   onMount(async () => {
     await loadHomePage();
+  });
+
+  // Clear the pending timeout so it doesn't fire after the app closes
+  onDestroy(() => {
+    clearTimeout(searchTimeout);
   });
 
   async function loadHomePage() {
@@ -32,18 +38,23 @@
   let selectedAnime: main.Anime | null = null;
 
   async function performSearch() {
-    if (searchQuery.length == 0) {
+    if (searchQuery.length === 0) {
       searchResults = await GetTrendingAnime();
       return;
     }
+
+    const gen = ++searchGen;
     isSearching = true;
     try {
       const results = await SearchAnime(searchQuery);
-      searchResults = results || [];
+      // Only commit results if no newer search has been issued
+      if (gen === searchGen) {
+        searchResults = results || [];
+      }
     } catch (err) {
-      console.error(err);
+      if (gen === searchGen) console.error(err);
     } finally {
-      isSearching = false;
+      if (gen === searchGen) isSearching = false;
     }
   }
 
