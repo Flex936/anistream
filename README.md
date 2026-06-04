@@ -2,28 +2,16 @@
 
 A lightweight, high-performance desktop application designed for streaming anime torrents sequentially. Built from the ground up using **Wails v2** (**Go (Golang)**, **Svelte**).
 
-AniStream bypasses the bloat of traditional Electron-based applications, achieving immediate video playback of P2P media streams while maintaining a microscopic memory and storage footprint.
+AniStream achieves immediate video playback of P2P media streams while maintaining a microscopic memory and storage footprint.
 
 ---
 
 ## Features
 
-- **Native Framework Efficiency:** Powered by Wails v2 utilizing native OS webviews (WebView2 on Windows, WebKitGTK on Linux).
-- **Sequential P2P Streaming:** Integrates a custom torrent engine that forces sequential piece-picking. Start watching high-definition 1080p anime within seconds while the rest of the torrent downloads seamlessly in the background.
+- **Native Framework Efficiency:** Powered by Wails v2 utilizing native OS webviews.
+- **Sequential P2P Streaming:** Integrates a custom torrent engine that forces sequential piece-picking.
 - **Reactive Modern UI:** Crafted with Svelte, and styled using TailwindCSS for fluid animations.
-- **Clean Metadata Aggregation:** Designed to plug directly into the **AniList GraphQL API** for beautiful cover art, synopses, schedules, and automated user tracking, cross-referenced against **Nyaa.si RSS feeds**.
-- **Seamless Cross-Compilation (for those working in Linux):** Built-in support to cross-compile fully static, standalone `.exe` binaries for Windows 11 directly from your Linux workspace.
-
----
-
-## Architecture Overview
-
-The app splits execution responsibilities across a secure native Go boundary and a reactive frontend webview:
-
-1. **Frontend Call:** The Svelte user interface issues a reactive command to the backend by calling an auto-generated TypeScript method (e.g., `window.go.main.App.StreamTorrent(magnetLink)`).
-2. **Sequential Pre-buffering:** The Go backend initiates the torrent client via `anacrolix/torrent`, prioritizes downloading the file header, index, and initial sequence blocks, and drops lower-priority blocks.
-3. **Local Loopback Streaming:** Go mounts an internal HTTP listener on a local random port, transforming the real-time downloading binary buffer into an un-seekable or semi-seekable network stream (`http://localhost:XXXX/stream`).
-4. **Media Render:** The frontend video player attaches to the local streaming URL, treating it as a standard web stream.
+- **Clean Metadata Aggregation:** Designed to plug directly into the **AniList GraphQL API** for the metadata and automated user tracking, cross-referenced against **Nyaa.si RSS feeds**.
 
 ---
 
@@ -78,7 +66,7 @@ wails dev -tags webkit2_41
 
 ### Build for Native Host
 
-Happens automatically on GitHub Actions.
+Happens automatically through GitHub Actions.
 Config settings can be found inside ./github/workflows/release.yaml`
 
 ---
