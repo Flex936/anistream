@@ -8,20 +8,26 @@ import (
 	"github.com/anacrolix/torrent"
 )
 
-// StreamTorrent takes a magnet link, finds the video file, and starts downloading
 func (a *App) StreamTorrent(magnetLink string) (string, error) {
+	// drop any previously active stream
+	a.mu.Lock()
+	if a.activeTorrent != nil {
+		a.activeTorrent.Drop()
+		a.activeTorrent = nil
+		a.activeFile = nil
+	}
+	a.mu.Unlock()
+
 	t, err := a.torrentClient.AddMagnet(magnetLink)
 	if err != nil {
 		return "", fmt.Errorf("failed to add magnet: %w", err)
 	}
 
-	// Wait for the P2P swarm to send us the metadata, with a timeout
 	select {
 	case <-t.GotInfo():
-		// metadata received, proceed
 	case <-time.After(30 * time.Second):
 		t.Drop()
-		return "", fmt.Errorf("timed out waiting for torrent metadata — no peers responded")
+		return "", fmt.Errorf("timed out waiting for torrent metadata")
 	}
 
 	var targetFile *torrent.File
@@ -32,28 +38,37 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 			targetFile = f
 		}
 	}
-
 	if targetFile == nil {
+		t.Drop()
 		return "", fmt.Errorf("no valid video file found in torrent")
 	}
 
-	a.activeFile = targetFile
 	targetFile.Download()
+
+	a.mu.Lock()
+	a.activeTorrent = t
+	a.activeFile = targetFile
+	a.mu.Unlock()
 
 	return "http://localhost:8080/stream", nil
 }
 
 // streamHandler feeds the downloading torrent bytes to the Svelte video player
 func (a *App) streamHandler(w http.ResponseWriter, r *http.Request) {
-	if a.activeFile == nil {
-		http.Error(w, "No active stream", http.StatusNotFound)
+	a.mu.RLock()
+	file := a.activeFile
+	a.mu.RUnlock()
+
+	if file == nil {
+		http.Error(w, "no active stream", http.StatusNotFound)
 		return
 	}
 
-	reader := a.activeFile.NewReader()
+	reader := file.NewReader()
 	reader.SetResponsive()
+	reader.SetReadahead(8 << 20) // 8 MB — enough for ~3s of 1080p video
 	defer reader.Close()
 
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	http.ServeContent(w, r, a.activeFile.DisplayPath(), time.Time{}, reader)
+	http.ServeContent(w, r, file.DisplayPath(), time.Time{}, reader)
 }

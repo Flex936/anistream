@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 )
 
 type AnimeTitle struct {
@@ -39,121 +38,68 @@ type GraphQLPayload struct {
 	Variables map[string]interface{} `json:"variables"`
 }
 
-// SearchAnime queries the AniList GraphQL API and returns a list of anime.
+// doGraphQL is the single HTTP+JSON round-trip for all AniList queries.
+// It is unexported because it is an implementation detail of this file.
+func (a *App) doGraphQL(query string, variables map[string]interface{}, result interface{}) error {
+	payload := GraphQLPayload{Query: query, Variables: variables}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal graphql payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodPost, "https://graphql.anilist.co", bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("create anilist request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := a.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("network error contacting anilist: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("anilist returned status %d", resp.StatusCode)
+	}
+	return json.NewDecoder(resp.Body).Decode(result)
+}
+
 func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
-	query := `
+	const query = `
     query ($search: String) {
         Page(page: 1, perPage: 15) {
             media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
                 id
-                title {
-                    romaji
-                    english
-                }
-                coverImage {
-                    large
-                }
-                episodes
-                status
-                description
+                title { romaji english }
+                coverImage { large }
+                episodes status description
             }
         }
     }`
-
-	payload := GraphQLPayload{
-		Query: query,
-		Variables: map[string]interface{}{
-			"search": searchQuery,
-		},
+	var result AniListResponse
+	if err := a.doGraphQL(query, map[string]interface{}{"search": searchQuery}, &result); err != nil {
+		return nil, err
 	}
-
-	jsonBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal graphql payload: %w", err)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("POST", "https://graphql.anilist.co", bytes.NewBuffer(jsonBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create http request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error contacting anilist: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("anilist api returned status: %d", resp.StatusCode)
-	}
-
-	var aniResponse AniListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&aniResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode anilist response: %w", err)
-	}
-
-	return aniResponse.Data.Page.Media, nil
+	return result.Data.Page.Media, nil
 }
 
-// GetTrendingAnime queries the AniList GraphQL API for the current top 15 trending anime.
 func (a *App) GetTrendingAnime() ([]Anime, error) {
-	// Notice the sort: TRENDING_DESC and no $search variable!
-	query := `
+	const query = `
     query {
         Page(page: 1, perPage: 15) {
             media(type: ANIME, sort: TRENDING_DESC) {
                 id
-                title {
-                    romaji
-                    english
-                }
-                coverImage {
-                    large
-                }
-                episodes
-                status
-                description
+                title { romaji english }
+                coverImage { large }
+                episodes status description
             }
         }
     }`
-
-	payload := GraphQLPayload{
-		Query:     query,
-		Variables: map[string]interface{}{}, // Empty variables
+	var result AniListResponse
+	if err := a.doGraphQL(query, map[string]interface{}{}, &result); err != nil {
+		return nil, err
 	}
-
-	jsonBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal graphql payload: %w", err)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("POST", "https://graphql.anilist.co", bytes.NewBuffer(jsonBytes))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create http request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("network error contacting anilist: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("anilist api returned status: %d", resp.StatusCode)
-	}
-
-	var aniResponse AniListResponse
-	if err := json.NewDecoder(resp.Body).Decode(&aniResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode anilist response: %w", err)
-	}
-
-	return aniResponse.Data.Page.Media, nil
+	return result.Data.Page.Media, nil
 }

@@ -3,24 +3,23 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/mmcdole/gofeed"
 )
 
 // Globals: Pre-compile regexes ONCE on startup
 var (
-	seasonRegex = regexp.MustCompile(`(?i)(?:season\s*(\d+)|\bs(\d+)\b|(\d+)(?:st|nd|rd|th)\s+season|(?:part|cour)\s*(\d+))`)
-	epRegex1    = regexp.MustCompile(`(?i)(?:e|ep|episode)\s*(\d+)`)
-	epRegex2    = regexp.MustCompile(`\s+-\s+(\d+)(?:v\d)?\s+`)
-	epRegex3    = regexp.MustCompile(`\s+(0\d+)\s+`)
-	batchRegex  = regexp.MustCompile(`\d{2,}\s*[-~]\s*\d{2,}`)
+	whitespaceRegex = regexp.MustCompile(`\s+`)
+	seasonRegex     = regexp.MustCompile(`(?i)(?:season\s*(\d+)|\bs(\d+)\b|(\d+)(?:st|nd|rd|th)\s+season|(?:part|cour)\s*(\d+))`)
+	epRegex1        = regexp.MustCompile(`(?i)(?:e|ep|episode)\s*(\d+)`)
+	epRegex2        = regexp.MustCompile(`\s+-\s+(\d+)(?:v\d)?\s+`)
+	epRegex3        = regexp.MustCompile(`\s+(0\d+)\s+`)
+	batchRegex      = regexp.MustCompile(`\d{2,}\s*[-~]\s*\d{2,}`)
 
 	// Catches colons, exclamation marks, question marks, and quotes
 	punctRegex = regexp.MustCompile(`[:!?'",]`)
@@ -35,13 +34,34 @@ type TorrentResult struct {
 	Score      float64 `json:"score"`
 }
 
+func extractSeason(title string) int {
+	matches := seasonRegex.FindStringSubmatch(title)
+	for i := 1; i < len(matches); i++ {
+		if matches[i] != "" {
+			s, _ := strconv.Atoi(matches[i])
+			return s
+		}
+	}
+	return 1
+}
+
+func extractEpisode(title string) int {
+	for _, re := range []*regexp.Regexp{epRegex1, epRegex2, epRegex3} {
+		if m := re.FindStringSubmatch(title); len(m) > 1 {
+			ep, _ := strconv.Atoi(m[1])
+			return ep
+		}
+	}
+	return -1
+}
+
 // GetEpisodeTorrents searches Nyaa.si, scores every torrent dynamically, and returns a sorted list.
 func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]TorrentResult, error) {
 	epStr := fmt.Sprintf("%02d", episodeNumber)
 
 	// Remove special characters that break Nyaa's search
 	safeTitle := punctRegex.ReplaceAllString(animeTitle, " ")
-	safeTitle = strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(safeTitle, " ")) // Clean up extra spaces
+	safeTitle = strings.TrimSpace(whitespaceRegex.ReplaceAllString(safeTitle, " "))
 
 	searchQuery := fmt.Sprintf("%s %s", safeTitle, epStr)
 	encodedQuery := url.QueryEscape(searchQuery)
@@ -51,7 +71,7 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 
 	// Force the connection to close if Nyaa takes longer than 10 seconds
 	fp := gofeed.NewParser()
-	fp.Client = &http.Client{Timeout: 10 * time.Second}
+	fp.Client = a.httpClient
 
 	feed, err := fp.ParseURL(feedURL)
 	if err != nil {
@@ -60,37 +80,6 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 
 	if len(feed.Items) == 0 {
 		return nil, fmt.Errorf("no torrents found for %s episode %s", animeTitle, epStr)
-	}
-
-	// Helper function: Extracts the season number from a string
-	extractSeason := func(title string) int {
-		matches := seasonRegex.FindStringSubmatch(title)
-		if len(matches) > 0 {
-			for i := 1; i < len(matches); i++ {
-				if matches[i] != "" {
-					s, _ := strconv.Atoi(matches[i])
-					return s
-				}
-			}
-		}
-		return 1
-	}
-
-	// Helper function: Extracts the episode number from a string
-	extractEpisode := func(title string) int {
-		if matches := epRegex1.FindStringSubmatch(title); len(matches) > 1 {
-			ep, _ := strconv.Atoi(matches[1])
-			return ep
-		}
-		if matches := epRegex2.FindStringSubmatch(title); len(matches) > 1 {
-			ep, _ := strconv.Atoi(matches[1])
-			return ep
-		}
-		if matches := epRegex3.FindStringSubmatch(title); len(matches) > 1 {
-			ep, _ := strconv.Atoi(matches[1])
-			return ep
-		}
-		return -1
 	}
 
 	queryTitleLow := strings.ToLower(animeTitle)
