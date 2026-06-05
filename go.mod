@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/anacrolix/torrent v1.61.0
-	github.com/dexterlb/mpvipc v0.0.0-20241005113212-7cdefca0e933
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/wailsapp/wails/v2 v2.12.0
 )
@@ -119,7 +118,6 @@ require (
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 	modernc.org/libc v1.72.5 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

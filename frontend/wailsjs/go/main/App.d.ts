@@ -6,6 +6,8 @@ export function GetEpisodeTorrents(arg1:string,arg2:number):Promise<Array<main.T
 
 export function GetTrendingAnime():Promise<Array<main.Anime>>;
 
+export function MPVStream(arg1:string,arg2:string):Promise<string>;
+
 export function SearchAnime(arg1:string):Promise<Array<main.Anime>>;
 
 export function StreamTorrent(arg1:string):Promise<string>;
