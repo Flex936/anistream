@@ -6,6 +6,12 @@ export function GetEpisodeTorrents(arg1:string,arg2:number):Promise<Array<main.T
 
 export function GetTrendingAnime():Promise<Array<main.Anime>>;
 
+export function IsLoggedIn():Promise<boolean>;
+
+export function LoginWithAniList():Promise<string>;
+
+export function Logout():Promise<void>;
+
 export function SearchAnime(arg1:string):Promise<Array<main.Anime>>;
 
 export function StreamTorrent(arg1:string):Promise<string>;

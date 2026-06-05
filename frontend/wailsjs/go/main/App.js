@@ -10,6 +10,18 @@ export function GetTrendingAnime() {
   return window['go']['main']['App']['GetTrendingAnime']();
 }
 
+export function IsLoggedIn() {
+  return window['go']['main']['App']['IsLoggedIn']();
+}
+
+export function LoginWithAniList() {
+  return window['go']['main']['App']['LoginWithAniList']();
+}
+
+export function Logout() {
+  return window['go']['main']['App']['Logout']();
+}
+
 export function SearchAnime(arg1) {
   return window['go']['main']['App']['SearchAnime'](arg1);
 }

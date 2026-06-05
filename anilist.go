@@ -54,6 +54,12 @@ func (a *App) doGraphQL(query string, variables map[string]interface{}, result i
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
+	// Inject the Authorization Header if the user is logged in!
+	cfg := LoadConfig()
+	if cfg.AniListToken != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.AniListToken)
+	}
+
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("network error contacting anilist: %w", err)

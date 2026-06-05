@@ -2,6 +2,7 @@
     import { createEventDispatcher, onMount, onDestroy } from "svelte";
     import {
         Search,
+        User,
         Settings,
         Minus,
         Maximize2,
@@ -17,6 +18,7 @@
     } from "../../wailsjs/runtime/runtime";
 
     export let searchQuery = "";
+    export let isLoggedIn = false;
     const dispatch = createEventDispatcher();
     let isMaximised = false;
 
@@ -87,7 +89,21 @@
     <div class="flex items-center space-x-4 text-muted">
         <button
             style="--wails-draggable: no-drag;"
-            class="hover:text-main transition-colors"
+            on:click={() => dispatch("login")}
+            class="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1 transition-colors
+                {isLoggedIn
+                ? 'text-green-400 hover:text-red-400'
+                : 'text-muted hover:text-main'}"
+            title={isLoggedIn ? "Log out of AniList" : "Log in to AniList"}
+        >
+            <User size={20} />
+        </button>
+
+        <button
+            style="--wails-draggable: no-drag;"
+            on:click={() => dispatch("settings")}
+            class="hover:text-main transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1"
+            title="Settings"
         >
             <Settings size={20} />
         </button>
