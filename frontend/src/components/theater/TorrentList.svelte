@@ -1,13 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import {
-        CloudDownload,
-        Search,
-        Star,
-        HardDrive,
-        Play,
-        LoaderCircle,
-    } from "lucide-svelte";
+    import { Search, HardDrive, Play, LoaderCircle } from "lucide-svelte";
     import type { main } from "../../../wailsjs/go/models";
 
     export let fetchedTorrents: main.TorrentResult[];
@@ -26,7 +19,6 @@
 
 <div class="flex items-center justify-between mb-4">
     <h3 class="text-xl font-semibold text-slate-200 flex items-center">
-        <CloudDownload size={20} class="mr-2 text-indigo-400" />
         Select Release for Episode {loadingEpisode}
     </h3>
     <button
@@ -64,7 +56,6 @@
             <div class="flex flex-col pr-4">
                 <div class="flex items-center space-x-2">
                     {#if index === 0 && !torrentSearch}
-                        <Star size={16} class="text-amber-400 fill-amber-400" />
                         <span
                             class="text-xs font-bold text-amber-400 uppercase tracking-wider"
                             >Recommended</span
