@@ -1,5 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
+    import { ArrowLeft } from "lucide-svelte";
 
     export let streamUrl: string;
     export let playingEpisode: number;
@@ -15,9 +16,10 @@
 
         <button
             on:click={() => dispatch("back")}
-            class="text-sm text-primary hover:text-primary-hover transition-colors"
+            class="flex items-center space-x-2 text-sm text-primary hover:text-primary-hover transition-colors"
         >
-            &larr; Back to Release List
+            <ArrowLeft size={16} />
+            <span>Back to Release List</span>
         </button>
     </div>
 

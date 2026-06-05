@@ -1,6 +1,12 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import { Search, HardDrive, Play, LoaderCircle } from "lucide-svelte";
+    import {
+        Search,
+        ArrowLeft,
+        HardDrive,
+        Play,
+        LoaderCircle,
+    } from "lucide-svelte";
     import type { main } from "../../../wailsjs/go/models";
 
     export let fetchedTorrents: main.TorrentResult[];
@@ -23,9 +29,10 @@
     </h3>
     <button
         on:click={() => dispatch("back")}
-        class="text-sm text-muted hover:text-main transition-colors"
+        class="flex items-center space-x-2 text-sm text-muted hover:text-main transition-colors"
     >
-        &larr; Episodes
+        <ArrowLeft size={16} />
+        <span>Back to Release List</span>
     </button>
 </div>
 
