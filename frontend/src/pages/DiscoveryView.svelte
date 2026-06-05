@@ -23,12 +23,9 @@
                 {#if searchQuery}
                     Results for "{searchQuery}"
                 {:else}
-                    Discover Anime
+                    Discover
                 {/if}
             </h2>
-            <p class="text-slate-400 mt-1 text-sm">
-                Type in the search bar above to query AniList.
-            </p>
         </div>
 
         {#if isSearching}
