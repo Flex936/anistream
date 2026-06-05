@@ -51,7 +51,7 @@
 
         try {
             const results = await GetEpisodeTorrents(titleToSearch, epNum);
-            if (gen === scrapingGen) fetchedTorrents = results;
+            if (gen === scrapingGen) fetchedTorrents = results || [];
         } catch (err) {
             if (gen === scrapingGen) alert(`Error: ${err}`);
         } finally {
@@ -79,7 +79,7 @@
 >
     <button
         on:click={goBack}
-        class="flex items-center space-x-2 text-slate-400 hover:text-white transition-colors mb-8 group"
+        class="flex items-center space-x-2 text-muted hover:text-main transition-colors mb-8 group"
     >
         <ArrowLeft
             size={20}

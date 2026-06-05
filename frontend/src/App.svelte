@@ -37,6 +37,13 @@
   // Routing State
   let selectedAnime: main.Anime | null = null;
 
+  function handleHome() {
+    selectedAnime = null;
+    searchQuery = "";
+    clearTimeout(searchTimeout);
+    loadHomePage();
+  }
+
   async function performSearch() {
     if (searchQuery.length === 0) {
       searchResults = await GetTrendingAnime();
@@ -66,8 +73,8 @@
   }
 </script>
 
-<main class="min-h-screen flex flex-col bg-slate-950">
-  <NavBar bind:searchQuery on:search={handleInput} />
+<main class="min-h-screen flex flex-col bg-base">
+  <NavBar bind:searchQuery on:search={handleInput} on:home={handleHome} />
 
   {#if selectedAnime}
     <TheaterView anime={selectedAnime} on:back={() => (selectedAnime = null)} />

@@ -52,16 +52,24 @@
 
 <nav
     style="--wails-draggable: drag;"
-    class="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 px-6 py-4 flex items-center justify-between"
+    class="sticky top-0 z-50 bg-base border-b border-border px-6 py-4 flex items-center justify-between"
 >
-    <div class="flex items-center space-x-2 text-indigo-400">
-        <h1 class="text-xl font-bold tracking-tight text-white">AniStream</h1>
-    </div>
+    <button
+        style="--wails-draggable: no-drag;"
+        on:click={() => dispatch("home")}
+        class="flex items-center space-x-2 text-primary hover:text-primary-hover transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded px-2 py-1 -ml-2 group"
+    >
+        <h1
+            class="text-xl font-bold tracking-tight text-main group-hover:text-white transition-colors"
+        >
+            AniStream
+        </h1>
+    </button>
 
     <div class="flex-1 max-w-2xl px-8">
         <div class="relative group">
             <div
-                class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-400 transition-colors"
+                class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted group-focus-within:text-primary transition-colors"
             >
                 <Search size={20} />
             </div>
@@ -71,32 +79,31 @@
                 bind:value={searchQuery}
                 on:input={handleInput}
                 placeholder="Search for anime by title..."
-                class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block pl-11 p-2.5 transition-all shadow-inner outline-none"
+                class="w-full bg-surface border border-border text-main text-sm rounded-full focus:ring-2 focus:ring-primary focus:border-primary block pl-11 p-2.5 transition-all shadow-inner outline-none"
             />
         </div>
     </div>
-    <!-- Far Right Icons -->
-    <div class="flex items-center space-x-4 text-slate-400">
+
+    <div class="flex items-center space-x-4 text-muted">
         <button
             style="--wails-draggable: no-drag;"
-            class="hover:text-white transition-colors"
+            class="hover:text-main transition-colors"
         >
             <Settings size={20} />
         </button>
 
-        <!-- Custom Window Controls -->
-        <div class="flex items-center space-x-2 border-l border-slate-700 pl-4">
+        <div class="flex items-center space-x-2 border-l border-border pl-4">
             <button
                 style="--wails-draggable: no-drag;"
                 on:click={WindowMinimise}
-                class="hover:text-white transition-colors"
+                class="hover:text-main transition-colors"
             >
                 <Minus size={20} />
             </button>
             <button
                 style="--wails-draggable: no-drag;"
                 on:click={handleWindowMaximise}
-                class="hover:text-yellow-500 transition-colors"
+                class="hover:text-accent transition-colors"
             >
                 {#if isMaximised}
                     <Minimize2 size={20} />

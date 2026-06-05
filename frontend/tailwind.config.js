@@ -4,7 +4,22 @@ export default {
     "./index.html",
     "./src/**/*.{svelte,js,ts,jsx,tsx}",],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        base: 'var(--bg-base)',
+        surface: 'var(--bg-surface)',
+        border: 'var(--bg-border)',
+
+        primary: {
+          DEFAULT: 'var(--color-primary)',
+          hover: 'var(--color-primary-hover)',
+        },
+        accent: 'var(--color-accent)',
+
+        main: 'var(--text-main)',
+        muted: 'var(--text-muted)',
+      }
+    },
   },
   plugins: [],
 }

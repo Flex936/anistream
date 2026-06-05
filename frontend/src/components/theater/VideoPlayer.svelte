@@ -9,18 +9,20 @@
 
 <div class="flex flex-col space-y-4 w-full">
     <div class="flex items-center justify-between">
-        <h3 class="text-xl font-semibold text-slate-200 flex items-center">
+        <h3 class="text-xl font-semibold text-main flex items-center">
             Episode {playingEpisode}
         </h3>
+
         <button
             on:click={() => dispatch("back")}
-            class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+            class="text-sm text-primary hover:text-primary-hover transition-colors"
         >
             &larr; Back to Release List
         </button>
     </div>
+
     <div
-        class="w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-slate-800 aspect-video animate-in fade-in zoom-in-95"
+        class="w-full bg-black rounded-xl shadow-2xl border border-border aspect-video animate-in fade-in"
     >
         <video src={streamUrl} controls autoplay class="w-full h-full">
             <track kind="captions" srclang="en" label="English" />
