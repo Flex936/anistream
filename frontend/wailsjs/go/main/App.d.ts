@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function GetEpisodeTorrents(arg1:string,arg2:number):Promise<Array<main.TorrentResult>>;
 
+export function GetTrendingAnime():Promise<Array<main.Anime>>;
+
 export function SearchAnime(arg1:string):Promise<Array<main.Anime>>;
 
 export function StreamTorrent(arg1:string):Promise<string>;

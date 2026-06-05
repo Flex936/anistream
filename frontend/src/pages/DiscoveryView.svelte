@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from "svelte";
-    import AnimeCard from "./AnimeCard.svelte";
+    import AnimeCard from "../components/AnimeCard.svelte";
     import { LoaderCircle } from "lucide-svelte";
     import type { main } from "../../wailsjs/go/models";
 
@@ -19,20 +19,17 @@
 <div class="flex-1 p-8 max-w-7xl mx-auto w-full">
     <div class="mb-8 flex items-center justify-between">
         <div>
-            <h2 class="text-2xl font-semibold text-slate-100">
+            <h2 class="text-2xl font-semibold text-main">
                 {#if searchQuery}
                     Results for "{searchQuery}"
                 {:else}
-                    Discover Anime
+                    Discover
                 {/if}
             </h2>
-            <p class="text-slate-400 mt-1 text-sm">
-                Type in the search bar above to query AniList.
-            </p>
         </div>
 
         {#if isSearching}
-            <LoaderCircle class="w-6 h-6 text-indigo-500 animate-spin" />
+            <LoaderCircle class="w-6 h-6 text-primary animate-spin" />
         {/if}
     </div>
 

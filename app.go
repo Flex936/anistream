@@ -18,36 +18,63 @@ import (
 	"sync"
 	"time"
 
+	"log"
+	"net/http"
+	"sync"
+	"time"
+
 	"github.com/dexterlb/mpvipc"
 	"github.com/mmcdole/gofeed"
-)
 
-// ==========================================
-// 1. APP CORE & INITIALIZATION
-// ==========================================
+	"github.com/anacrolix/torrent"
+)
 
 // App struct holds the application state and torrent engine
 type App struct {
-	ctx       context.Context
-	mpvCmd    *exec.Cmd
-	mpvClient *mpvipc.Connection
-	mpvMutex  sync.Mutex
-	mpvStdout io.ReadCloser
-	clients   map[chan []byte]bool
-	clientsMu sync.Mutex
+	ctx           context.Context
+	mpvCmd        *exec.Cmd
+	mpvMutex      sync.Mutex
+	mpvStdout     io.ReadCloser
+	clients       map[chan []byte]bool
+	clientsMu     sync.Mutex
+	ctx           context.Context
+	torrentClient *torrent.Client
+
+	mu            sync.RWMutex // guards the two fields below
+	activeFile    *torrent.File
+	activeTorrent *torrent.Torrent
 }
 
-// NewApp creates a new App application struct and boots the background services
 func NewApp() *App {
 	initTorrentEngine() // Initialize global torrent engine
 
 	app := &App{}
+	cfg := torrent.NewDefaultClientConfig()
+	cfg.DataDir = "./tmp_downloads"
+	cfg.NoUpload = true
 
-	// Start the local HTTP streaming server in the background
+	client, err := torrent.NewClient(cfg)
+	if err != nil {
+		log.Fatalf("failed to create torrent client: %v", err)
+	}
+
+	app := &App{
+		torrentClient: client,
+		httpClient:    &http.Client{Timeout: 10 * time.Second},
+	}
+
+	mux := http.NewServeMux()
+	// streamHandler is defined in stream.go
+	mux.HandleFunc("/stream", app.streamHandler)
+
 	go func() {
 		http.HandleFunc("/stream", app.streamHandler)
 		http.HandleFunc("/mpv-frame-stream", app.mpvFrameStreamHandler)
 		http.ListenAndServe(":8080", nil)
+		srv := &http.Server{Addr: ":8080", Handler: mux}
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("stream server exited: %v", err)
+		}
 	}()
 
 	return app

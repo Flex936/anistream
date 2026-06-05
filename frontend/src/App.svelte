@@ -1,33 +1,67 @@
 <script lang="ts">
-  import { SearchAnime } from "../wailsjs/go/main/App";
+  import { onMount, onDestroy } from "svelte";
+  import { SearchAnime, GetTrendingAnime } from "../wailsjs/go/main/App";
   import type { main } from "../wailsjs/go/models";
 
   import NavBar from "./components/NavBar.svelte";
-  import DiscoveryView from "./components/DiscoveryView.svelte";
-  import TheaterView from "./components/TheaterView.svelte";
+  import DiscoveryView from "./pages/DiscoveryView.svelte";
+  import TheaterView from "./pages/TheaterView.svelte";
 
   // State Variables
   let searchQuery = "";
   let isSearching = false;
   let searchResults: main.Anime[] = [];
   let searchTimeout: ReturnType<typeof setTimeout>;
+  let searchGen = 0;
+
+  onMount(async () => {
+    await loadHomePage();
+  });
+
+  // Clear the pending timeout so it doesn't fire after the app closes
+  onDestroy(() => {
+    clearTimeout(searchTimeout);
+  });
+
+  async function loadHomePage() {
+    isSearching = true;
+    try {
+      searchResults = await GetTrendingAnime();
+    } catch (error) {
+      console.error("Failed to load trending anime:", error);
+    } finally {
+      isSearching = false;
+    }
+  }
 
   // Routing State
   let selectedAnime: main.Anime | null = null;
 
+  function handleHome() {
+    selectedAnime = null;
+    searchQuery = "";
+    clearTimeout(searchTimeout);
+    loadHomePage();
+  }
+
   async function performSearch() {
-    if (searchQuery.trim().length < 3) {
-      searchResults = [];
+    if (searchQuery.length === 0) {
+      searchResults = await GetTrendingAnime();
       return;
     }
+
+    const gen = ++searchGen;
     isSearching = true;
     try {
       const results = await SearchAnime(searchQuery);
-      searchResults = results || [];
+      // Only commit results if no newer search has been issued
+      if (gen === searchGen) {
+        searchResults = results || [];
+      }
     } catch (err) {
-      console.error(err);
+      if (gen === searchGen) console.error(err);
     } finally {
-      isSearching = false;
+      if (gen === searchGen) isSearching = false;
     }
   }
 
@@ -39,8 +73,8 @@
   }
 </script>
 
-<main class="min-h-screen flex flex-col bg-slate-950">
-  <NavBar bind:searchQuery on:search={handleInput} />
+<main class="min-h-screen flex flex-col bg-base">
+  <NavBar bind:searchQuery on:search={handleInput} on:home={handleHome} />
 
   {#if selectedAnime}
     <TheaterView anime={selectedAnime} on:back={() => (selectedAnime = null)} />

@@ -1,44 +1,123 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
-    import { Search, Settings, Clapperboard } from "lucide-svelte";
+    import { createEventDispatcher, onMount, onDestroy } from "svelte";
+    import {
+        Search,
+        Settings,
+        Minus,
+        Maximize2,
+        Minimize2,
+        X,
+    } from "lucide-svelte";
+    import {
+        WindowMinimise,
+        WindowIsMaximised,
+        WindowUnmaximise,
+        WindowMaximise,
+        Quit,
+    } from "../../wailsjs/runtime/runtime";
 
     export let searchQuery = "";
-
     const dispatch = createEventDispatcher();
+    let isMaximised = false;
+
+    async function syncMaximisedState() {
+        isMaximised = await WindowIsMaximised();
+    }
+
+    onMount(async () => {
+        await syncMaximisedState();
+        // Keep icon in sync when OS resizes the window
+        window.addEventListener("resize", syncMaximisedState);
+    });
+
+    onDestroy(() => {
+        window.removeEventListener("resize", syncMaximisedState);
+    });
 
     function handleInput() {
         dispatch("search", searchQuery);
     }
+
+    async function handleWindowMaximise() {
+        // Don't trust local state for the decision
+        if (await WindowIsMaximised()) {
+            WindowUnmaximise();
+            isMaximised = false;
+        } else {
+            WindowMaximise();
+            isMaximised = true;
+        }
+    }
 </script>
 
 <nav
-    class="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 px-6 py-4 flex items-center justify-between"
+    style="--wails-draggable: drag;"
+    class="sticky top-0 z-50 bg-base border-b border-border px-6 py-4 flex items-center justify-between"
 >
-    <div class="flex items-center space-x-2 text-indigo-400">
-        <Clapperboard size={28} />
-        <h1 class="text-xl font-bold tracking-tight text-white">AniStream</h1>
-    </div>
+    <button
+        style="--wails-draggable: no-drag;"
+        on:click={() => dispatch("home")}
+        class="flex items-center space-x-2 text-primary hover:text-primary-hover transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded px-2 py-1 -ml-2 group"
+    >
+        <h1
+            class="text-xl font-bold tracking-tight text-main group-hover:text-white transition-colors"
+        >
+            AniStream
+        </h1>
+    </button>
 
     <div class="flex-1 max-w-2xl px-8">
         <div class="relative group">
             <div
-                class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-400 transition-colors"
+                class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted group-focus-within:text-primary transition-colors"
             >
                 <Search size={20} />
             </div>
             <input
+                style="--wails-draggable: no-drag;"
                 type="text"
                 bind:value={searchQuery}
                 on:input={handleInput}
                 placeholder="Search for anime by title..."
-                class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-full focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block pl-11 p-2.5 transition-all shadow-inner outline-none"
+                class="w-full bg-surface border border-border text-main text-sm rounded-full focus:ring-2 focus:ring-primary focus:border-primary block pl-11 p-2.5 transition-all shadow-inner outline-none"
             />
         </div>
     </div>
 
-    <div
-        class="flex items-center text-slate-400 hover:text-white cursor-pointer transition-colors"
-    >
-        <Settings size={24} />
+    <div class="flex items-center space-x-4 text-muted">
+        <button
+            style="--wails-draggable: no-drag;"
+            class="hover:text-main transition-colors"
+        >
+            <Settings size={20} />
+        </button>
+
+        <div class="flex items-center space-x-2 border-l border-border pl-4">
+            <button
+                style="--wails-draggable: no-drag;"
+                on:click={WindowMinimise}
+                class="hover:text-main transition-colors"
+            >
+                <Minus size={20} />
+            </button>
+            <button
+                style="--wails-draggable: no-drag;"
+                on:click={handleWindowMaximise}
+                class="hover:text-accent transition-colors"
+            >
+                {#if isMaximised}
+                    <Minimize2 size={20} />
+                {:else}
+                    <Maximize2 size={20} />
+                {/if}
+            </button>
+            <button
+                style="--wails-draggable: no-drag;"
+                on:click={Quit}
+                class="hover:text-red-400 transition-colors"
+            >
+                <X size={20} />
+            </button>
+        </div>
     </div>
 </nav>
