@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -11,8 +12,9 @@ import (
 )
 
 type MpvManager struct {
-	mutex     sync.Mutex
-	activeCmd *exec.Cmd // Tracks the background transcoder process safely
+	mutex      sync.Mutex
+	activeCmd  *exec.Cmd
+	cancelFunc context.CancelFunc // cancels waitForFile when StopTranscode is called
 }
 
 func NewMpvManager() *MpvManager {
@@ -24,56 +26,85 @@ func (m *MpvManager) Init() error {
 	return nil
 }
 
-// StartTranscode fires up a detached background process to slice video into HLS segments
+// StartTranscode fires up a detached background process to slice video into HLS segments.
+// The mutex is held only for the setup phase so that StopTranscode can always interrupt
+// immediately, even while waitForFile is polling.
 func (m *MpvManager) StartTranscode(sourceURL string) error {
+	// ── Phase 1: setup (mutex held) ─────────────────────────────────────────
 	m.mutex.Lock()
-	defer m.mutex.Unlock()
 
-	// 1. Guard against overlapping runs: kill any existing transcoder first
-	m.stopOldProcess()
+	m.stopOldProcess() // kill any previous transcode + cancel its wait
 
-	// 2. Clear out old HLS segment cache
 	_ = os.RemoveAll("./tmp_hls")
 	_ = os.MkdirAll("./tmp_hls", 0755)
 
-	// 3. Configure MPV to run persistently in the background
+	// Each transcode gets its own context so we can cancel waitForFile
+	// the instant StopTranscode is called, without waiting for polling to finish.
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelFunc = cancel
+
+	// cmd.Dir = "./tmp_hls" is critical: the fMP4 HLS muxer writes init.mp4
+	// relative to the process CWD, not relative to --o, so all output files
+	// (index.m3u8, init.mp4, *.m4s) must land in the same folder.
 	cmd := exec.Command("mpv",
 		sourceURL,
-		"--o=index.m3u8",
+		"--o=index.m3u8", // relative to cmd.Dir
 		"--of=hls",
 		"--ofopts=hls_time=2,hls_segment_type=fmp4,hls_playlist_type=event",
 		"--ovc=libx264",
 		"--oac=aac",
 		"--ovcopts=preset=ultrafast,tune=zerolatency",
-		"--sid=1", // Default to subtitle track 1
+		"--sid=1",
 	)
 	cmd.Dir = "./tmp_hls"
-	// Note: We deliberately do NOT use a defer Kill loop here.
-	// We want this process to stay alive after this function returns!
+
 	if err := cmd.Start(); err != nil {
+		cancel()
+		m.cancelFunc = nil
+		m.mutex.Unlock()
 		return fmt.Errorf("failed to start mpv background transcode: %w", err)
 	}
 
 	m.activeCmd = cmd
 	log.Println("[MPV] Started live background HLS transcode pipeline.")
-	return m.waitForFile(filepath.Join("./tmp_hls", "init.mp4"), 30*time.Second)
-}
 
-func (m *MpvManager) waitForFile(path string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(path); err == nil {
-			log.Printf("[MPV] Ready — %s written to disk.", filepath.Base(path))
-			return nil
-		}
-		time.Sleep(250 * time.Millisecond)
+	// ── Phase 2: wait WITHOUT holding the mutex ──────────────────────────────
+	// Releasing here lets StopTranscode acquire the lock and kill the process
+	// immediately if the user switches videos during the wait.
+	m.mutex.Unlock()
+
+	if err := m.waitForFile(ctx, filepath.Join("./tmp_hls", "init.mp4"), 30*time.Second); err != nil {
+		m.StopTranscode() // clean up if we timed out or were cancelled
+		return err
 	}
-	// MPV never produced the file; kill it so we don't leave a zombie.
-	m.stopOldProcess()
-	return fmt.Errorf("timed out waiting for %s — MPV may have crashed or the source is not yet buffered", filepath.Base(path))
+	return nil
 }
 
-// StopTranscode safely halts the active transcoder process
+// waitForFile polls until path exists or ctx is cancelled (StopTranscode was called)
+// or the timeout elapses. It does NOT hold the mutex.
+func (m *MpvManager) waitForFile(ctx context.Context, path string, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// StopTranscode cancelled us — not an error worth surfacing
+			return fmt.Errorf("transcode stopped before %s was ready", filepath.Base(path))
+		case <-timer.C:
+			return fmt.Errorf("timed out waiting for %s — MPV may have crashed or source not yet buffered", filepath.Base(path))
+		case <-ticker.C:
+			if _, err := os.Stat(path); err == nil {
+				log.Printf("[MPV] Ready — %s written to disk.", filepath.Base(path))
+				return nil
+			}
+		}
+	}
+}
+
+// StopTranscode cancels any in-progress waitForFile, then kills the MPV process.
 func (m *MpvManager) StopTranscode() {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -84,8 +115,13 @@ func (m *MpvManager) Shutdown() {
 	m.StopTranscode()
 }
 
-// Internal helper assumes mutex lock is already held
+// stopOldProcess assumes the mutex is already held.
 func (m *MpvManager) stopOldProcess() {
+	// Cancel waitForFile first so it stops polling immediately.
+	if m.cancelFunc != nil {
+		m.cancelFunc()
+		m.cancelFunc = nil
+	}
 	if m.activeCmd != nil && m.activeCmd.Process != nil {
 		log.Println("[MPV] Stopping active background transcoder process...")
 		_ = m.activeCmd.Process.Kill()
