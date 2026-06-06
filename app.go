@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
+	"os/exec"
 	"sync"
 	"time"
 
@@ -18,6 +18,7 @@ type App struct {
 	mu            sync.RWMutex // guards fields below
 	activeFile    *torrent.File
 	activeTorrent *torrent.Torrent
+	activeCmd     *exec.Cmd
 	httpClient    *http.Client
 	mpv           *MpvManager // Access point to separated MPV logic
 }
@@ -35,13 +36,29 @@ func NewApp() *App {
 	app := &App{
 		torrentClient: client,
 		httpClient:    &http.Client{Timeout: 10 * time.Second},
-		mpv:           NewMpvManager(), // Initialize MPV manager
+		mpv:           NewMpvManager(),
 	}
 
 	mux := http.NewServeMux()
-	// streamHandler is assumed to be defined in stream.go
 	mux.HandleFunc("/stream", app.streamHandler)
-	mux.HandleFunc("/mpv-stream", app.mpv.LiveStreamHandler)
+	fileServer := http.FileServer(http.Dir("./tmp_hls"))
+	hlsHandler := http.StripPrefix("/hls/", fileServer)
+
+	// 2. Wrap it with CORS middleware so hls.js can access index.m3u8 and .m4s segments
+	mux.Handle("/hls/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Range, Content-Type")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
+
+		// Handle browser preflight checks instantly
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		hlsHandler.ServeHTTP(w, r)
+	}))
 
 	go func() {
 		srv := &http.Server{Addr: ":8080", Handler: mux}
@@ -64,20 +81,4 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) shutdown(ctx context.Context) {
 	a.mpv.Shutdown()
-}
-
-// MPVStream takes a magnet link, gets the stream URL, and forwards it to the MPV processor
-func (a *App) MPVStream(magnetLink string, selectedSubtitle string) (string, error) {
-	streamURL, err := a.StreamTorrent(magnetLink) // Fetch the localhost torrent server address
-	if err != nil {
-		return "", err
-	}
-
-	if selectedSubtitle == "" {
-		selectedSubtitle = "1"
-	}
-
-	// Send the structural instructions directly to the frontend player element
-	targetPlaybackURL := fmt.Sprintf("http://localhost:8080/mpv-stream?source=%s&sub=%s", streamURL, selectedSubtitle)
-	return targetPlaybackURL, nil
 }

@@ -1,40 +1,76 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
-    // Assuming these are your Wails runtime bindings
-    import { EventsEmit } from "../../../wailsjs/runtime/runtime";
-
     export let streamUrl: string;
     export let playingEpisode: number;
+    import { onMount, onDestroy } from "svelte";
+    import Hls from "hls.js";
+    let videoElement;
+    let hlsInstance;
 
-    let videoElement: HTMLVideoElement;
-    let isPaused = true;
-    let currentTime = 0;
-    let duration = 1389; // 23 minutes in seconds (you can pass this from Go metadata)
+    function initPlayer() {
+        if (!streamUrl || !videoElement) return;
 
-    function togglePlay() {
-        if (!videoElement) return;
-        if (videoElement.paused) {
-            videoElement.play();
-            isPaused = false;
-        } else {
-            videoElement.pause();
-            isPaused = true;
+        // Reset player state if changing paths or instances
+        if (hlsInstance) {
+            hlsInstance.destroy();
+        }
+
+        // Check if the browser natively supports HLS (Safari/iOS default)
+        if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+            videoElement.src = streamUrl;
+        }
+        // Use hls.js for all engines lacking native layout parsing (Chrome, Firefox, Electron/Wails)
+        else if (Hls.isSupported()) {
+            hlsInstance = new Hls({
+                maxBufferLength: 10, // Max window chunk memory size (keeps disk-read footprint small)
+                liveSyncDurationCount: 3, // Start playing after 3 chunks are written (~6 seconds)
+            });
+
+            hlsInstance.loadSource(streamUrl);
+            hlsInstance.attachMedia(videoElement);
+
+            hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+                videoElement.play().catch((err) => {
+                    console.log(
+                        "Autoplay blocked, waiting for user interactions:",
+                        err,
+                    );
+                });
+            });
+
+            hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+                if (data.fatal) {
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            console.log(
+                                "HLS Network issue encountered, attempting reconnect...",
+                            );
+                            hlsInstance.startLoad();
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            console.log(
+                                "HLS Media recovery processing triggered...",
+                            );
+                            hlsInstance.recoverMediaError();
+                            break;
+                        default:
+                            initPlayer();
+                            break;
+                    }
+                }
+            });
         }
     }
 
-    // Server-side Seeking: Tell Go to restart the MPV process at a specific second
-    function handleScrub(e: Event) {
-        const targetTime = parseFloat((e.target as HTMLInputElement).value);
-        currentTime = targetTime;
-        // Emit a Wails event that your backend listens to
-        EventsEmit("player:seek", targetTime);
+    // Trigger video load hook on lifecycle mounting or route updates
+    $: if (streamUrl && videoElement) {
+        initPlayer();
     }
 
-    function formatTime(secs: number) {
-        const m = Math.floor(secs / 60);
-        const s = Math.floor(secs % 60);
-        return `${m}:${s < 10 ? "0" : ""}${s}`;
-    }
+    onDestroy(() => {
+        if (hlsInstance) {
+            hlsInstance.destroy();
+        }
+    });
 </script>
 
 <div
@@ -42,50 +78,11 @@
 >
     <video
         bind:this={videoElement}
-        src={streamUrl}
-        autoplay
+        controls
+        preload="none"
+        crossorigin="anonymous"
         class="w-full h-full object-contain"
-        on:timeupdate={() => {
-            if (!videoElement.paused) currentTime += 0.25;
-        }}
-    />
-
-    <div
-        class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 space-y-3"
     >
-        <div class="flex items-center space-x-2 w-full">
-            <span class="text-xs text-zinc-400 font-mono"
-                >{formatTime(currentTime)}</span
-            >
-            <input
-                type="range"
-                min="0"
-                max={duration}
-                value={currentTime}
-                on:change={handleScrub}
-                class="w-full h-1 bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-primary"
-            />
-            <span class="text-xs text-zinc-400 font-mono"
-                >{formatTime(duration)}</span
-            >
-        </div>
-
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-                <button
-                    on:click={togglePlay}
-                    class="text-white hover:text-primary transition-colors text-sm font-semibold"
-                >
-                    {#if isPaused}
-                        Play
-                    {:else}
-                        Pause
-                    {/if}
-                </button>
-                <span class="text-sm text-zinc-300"
-                    >Episode {playingEpisode}</span
-                >
-            </div>
-        </div>
-    </div>
+        <track kind="captions" />
+    </video>
 </div>

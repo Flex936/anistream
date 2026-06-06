@@ -9,7 +9,10 @@ import (
 )
 
 func (a *App) StreamTorrent(magnetLink string) (string, error) {
-	// drop any previously active stream
+	// 1. Tell MPV manager to drop any previous background transcodes
+	a.mpv.StopTranscode()
+
+	// 2. Drop any previously active torrent stream
 	a.mu.Lock()
 	if a.activeTorrent != nil {
 		a.activeTorrent.Drop()
@@ -50,10 +53,17 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 	a.activeFile = targetFile
 	a.mu.Unlock()
 
-	return "http://localhost:8080/stream", nil
+	// 3. Delegate background process creation entirely to your MpvManager
+	sourceURL := "http://localhost:8080/stream"
+	if err := a.mpv.StartTranscode(sourceURL); err != nil {
+		return "", fmt.Errorf("transcoder failed to initialize: %w", err)
+	}
+
+	// 4. Return the static playlist file path for hls.js to read
+	return "http://localhost:8080/hls/index.m3u8", nil
 }
 
-// streamHandler feeds the downloading torrent bytes to the Svelte video player
+// streamHandler feeds the downloading torrent bytes to the background MPV engine
 func (a *App) streamHandler(w http.ResponseWriter, r *http.Request) {
 	a.mu.RLock()
 	file := a.activeFile

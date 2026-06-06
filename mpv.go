@@ -2,85 +2,94 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
+	"time"
 )
 
 type MpvManager struct {
-	mutex sync.Mutex
+	mutex     sync.Mutex
+	activeCmd *exec.Cmd // Tracks the background transcoder process safely
 }
 
 func NewMpvManager() *MpvManager {
 	return &MpvManager{}
 }
 
-// Init can now remain basic as we spawn transcoding pipelines per request
 func (m *MpvManager) Init() error {
 	log.Println("[MPV] Transcoder engine initialized.")
 	return nil
 }
 
-func (m *MpvManager) Shutdown() {}
+// StartTranscode fires up a detached background process to slice video into HLS segments
+func (m *MpvManager) StartTranscode(sourceURL string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-// LiveStreamHandler transcodes the torrent source into a real-time WebM video on the fly
-func (m *MpvManager) LiveStreamHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Range, Content-Type")
+	// 1. Guard against overlapping runs: kill any existing transcoder first
+	m.stopOldProcess()
 
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	// 2. Clear out old HLS segment cache
+	_ = os.RemoveAll("./tmp_hls")
+	_ = os.MkdirAll("./tmp_hls", 0755)
 
-	sourceURL := r.URL.Query().Get("source")
-	subTrack := r.URL.Query().Get("sub")
-
-	if sourceURL == "" {
-		http.Error(w, "missing source URL parameter", http.StatusBadRequest)
-		return
-	}
-	if subTrack == "" {
-		subTrack = "1"
-	}
-
-	// 2. Set streaming headers
-	w.Header().Set("Content-Type", "video/mp4")
-	w.Header().Set("Cache-Control", "no-cache, private")
-	w.Header().Set("Connection", "keep-alive")
-
-	// 3. Execute MPV (This burns the subtitles in!)
+	// 3. Configure MPV to run persistently in the background
 	cmd := exec.Command("mpv",
 		sourceURL,
-		"--o=-",
-		"--of=mp4",
+		"--o=index.m3u8",
+		"--of=hls",
+		"--ofopts=hls_time=2,hls_segment_type=fmp4,hls_playlist_type=event",
 		"--ovc=libx264",
 		"--oac=aac",
-		"--ofopts=movflags=frag_keyframe+empty_moov+default_base_moof",
 		"--ovcopts=preset=ultrafast,tune=zerolatency",
-		fmt.Sprintf("--sid=%s", subTrack), // <-- This burns the subtitles into the stream
+		"--sid=1", // Default to subtitle track 1
 	)
-	cmd.Stderr = os.Stderr
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	cmd.Dir = "./tmp_hls"
+	// Note: We deliberately do NOT use a defer Kill loop here.
+	// We want this process to stay alive after this function returns!
 	if err := cmd.Start(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return fmt.Errorf("failed to start mpv background transcode: %w", err)
 	}
 
-	defer func() {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-	}()
+	m.activeCmd = cmd
+	log.Println("[MPV] Started live background HLS transcode pipeline.")
+	return m.waitForFile(filepath.Join("./tmp_hls", "init.mp4"), 30*time.Second)
+}
 
-	_, _ = io.Copy(w, stdout)
+func (m *MpvManager) waitForFile(path string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			log.Printf("[MPV] Ready — %s written to disk.", filepath.Base(path))
+			return nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	// MPV never produced the file; kill it so we don't leave a zombie.
+	m.stopOldProcess()
+	return fmt.Errorf("timed out waiting for %s — MPV may have crashed or the source is not yet buffered", filepath.Base(path))
+}
+
+// StopTranscode safely halts the active transcoder process
+func (m *MpvManager) StopTranscode() {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.stopOldProcess()
+}
+
+func (m *MpvManager) Shutdown() {
+	m.StopTranscode()
+}
+
+// Internal helper assumes mutex lock is already held
+func (m *MpvManager) stopOldProcess() {
+	if m.activeCmd != nil && m.activeCmd.Process != nil {
+		log.Println("[MPV] Stopping active background transcoder process...")
+		_ = m.activeCmd.Process.Kill()
+		_ = m.activeCmd.Wait()
+		m.activeCmd = nil
+	}
 }
