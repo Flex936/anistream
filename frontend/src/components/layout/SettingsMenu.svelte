@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from "svelte";
-  import { X, Monitor, HardDrive } from "lucide-svelte";
+  import { onMount } from "svelte";
+  import { X, Monitor, HardDrive } from "@lucide/svelte";
   import {
     GetResolution,
     UpdateResolution,
@@ -9,11 +9,11 @@
   } from "../../../wailsjs/go/main/App";
   import { WindowSetSize } from "../../../wailsjs/runtime/runtime";
 
-  const dispatch = createEventDispatcher();
+  let { onClose }: { onClose?: () => void } = $props();
 
-  let activeTab = "general";
-  let isSaving = false;
-  let filterEcchi = true;
+  let activeTab = $state("general");
+  let isSaving = $state(false);
+  let filterEcchi = $state(true);
 
   const resolutions = [
     { label: "720p HD (1280 x 720)", w: 1280, h: 720 },
@@ -21,7 +21,7 @@
     { label: "1080p Full HD (1920 x 1080)", w: 1920, h: 1080 },
     { label: "1440p QHD (2560 x 1440)", w: 2560, h: 1440 },
   ];
-  let selectedRes = resolutions[0];
+  let selectedRes = $state(resolutions[0]);
 
   onMount(async () => {
     try {
@@ -44,7 +44,7 @@
       await UpdateEcchiFilter(filterEcchi);
 
       WindowSetSize(selectedRes.w, selectedRes.h);
-      dispatch("close");
+      onClose?.();
     } catch (err) {
       console.error("Failed to save settings:", err);
       alert("Error saving settings");
@@ -55,7 +55,7 @@
 </script>
 
 <div
-  class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+  class="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
 >
   <div
     class="w-full max-w-3xl bg-surface border border-border rounded-xl shadow-2xl flex overflow-hidden animate-in fade-in zoom-in-95 duration-200"
@@ -70,7 +70,7 @@
         'general'
           ? 'bg-primary/20 text-primary'
           : 'text-muted hover:bg-surface hover:text-main'}"
-        on:click={() => (activeTab = "general")}
+        onclick={() => (activeTab = "general")}
       >
         <Monitor size={18} />
         <span class="font-medium">General</span>
@@ -78,7 +78,7 @@
 
       <button
         class="flex items-center space-x-3 px-4 py-2 rounded-lg text-muted hover:bg-surface hover:text-main transition-colors"
-        on:click={() => (activeTab = "downloads")}
+        onclick={() => (activeTab = "downloads")}
       >
         <HardDrive size={18} />
         <span class="font-medium">Downloads</span>
@@ -88,7 +88,7 @@
     <div class="flex-1 flex flex-col relative min-h-[400px]">
       <button
         class="absolute top-4 right-4 p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-full transition-colors"
-        on:click={() => dispatch("close")}
+        onclick={() => onClose?.()}
       >
         <X size={20} />
       </button>
@@ -112,7 +112,7 @@
                       res.label
                         ? 'border-primary bg-primary/10'
                         : 'border-border bg-base hover:border-gray-500 hover:bg-surface'}"
-                      on:click={() => (selectedRes = res)}
+                      onclick={() => (selectedRes = res)}
                     >
                       <span
                         class="font-bold {selectedRes.label === res.label
@@ -154,7 +154,7 @@
                   class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary {filterEcchi
                     ? 'bg-primary'
                     : 'bg-gray-600'}"
-                  on:click={() => (filterEcchi = !filterEcchi)}
+                  onclick={() => (filterEcchi = !filterEcchi)}
                 >
                   <span
                     class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {filterEcchi
@@ -175,7 +175,7 @@
 
       <div class="border-t border-border p-4 bg-base flex justify-end">
         <button
-          on:click={handleSave}
+          onclick={handleSave}
           disabled={isSaving}
           class="bg-primary hover:bg-primary-hover text-white font-medium px-6 py-2 rounded-lg transition-colors shadow-md disabled:opacity-50"
         >

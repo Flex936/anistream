@@ -1,39 +1,29 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+    /* Backgrounds */
+    --color-base: #0a0a0c;
+    --color-surface: #14151a;
+    --color-border: #272a35;
+
+    /* Brand Colors */
+    --color-primary: #6366f1;
+    --color-primary-hover: #4f46e5;
+    --color-accent: #fbbf24;
+
+    /* Text Colors */
+    --color-main: #f1f5f9;
+    --color-muted: #94a3b8;
+}
 
 @layer base {
-    :root {
-        /* Backgrounds - Almost black, soft charcoal gray */
-        --bg-base: #0a0a0c;
-        --bg-surface: #14151a;
-        /* Slightly lighter for cards, sidebars, and menus */
-        --bg-border: #272a35;
-        /* For borders separating elements */
-
-        /* Brand Colors (Keeping your Indigo/Amber vibe) */
-        --color-primary: #6366f1;
-        /* Indigo 500 */
-        --color-primary-hover: #4f46e5;
-        /* Indigo 600 */
-        --color-accent: #fbbf24;
-        /* Amber 400 (for your Recommended stars) */
-
-        /* Text Colors */
-        --text-main: #f1f5f9;
-        /* Slate 100 - Crisp white */
-        --text-muted: #94a3b8;
-        /* Slate 400 - Gray for descriptions/subtitles */
-    }
-
     body {
-        /* We swap out bg-slate-950 for our new bg-base! */
         @apply bg-base text-main antialiased select-none overflow-x-hidden;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
 }
 
-/* Keep your custom scrollbar styles here! */
+/* Custom Scrollbar Styles */
 .custom-scrollbar::-webkit-scrollbar {
     width: 8px;
 }
@@ -43,10 +33,10 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--bg-border);
+    background: var(--color-border);
     border-radius: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
+    background: var(--color-muted);
 }

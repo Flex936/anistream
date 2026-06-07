@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import { ArrowLeft } from "lucide-svelte";
+  import { ArrowLeft } from "@lucide/svelte";
   import type { main } from "../../wailsjs/go/models";
   import {
     GetEpisodeTorrents,
@@ -13,32 +12,36 @@
   import TorrentList from "../components/theater/TorrentList.svelte";
   import VideoPlayer from "../components/theater/VideoPlayer.svelte";
 
-  export let anime: main.Anime;
-  const dispatch = createEventDispatcher();
+  let {
+    anime,
+    onBack,
+  }: {
+    anime: main.Anime;
+    onBack: () => void;
+  } = $props();
 
-  // State Variables
-  let isScraping = false;
+  let isScraping = $state(false);
+  let isStartingStream = $state(false);
+  let loadingEpisode = $state(0);
+  let playingEpisode = $state(0);
+  let streamUrl = $state<string | null>(null);
+  let fetchedTorrents = $state<main.TorrentResult[]>([]);
+
   let scrapingGen = 0;
-  let isStartingStream = false;
-  let loadingEpisode = 0;
-  let playingEpisode = 0;
 
-  let streamUrl: string | null = null;
-  let fetchedTorrents: main.TorrentResult[] = [];
-
-  // Smart Episode Math
-  $: availableEpisodes = (() => {
+  let availableEpisodes = $derived.by(() => {
     if (anime.status === "RELEASING" && anime.nextAiringEpisode) {
       return anime.nextAiringEpisode.episode - 1;
     }
     return anime.episodes || 0;
-  })();
+  });
 
-  $: episodeList = anime.episodes
-    ? Array.from({ length: anime.episodes }, (_, i) => i + 1)
-    : [];
+  let episodeList = $derived(
+    anime.episodes
+      ? Array.from({ length: anime.episodes }, (_, i) => i + 1)
+      : [],
+  );
 
-  // FIX: Consolidated goBack function
   function goBack() {
     scrapingGen++; // Invalidate requests
     streamUrl = null;
@@ -46,7 +49,8 @@
     playingEpisode = 0;
     loadingEpisode = 0;
     isScraping = false;
-    dispatch("back");
+
+    onBack();
 
     // Ensure we kill the torrent if the user backs out
     StopStream().catch((err) =>
@@ -54,8 +58,7 @@
     );
   }
 
-  async function handleFetchTorrents(event: CustomEvent<number>) {
-    const epNum = event.detail;
+  async function handleFetchTorrents(epNum: number) {
     const titleToSearch = anime.title?.romaji || anime.title?.english || "";
     if (!titleToSearch) return;
 
@@ -74,8 +77,8 @@
     }
   }
 
-  async function handleStartStream(event: CustomEvent<string>) {
-    const magnet = event.detail;
+  // Magnet link passed directly instead of CustomEvent
+  async function handleStartStream(magnet: string) {
     isStartingStream = true;
     try {
       const url = await StreamTorrent(magnet);
@@ -93,7 +96,7 @@
   class="flex-1 p-8 max-w-7xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500"
 >
   <button
-    on:click={goBack}
+    onclick={goBack}
     class="flex items-center space-x-2 text-muted hover:text-main transition-colors mb-8 group"
   >
     <ArrowLeft
@@ -112,7 +115,7 @@
           {streamUrl}
           {playingEpisode}
           animeId={anime.id}
-          on:back={() => {
+          onBack={() => {
             streamUrl = null;
             playingEpisode = 0;
           }}
@@ -122,11 +125,11 @@
           {fetchedTorrents}
           {loadingEpisode}
           {isStartingStream}
-          on:back={() => {
+          onBack={() => {
             fetchedTorrents = [];
             loadingEpisode = 0;
           }}
-          on:play={handleStartStream}
+          onPlay={handleStartStream}
         />
       {:else}
         <EpisodeList
@@ -134,7 +137,7 @@
           {anime}
           {isScraping}
           {loadingEpisode}
-          on:select={handleFetchTorrents}
+          onSelect={handleFetchTorrents}
         />
       {/if}
     </div>

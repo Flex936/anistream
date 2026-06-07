@@ -2,7 +2,7 @@
   import type { main } from "../../../wailsjs/go/models";
   import { formatStatus, getSidebarBadgeStyle } from "../../utils/statusColor";
 
-  export let anime: main.Anime;
+  let { anime }: { anime: main.Anime } = $props();
 
   // Naive but effective for AniList's known output
   function sanitize(html: string) {

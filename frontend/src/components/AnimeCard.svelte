@@ -1,25 +1,21 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import { CirclePlay } from "lucide-svelte";
-  import type { main } from "../../wailsjs/go/models";
+  import { CirclePlay } from "@lucide/svelte";
 
   import { formatStatus, getCardStatusColor } from "../utils/statusColor";
 
-  export let anime: main.Anime;
+  let { anime, onSelect } = $props();
 
-  const dispatch = createEventDispatcher();
-
-  let isLoaded = false;
+  let isLoaded = $state(false);
 
   function selectAnime() {
-    dispatch("select", anime);
+    onSelect?.(anime);
   }
 </script>
 
 <article
   class="group relative flex flex-col cursor-pointer ..."
-  on:click={selectAnime}
-  on:keydown={(e) => (e.key === "Enter" || e.key === " ") && selectAnime()}
+  onclick={selectAnime}
+  onkeydown={(e) => (e.key === "Enter" || e.key === " ") && selectAnime()}
 >
   <div
     class="relative w-full aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-border bg-surface group-hover:border-primary/50 transition-colors"
@@ -35,7 +31,7 @@
       class={"w-full h-full object-cover transition-opacity duration-500 " +
         (isLoaded ? "opacity-100" : "opacity-0")}
       loading="lazy"
-      on:load={() => (isLoaded = true)}
+      onload={() => (isLoaded = true)}
     />
 
     <div

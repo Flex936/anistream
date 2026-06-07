@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import { ArrowLeft } from "lucide-svelte";
+  import { ArrowLeft } from "@lucide/svelte";
 
-  export let playingEpisode: number;
-
-  const dispatch = createEventDispatcher();
+  let {
+    playingEpisode,
+    onBack,
+  }: { playingEpisode: number; onBack?: () => void } = $props();
 </script>
 
 <div class="flex items-center justify-between">
@@ -15,7 +15,7 @@
   </div>
 
   <button
-    on:click={() => dispatch("back")}
+    onclick={() => onBack?.()}
     class="flex items-center space-x-2 text-sm text-primary hover:text-primary-hover transition-colors group"
   >
     <ArrowLeft

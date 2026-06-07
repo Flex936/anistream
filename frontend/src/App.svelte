@@ -9,14 +9,15 @@
   import TheaterView from "./pages/TheaterView.svelte";
   import SettingsMenu from "./components/layout/SettingsMenu.svelte";
 
-  // State Variables
-  let searchQuery = "";
-  let isSearching = false;
-  let searchResults: main.Anime[] = [];
+  let searchQuery = $state("");
+  let isSearching = $state(false);
+  let searchResults = $state<main.Anime[]>([]);
+  let isUserLoggedIn = $state(false);
+  let isSettingsOpen = $state(false);
+  let selectedAnime = $state<main.Anime | null>(null);
+
   let searchTimeout: ReturnType<typeof setTimeout>;
   let searchGen = 0;
-  let isUserLoggedIn = false;
-  let isSettingsOpen = false;
 
   onMount(async () => {
     try {
@@ -27,7 +28,6 @@
     await loadHomePage();
   });
 
-  // Clear the pending timeout so it doesn't fire after the app closes
   onDestroy(() => {
     clearTimeout(searchTimeout);
   });
@@ -35,16 +35,14 @@
   async function loadHomePage() {
     isSearching = true;
     try {
-      searchResults = await GetTrendingAnime();
+      const results = await GetTrendingAnime();
+      searchResults = results || [];
     } catch (error) {
       console.error("Failed to load trending anime:", error);
     } finally {
       isSearching = false;
     }
   }
-
-  // Routing State
-  let selectedAnime: main.Anime | null = null;
 
   function handleHome() {
     selectedAnime = null;
@@ -55,7 +53,7 @@
 
   async function performSearch() {
     if (searchQuery.length === 0) {
-      searchResults = await GetTrendingAnime();
+      await loadHomePage();
       return;
     }
 
@@ -107,24 +105,24 @@
   <NavBar
     bind:searchQuery
     isLoggedIn={isUserLoggedIn}
-    on:search={handleInput}
-    on:home={handleHome}
-    on:login={handleLogin}
-    on:settings={() => (isSettingsOpen = true)}
+    onSearch={handleInput}
+    onHome={handleHome}
+    onLogin={handleLogin}
+    onSettings={() => (isSettingsOpen = true)}
   />
 
   {#if selectedAnime}
-    <TheaterView anime={selectedAnime} on:back={() => (selectedAnime = null)} />
+    <TheaterView anime={selectedAnime} onBack={() => (selectedAnime = null)} />
   {:else}
     <DiscoveryView
       {searchQuery}
       {isSearching}
       {searchResults}
-      on:select={(e) => (selectedAnime = e.detail)}
+      onSelect={(anime) => (selectedAnime = anime)}
     />
   {/if}
 
   {#if isSettingsOpen}
-    <SettingsMenu on:close={() => (isSettingsOpen = false)} />
+    <SettingsMenu onClose={() => (isSettingsOpen = false)} />
   {/if}
 </main>

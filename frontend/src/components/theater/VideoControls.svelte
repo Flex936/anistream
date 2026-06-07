@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
   import {
     Play,
     Pause,
@@ -7,15 +6,16 @@
     Volume1,
     VolumeX,
     Maximize,
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
 
-  export let paused: boolean;
-  export let currentTime: number;
-  export let duration: number;
-  export let volume: number;
-  export let isMuted: boolean;
-
-  const dispatch = createEventDispatcher();
+  let {
+    paused = $bindable(),
+    currentTime = $bindable(),
+    duration,
+    volume = $bindable(),
+    isMuted = $bindable(),
+    onFullscreen,
+  } = $props();
 
   function formatTime(timeInSeconds: number) {
     if (isNaN(timeInSeconds)) return "0:00";
@@ -33,7 +33,7 @@
 </script>
 
 <div
-  class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col gap-2"
+  class="absolute bottom-0 left-0 right-0 p-4 bg-linear-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col gap-2"
 >
   <input
     type="range"
@@ -46,7 +46,7 @@
   <div class="flex items-center justify-between text-white text-sm mt-1">
     <div class="flex items-center gap-4">
       <button
-        on:click={togglePlay}
+        onclick={togglePlay}
         class="hover:text-zinc-300 transition-colors w-8 flex justify-center"
       >
         {#if paused}
@@ -64,7 +64,7 @@
     <div class="flex items-center gap-4">
       <div class="flex items-center gap-3 ml-2">
         <button
-          on:click={toggleMute}
+          onclick={toggleMute}
           class="text-white hover:text-primary transition-colors focus:outline-none"
           title={isMuted || volume === 0 ? "Unmute" : "Mute"}
         >
@@ -90,7 +90,7 @@
       </div>
 
       <button
-        on:click={() => dispatch("fullscreen")}
+        onclick={() => onFullscreen?.()}
         class="hover:text-zinc-300 transition-colors ml-2"
       >
         <Maximize size={20} />

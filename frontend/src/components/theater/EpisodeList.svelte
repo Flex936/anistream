@@ -1,14 +1,20 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import { Search, LoaderCircle } from "lucide-svelte";
+  import { Search, LoaderCircle } from "@lucide/svelte";
   import type { main } from "../../../wailsjs/go/models";
 
-  export let availableEpisodes: number;
-  export let anime: main.Anime;
-  export let isScraping: boolean;
-  export let loadingEpisode: number;
-
-  const dispatch = createEventDispatcher();
+  let {
+    availableEpisodes,
+    anime,
+    isScraping,
+    loadingEpisode,
+    onSelect,
+  }: {
+    availableEpisodes: number;
+    anime: main.Anime;
+    isScraping: boolean;
+    loadingEpisode: number;
+    onSelect?: (epNum: number) => void;
+  } = $props();
 </script>
 
 <div class="flex items-center justify-between mb-4 border-b border-border pb-4">
@@ -48,12 +54,12 @@
       </div>
 
       <button
-        on:click={() => dispatch("select", epNum)}
+        onclick={() => onSelect?.(epNum)}
         disabled={isScraping}
         class="flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-200
                     {isScraping && loadingEpisode === epNum
           ? 'bg-primary/20 text-primary'
-          : 'bg-transparent text-muted/70 group-hover:bg-white/10 group-hover:text-main hover:!bg-primary hover:!text-white'}"
+          : 'bg-transparent text-muted/70 group-hover:bg-white/10 group-hover:text-main hover:bg-primary! hover:text-white!'}"
       >
         {#if isScraping && loadingEpisode === epNum}
           <LoaderCircle size={18} class="animate-spin text-primary" />

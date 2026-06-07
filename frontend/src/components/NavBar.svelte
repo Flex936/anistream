@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount, onDestroy } from "svelte";
+    import { onMount, onDestroy } from "svelte";
     import {
         Search,
         User,
@@ -8,7 +8,7 @@
         Maximize2,
         Minimize2,
         X,
-    } from "lucide-svelte";
+    } from "@lucide/svelte";
     import {
         WindowMinimise,
         WindowIsMaximised,
@@ -17,10 +17,16 @@
         Quit,
     } from "../../wailsjs/runtime/runtime";
 
-    export let searchQuery = "";
-    export let isLoggedIn = false;
-    const dispatch = createEventDispatcher();
-    let isMaximised = false;
+    let {
+        searchQuery = $bindable(""),
+        isLoggedIn = false,
+        onSearch,
+        onHome,
+        onLogin,
+        onSettings
+    } = $props();
+    
+    let isMaximised = $state(false);
 
     async function syncMaximisedState() {
         isMaximised = await WindowIsMaximised();
@@ -37,7 +43,7 @@
     });
 
     function handleInput() {
-        dispatch("search", searchQuery);
+        if (onSearch) onSearch(searchQuery);
     }
 
     async function handleWindowMaximise() {
@@ -58,7 +64,7 @@
 >
     <button
         style="--wails-draggable: no-drag;"
-        on:click={() => dispatch("home")}
+        onclick={onHome}
         class="flex items-center space-x-2 text-primary hover:text-primary-hover transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded px-2 py-1 -ml-2 group"
     >
         <h1
@@ -79,7 +85,7 @@
                 style="--wails-draggable: no-drag;"
                 type="text"
                 bind:value={searchQuery}
-                on:input={handleInput}
+                oninput={handleInput}
                 placeholder="Search for anime by title..."
                 class="w-full bg-surface border border-border text-main text-sm rounded-full focus:ring-2 focus:ring-primary focus:border-primary block pl-11 p-2.5 transition-all shadow-inner outline-none"
             />
@@ -89,7 +95,7 @@
     <div class="flex items-center space-x-4 text-muted">
         <button
             style="--wails-draggable: no-drag;"
-            on:click={() => dispatch("login")}
+            onclick={onLogin}
             class="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1 transition-colors
                 {isLoggedIn
                 ? 'text-green-400 hover:text-red-400'
@@ -101,7 +107,7 @@
 
         <button
             style="--wails-draggable: no-drag;"
-            on:click={() => dispatch("settings")}
+            onclick={onSettings}
             class="hover:text-main transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1"
             title="Settings"
         >
@@ -111,14 +117,14 @@
         <div class="flex items-center space-x-2 border-l border-border pl-4">
             <button
                 style="--wails-draggable: no-drag;"
-                on:click={WindowMinimise}
+                onclick={WindowMinimise}
                 class="hover:text-main transition-colors"
             >
                 <Minus size={20} />
             </button>
             <button
                 style="--wails-draggable: no-drag;"
-                on:click={handleWindowMaximise}
+                onclick={handleWindowMaximise}
                 class="hover:text-accent transition-colors"
             >
                 {#if isMaximised}
@@ -129,7 +135,7 @@
             </button>
             <button
                 style="--wails-draggable: no-drag;"
-                on:click={Quit}
+                onclick={Quit}
                 class="hover:text-red-400 transition-colors"
             >
                 <X size={20} />

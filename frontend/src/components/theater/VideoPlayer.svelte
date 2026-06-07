@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import {
     GetAnimeProgress,
     UpdateAnimeProgress,
@@ -11,36 +11,46 @@
   import TrackingOverlay from "./TrackingOverlay.svelte";
   import VideoControls from "./VideoControls.svelte";
 
-  // Props
-  export let streamUrl: string;
-  export let playingEpisode: number;
-  export let animeId: number;
-
-  const dispatch = createEventDispatcher();
+  let {
+    streamUrl,
+    playingEpisode,
+    animeId,
+    onBack,
+  }: {
+    streamUrl: string;
+    playingEpisode: number;
+    animeId: number;
+    onBack?: () => void;
+  } = $props();
 
   // AniList State
-  let currentProgress = 0;
-  let hasScrobbled = false;
-  let isTrackingTimerActive = false;
+  let currentProgress = $state(0);
+  let hasScrobbled = $state(false);
+  let isTrackingTimerActive = $state(false);
   let trackingTimeout: ReturnType<typeof setTimeout>;
 
   // Shared Video State
-  let currentTime = 0;
-  let duration = 0;
+  let currentTime = $state(0);
+  let duration = $state(0);
 
   // Player State
   let hlsInstance: Hls | undefined;
   let videoElement: HTMLVideoElement;
   let playerContainer: HTMLDivElement;
-  let paused = true;
-  let volume = 1;
-  let isMuted = false;
+  let paused = $state(true);
+  let volume = $state(1);
+  let isMuted = $state(false);
   let metadataInterval: ReturnType<typeof setInterval>;
 
   // ==========================================
   // AniList Tracking Logic
   // ==========================================
-  $: if (animeId && playingEpisode) resetTracker();
+  $effect(() => {
+    if (animeId && playingEpisode) {
+      // we don't want reactivity loop here for reset
+      resetTracker();
+    }
+  });
 
   async function resetTracker() {
     hasScrobbled = false;
@@ -53,21 +63,23 @@
     }
   }
 
-  $: if (duration > 0 && !hasScrobbled) {
-    const percentage = currentTime / duration;
-    if (percentage >= 0.9) {
-      if (!isTrackingTimerActive && playingEpisode > currentProgress) {
-        isTrackingTimerActive = true;
-        trackingTimeout = setTimeout(async () => {
-          if (currentTime / duration >= 0.9) await triggerAniListUpdate();
-          else isTrackingTimerActive = false;
-        }, 5000);
+  $effect(() => {
+    if (duration > 0 && !hasScrobbled) {
+      const percentage = currentTime / duration;
+      if (percentage >= 0.9) {
+        if (!isTrackingTimerActive && playingEpisode > currentProgress) {
+          isTrackingTimerActive = true;
+          trackingTimeout = setTimeout(async () => {
+            if (currentTime / duration >= 0.9) await triggerAniListUpdate();
+            else isTrackingTimerActive = false;
+          }, 5000);
+        }
+      } else if (isTrackingTimerActive) {
+        clearTimeout(trackingTimeout);
+        isTrackingTimerActive = false;
       }
-    } else if (isTrackingTimerActive) {
-      clearTimeout(trackingTimeout);
-      isTrackingTimerActive = false;
     }
-  }
+  });
 
   async function triggerAniListUpdate() {
     hasScrobbled = true;
@@ -89,7 +101,7 @@
     ) {
       triggerAniListUpdate();
     }
-    dispatch("back");
+    onBack?.();
   }
 
   // ==========================================
@@ -147,7 +159,9 @@
     }
   }
 
-  $: if (streamUrl && videoElement) initPlayer();
+  $effect(() => {
+    if (streamUrl && videoElement) initPlayer();
+  });
 
   function toggleFullscreen() {
     if (!document.fullscreenElement)
@@ -167,7 +181,7 @@
 </script>
 
 <div class="flex flex-col space-y-4 w-full">
-  <VideoHeader {playingEpisode} on:back={handleBack} />
+  <VideoHeader {playingEpisode} onBack={handleBack} />
 
   <div
     bind:this={playerContainer}
@@ -181,7 +195,7 @@
       bind:currentTime
       bind:volume
       bind:muted={isMuted}
-      on:click={() => (paused = !paused)}
+      onclick={() => (paused = !paused)}
       preload="none"
       crossorigin="anonymous"
       class="w-full h-full object-contain cursor-pointer"
@@ -195,7 +209,7 @@
       {duration}
       bind:volume
       bind:isMuted
-      on:fullscreen={toggleFullscreen}
+      onFullscreen={toggleFullscreen}
     />
   </div>
 </div>
