@@ -7,6 +7,10 @@ import (
 	"net/http"
 )
 
+type NextAiringEpisode struct {
+	Episode int `json:"episode"`
+}
+
 type AnimeTitle struct {
 	Romaji  string `json:"romaji"`
 	English string `json:"english"`
@@ -17,12 +21,13 @@ type AnimeCover struct {
 }
 
 type Anime struct {
-	ID          int        `json:"id"`
-	Title       AnimeTitle `json:"title"`
-	CoverImage  AnimeCover `json:"coverImage"`
-	Episodes    int        `json:"episodes"`
-	Status      string     `json:"status"`
-	Description string     `json:"description"`
+	ID                int                `json:"id"`
+	Title             AnimeTitle         `json:"title"`
+	CoverImage        AnimeCover         `json:"coverImage"`
+	Episodes          int                `json:"episodes"`
+	Status            string             `json:"status"`
+	Description       string             `json:"description"`
+	NextAiringEpisode *NextAiringEpisode `json:"nextAiringEpisode"`
 }
 
 type AniListResponse struct {
@@ -86,6 +91,7 @@ func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
                 title { romaji english }
                 coverImage { large }
                 episodes status description
+				nextAiringEpisode { episode }
             }
         }
     }`
@@ -116,6 +122,7 @@ func (a *App) GetTrendingAnime() ([]Anime, error) {
                 title { romaji english }
                 coverImage { large }
                 episodes status description
+				nextAiringEpisode { episode }
             }
         }
     }`

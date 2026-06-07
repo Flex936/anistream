@@ -1,5 +1,17 @@
 export namespace main {
 	
+	export class NextAiringEpisode {
+	    episode: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new NextAiringEpisode(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.episode = source["episode"];
+	    }
+	}
 	export class AnimeCover {
 	    large: string;
 	
@@ -33,6 +45,7 @@ export namespace main {
 	    episodes: number;
 	    status: string;
 	    description: string;
+	    nextAiringEpisode?: NextAiringEpisode;
 	
 	    static createFrom(source: any = {}) {
 	        return new Anime(source);
@@ -46,6 +59,7 @@ export namespace main {
 	        this.episodes = source["episodes"];
 	        this.status = source["status"];
 	        this.description = source["description"];
+	        this.nextAiringEpisode = this.convertValues(source["nextAiringEpisode"], NextAiringEpisode);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -66,6 +80,7 @@ export namespace main {
 		    return a;
 		}
 	}
+	
 	
 	
 	export class Resolution {
