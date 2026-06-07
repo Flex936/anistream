@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
-  import { X, Monitor, HardDrive } from "lucide-svelte";
+  import { X, Monitor, HardDrive, ArrowDown } from "lucide-svelte";
   import {
     GetResolution,
     UpdateResolution,
@@ -97,24 +97,43 @@
             <h3 class="text-2xl font-bold text-main mb-6">General Settings</h3>
 
             <div class="space-y-4 max-w-md">
-              <label class="flex flex-col space-y-2">
+              <div class="space-y-3">
                 <span
                   class="text-sm font-semibold text-muted uppercase tracking-wider"
                   >Startup Resolution</span
                 >
-                <select
-                  bind:value={selectedRes}
-                  class="bg-base border border-border rounded-lg p-3 text-main focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all shadow-inner"
-                >
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {#each resolutions as res}
-                    <option value={res}>{res.label}</option>
+                    <button
+                      class="flex flex-col items-start p-4 rounded-xl border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary
+                {selectedRes.label === res.label
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border bg-base hover:border-gray-500 hover:bg-surface'}"
+                      on:click={() => (selectedRes = res)}
+                    >
+                      <span
+                        class="font-bold {selectedRes.label === res.label
+                          ? 'text-primary'
+                          : 'text-gray-200'}"
+                      >
+                        {res.label.split("(")[0].trim()}
+                      </span>
+                      <span
+                        class="text-xs mt-1 {selectedRes.label === res.label
+                          ? 'text-primary/80'
+                          : 'text-gray-500'}"
+                      >
+                        {res.w} x {res.h}
+                      </span>
+                    </button>
                   {/each}
-                </select>
-                <p class="text-xs text-muted pt-1">
+                </div>
+                <p class="text-xs text-muted pt-2">
                   This will be the default window size every time you open
                   AniStream.
                 </p>
-              </label>
+              </div>
             </div>
           </div>
         {:else if activeTab === "downloads"}
