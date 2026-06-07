@@ -3,7 +3,6 @@
   import { Search, LoaderCircle } from "lucide-svelte";
   import type { main } from "../../../wailsjs/go/models";
 
-  export let episodeList: number[];
   export let availableEpisodes: number;
   export let anime: main.Anime;
   export let isScraping: boolean;
@@ -22,11 +21,6 @@
       >
         {availableEpisodes} / {anime.episodes || "?"} Aired
       </span>
-      <span
-        class="text-muted font-medium bg-surface px-3 py-1 rounded-full border border-border"
-      >
-        Next: Ep {anime.nextAiringEpisode.episode}
-      </span>
     </div>
   {:else if anime.episodes}
     <span class="text-muted font-medium">{anime.episodes} Episodes</span>
@@ -36,7 +30,7 @@
 <div
   class="bg-surface border border-border rounded-xl flex-1 max-h-[600px] overflow-y-auto p-2 space-y-1 custom-scrollbar"
 >
-  {#each episodeList as epNum}
+  {#each Array.from({ length: availableEpisodes }, (_, i) => i + 1) as epNum}
     <div
       class="flex items-center justify-between p-2 pl-4 rounded-lg hover:bg-white/5 transition-colors group"
     >

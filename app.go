@@ -10,18 +10,18 @@ import (
 	"github.com/anacrolix/torrent"
 )
 
-// App struct holds the application state and torrent engine
 type App struct {
 	ctx           context.Context
 	torrentClient *torrent.Client
-	httpClient    *http.Client // shared, see anilist.go section
+	httpClient    *http.Client
 
-	mu            sync.RWMutex // guards the two fields below
+	mu            sync.RWMutex
 	activeFile    *torrent.File
 	activeTorrent *torrent.Torrent
+	aniListToken  string // cached from config; mutated only by Login/Logout
+	viewerID      int    // 0 = not yet fetched; cached after first successful call
 }
 
-// NewApp creates a new App application struct and boots the background services
 func NewApp() *App {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.DataDir = "./tmp_downloads"
@@ -38,7 +38,6 @@ func NewApp() *App {
 	}
 
 	mux := http.NewServeMux()
-	// streamHandler is defined in stream.go
 	mux.HandleFunc("/stream", app.streamHandler)
 
 	go func() {
@@ -51,7 +50,12 @@ func NewApp() *App {
 	return app
 }
 
-// startup is called when the app starts. The context is saved so we can call runtime methods.
+// startup is called by Wails after the window is ready. We warm the token
+// cache here so doGraphQL never needs to touch disk during normal operation.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	cfg := LoadConfig()
+	a.mu.Lock()
+	a.aniListToken = cfg.AniListToken
+	a.mu.Unlock()
 }

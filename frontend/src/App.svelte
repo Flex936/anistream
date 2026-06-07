@@ -24,9 +24,6 @@
     } catch (err) {
       console.error("Failed to check login status:", err);
     }
-  });
-
-  onMount(async () => {
     await loadHomePage();
   });
 

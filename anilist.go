@@ -45,6 +45,7 @@ type GraphQLPayload struct {
 
 // doGraphQL is the single HTTP+JSON round-trip for all AniList queries.
 // It is unexported because it is an implementation detail of this file.
+// doGraphQL — reads the token from the in-memory field, no disk I/O.
 func (a *App) doGraphQL(query string, variables map[string]interface{}, result interface{}) error {
 	payload := GraphQLPayload{Query: query, Variables: variables}
 	body, err := json.Marshal(payload)
@@ -59,9 +60,11 @@ func (a *App) doGraphQL(query string, variables map[string]interface{}, result i
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	cfg := LoadConfig()
-	if cfg.AniListToken != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.AniListToken)
+	a.mu.RLock()
+	token := a.aniListToken
+	a.mu.RUnlock()
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
 	resp, err := a.httpClient.Do(req)
@@ -191,7 +194,16 @@ func (a *App) UpdateAnimeProgress(animeID int, episode int) error {
 	}, &result)
 }
 
+// getViewerID returns the authenticated user's AniList ID, fetching it only
+// once per session and caching the result on the App struct.
 func (a *App) getViewerID() (int, error) {
+	a.mu.RLock()
+	id := a.viewerID
+	a.mu.RUnlock()
+	if id != 0 {
+		return id, nil
+	}
+
 	const query = `query { Viewer { id } }`
 	var result struct {
 		Data struct {
@@ -200,12 +212,15 @@ func (a *App) getViewerID() (int, error) {
 			} `json:"Viewer"`
 		} `json:"data"`
 	}
-
 	if err := a.doGraphQL(query, nil, &result); err != nil {
 		return 0, err
 	}
 	if result.Data.Viewer.ID == 0 {
 		return 0, fmt.Errorf("could not resolve viewer id")
 	}
+
+	a.mu.Lock()
+	a.viewerID = result.Data.Viewer.ID
+	a.mu.Unlock()
 	return result.Data.Viewer.ID, nil
 }

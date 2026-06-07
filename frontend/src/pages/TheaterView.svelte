@@ -119,7 +119,6 @@
         />
       {:else}
         <EpisodeList
-          {episodeList}
           {availableEpisodes}
           {anime}
           {isScraping}

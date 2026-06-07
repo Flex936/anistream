@@ -4,13 +4,6 @@
 
   export let anime: main.Anime;
 
-  $: availableEpisodes = (() => {
-    if (anime.status === "RELEASING" && anime.nextAiringEpisode) {
-      return anime.nextAiringEpisode.episode - 1;
-    }
-    return anime.episodes || 0;
-  })();
-
   // Naive but effective for AniList's known output
   function sanitize(html: string) {
     return html.replace(/<(?!\/?(br|i|b|em|strong)\b)[^>]+>/gi, "");
@@ -28,16 +21,6 @@
     <h2 class="text-2xl font-bold text-main leading-tight">
       {anime.title?.romaji || anime.title?.english}
     </h2>
-
-    {#if anime.status === "RELEASING" && anime.nextAiringEpisode}
-      <span class="text-xs font-semibold text-primary mt-1">
-        {availableEpisodes} / {anime.episodes || "?"} Aired
-      </span>
-    {:else}
-      <span class="text-xs text-muted mt-1"
-        >{anime.episodes || "?"} Episodes</span
-      >
-    {/if}
 
     <div class="flex items-center space-x-3 text-sm text-muted font-medium">
       <span
