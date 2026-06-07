@@ -10,6 +10,7 @@ type AppConfig struct {
 	AniListToken string `json:"anilistToken"`
 	Width        int    `json:"width"`
 	Height       int    `json:"height"`
+	FilterEcchi  bool   `json:"filterEcchi"`
 }
 
 type Resolution struct {
@@ -24,7 +25,6 @@ func getConfigPath() string {
 	}
 	appDir := filepath.Join(configDir, "AniStream")
 	os.MkdirAll(appDir, os.ModePerm)
-	println(appDir)
 	return filepath.Join(appDir, "config.json")
 }
 
@@ -32,6 +32,7 @@ func LoadConfig() AppConfig {
 	var cfg AppConfig
 	cfg.Width = 1280
 	cfg.Height = 720
+	cfg.FilterEcchi = true
 
 	data, err := os.ReadFile(getConfigPath())
 	if err == nil {
@@ -62,5 +63,16 @@ func (a *App) UpdateResolution(width int, height int) error {
 	cfg := LoadConfig()
 	cfg.Width = width
 	cfg.Height = height
+	return SaveConfig(cfg)
+}
+
+func (a *App) GetEcchiFilter() bool {
+	cfg := LoadConfig()
+	return cfg.FilterEcchi
+}
+
+func (a *App) UpdateEcchiFilter(filter bool) error {
+	cfg := LoadConfig()
+	cfg.FilterEcchi = filter
 	return SaveConfig(cfg)
 }

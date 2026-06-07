@@ -1,39 +1,39 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
-  import { X, Monitor, HardDrive, ArrowDown } from "lucide-svelte";
+  import { X, Monitor, HardDrive } from "lucide-svelte";
   import {
     GetResolution,
     UpdateResolution,
+    GetEcchiFilter,
+    UpdateEcchiFilter,
   } from "../../../wailsjs/go/main/App";
   import { WindowSetSize } from "../../../wailsjs/runtime/runtime";
 
   const dispatch = createEventDispatcher();
 
-  // State
   let activeTab = "general";
   let isSaving = false;
+  let filterEcchi = true;
 
-  // Available Resolutions
   const resolutions = [
     { label: "720p HD (1280 x 720)", w: 1280, h: 720 },
     { label: "900p HD+ (1600 x 900)", w: 1600, h: 900 },
     { label: "1080p Full HD (1920 x 1080)", w: 1920, h: 1080 },
     { label: "1440p QHD (2560 x 1440)", w: 2560, h: 1440 },
   ];
-
-  // Bind the currently selected option
   let selectedRes = resolutions[0];
 
   onMount(async () => {
     try {
       const currentRes = await GetResolution();
-
       const match = resolutions.find(
         (r) => r.w === currentRes.width && r.h === currentRes.height,
       );
       if (match) selectedRes = match;
+
+      filterEcchi = await GetEcchiFilter();
     } catch (err) {
-      console.error("Failed to fetch resolution:", err);
+      console.error("Failed to fetch settings:", err);
     }
   });
 
@@ -41,6 +41,8 @@
     isSaving = true;
     try {
       await UpdateResolution(selectedRes.w, selectedRes.h);
+      await UpdateEcchiFilter(filterEcchi);
+
       WindowSetSize(selectedRes.w, selectedRes.h);
       dispatch("close");
     } catch (err) {
@@ -144,6 +146,32 @@
         {/if}
       </div>
 
+      <div class="p-8 flex-1 border-t border-border">
+        <div class="flex items-center justify-between">
+          <div class="flex flex-col">
+            <span
+              class="text-sm font-semibold text-main uppercase tracking-wider"
+              >Filter Ecchi Content</span
+            >
+            <span class="text-xs text-muted mt-1"
+              >Hide borderline NSFW shows.</span
+            >
+          </div>
+
+          <button
+            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary {filterEcchi
+              ? 'bg-primary'
+              : 'bg-gray-600'}"
+            on:click={() => (filterEcchi = !filterEcchi)}
+          >
+            <span
+              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {filterEcchi
+                ? 'translate-x-6'
+                : 'translate-x-1'}"
+            ></span>
+          </button>
+        </div>
+      </div>
       <div class="border-t border-border p-4 bg-base flex justify-end">
         <button
           on:click={handleSave}

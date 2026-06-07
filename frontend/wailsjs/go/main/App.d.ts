@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function GetAnimeProgress(arg1:number):Promise<number>;
 
+export function GetEcchiFilter():Promise<boolean>;
+
 export function GetEpisodeTorrents(arg1:string,arg2:number):Promise<Array<main.TorrentResult>>;
 
 export function GetResolution():Promise<main.Resolution>;
@@ -21,5 +23,7 @@ export function SearchAnime(arg1:string):Promise<Array<main.Anime>>;
 export function StreamTorrent(arg1:string):Promise<string>;
 
 export function UpdateAnimeProgress(arg1:number,arg2:number):Promise<void>;
+
+export function UpdateEcchiFilter(arg1:boolean):Promise<void>;
 
 export function UpdateResolution(arg1:number,arg2:number):Promise<void>;

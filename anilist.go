@@ -72,10 +72,16 @@ func (a *App) doGraphQL(query string, variables map[string]interface{}, result i
 }
 
 func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
+	cfg := LoadConfig()
+	bannedGenres := []string{"Hentai"}
+	if cfg.FilterEcchi {
+		bannedGenres = append(bannedGenres, "Ecchi")
+	}
+
 	const query = `
-    query ($search: String) {
+    query ($search: String, $bannedGenres: [String]) {
         Page(page: 1, perPage: 15) {
-            media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: ["Hentai"]) {
+            media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres) {
                 id
                 title { romaji english }
                 coverImage { large }
@@ -84,17 +90,28 @@ func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
         }
     }`
 	var result AniListResponse
-	if err := a.doGraphQL(query, map[string]interface{}{"search": searchQuery}, &result); err != nil {
+	variables := map[string]interface{}{
+		"search":       searchQuery,
+		"bannedGenres": bannedGenres,
+	}
+
+	if err := a.doGraphQL(query, variables, &result); err != nil {
 		return nil, err
 	}
 	return result.Data.Page.Media, nil
 }
 
 func (a *App) GetTrendingAnime() ([]Anime, error) {
+	cfg := LoadConfig()
+	bannedGenres := []string{"Hentai"}
+	if cfg.FilterEcchi {
+		bannedGenres = append(bannedGenres, "Ecchi")
+	}
+
 	const query = `
-    query {
+    query ($bannedGenres: [String]) {
         Page(page: 1, perPage: 15) {
-            media(type: ANIME, sort: TRENDING_DESC, isAdult: false, genre_not_in: ["Hentai"]) {
+            media(type: ANIME, sort: TRENDING_DESC, isAdult: false, genre_not_in: $bannedGenres) {
                 id
                 title { romaji english }
                 coverImage { large }
@@ -103,7 +120,7 @@ func (a *App) GetTrendingAnime() ([]Anime, error) {
         }
     }`
 	var result AniListResponse
-	if err := a.doGraphQL(query, map[string]interface{}{}, &result); err != nil {
+	if err := a.doGraphQL(query, map[string]interface{}{"bannedGenres": bannedGenres}, &result); err != nil {
 		return nil, err
 	}
 	return result.Data.Page.Media, nil

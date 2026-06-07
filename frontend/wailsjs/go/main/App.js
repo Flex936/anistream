@@ -6,6 +6,10 @@ export function GetAnimeProgress(arg1) {
   return window['go']['main']['App']['GetAnimeProgress'](arg1);
 }
 
+export function GetEcchiFilter() {
+  return window['go']['main']['App']['GetEcchiFilter']();
+}
+
 export function GetEpisodeTorrents(arg1, arg2) {
   return window['go']['main']['App']['GetEpisodeTorrents'](arg1, arg2);
 }
@@ -40,6 +44,10 @@ export function StreamTorrent(arg1) {
 
 export function UpdateAnimeProgress(arg1, arg2) {
   return window['go']['main']['App']['UpdateAnimeProgress'](arg1, arg2);
+}
+
+export function UpdateEcchiFilter(arg1) {
+  return window['go']['main']['App']['UpdateEcchiFilter'](arg1);
 }
 
 export function UpdateResolution(arg1, arg2) {
