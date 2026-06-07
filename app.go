@@ -16,20 +16,14 @@ import (
 type App struct {
 	ctx           context.Context
 	torrentClient *torrent.Client
+	httpClient    *http.Client
+	mpv           *MpvManager
+	cancelStream  context.CancelFunc // Track and kill active stream routines
+
 	mu            sync.RWMutex // guards fields below
 	activeFile    *torrent.File
 	activeTorrent *torrent.Torrent
 	activeCmd     *exec.Cmd
-	httpClient    *http.Client
-	mpv           *MpvManager        // Access point to separated MPV logic
-	cancelStream  context.CancelFunc // ADD THIS: Track and kill active stream routines
-	ctx           context.Context
-	torrentClient *torrent.Client
-	httpClient    *http.Client
-
-	mu            sync.RWMutex
-	activeFile    *torrent.File
-	activeTorrent *torrent.Torrent
 	aniListToken  string // cached from config; mutated only by Login/Logout
 	viewerID      int    // 0 = not yet fetched; cached after first successful call
 }
@@ -56,14 +50,18 @@ func NewApp() *App {
 	fileServer := http.FileServer(http.Dir("./tmp_hls"))
 	hlsHandler := http.StripPrefix("/hls/", fileServer)
 
-	// 2. Wrap it with CORS middleware so hls.js can access index.m3u8 and .m4s segments
+	// Wrap it with CORS middleware so hls.js can access index.m3u8 and .m4s segments
 	mux.Handle("/hls/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Range, Content-Type")
 		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
 
-		// Handle browser preflight checks instantly
+		// Tell the browser this is a live stream, do not cache!
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -83,8 +81,6 @@ func NewApp() *App {
 	return app
 }
 
-// startup is called by Wails after the window is ready. We warm the token
-// cache here so doGraphQL never needs to touch disk during normal operation.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	cfg := LoadConfig()
@@ -100,8 +96,8 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) shutdown(ctx context.Context) {
 	a.mpv.Shutdown()
 }
+
 func (a *App) handleMetadata(w http.ResponseWriter, r *http.Request) {
-	// Add CORS so your Svelte dev server can access it
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -111,13 +107,12 @@ func (a *App) handleMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch the metadata from our MPV manager
 	payload, err := a.mpv.GetMetadata()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
-	// Send it to the frontend
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
+}

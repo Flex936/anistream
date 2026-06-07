@@ -3,8 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-
-	"gopkg.in/natefinch/npipe.v2"
+	"net"
 )
 
 type MpvCommand struct {
@@ -46,14 +45,14 @@ type FrontendPayload struct {
 	Chapters    []MpvChapter `json:"chapters"`
 }
 
-func sendCommand(conn *npipe.PipeConn, cmd []interface{}) {
+func sendCommand(conn net.Conn, cmd []interface{}) {
 	req := MpvCommand{Command: cmd}
 	jsonBytes, _ := json.Marshal(req)
 	// mpv requires a newline character at the end of every JSON command
 	conn.Write(append(jsonBytes, '\n'))
 }
 
-func getFloatProperty(conn *npipe.PipeConn, reader *bufio.Reader, prop string) float64 {
+func getFloatProperty(conn net.Conn, reader *bufio.Reader, prop string) float64 {
 	sendCommand(conn, []interface{}{"get_property", prop})
 	line, _ := reader.ReadBytes('\n')
 
@@ -62,7 +61,7 @@ func getFloatProperty(conn *npipe.PipeConn, reader *bufio.Reader, prop string) f
 	return res.Data
 }
 
-func getTracks(conn *npipe.PipeConn, reader *bufio.Reader) []MpvTrack {
+func getTracks(conn net.Conn, reader *bufio.Reader) []MpvTrack {
 	sendCommand(conn, []interface{}{"get_property", "track-list"})
 	line, _ := reader.ReadBytes('\n')
 
@@ -71,7 +70,7 @@ func getTracks(conn *npipe.PipeConn, reader *bufio.Reader) []MpvTrack {
 	return res.Data
 }
 
-func getChapters(conn *npipe.PipeConn, reader *bufio.Reader) []MpvChapter {
+func getChapters(conn net.Conn, reader *bufio.Reader) []MpvChapter {
 	sendCommand(conn, []interface{}{"get_property", "chapter-list"})
 	line, _ := reader.ReadBytes('\n')
 

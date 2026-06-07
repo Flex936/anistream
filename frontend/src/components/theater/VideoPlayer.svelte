@@ -141,25 +141,44 @@
     } else if (Hls.isSupported()) {
       hlsInstance = new Hls({
         maxBufferLength: 10,
-        liveSyncDurationCount: 3,
+        liveSyncDurationCount: 1, // Start playing as soon as 1 segment exists (instead of waiting for 3)
+        manifestLoadingMaxRetry: 10, // Tolerate 404s gracefully while MPV boots up
+        manifestLoadingRetryDelay: 500,
+        fragLoadingMaxRetry: 10,
+        fragLoadingRetryDelay: 500,
       });
 
       hlsInstance.loadSource(streamUrl);
       hlsInstance.attachMedia(videoElement);
 
       hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-        videoElement.play().catch((err) => {
-          console.log("Autoplay blocked:", err);
-        });
+        videoElement
+          .play()
+          .then(() => {
+            paused = false; // Successfully autoplayed!
+          })
+          .catch((err) => {
+            console.log(
+              "Autoplay blocked. Waiting for user to click play.",
+              err,
+            );
+            paused = true; // Sync the UI so the user can manually hit the play button
+          });
       });
 
       hlsInstance.on(Hls.Events.ERROR, function (event, data) {
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              hlsInstance?.startLoad();
+              console.log("HLS Network issue, retrying in 1s...");
+              // Add a 1-second delay so we don't infinitely loop and crash the browser
+              // while waiting for MPV to finish writing the segment!
+              setTimeout(() => {
+                hlsInstance?.startLoad();
+              }, 1000);
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log("HLS Media recovery processing triggered...");
               hlsInstance?.recoverMediaError();
               break;
             default:

@@ -1,12 +1,12 @@
 <script lang="ts">
-    import { createEventDispatcher } from "svelte";
-    import { ArrowLeft } from "lucide-svelte";
-    import type { main } from "../../wailsjs/go/models";
-    import {
-        GetEpisodeTorrents,
-        StreamTorrent,
-        StopStream,
-    } from "../../wailsjs/go/main/App";
+  import { createEventDispatcher } from "svelte";
+  import { ArrowLeft } from "lucide-svelte";
+  import type { main } from "../../wailsjs/go/models";
+  import {
+    GetEpisodeTorrents,
+    StreamTorrent,
+    StopStream,
+  } from "../../wailsjs/go/main/App";
 
   import AnimeDetailsSidebar from "../components/theater/AnimeDetailsSidebar.svelte";
   import EpisodeList from "../components/theater/EpisodeList.svelte";
@@ -26,19 +26,7 @@
   let streamUrl: string | null = null;
   let fetchedTorrents: main.TorrentResult[] = [];
 
-
-
-    function goBack() {
-        scrapingGen++; // Invalidate requests
-        streamUrl = null;
-        fetchedTorrents = [];
-        playingEpisode = 0;
-        loadingEpisode = 0;
-        isScraping = false;
-        dispatch("back");
-        StopStream().catch((err) =>
-            console.error("Failed to cancel torrent load:", err),
-        );
+  // Smart Episode Math
   $: availableEpisodes = (() => {
     if (anime.status === "RELEASING" && anime.nextAiringEpisode) {
       return anime.nextAiringEpisode.episode - 1;
@@ -50,6 +38,7 @@
     ? Array.from({ length: anime.episodes }, (_, i) => i + 1)
     : [];
 
+  // FIX: Consolidated goBack function
   function goBack() {
     scrapingGen++; // Invalidate requests
     streamUrl = null;
@@ -58,6 +47,11 @@
     loadingEpisode = 0;
     isScraping = false;
     dispatch("back");
+
+    // Ensure we kill the torrent if the user backs out
+    StopStream().catch((err) =>
+      console.error("Failed to cancel torrent load:", err),
+    );
   }
 
   async function handleFetchTorrents(event: CustomEvent<number>) {
