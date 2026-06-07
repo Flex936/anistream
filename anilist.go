@@ -76,7 +76,7 @@ func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
 	const query = `
     query ($search: String) {
         Page(page: 1, perPage: 15) {
-            media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+            media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: ["Hentai"]) {
                 id
                 title { romaji english }
                 coverImage { large }
@@ -95,7 +95,7 @@ func (a *App) GetTrendingAnime() ([]Anime, error) {
 	const query = `
     query {
         Page(page: 1, perPage: 15) {
-            media(type: ANIME, sort: TRENDING_DESC) {
+            media(type: ANIME, sort: TRENDING_DESC, isAdult: false, genre_not_in: ["Hentai"]) {
                 id
                 title { romaji english }
                 coverImage { large }
@@ -189,55 +189,4 @@ func (a *App) getViewerID() (int, error) {
 		return 0, fmt.Errorf("could not resolve viewer id")
 	}
 	return result.Data.Viewer.ID, nil
-}
-
-// GetUserWatchingList fetches the anime the logged-in user is currently watching
-func (a *App) GetUserWatchingList() ([]Anime, error) {
-	if !a.IsLoggedIn() {
-		return nil, fmt.Errorf("user not logged in")
-	}
-
-	// Find out who we are
-	viewerID, err := a.getViewerID()
-	if err != nil {
-		return nil, err
-	}
-
-	// Fetch our specific "CURRENT" list
-	const query = `
-    query ($userId: Int) {
-        Page {
-            mediaList(userId: $userId, status: CURRENT, type: ANIME, sort: UPDATED_TIME_DESC) {
-                media {
-                    id
-                    title { romaji english }
-                    coverImage { large }
-                    episodes
-                    status
-                    description
-                }
-            }
-        }
-    }`
-
-	var result struct {
-		Data struct {
-			Page struct {
-				MediaList []struct {
-					Media Anime `json:"media"`
-				} `json:"mediaList"`
-			} `json:"Page"`
-		} `json:"data"`
-	}
-
-	if err := a.doGraphQL(query, map[string]interface{}{"userId": viewerID}, &result); err != nil {
-		return nil, err
-	}
-
-	// Unpack the nested GraphQL response into your standard []Anime array format
-	var animes []Anime
-	for _, item := range result.Data.Page.MediaList {
-		animes = append(animes, item.Media)
-	}
-	return animes, nil
 }
