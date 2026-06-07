@@ -96,6 +96,7 @@
                 <VideoPlayer
                     {streamUrl}
                     {playingEpisode}
+                    animeId={anime.id}
                     on:back={() => {
                         streamUrl = null;
                         playingEpisode = 0;

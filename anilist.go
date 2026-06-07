@@ -109,3 +109,135 @@ func (a *App) GetTrendingAnime() ([]Anime, error) {
 	}
 	return result.Data.Page.Media, nil
 }
+
+// GetAnimeProgress checks the user's AniList profile for their current watched episode.
+func (a *App) GetAnimeProgress(animeID int) (int, error) {
+	if !a.IsLoggedIn() {
+		return 0, nil
+	}
+
+	// We must fetch the user's ID first!
+	viewerID, err := a.getViewerID()
+	if err != nil {
+		return 0, nil
+	}
+
+	const query = `
+    query ($userId: Int, $mediaId: Int) {
+        MediaList(userId: $userId, mediaId: $mediaId) {
+            progress
+        }
+    }`
+
+	var result struct {
+		Data struct {
+			MediaList struct {
+				Progress int `json:"progress"`
+			} `json:"MediaList"`
+		} `json:"data"`
+	}
+
+	// Pass both the userId and the mediaId to AniList
+	err = a.doGraphQL(query, map[string]interface{}{
+		"userId":  viewerID,
+		"mediaId": animeID,
+	}, &result)
+
+	if err != nil {
+		return 0, nil
+	}
+
+	return result.Data.MediaList.Progress, nil
+}
+
+// UpdateAnimeProgress fires the mutation to update their AniList profile!
+func (a *App) UpdateAnimeProgress(animeID int, episode int) error {
+	if !a.IsLoggedIn() {
+		return fmt.Errorf("user is not logged in")
+	}
+
+	const query = `
+    mutation ($mediaId: Int, $progress: Int) {
+        SaveMediaListEntry(mediaId: $mediaId, progress: $progress) {
+            id
+            progress
+        }
+    }`
+
+	var result interface{}
+	return a.doGraphQL(query, map[string]interface{}{
+		"mediaId":  animeID,
+		"progress": episode,
+	}, &result)
+}
+
+// getViewerID is a private helper to fetch the authenticated user's internal AniList ID
+func (a *App) getViewerID() (int, error) {
+	const query = `query { Viewer { id } }`
+	var result struct {
+		Data struct {
+			Viewer struct {
+				ID int `json:"id"`
+			} `json:"Viewer"`
+		} `json:"data"`
+	}
+
+	if err := a.doGraphQL(query, nil, &result); err != nil {
+		return 0, err
+	}
+	if result.Data.Viewer.ID == 0 {
+		return 0, fmt.Errorf("could not resolve viewer id")
+	}
+	return result.Data.Viewer.ID, nil
+}
+
+// GetUserWatchingList fetches the anime the logged-in user is currently watching
+func (a *App) GetUserWatchingList() ([]Anime, error) {
+	if !a.IsLoggedIn() {
+		return nil, fmt.Errorf("user not logged in")
+	}
+
+	// Find out who we are
+	viewerID, err := a.getViewerID()
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch our specific "CURRENT" list
+	const query = `
+    query ($userId: Int) {
+        Page {
+            mediaList(userId: $userId, status: CURRENT, type: ANIME, sort: UPDATED_TIME_DESC) {
+                media {
+                    id
+                    title { romaji english }
+                    coverImage { large }
+                    episodes
+                    status
+                    description
+                }
+            }
+        }
+    }`
+
+	var result struct {
+		Data struct {
+			Page struct {
+				MediaList []struct {
+					Media Anime `json:"media"`
+				} `json:"mediaList"`
+			} `json:"Page"`
+		} `json:"data"`
+	}
+
+	if err := a.doGraphQL(query, map[string]interface{}{"userId": viewerID}, &result); err != nil {
+		return nil, err
+	}
+
+	// Unpack the nested GraphQL response into your standard []Anime array format
+	var animes []Anime
+	for _, item := range result.Data.Page.MediaList {
+		animes = append(animes, item.Media)
+	}
+	return animes, nil
+}
