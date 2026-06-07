@@ -1,14 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"sync"
 	"time"
+
+	"gopkg.in/natefinch/npipe.v2"
 )
 
 type MpvManager struct {
@@ -50,6 +56,7 @@ func (m *MpvManager) StartTranscode(sourceURL string) error {
 		sourceURL,
 		"--o=index.m3u8", // relative to cmd.Dir
 		"--of=hls",
+		"--input-ipc-server=//./pipe/mpv-pipe",
 		"--ofopts=hls_time=2,hls_segment_type=fmp4,hls_playlist_type=event",
 		"--ovc=libx264",
 		"--oac=aac",
@@ -73,7 +80,7 @@ func (m *MpvManager) StartTranscode(sourceURL string) error {
 	// immediately if the user switches videos during the wait.
 	m.mutex.Unlock()
 
-	if err := m.waitForFile(ctx, filepath.Join("./tmp_hls", "init.mp4"), 30*time.Second); err != nil {
+	if err := m.waitForFile(ctx, filepath.Join("./tmp_hls", "init.mp4"), 45*time.Second); err != nil {
 		m.StopTranscode() // clean up if we timed out or were cancelled
 		return err
 	}
@@ -124,8 +131,73 @@ func (m *MpvManager) stopOldProcess() {
 	}
 	if m.activeCmd != nil && m.activeCmd.Process != nil {
 		log.Println("[MPV] Stopping active background transcoder process...")
-		_ = m.activeCmd.Process.Kill()
+
+		if runtime.GOOS == "windows" {
+			// Forcefully kill the target process AND all child processes spawned by it
+			killCmd := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(m.activeCmd.Process.Pid))
+			_ = killCmd.Run()
+		} else {
+			// Standard POSIX fallback
+			_ = m.activeCmd.Process.Kill()
+		}
+
 		_ = m.activeCmd.Wait()
 		m.activeCmd = nil
+	}
+}
+func (m *MpvManager) GetMetadata() (*FrontendPayload, error) {
+	// Connect to the mpv named pipe
+	conn, err := npipe.Dial(`\\.\pipe\mpv-pipe`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to mpv pipe: %w", err)
+	}
+	defer conn.Close()
+
+	reader := bufio.NewReader(conn)
+
+	// Fetch Data
+	duration := getFloatProperty(conn, reader, "duration")
+	tracks := getTracks(conn, reader)
+	chapters := getChapters(conn, reader)
+
+	// Filter tracks for the frontend
+	var audioTracks []MpvTrack
+	var subtitles []MpvTrack
+
+	for _, track := range tracks {
+		if track.Type == "audio" {
+			audioTracks = append(audioTracks, track)
+		} else if track.Type == "sub" {
+			subtitles = append(subtitles, track)
+		}
+	}
+
+	payload := &FrontendPayload{
+		Duration:    duration,
+		AudioTracks: audioTracks,
+		Subtitles:   subtitles,
+		Chapters:    chapters,
+	}
+
+	return payload, nil
+}
+func listenForEvents(conn *npipe.PipeConn) {
+	reader := bufio.NewReader(conn)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			log.Println("Pipe closed")
+			return
+		}
+
+		// mpv events look like {"event": "file-loaded"}
+		var event map[string]interface{}
+		json.Unmarshal(line, &event)
+
+		if eventName, ok := event["event"].(string); ok {
+			if eventName == "file-loaded" {
+				fmt.Println("Torrent File Loaded! Safe to extract metadata now.")
+			}
+		}
 	}
 }

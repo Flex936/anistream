@@ -8,4 +8,6 @@ export function GetTrendingAnime():Promise<Array<main.Anime>>;
 
 export function SearchAnime(arg1:string):Promise<Array<main.Anime>>;
 
+export function StopStream():Promise<void>;
+
 export function StreamTorrent(arg1:string):Promise<string>;

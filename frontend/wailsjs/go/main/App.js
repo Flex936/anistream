@@ -14,6 +14,10 @@ export function SearchAnime(arg1) {
   return window['go']['main']['App']['SearchAnime'](arg1);
 }
 
+export function StopStream() {
+  return window['go']['main']['App']['StopStream']();
+}
+
 export function StreamTorrent(arg1) {
   return window['go']['main']['App']['StreamTorrent'](arg1);
 }

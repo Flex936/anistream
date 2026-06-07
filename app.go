@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os/exec"
@@ -20,7 +21,8 @@ type App struct {
 	activeTorrent *torrent.Torrent
 	activeCmd     *exec.Cmd
 	httpClient    *http.Client
-	mpv           *MpvManager // Access point to separated MPV logic
+	mpv           *MpvManager        // Access point to separated MPV logic
+	cancelStream  context.CancelFunc // ADD THIS: Track and kill active stream routines
 }
 
 func NewApp() *App {
@@ -41,6 +43,7 @@ func NewApp() *App {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stream", app.streamHandler)
+	mux.HandleFunc("/anime-data", app.handleMetadata)
 	fileServer := http.FileServer(http.Dir("./tmp_hls"))
 	hlsHandler := http.StripPrefix("/hls/", fileServer)
 
@@ -81,4 +84,26 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) shutdown(ctx context.Context) {
 	a.mpv.Shutdown()
+}
+func (a *App) handleMetadata(w http.ResponseWriter, r *http.Request) {
+	// Add CORS so your Svelte dev server can access it
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Fetch the metadata from our MPV manager
+	payload, err := a.mpv.GetMetadata()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	// Send it to the frontend
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payload)
 }

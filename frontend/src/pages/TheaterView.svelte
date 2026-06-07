@@ -5,6 +5,7 @@
     import {
         GetEpisodeTorrents,
         StreamTorrent,
+        StopStream,
     } from "../../wailsjs/go/main/App";
 
     import AnimeDetailsSidebar from "../components/theater/AnimeDetailsSidebar.svelte";
@@ -37,6 +38,9 @@
         loadingEpisode = 0;
         isScraping = false;
         dispatch("back");
+        StopStream().catch((err) =>
+            console.error("Failed to cancel torrent load:", err),
+        );
     }
 
     async function handleFetchTorrents(event: CustomEvent<number>) {
