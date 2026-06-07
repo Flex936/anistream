@@ -6,6 +6,8 @@ export function GetAnimeProgress(arg1:number):Promise<number>;
 
 export function GetEpisodeTorrents(arg1:string,arg2:number):Promise<Array<main.TorrentResult>>;
 
+export function GetResolution():Promise<main.Resolution>;
+
 export function GetTrendingAnime():Promise<Array<main.Anime>>;
 
 export function IsLoggedIn():Promise<boolean>;
@@ -19,3 +21,5 @@ export function SearchAnime(arg1:string):Promise<Array<main.Anime>>;
 export function StreamTorrent(arg1:string):Promise<string>;
 
 export function UpdateAnimeProgress(arg1:number,arg2:number):Promise<void>;
+
+export function UpdateResolution(arg1:number,arg2:number):Promise<void>;

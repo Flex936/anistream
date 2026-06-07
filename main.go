@@ -12,14 +12,14 @@ import (
 var assets embed.FS
 
 func main() {
-	// Create an instance of the app structure
 	app := NewApp()
+	cfg := LoadConfig()
 
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:     "AniStream",
-		Width:     1280,
-		Height:    720,
+		Width:     cfg.Width,
+		Height:    cfg.Height,
 		Frameless: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,

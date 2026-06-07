@@ -7,6 +7,7 @@
   import NavBar from "./components/NavBar.svelte";
   import DiscoveryView from "./pages/DiscoveryView.svelte";
   import TheaterView from "./pages/TheaterView.svelte";
+  import SettingsMenu from "./components/layout/SettingsMenu.svelte";
 
   // State Variables
   let searchQuery = "";
@@ -15,6 +16,7 @@
   let searchTimeout: ReturnType<typeof setTimeout>;
   let searchGen = 0;
   let isUserLoggedIn = false;
+  let isSettingsOpen = false;
 
   onMount(async () => {
     try {
@@ -104,13 +106,14 @@
   }
 </script>
 
-<main class="min-h-screen flex flex-col bg-base">
+<main class="min-h-screen flex flex-col bg-base relative">
   <NavBar
     bind:searchQuery
     isLoggedIn={isUserLoggedIn}
     on:search={handleInput}
     on:home={handleHome}
     on:login={handleLogin}
+    on:settings={() => (isSettingsOpen = true)}
   />
 
   {#if selectedAnime}
@@ -122,5 +125,9 @@
       {searchResults}
       on:select={(e) => (selectedAnime = e.detail)}
     />
+  {/if}
+
+  {#if isSettingsOpen}
+    <SettingsMenu on:close={() => (isSettingsOpen = false)} />
   {/if}
 </main>

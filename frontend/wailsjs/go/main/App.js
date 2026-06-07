@@ -10,6 +10,10 @@ export function GetEpisodeTorrents(arg1, arg2) {
   return window['go']['main']['App']['GetEpisodeTorrents'](arg1, arg2);
 }
 
+export function GetResolution() {
+  return window['go']['main']['App']['GetResolution']();
+}
+
 export function GetTrendingAnime() {
   return window['go']['main']['App']['GetTrendingAnime']();
 }
@@ -36,4 +40,8 @@ export function StreamTorrent(arg1) {
 
 export function UpdateAnimeProgress(arg1, arg2) {
   return window['go']['main']['App']['UpdateAnimeProgress'](arg1, arg2);
+}
+
+export function UpdateResolution(arg1, arg2) {
+  return window['go']['main']['App']['UpdateResolution'](arg1, arg2);
 }

@@ -68,6 +68,20 @@ export namespace main {
 	}
 	
 	
+	export class Resolution {
+	    width: number;
+	    height: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Resolution(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.width = source["width"];
+	        this.height = source["height"];
+	    }
+	}
 	export class TorrentResult {
 	    title: string;
 	    magnetLink: string;

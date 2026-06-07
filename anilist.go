@@ -54,7 +54,6 @@ func (a *App) doGraphQL(query string, variables map[string]interface{}, result i
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	// Inject the Authorization Header if the user is logged in!
 	cfg := LoadConfig()
 	if cfg.AniListToken != "" {
 		req.Header.Set("Authorization", "Bearer "+cfg.AniListToken)
@@ -110,7 +109,6 @@ func (a *App) GetTrendingAnime() ([]Anime, error) {
 	return result.Data.Page.Media, nil
 }
 
-// GetAnimeProgress checks the user's AniList profile for their current watched episode.
 func (a *App) GetAnimeProgress(animeID int) (int, error) {
 	if !a.IsLoggedIn() {
 		return 0, nil
@@ -137,7 +135,6 @@ func (a *App) GetAnimeProgress(animeID int) (int, error) {
 		} `json:"data"`
 	}
 
-	// Pass both the userId and the mediaId to AniList
 	err = a.doGraphQL(query, map[string]interface{}{
 		"userId":  viewerID,
 		"mediaId": animeID,
@@ -150,7 +147,6 @@ func (a *App) GetAnimeProgress(animeID int) (int, error) {
 	return result.Data.MediaList.Progress, nil
 }
 
-// UpdateAnimeProgress fires the mutation to update their AniList profile!
 func (a *App) UpdateAnimeProgress(animeID int, episode int) error {
 	if !a.IsLoggedIn() {
 		return fmt.Errorf("user is not logged in")
@@ -171,7 +167,6 @@ func (a *App) UpdateAnimeProgress(animeID int, episode int) error {
 	}, &result)
 }
 
-// getViewerID is a private helper to fetch the authenticated user's internal AniList ID
 func (a *App) getViewerID() (int, error) {
 	const query = `query { Viewer { id } }`
 	var result struct {
