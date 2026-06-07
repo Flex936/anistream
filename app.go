@@ -23,6 +23,15 @@ type App struct {
 	httpClient    *http.Client
 	mpv           *MpvManager        // Access point to separated MPV logic
 	cancelStream  context.CancelFunc // ADD THIS: Track and kill active stream routines
+	ctx           context.Context
+	torrentClient *torrent.Client
+	httpClient    *http.Client
+
+	mu            sync.RWMutex
+	activeFile    *torrent.File
+	activeTorrent *torrent.Torrent
+	aniListToken  string // cached from config; mutated only by Login/Logout
+	viewerID      int    // 0 = not yet fetched; cached after first successful call
 }
 
 func NewApp() *App {
@@ -74,9 +83,15 @@ func NewApp() *App {
 	return app
 }
 
-// startup is called when the app starts.
+// startup is called by Wails after the window is ready. We warm the token
+// cache here so doGraphQL never needs to touch disk during normal operation.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	cfg := LoadConfig()
+	a.mu.Lock()
+	a.aniListToken = cfg.AniListToken
+	a.mu.Unlock()
+
 	if err := a.mpv.Init(); err != nil {
 		log.Printf("[MPV] Failed to initialize mpv: %v", err)
 	}
@@ -106,4 +121,3 @@ func (a *App) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	// Send it to the frontend
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
-}

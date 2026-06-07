@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { LoginWithAniList, IsLoggedIn, Logout } from "../wailsjs/go/main/App";
   import { SearchAnime, GetTrendingAnime } from "../wailsjs/go/main/App";
   import type { main } from "../wailsjs/go/models";
 
   import NavBar from "./components/NavBar.svelte";
   import DiscoveryView from "./pages/DiscoveryView.svelte";
   import TheaterView from "./pages/TheaterView.svelte";
+  import SettingsMenu from "./components/layout/SettingsMenu.svelte";
 
   // State Variables
   let searchQuery = "";
@@ -13,8 +15,15 @@
   let searchResults: main.Anime[] = [];
   let searchTimeout: ReturnType<typeof setTimeout>;
   let searchGen = 0;
+  let isUserLoggedIn = false;
+  let isSettingsOpen = false;
 
   onMount(async () => {
+    try {
+      isUserLoggedIn = await IsLoggedIn();
+    } catch (err) {
+      console.error("Failed to check login status:", err);
+    }
     await loadHomePage();
   });
 
@@ -71,10 +80,38 @@
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(performSearch, 500);
   }
+
+  async function handleLogin() {
+    if (isUserLoggedIn) {
+      // Logout Flow
+      if (confirm("Are you sure you want to log out of AniList?")) {
+        await Logout();
+        isUserLoggedIn = false;
+      }
+    } else {
+      // Login Flow
+      try {
+        const result = await LoginWithAniList();
+        if (result === "success") {
+          isUserLoggedIn = true;
+        }
+      } catch (err) {
+        console.error("OAuth2 Failed:", err);
+        alert("Failed to log in. Please try again.");
+      }
+    }
+  }
 </script>
 
-<main class="min-h-screen flex flex-col bg-base">
-  <NavBar bind:searchQuery on:search={handleInput} on:home={handleHome} />
+<main class="min-h-screen flex flex-col bg-base relative">
+  <NavBar
+    bind:searchQuery
+    isLoggedIn={isUserLoggedIn}
+    on:search={handleInput}
+    on:home={handleHome}
+    on:login={handleLogin}
+    on:settings={() => (isSettingsOpen = true)}
+  />
 
   {#if selectedAnime}
     <TheaterView anime={selectedAnime} on:back={() => (selectedAnime = null)} />
@@ -85,5 +122,9 @@
       {searchResults}
       on:select={(e) => (selectedAnime = e.detail)}
     />
+  {/if}
+
+  {#if isSettingsOpen}
+    <SettingsMenu on:close={() => (isSettingsOpen = false)} />
   {/if}
 </main>
