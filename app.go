@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os/exec"
@@ -115,4 +116,38 @@ func (a *App) handleMetadata(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
+}
+func (a *App) GetMpvMetadata() (*FrontendPayload, error) {
+	return a.mpv.GetMetadata()
+}
+
+// SendMpvCommand allows Svelte to send commands directly to MPV.
+// This will auto-generate the MpvCommand type!
+func (a *App) SendMpvCommand(command []interface{}) error {
+	conn, err := DialMpv()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	sendCommand(conn, command) // Pass the slice directly
+	return nil
+}
+func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid string) error {
+	a.mu.RLock()
+	file := a.activeFile
+	a.mu.RUnlock()
+
+	if file == nil {
+		return fmt.Errorf("no active torrent stream to restart")
+	}
+
+	sourceURL := "http://localhost:8080/stream"
+
+	// StartTranscode automatically calls stopOldProcess() and clears ./tmp_hls!
+	if err := a.mpv.StartTranscode(sourceURL, timeInSeconds, sid, aid); err != nil {
+		return fmt.Errorf("failed to restart stream with new tracks: %w", err)
+	}
+
+	return nil
 }

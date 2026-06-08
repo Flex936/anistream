@@ -27,7 +27,7 @@ func (m *MpvManager) Init() error {
 	return nil
 }
 
-func (m *MpvManager) StartTranscode(sourceURL string) error {
+func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid string, aid string) error {
 	m.mutex.Lock()
 	m.stopOldProcess()
 
@@ -39,7 +39,8 @@ func (m *MpvManager) StartTranscode(sourceURL string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFunc = cancel
 
-	cmd := exec.Command("mpv",
+	// 1. Build the base arguments
+	args := []string{
 		sourceURL,
 		"--o=index.m3u8",
 		"--of=hls",
@@ -48,8 +49,21 @@ func (m *MpvManager) StartTranscode(sourceURL string) error {
 		"--ovc=libx264",
 		"--oac=aac",
 		"--ovcopts=preset=ultrafast,tune=zerolatency",
-		"--sid=1",
-	)
+	}
+
+	// 2. Conditionally append our track and time flags
+	if startTime > 0 {
+		args = append(args, fmt.Sprintf("--start=%.3f", startTime))
+	}
+	if sid != "" {
+		args = append(args, fmt.Sprintf("--sid=%s", sid))
+	}
+	if aid != "" {
+		args = append(args, fmt.Sprintf("--aid=%s", aid))
+	}
+
+	// 3. Pass the dynamic slice to exec.Command
+	cmd := exec.Command("mpv", args...)
 	cmd.Dir = "./tmp_hls"
 
 	if err := cmd.Start(); err != nil {

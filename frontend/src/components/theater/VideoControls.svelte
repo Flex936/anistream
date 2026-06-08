@@ -6,6 +6,7 @@
     Volume1,
     VolumeX,
     Maximize,
+    Settings,
   } from "@lucide/svelte";
 
   let {
@@ -15,6 +16,7 @@
     volume = $bindable(),
     isMuted = $bindable(),
     onFullscreen,
+    SettingsOpen = $bindable(),
   } = $props();
 
   function formatTime(timeInSeconds: number) {
@@ -29,6 +31,9 @@
   }
   function toggleMute() {
     isMuted = !isMuted;
+  }
+  function toggleSettings() {
+    SettingsOpen = !SettingsOpen;
   }
 </script>
 
@@ -47,7 +52,7 @@
     <div class="flex items-center gap-4">
       <button
         onclick={togglePlay}
-        class="hover:text-zinc-300 transition-colors w-8 flex justify-center"
+        class="hover:text-zinc-300 transition-colors w-8 flex justify-center hover:cursor-pointer"
       >
         {#if paused}
           <Play size={22} fill="currentColor" />
@@ -65,7 +70,7 @@
       <div class="flex items-center gap-3 ml-2">
         <button
           onclick={toggleMute}
-          class="text-white hover:text-primary transition-colors focus:outline-none"
+          class="text-white hover:text-primary transition-colors focus:outline-none hover:cursor-pointer"
           title={isMuted || volume === 0 ? "Unmute" : "Mute"}
         >
           {#if isMuted || volume === 0}
@@ -88,10 +93,15 @@
           />
         </div>
       </div>
-
+      <button
+        onclick={() => toggleSettings()}
+        class="hover:text-zinc-300 transition-colors ml-2 hover:cursor-pointer"
+      >
+        <Settings size={20} />
+      </button>
       <button
         onclick={() => onFullscreen?.()}
-        class="hover:text-zinc-300 transition-colors ml-2"
+        class="hover:text-zinc-300 transition-colors ml-2 hover:cursor-pointer"
       >
         <Maximize size={20} />
       </button>

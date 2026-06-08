@@ -85,7 +85,7 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 
 	// 4. Delegate background process creation entirely to your MpvManager
 	sourceURL := "http://localhost:8080/stream"
-	if err := a.mpv.StartTranscode(sourceURL); err != nil {
+	if err := a.mpv.StartTranscode(sourceURL, 0, "auto", "auto"); err != nil {
 		cancel()
 
 		// FIX: Clean up application state and drop torrent if MPV fails/times out
