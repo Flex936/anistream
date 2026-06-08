@@ -4,7 +4,7 @@
   import { SearchAnime, GetTrendingAnime } from "../wailsjs/go/main/App";
   import type { main } from "../wailsjs/go/models";
 
-  import NavBar from "./components/NavBar.svelte";
+  import NavBar from "./components/layout/NavBar.svelte";
   import DiscoveryView from "./pages/DiscoveryView.svelte";
   import TheaterView from "./pages/TheaterView.svelte";
   import SettingsMenu from "./components/layout/SettingsMenu.svelte";

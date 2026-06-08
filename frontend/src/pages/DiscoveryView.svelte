@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AnimeCard from "../components/AnimeCard.svelte";
+  import AnimeCard from "../components/shared/AnimeCard.svelte";
   import { LoaderCircle } from "@lucide/svelte";
   import type { main } from "../../wailsjs/go/models";
 

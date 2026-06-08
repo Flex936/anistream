@@ -6,7 +6,7 @@
     StopStream,
     GetMpvMetadata,
     SendMpvCommand,
-    ChangeTrackAndRestart, // 1. Import the new function
+    ChangeTrackAndRestart,
   } from "../../../wailsjs/go/main/App";
   import Hls from "hls.js";
 
