@@ -10,7 +10,7 @@ import (
 )
 
 func (a *App) StreamTorrent(magnetLink string) (string, error) {
-	// 1. Cancel any currently executing stream setup goroutines immediately
+	// Cancel any currently executing stream setup goroutines immediately
 	a.mu.Lock()
 	if a.cancelStream != nil {
 		a.cancelStream()
@@ -20,10 +20,10 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 	a.cancelStream = cancel
 	a.mu.Unlock()
 
-	// 2. Tell MPV manager to drop any previous background transcodes
+	// ell MPV manager to drop any previous background transcodes
 	a.mpv.StopTranscode()
 
-	// 3. Drop any previously active torrent stream
+	// Drop any previously active torrent stream
 	a.mu.Lock()
 	if a.activeTorrent != nil {
 		a.activeTorrent.Drop()

@@ -56,6 +56,8 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 
 	if encoder == "libx264" {
 		args = append(args, "--ovcopts=preset=ultrafast,tune=zerolatency")
+	} else if encoder == "h264_nvenc" {
+		args = append(args, "--vf=format=yuv420p")
 	}
 
 	// Conditionally append our track and time flags
@@ -72,6 +74,10 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 	// Pass the dynamic slice to exec.Command
 	cmd := exec.Command("mpv", args...)
 	cmd.Dir = "./tmp_hls"
+
+	// Pipe MPV's output to the terminal
+	/* cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr */
 
 	if err := cmd.Start(); err != nil {
 		cancel()
