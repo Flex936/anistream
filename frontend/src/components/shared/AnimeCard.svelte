@@ -1,7 +1,7 @@
 <script lang="ts">
   import { CirclePlay } from "@lucide/svelte";
 
-  import { formatStatus, getCardStatusColor } from "../utils/statusColor";
+  import { formatStatus, getCardStatusColor } from "../../utils/statusColor";
 
   let { anime, onSelect } = $props();
 
