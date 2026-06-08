@@ -6,6 +6,10 @@ export function ChangeTrackAndRestart(arg1, arg2, arg3) {
   return window['go']['main']['App']['ChangeTrackAndRestart'](arg1, arg2, arg3);
 }
 
+export function GetAV1Enabled() {
+  return window['go']['main']['App']['GetAV1Enabled']();
+}
+
 export function GetAnimeProgress(arg1) {
   return window['go']['main']['App']['GetAnimeProgress'](arg1);
 }
@@ -60,6 +64,10 @@ export function StopStream() {
 
 export function StreamTorrent(arg1) {
   return window['go']['main']['App']['StreamTorrent'](arg1);
+}
+
+export function UpdateAV1Enabled(arg1) {
+  return window['go']['main']['App']['UpdateAV1Enabled'](arg1);
 }
 
 export function UpdateAnimeProgress(arg1, arg2) {

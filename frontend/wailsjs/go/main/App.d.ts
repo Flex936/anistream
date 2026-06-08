@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function ChangeTrackAndRestart(arg1:number,arg2:string,arg3:string):Promise<void>;
 
+export function GetAV1Enabled():Promise<boolean>;
+
 export function GetAnimeProgress(arg1:number):Promise<number>;
 
 export function GetEcchiFilter():Promise<boolean>;
@@ -31,6 +33,8 @@ export function SendMpvCommand(arg1:Array<any>):Promise<void>;
 export function StopStream():Promise<void>;
 
 export function StreamTorrent(arg1:string):Promise<string>;
+
+export function UpdateAV1Enabled(arg1:boolean):Promise<void>;
 
 export function UpdateAnimeProgress(arg1:number,arg2:number):Promise<void>;
 

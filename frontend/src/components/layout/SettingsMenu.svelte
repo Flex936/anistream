@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { X, Monitor, Zap, Cpu } from "@lucide/svelte";
+  import { X, Monitor, Zap, Cpu, TriangleAlert } from "@lucide/svelte";
   import {
     GetResolution,
     UpdateResolution,
@@ -8,6 +8,8 @@
     UpdateEcchiFilter,
     GetTranscoder,
     UpdateTranscoder,
+    GetAV1Enabled,
+    UpdateAV1Enabled,
   } from "../../../wailsjs/go/main/App";
   import { WindowSetSize } from "../../../wailsjs/runtime/runtime";
 
@@ -17,6 +19,7 @@
   let isSaving = $state(false);
   let filterEcchi = $state(true);
   let selectedEncoder = $state("libx264");
+  let enableAV1 = $state(false);
 
   const resolutions = [
     { label: "720p HD (1280 x 720)", w: 1280, h: 720 },
@@ -65,6 +68,7 @@
 
       filterEcchi = await GetEcchiFilter();
       selectedEncoder = await GetTranscoder();
+      enableAV1 = await GetAV1Enabled();
     } catch (err) {
       console.error("Failed to fetch settings:", err);
     }
@@ -76,6 +80,7 @@
       await UpdateResolution(selectedRes.w, selectedRes.h);
       await UpdateEcchiFilter(filterEcchi);
       await UpdateTranscoder(selectedEncoder);
+      await UpdateAV1Enabled(enableAV1);
 
       WindowSetSize(selectedRes.w, selectedRes.h);
       onClose?.();
@@ -234,6 +239,53 @@
                   {/if}
                 </button>
               {/each}
+            </div>
+            <div class="pt-6 border-t border-border">
+              <div class="flex items-start justify-between">
+                <div class="flex flex-col max-w-[80%]">
+                  <span
+                    class="text-sm font-bold text-main flex items-center gap-2"
+                  >
+                    Enable AV1 Encoding
+                    <span
+                      class="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-500 text-[10px] uppercase font-bold tracking-wider"
+                      >Experimental</span
+                    >
+                  </span>
+                  <p class="text-xs text-muted mt-1 leading-relaxed">
+                    Upgrades NVENC, AMF, or QuickSync to use the AV1 codec
+                    instead of H.264. <strong class="text-red-400"
+                      >WARNING:</strong
+                    > This will crash the player unless you have an RTX 40-series,
+                    RX 7000-series, or Intel Arc GPU.
+                  </p>
+                </div>
+
+                <button
+                  aria-label="Toggle AV1"
+                  disabled={selectedEncoder === "libx264" ||
+                    selectedEncoder === "h264_videotoolbox"}
+                  class="relative mt-2 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-30 disabled:cursor-not-allowed {enableAV1
+                    ? 'bg-amber-500'
+                    : 'bg-gray-600'}"
+                  onclick={() => (enableAV1 = !enableAV1)}
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {enableAV1
+                      ? 'translate-x-6'
+                      : 'translate-x-1'}"
+                  ></span>
+                </button>
+              </div>
+
+              {#if selectedEncoder === "libx264" || selectedEncoder === "h264_videotoolbox"}
+                <p
+                  class="text-[10px] text-amber-500/80 mt-2 flex items-center gap-1"
+                >
+                  <TriangleAlert size={12} /> Requires a dedicated GPU encoder to
+                  be selected above.
+                </p>
+              {/if}
             </div>
           </div>
         {/if}

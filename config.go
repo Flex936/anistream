@@ -12,6 +12,7 @@ type AppConfig struct {
 	Height       int    `json:"height"`
 	FilterEcchi  bool   `json:"filterEcchi"`
 	Encoder      string `json:"encoder"`
+	EnableAV1    bool   `json:"enableAV1"`
 }
 
 type Resolution struct {
@@ -34,6 +35,7 @@ func LoadConfig() AppConfig {
 	cfg.Width = 1280
 	cfg.Height = 720
 	cfg.FilterEcchi = true
+	cfg.EnableAV1 = false
 
 	data, err := os.ReadFile(getConfigPath())
 	if err == nil {
@@ -89,5 +91,16 @@ func (a *App) GetTranscoder() string {
 func (a *App) UpdateTranscoder(encoder string) error {
 	cfg := LoadConfig()
 	cfg.Encoder = encoder
+	return SaveConfig(cfg)
+}
+
+func (a *App) GetAV1Enabled() bool {
+	cfg := LoadConfig()
+	return cfg.EnableAV1
+}
+
+func (a *App) UpdateAV1Enabled(enabled bool) error {
+	cfg := LoadConfig()
+	cfg.EnableAV1 = enabled
 	return SaveConfig(cfg)
 }

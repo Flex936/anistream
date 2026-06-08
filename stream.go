@@ -92,6 +92,17 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 		encoder = "libx264"
 	}
 
+	if cfg.EnableAV1 {
+		switch encoder {
+		case "h264_nvenc":
+			encoder = "av1_nvenc" // Requires RTX 4000 series
+		case "h264_amf":
+			encoder = "av1_amf" // Requires RX 7000 series
+		case "h264_qsv":
+			encoder = "av1_qsv" // Requires Intel Arc / 14th Gen
+		}
+	}
+
 	if err := a.mpv.StartTranscode(sourceURL, 0, "auto", "auto", encoder); err != nil {
 		cancel()
 
