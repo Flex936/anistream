@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { X, Monitor, HardDrive } from "@lucide/svelte";
+  import { X, Monitor, Zap, Cpu } from "@lucide/svelte";
   import {
     GetResolution,
     UpdateResolution,
     GetEcchiFilter,
     UpdateEcchiFilter,
+    GetTranscoder,
+    UpdateTranscoder,
   } from "../../../wailsjs/go/main/App";
   import { WindowSetSize } from "../../../wailsjs/runtime/runtime";
 
@@ -14,6 +16,7 @@
   let activeTab = $state("general");
   let isSaving = $state(false);
   let filterEcchi = $state(true);
+  let selectedEncoder = $state("libx264");
 
   const resolutions = [
     { label: "720p HD (1280 x 720)", w: 1280, h: 720 },
@@ -21,6 +24,35 @@
     { label: "1080p Full HD (1920 x 1080)", w: 1920, h: 1080 },
     { label: "1440p QHD (2560 x 1440)", w: 2560, h: 1440 },
   ];
+
+  const encoders = [
+    {
+      id: "libx264",
+      name: "Software",
+      desc: "Compatible with all.",
+    },
+    {
+      id: "h264_nvenc",
+      name: "NVENC",
+      desc: "For NVIDIA cards.",
+    },
+    {
+      id: "h264_amf",
+      name: "AMF",
+      desc: "For AMD graphics.",
+    },
+    {
+      id: "h264_qsv",
+      name: "QuickSync",
+      desc: "For Intel graphics.",
+    },
+    {
+      id: "h264_videotoolbox",
+      name: "Apple Silicon",
+      desc: "For M1/M2/M3 Mac users.",
+    },
+  ];
+
   let selectedRes = $state(resolutions[0]);
 
   onMount(async () => {
@@ -32,6 +64,7 @@
       if (match) selectedRes = match;
 
       filterEcchi = await GetEcchiFilter();
+      selectedEncoder = await GetTranscoder();
     } catch (err) {
       console.error("Failed to fetch settings:", err);
     }
@@ -42,6 +75,7 @@
     try {
       await UpdateResolution(selectedRes.w, selectedRes.h);
       await UpdateEcchiFilter(filterEcchi);
+      await UpdateTranscoder(selectedEncoder);
 
       WindowSetSize(selectedRes.w, selectedRes.h);
       onClose?.();
@@ -77,81 +111,76 @@
       </button>
 
       <button
-        class="flex items-center space-x-3 px-4 py-2 rounded-lg text-muted hover:bg-surface hover:text-main transition-colors"
-        onclick={() => (activeTab = "downloads")}
+        class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors {activeTab ===
+        'playback'
+          ? 'bg-primary/20 text-primary'
+          : 'text-muted hover:bg-surface hover:text-main'}"
+        onclick={() => (activeTab = "playback")}
       >
-        <HardDrive size={18} />
-        <span class="font-medium">Downloads</span>
+        <Zap size={18} />
+        <span class="font-medium">Playback</span>
       </button>
     </div>
 
-    <div class="flex-1 flex flex-col relative min-h-[400px]">
+    <div class="flex-1 flex flex-col relative min-h-[500px]">
       <button
-        class="absolute top-4 right-4 p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-full transition-colors"
+        class="absolute top-4 right-4 p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-full transition-colors z-10"
         onclick={() => onClose?.()}
       >
         <X size={20} />
       </button>
 
-      <div class="p-8 flex-1">
+      <div class="p-8 flex-1 overflow-y-auto">
         {#if activeTab === "general"}
           <div class="animate-in fade-in slide-in-from-right-4 duration-300">
             <h3 class="text-2xl font-bold text-main mb-6">General Settings</h3>
 
-            <div class="space-y-4 max-w-md">
+            <div class="space-y-6">
               <div class="space-y-3">
                 <span
-                  class="text-sm font-semibold text-muted uppercase tracking-wider"
+                  class="text-xs font-semibold text-muted uppercase tracking-wider"
                   >Startup Resolution</span
                 >
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="grid grid-cols-2 gap-3">
                   {#each resolutions as res}
                     <button
-                      class="flex flex-col items-start p-4 rounded-xl border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary {selectedRes.label ===
+                      class="flex flex-col items-start p-3 rounded-xl border-2 transition-all duration-200 {selectedRes.label ===
                       res.label
                         ? 'border-primary bg-primary/10'
-                        : 'border-border bg-base hover:border-gray-500 hover:bg-surface'}"
+                        : 'border-border bg-base hover:border-gray-500'}"
                       onclick={() => (selectedRes = res)}
                     >
                       <span
-                        class="font-bold {selectedRes.label === res.label
+                        class="font-bold text-sm {selectedRes.label ===
+                        res.label
                           ? 'text-primary'
-                          : 'text-gray-200'}"
+                          : 'text-gray-200'}">{res.label.split("(")[0]}</span
                       >
-                        {res.label.split("(")[0].trim()}
-                      </span>
                       <span
-                        class="text-xs mt-1 {selectedRes.label === res.label
+                        class="text-[10px] {selectedRes.label === res.label
                           ? 'text-primary/80'
-                          : 'text-gray-500'}"
+                          : 'text-gray-500'}">{res.w} x {res.h}</span
                       >
-                        {res.w} x {res.h}
-                      </span>
                     </button>
                   {/each}
                 </div>
-                <p class="text-xs text-muted pt-2">
-                  This will be the default window size every time you open
-                  AniStream.
-                </p>
               </div>
-            </div>
 
-            <div class="space-y-3 pt-6 mt-6 border-t border-border max-w-md">
-              <div class="flex items-center justify-between">
-                <div class="flex flex-col">
+              <div
+                class="pt-6 border-t border-border flex items-center justify-between"
+              >
+                <div>
                   <span
-                    class="text-sm font-semibold text-main uppercase tracking-wider"
+                    class="text-sm font-semibold text-main uppercase tracking-wider block"
                     >Filter Ecchi Content</span
                   >
-                  <span class="text-xs text-muted mt-1"
+                  <span class="text-xs text-muted"
                     >Hide borderline NSFW shows.</span
                   >
                 </div>
-
                 <button
-                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary {filterEcchi
+                  aria-label="Toggle Ecchi Filter"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {filterEcchi
                     ? 'bg-primary'
                     : 'bg-gray-600'}"
                   onclick={() => (filterEcchi = !filterEcchi)}
@@ -165,10 +194,47 @@
               </div>
             </div>
           </div>
-        {:else if activeTab === "downloads"}
+        {:else if activeTab === "playback"}
           <div class="animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 class="text-2xl font-bold text-main mb-6">Downloads</h3>
-            <p class="text-muted">Coming soon...</p>
+            <h3 class="text-2xl font-bold text-main mb-2">
+              Hardware Acceleration
+            </h3>
+            <p class="text-sm text-muted mb-6">
+              Using your GPU reduces buffer time and CPU load.
+            </p>
+
+            <div class="space-y-3">
+              {#each encoders as enc}
+                <button
+                  class="w-full flex items-center p-4 rounded-xl border-2 transition-all duration-200 {selectedEncoder ===
+                  enc.id
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border bg-base hover:border-gray-500 text-left'}"
+                  onclick={() => (selectedEncoder = enc.id)}
+                >
+                  <div
+                    class="p-2 rounded-lg {selectedEncoder === enc.id
+                      ? 'bg-primary text-white'
+                      : 'bg-surface text-muted'} mr-4"
+                  >
+                    {#if enc.id === "libx264"}<Cpu size={20} />{:else}<Zap
+                        size={20}
+                      />{/if}
+                  </div>
+                  <div class="flex flex-col text-left">
+                    <span
+                      class="font-bold {selectedEncoder === enc.id
+                        ? 'text-primary'
+                        : 'text-main'}">{enc.name}</span
+                    >
+                    <span class="text-xs text-muted">{enc.desc}</span>
+                  </div>
+                  {#if selectedEncoder === enc.id}
+                    <div class="ml-auto text-primary"><Zap size={20} /></div>
+                  {/if}
+                </button>
+              {/each}
+            </div>
           </div>
         {/if}
       </div>
@@ -177,7 +243,7 @@
         <button
           onclick={handleSave}
           disabled={isSaving}
-          class="bg-primary hover:bg-primary-hover text-white font-medium px-6 py-2 rounded-lg transition-colors shadow-md disabled:opacity-50"
+          class="bg-primary hover:bg-primary/90 text-white font-medium px-8 py-2 rounded-lg transition-colors shadow-lg disabled:opacity-50"
         >
           {isSaving ? "Saving..." : "Save Changes"}
         </button>

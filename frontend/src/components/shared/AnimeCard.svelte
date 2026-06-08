@@ -18,7 +18,7 @@
   onkeydown={(e) => (e.key === "Enter" || e.key === " ") && selectAnime()}
 >
   <div
-    class="relative w-full aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-border bg-surface group-hover:border-primary/50 transition-colors"
+    class="relative w-full aspect-2/3 rounded-xl overflow-hidden shadow-lg border border-border bg-surface group-hover:border-primary/50 transition-colors"
   >
     <div
       class={"absolute inset-0 bg-surface animate-pulse " +

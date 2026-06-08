@@ -34,6 +34,12 @@ func NewApp() *App {
 	cfg.DataDir = "./tmp_downloads"
 	cfg.NoUpload = true
 
+	// Aggressive Streaming Network Config
+	cfg.EstablishedConnsPerTorrent = 100 // Default is 50. Grab more peers for faster chunks.
+	cfg.HalfOpenConnsPerTorrent = 50     // Default is 25. Dial out to peers twice as fast.
+	cfg.TorrentPeersHighWater = 1000     // Keep a massive pool of potential peers ready.
+	cfg.TorrentPeersLowWater = 500
+
 	client, err := torrent.NewClient(cfg)
 	if err != nil {
 		log.Fatalf("failed to create torrent client: %v", err)
@@ -117,6 +123,7 @@ func (a *App) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
 }
+
 func (a *App) GetMpvMetadata() (*FrontendPayload, error) {
 	return a.mpv.GetMetadata()
 }
@@ -130,9 +137,10 @@ func (a *App) SendMpvCommand(command []interface{}) error {
 	}
 	defer conn.Close()
 
-	sendCommand(conn, command) // Pass the slice directly
+	sendCommand(conn, command)
 	return nil
 }
+
 func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid string) error {
 	a.mu.RLock()
 	file := a.activeFile
@@ -144,8 +152,13 @@ func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid strin
 
 	sourceURL := "http://localhost:8080/stream"
 
-	// StartTranscode automatically calls stopOldProcess() and clears ./tmp_hls!
-	if err := a.mpv.StartTranscode(sourceURL, timeInSeconds, sid, aid); err != nil {
+	cfg := LoadConfig()
+	encoder := cfg.Encoder
+	if encoder == "" {
+		encoder = "libx264"
+	}
+
+	if err := a.mpv.StartTranscode(sourceURL, timeInSeconds, sid, aid, encoder); err != nil {
 		return fmt.Errorf("failed to restart stream with new tracks: %w", err)
 	}
 

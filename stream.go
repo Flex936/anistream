@@ -83,12 +83,19 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 	a.activeFile = targetFile
 	a.mu.Unlock()
 
-	// 4. Delegate background process creation entirely to your MpvManager
+	// Delegate background process creation entirely to your MpvManager
 	sourceURL := "http://localhost:8080/stream"
-	if err := a.mpv.StartTranscode(sourceURL, 0, "auto", "auto"); err != nil {
+
+	cfg := LoadConfig()
+	encoder := cfg.Encoder
+	if encoder == "" {
+		encoder = "libx264"
+	}
+
+	if err := a.mpv.StartTranscode(sourceURL, 0, "auto", "auto", encoder); err != nil {
 		cancel()
 
-		// FIX: Clean up application state and drop torrent if MPV fails/times out
+		// Clean up application state and drop torrent if MPV fails/times out
 		a.mu.Lock()
 		if a.activeTorrent == t {
 			a.activeTorrent = nil
@@ -137,42 +144,35 @@ func (a *App) streamHandler(w http.ResponseWriter, r *http.Request) {
 
 	reader := file.NewReader()
 	reader.SetResponsive()
-	reader.SetReadahead(8 << 20) // 8 MB — enough for ~3s of 1080p video
+	reader.SetReadahead(8 << 20)
 	defer reader.Close()
 
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	http.ServeContent(w, r, file.DisplayPath(), time.Time{}, reader)
 }
+
 func PrepareTorrentForStreaming(t *torrent.Torrent, f *torrent.File) {
-	// 1. Cancel any global sequential downloading temporarily
+	// Cancel any global sequential downloading temporarily
 	t.CancelPieces(0, t.NumPieces())
 
-	// 2. Calculate the piece range for this specific file
-	fileOffset := f.Offset()
-	fileLength := f.Length()
-
-	// Get the piece size of the torrent
+	// Calculate the piece range for this specific file
 	pieceLength := t.Info().PieceLength
+	startPiece := int(f.Offset() / pieceLength)
+	endPiece := int((f.Offset() + f.Length()) / pieceLength)
 
-	startPiece := int(fileOffset / pieceLength)
-	endPiece := int((fileOffset + fileLength) / pieceLength)
-
-	// 3. PRIORITIZE THE HEAD AND TAIL (Critical for MKV metadata)
-	// High-priority for the first 2 pieces (contains MKV headers)
+	// Prioritize the head and tail (Critical for MKV metadata)
+	// PiecePriorityNow tells the client to drop everything and fetch these instantly.
 	for i := startPiece; i < startPiece+2 && i <= endPiece; i++ {
-		t.Piece(i).SetPriority(torrent.PiecePriorityHigh)
+		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
 	}
 
 	// High-priority for the last 2 pieces (contains MKV Cues/Duration/Chapters)
 	for i := endPiece; i > endPiece-2 && i >= startPiece; i-- {
-		t.Piece(i).SetPriority(torrent.PiecePriorityHigh)
+		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
 	}
 
-	// 4. Set the rest of the file to normal sequential download
-	// anacrolix/torrent allows you to download a specific range sequentially
-	go func() {
-		// Wait a brief moment or check if head/tail are downloaded,
-		// then feed the rest sequentially.
-		t.DownloadPieces(startPiece, endPiece)
-	}()
+	// DO NOT manually call t.DownloadPieces() here!
+	// The `file.NewReader().SetReadahead()` in the streamHandler will dynamically
+	// request the exact sequential pieces it needs as the video plays, keeping the
+	// bandwidth fully dedicated to the exact moment the user is watching.
 }

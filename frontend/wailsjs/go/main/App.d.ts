@@ -14,6 +14,8 @@ export function GetMpvMetadata():Promise<main.FrontendPayload>;
 
 export function GetResolution():Promise<main.Resolution>;
 
+export function GetTranscoder():Promise<string>;
+
 export function GetTrendingAnime():Promise<Array<main.Anime>>;
 
 export function IsLoggedIn():Promise<boolean>;
@@ -35,3 +37,5 @@ export function UpdateAnimeProgress(arg1:number,arg2:number):Promise<void>;
 export function UpdateEcchiFilter(arg1:boolean):Promise<void>;
 
 export function UpdateResolution(arg1:number,arg2:number):Promise<void>;
+
+export function UpdateTranscoder(arg1:string):Promise<void>;

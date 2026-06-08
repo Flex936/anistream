@@ -11,6 +11,7 @@ type AppConfig struct {
 	Width        int    `json:"width"`
 	Height       int    `json:"height"`
 	FilterEcchi  bool   `json:"filterEcchi"`
+	Encoder      string `json:"encoder"`
 }
 
 type Resolution struct {
@@ -74,5 +75,19 @@ func (a *App) GetEcchiFilter() bool {
 func (a *App) UpdateEcchiFilter(filter bool) error {
 	cfg := LoadConfig()
 	cfg.FilterEcchi = filter
+	return SaveConfig(cfg)
+}
+
+func (a *App) GetTranscoder() string {
+	cfg := LoadConfig()
+	if cfg.Encoder == "" {
+		return "libx264"
+	}
+	return cfg.Encoder
+}
+
+func (a *App) UpdateTranscoder(encoder string) error {
+	cfg := LoadConfig()
+	cfg.Encoder = encoder
 	return SaveConfig(cfg)
 }

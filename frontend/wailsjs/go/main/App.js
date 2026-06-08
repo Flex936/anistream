@@ -26,6 +26,10 @@ export function GetResolution() {
   return window['go']['main']['App']['GetResolution']();
 }
 
+export function GetTranscoder() {
+  return window['go']['main']['App']['GetTranscoder']();
+}
+
 export function GetTrendingAnime() {
   return window['go']['main']['App']['GetTrendingAnime']();
 }
@@ -68,4 +72,8 @@ export function UpdateEcchiFilter(arg1) {
 
 export function UpdateResolution(arg1, arg2) {
   return window['go']['main']['App']['UpdateResolution'](arg1, arg2);
+}
+
+export function UpdateTranscoder(arg1) {
+  return window['go']['main']['App']['UpdateTranscoder'](arg1);
 }
