@@ -57,7 +57,6 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 		}
 	}
 
-	// STRICT TRANSCODE PIPELINE
 	args := []string{
 		sourceURL,
 		"--o=index.m3u8",
@@ -65,7 +64,7 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 		GetIpcArg(),
 		"--ofopts=hls_time=2,hls_segment_type=fmp4,hls_playlist_type=event",
 		"--hwdec=auto-safe",
-		"--msg-level=ffmpeg=error", // Mutes the annoying terminal warnings!
+		"--msg-level=ffmpeg=error",
 		"--ovc=" + encoder,
 		"--oac=" + audioEncoder,
 	}
