@@ -234,9 +234,6 @@
                     >
                     <span class="text-xs text-muted">{enc.desc}</span>
                   </div>
-                  {#if selectedEncoder === enc.id}
-                    <div class="ml-auto text-primary"><Zap size={20} /></div>
-                  {/if}
                 </button>
               {/each}
             </div>
