@@ -55,7 +55,6 @@ func extractEpisode(title string) int {
 	return -1
 }
 
-// GetEpisodeTorrents searches Nyaa.si, scores every torrent dynamically, and returns a sorted list.
 func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]TorrentResult, error) {
 	epStr := fmt.Sprintf("%02d", episodeNumber)
 
@@ -63,13 +62,35 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 	safeTitle := punctRegex.ReplaceAllString(animeTitle, " ")
 	safeTitle = strings.TrimSpace(whitespaceRegex.ReplaceAllString(safeTitle, " "))
 
+	// Try standard TV Show search with the episode number appended
 	searchQuery := fmt.Sprintf("%s %s", safeTitle, epStr)
+	results, err := a.searchAndScoreNyaa(searchQuery, animeTitle, episodeNumber, false)
+
+	// he Movie Fallback Trap
+	// If the standard search fails to find anything, AND we are looking for the first episode,
+	// it is highly likely that this is a Movie, Film, or one-off OVA.
+	if (err != nil || len(results) == 0) && episodeNumber == 1 {
+		log.Printf("[SCRAPER] No standard episodes found for '%s'. Attempting Movie/Fallback search...", safeTitle)
+		results, err = a.searchAndScoreNyaa(safeTitle, animeTitle, episodeNumber, true)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no torrents found for %s episode %s", animeTitle, epStr)
+	}
+
+	return results, nil
+}
+
+// Extracted search logic to allow for clean fallback attempts
+func (a *App) searchAndScoreNyaa(searchQuery string, animeTitle string, episodeNumber int, isMovieFallback bool) ([]TorrentResult, error) {
 	encodedQuery := url.QueryEscape(searchQuery)
 	feedURL := fmt.Sprintf("https://nyaa.si/?page=rss&q=%s&c=1_2&f=0", encodedQuery)
 
 	log.Printf("[SCRAPER] Searching Nyaa for: '%s'", searchQuery)
 
-	// Force the connection to close if Nyaa takes longer than 10 seconds
 	fp := gofeed.NewParser()
 	fp.Client = a.httpClient
 
@@ -79,11 +100,15 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 	}
 
 	if len(feed.Items) == 0 {
-		return nil, fmt.Errorf("no torrents found for %s episode %s", animeTitle, epStr)
+		return nil, nil // Return nil instead of an error so the fallback logic can catch it cleanly
 	}
 
 	queryTitleLow := strings.ToLower(animeTitle)
 	targetSeason := extractSeason(queryTitleLow)
+	epStr := fmt.Sprintf("%02d", episodeNumber)
+
+	// Determine if we should allow movie tags to bypass penalties
+	isMovieQuery := isMovieFallback || strings.Contains(queryTitleLow, "movie") || strings.Contains(queryTitleLow, "film") || strings.Contains(queryTitleLow, "gekijouban")
 
 	var results []TorrentResult
 
@@ -111,8 +136,16 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 
 		// Episode filter
 		torrentEp := extractEpisode(titleLow)
-		if torrentEp != -1 && torrentEp != episodeNumber {
-			continue
+		if !isMovieFallback {
+			// Strict TV checking
+			if torrentEp != -1 && torrentEp != episodeNumber {
+				continue
+			}
+		} else {
+			// If it's a movie fallback, we allow items with NO episode number (-1) or episode 1.
+			if torrentEp != -1 && torrentEp != 1 {
+				continue
+			}
 		}
 
 		// Penalties: Spin-offs/OVAs/Movies/Batches
@@ -125,12 +158,17 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 		if !strings.Contains(queryTitleLow, "oad") && strings.Contains(titleLow, "oad") {
 			score -= 100
 		}
-		if !strings.Contains(queryTitleLow, "movie") && strings.Contains(titleLow, "movie") {
-			score -= 100
-		}
 		if !strings.Contains(queryTitleLow, "special") && strings.Contains(titleLow, "special") {
 			score -= 100
 		}
+
+		// The Movie Trap: Adjusting penalties/boosts for films
+		if !isMovieQuery && strings.Contains(titleLow, "movie") {
+			score -= 100
+		} else if isMovieQuery && (strings.Contains(titleLow, "movie") || strings.Contains(titleLow, "gekijouban") || strings.Contains(titleLow, "film")) {
+			score += 50
+		}
+
 		if strings.Contains(titleLow, "[batch]") || strings.Contains(titleLow, "(batch)") {
 			score -= 150
 		}
@@ -138,9 +176,11 @@ func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]Torren
 			score -= 150
 		}
 
-		// Boost: Episodic formatting
-		if strings.Contains(titleLow, fmt.Sprintf("- %s", epStr)) || strings.Contains(titleLow, fmt.Sprintf(" %s ", epStr)) {
-			score += 20
+		// Boost: Episodic formatting (Only for TV shows)
+		if !isMovieFallback {
+			if strings.Contains(titleLow, fmt.Sprintf("- %s", epStr)) || strings.Contains(titleLow, fmt.Sprintf(" %s ", epStr)) {
+				score += 20
+			}
 		}
 
 		// Boost: Trusted groups
