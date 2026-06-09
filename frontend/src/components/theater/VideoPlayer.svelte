@@ -51,6 +51,31 @@
   let animeData = $state<main.FrontendPayload | undefined>(undefined);
 
   // ==========================================
+  // Idle UI Logic (Auto-Hide Controls)
+  // ==========================================
+  let isIdle = $state(false);
+  let idleTimeout: ReturnType<typeof setTimeout>;
+
+  function handleMouseMove() {
+    isIdle = false;
+    clearTimeout(idleTimeout);
+
+    // Only start the idle timer if the video is playing AND settings are closed
+    if (!paused && !SettingsOpen) {
+      idleTimeout = setTimeout(() => {
+        isIdle = true;
+      }, 2500); // Hide after 2.5 seconds of inactivity
+    }
+  }
+
+  function handleMouseLeave() {
+    if (!paused && !SettingsOpen) {
+      isIdle = true;
+      clearTimeout(idleTimeout);
+    }
+  }
+
+  // ==========================================
   // AniList Tracking Logic (kept exactly as is)
   // ==========================================
   $effect(() => {
@@ -217,7 +242,14 @@
 
   <div
     bind:this={playerContainer}
-    class="relative group w-full aspect-video bg-black rounded-xl overflow-hidden border border-zinc-800 shadow-2xl"
+    onpointermove={handleMouseMove}
+    onpointerleave={handleMouseLeave}
+    aria-label="video-player"
+    role="dialog"
+    tabindex="0"
+    class="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-zinc-800 shadow-2xl transition-cursor {isIdle
+      ? 'cursor-none'
+      : ''}"
   >
     <TrackingOverlay {hasScrobbled} {isTrackingTimerActive} />
 
@@ -243,6 +275,7 @@
       bind:isMuted
       bind:SettingsOpen
       onFullscreen={toggleFullscreen}
+      {isIdle}
     />
 
     <VideoSettings

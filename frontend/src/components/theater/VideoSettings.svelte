@@ -14,9 +14,12 @@
   function handleMouseLeave() {
     closeTimeout = setTimeout(() => {
       SettingsOpen = false;
-      SettingsView = "main";
-    }, 200);
+      setTimeout(() => {
+        if (!SettingsOpen) SettingsView = "main";
+      }, 300);
+    }, 300);
   }
+
   function handleMouseEnter() {
     clearTimeout(closeTimeout);
   }
@@ -48,7 +51,7 @@
       }}
     >
       <span class="mr-1"><Captions size={20} /></span><span>Subtitles</span
-      ><span class="absolute right-7 text-gray-700"
+      ><span class="absolute right-7 text-gray-700 truncate"
         >{#if SelectedSub}{SelectedSub?.lang} ({SelectedSub?.title}){:else}
           None
         {/if}</span
@@ -137,3 +140,19 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #3f3f46;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #52525b;
+  }
+</style>

@@ -17,6 +17,7 @@
     isMuted = $bindable(),
     onFullscreen,
     SettingsOpen = $bindable(),
+    isIdle,
   } = $props();
 
   function formatTime(timeInSeconds: number) {
@@ -38,7 +39,9 @@
 </script>
 
 <div
-  class="absolute bottom-0 left-0 right-0 p-4 bg-linear-to-t from-black/90 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col gap-2"
+  class="absolute bottom-0 left-0 right-0 p-4 bg-linear-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-300 flex flex-col gap-2 {isIdle
+    ? 'opacity-0 pointer-events-none'
+    : 'opacity-100'}"
 >
   <input
     type="range"

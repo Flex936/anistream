@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { X, Monitor, Zap, Cpu, TriangleAlert } from "@lucide/svelte";
+  import { X, Monitor, Zap, Cpu, Film, TriangleAlert } from "@lucide/svelte";
   import {
     GetResolution,
     UpdateResolution,
@@ -122,7 +122,7 @@
           : 'text-muted hover:bg-surface hover:text-main'}"
         onclick={() => (activeTab = "playback")}
       >
-        <Zap size={18} />
+        <Film size={18} />
         <span class="font-medium">Playback</span>
       </button>
     </div>
@@ -254,10 +254,11 @@
                   </span>
                   <p class="text-xs text-muted mt-1 leading-relaxed">
                     Upgrades NVENC, AMF, or QuickSync to use the AV1 codec
-                    instead of H.264. <strong class="text-red-400"
-                      >WARNING:</strong
-                    > This will crash the player unless you have an RTX 40-series,
-                    RX 7000-series, or Intel Arc GPU.
+                    instead of H.264.
+                    <br />
+                    <strong class="text-red-400">WARNING:</strong> This will only
+                    work on RTX 40-series, RX 7000-series, or Intel Arc GPU (and
+                    above).
                   </p>
                 </div>
 
