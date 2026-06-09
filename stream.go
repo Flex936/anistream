@@ -10,22 +10,13 @@ import (
 )
 
 func (a *App) StreamTorrent(magnetLink string) (string, error) {
+	// Instantly nuke any currently active stream using our centralized cleanup
+	a.StopStream()
+
+	// Setup the fresh stream context
 	a.mu.Lock()
-	if a.cancelStream != nil {
-		a.cancelStream()
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancelStream = cancel
-	a.mu.Unlock()
-
-	a.mpv.StopTranscode()
-
-	a.mu.Lock()
-	if a.activeTorrent != nil {
-		a.activeTorrent.Drop()
-		a.activeTorrent = nil
-		a.activeFile = nil
-	}
 	a.mu.Unlock()
 
 	t, err := a.torrentClient.AddMagnet(magnetLink)
@@ -82,14 +73,8 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 	encoder, audioEncoder := a.resolveEncoders(sid)
 
 	if err := a.mpv.StartTranscode(sourceURL, 0, sid, aid, encoder, audioEncoder); err != nil {
-		cancel()
-		a.mu.Lock()
-		if a.activeTorrent == t {
-			a.activeTorrent = nil
-			a.activeFile = nil
-		}
-		a.mu.Unlock()
-		t.Drop()
+		// Leverage StopStream to automatically drop context, kill MPV, and dump the bad torrent!
+		a.StopStream()
 		return "", fmt.Errorf("transcoder failed to initialize: %w", err)
 	}
 
