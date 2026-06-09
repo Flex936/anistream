@@ -13,6 +13,7 @@ type AppConfig struct {
 	FilterEcchi  bool   `json:"filterEcchi"`
 	Encoder      string `json:"encoder"`
 	EnableAV1    bool   `json:"enableAV1"`
+	EnableOpus   bool   `json:"enableOpus"`
 }
 
 type Resolution struct {
@@ -36,6 +37,7 @@ func LoadConfig() AppConfig {
 	cfg.Height = 720
 	cfg.FilterEcchi = true
 	cfg.EnableAV1 = false
+	cfg.EnableOpus = false
 
 	data, err := os.ReadFile(getConfigPath())
 	if err == nil {
@@ -102,5 +104,16 @@ func (a *App) GetAV1Enabled() bool {
 func (a *App) UpdateAV1Enabled(enabled bool) error {
 	cfg := LoadConfig()
 	cfg.EnableAV1 = enabled
+	return SaveConfig(cfg)
+}
+
+func (a *App) GetOpusEnabled() bool {
+	cfg := LoadConfig()
+	return cfg.EnableOpus
+}
+
+func (a *App) UpdateOpusEnabled(enabled bool) error {
+	cfg := LoadConfig()
+	cfg.EnableOpus = enabled
 	return SaveConfig(cfg)
 }

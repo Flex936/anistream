@@ -19,14 +19,14 @@ type App struct {
 	torrentClient *torrent.Client
 	httpClient    *http.Client
 	mpv           *MpvManager
-	cancelStream  context.CancelFunc // Track and kill active stream routines
+	cancelStream  context.CancelFunc
 
-	mu            sync.RWMutex // guards fields below
+	mu            sync.RWMutex
 	activeFile    *torrent.File
 	activeTorrent *torrent.Torrent
 	activeCmd     *exec.Cmd
-	aniListToken  string // cached from config; mutated only by Login/Logout
-	viewerID      int    // 0 = not yet fetched; cached after first successful call
+	aniListToken  string
+	viewerID      int
 }
 
 func NewApp() *App {
@@ -34,10 +34,9 @@ func NewApp() *App {
 	cfg.DataDir = "./tmp_downloads"
 	cfg.NoUpload = true
 
-	// Aggressive Streaming Network Config
-	cfg.EstablishedConnsPerTorrent = 100 // Default is 50. Grab more peers for faster chunks.
-	cfg.HalfOpenConnsPerTorrent = 50     // Default is 25. Dial out to peers twice as fast.
-	cfg.TorrentPeersHighWater = 1000     // Keep a massive pool of potential peers ready.
+	cfg.EstablishedConnsPerTorrent = 100
+	cfg.HalfOpenConnsPerTorrent = 50
+	cfg.TorrentPeersHighWater = 1000
 	cfg.TorrentPeersLowWater = 500
 
 	client, err := torrent.NewClient(cfg)
@@ -57,14 +56,11 @@ func NewApp() *App {
 	fileServer := http.FileServer(http.Dir("./tmp_hls"))
 	hlsHandler := http.StripPrefix("/hls/", fileServer)
 
-	// Wrap it with CORS middleware so hls.js can access index.m3u8 and .m4s segments
 	mux.Handle("/hls/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Range, Content-Type")
 		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
-
-		// Tell the browser this is a live stream, do not cache!
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("Expires", "0")
@@ -73,7 +69,6 @@ func NewApp() *App {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-
 		hlsHandler.ServeHTTP(w, r)
 	}))
 
@@ -128,17 +123,31 @@ func (a *App) GetMpvMetadata() (*FrontendPayload, error) {
 	return a.mpv.GetMetadata()
 }
 
-// SendMpvCommand allows Svelte to send commands directly to MPV.
-// This will auto-generate the MpvCommand type!
 func (a *App) SendMpvCommand(command []interface{}) error {
 	conn, err := DialMpv()
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-
 	sendCommand(conn, command)
 	return nil
+}
+
+// --- The Centralized Resolver (Now strictly follows the config) ---
+func (a *App) resolveEncoders(sid string) (string, string) {
+	cfg := LoadConfig()
+
+	encoder := cfg.Encoder
+	if encoder == "" {
+		encoder = "libx264"
+	}
+	audioEncoder := "aac"
+
+	if cfg.EnableOpus {
+		audioEncoder = "libopus"
+	}
+
+	return encoder, audioEncoder
 }
 
 func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid string) error {
@@ -152,13 +161,10 @@ func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid strin
 
 	sourceURL := "http://localhost:8080/stream"
 
-	cfg := LoadConfig()
-	encoder := cfg.Encoder
-	if encoder == "" {
-		encoder = "libx264"
-	}
+	// Use the central resolver to get the correct encoders based on the config
+	encoder, audioEncoder := a.resolveEncoders(sid)
 
-	if err := a.mpv.StartTranscode(sourceURL, timeInSeconds, sid, aid, encoder); err != nil {
+	if err := a.mpv.StartTranscode(sourceURL, timeInSeconds, sid, aid, encoder, audioEncoder); err != nil {
 		return fmt.Errorf("failed to restart stream with new tracks: %w", err)
 	}
 

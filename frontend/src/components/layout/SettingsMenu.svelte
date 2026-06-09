@@ -10,6 +10,8 @@
     UpdateTranscoder,
     GetAV1Enabled,
     UpdateAV1Enabled,
+    GetOpusEnabled,
+    UpdateOpusEnabled,
   } from "../../../wailsjs/go/main/App";
   import { WindowSetSize } from "../../../wailsjs/runtime/runtime";
 
@@ -20,6 +22,7 @@
   let filterEcchi = $state(true);
   let selectedEncoder = $state("libx264");
   let enableAV1 = $state(false);
+  let enableOpus = $state(false);
 
   const resolutions = [
     { label: "720p HD (1280 x 720)", w: 1280, h: 720 },
@@ -67,8 +70,17 @@
       if (match) selectedRes = match;
 
       filterEcchi = await GetEcchiFilter();
-      selectedEncoder = await GetTranscoder();
       enableAV1 = await GetAV1Enabled();
+      enableOpus = await GetOpusEnabled();
+
+      let savedEncoder = await GetTranscoder();
+
+      if (savedEncoder.startsWith("av1_")) {
+        selectedEncoder = savedEncoder.replace("av1_", "h264_");
+        enableAV1 = true;
+      } else {
+        selectedEncoder = savedEncoder;
+      }
     } catch (err) {
       console.error("Failed to fetch settings:", err);
     }
@@ -79,8 +91,15 @@
     try {
       await UpdateResolution(selectedRes.w, selectedRes.h);
       await UpdateEcchiFilter(filterEcchi);
-      await UpdateTranscoder(selectedEncoder);
+
+      let finalEncoder = selectedEncoder;
+      if (enableAV1 && selectedEncoder.startsWith("h264_")) {
+        finalEncoder = selectedEncoder.replace("h264_", "av1_");
+      }
+
+      await UpdateTranscoder(finalEncoder);
       await UpdateAV1Enabled(enableAV1);
+      await UpdateOpusEnabled(enableOpus);
 
       WindowSetSize(selectedRes.w, selectedRes.h);
       onClose?.();
@@ -237,7 +256,8 @@
                 </button>
               {/each}
             </div>
-            <div class="pt-6 border-t border-border">
+
+            <div class="pt-6 border-t border-border mt-6">
               <div class="flex items-start justify-between">
                 <div class="flex flex-col max-w-[80%]">
                   <span
@@ -284,6 +304,40 @@
                   be selected above.
                 </p>
               {/if}
+            </div>
+
+            <div class="pt-6 border-t border-border mt-6">
+              <div class="flex items-start justify-between">
+                <div class="flex flex-col max-w-[80%]">
+                  <span
+                    class="text-sm font-bold text-main flex items-center gap-2"
+                  >
+                    High-Fidelity Audio (Opus)
+                  </span>
+                  <p class="text-xs text-muted mt-1 leading-relaxed">
+                    Uses the Opus codec for slightly better audio quality at
+                    lower bitrates instead of standard AAC.
+                    <br />
+                    <strong class="text-red-400">WARNING:</strong> Do not enable
+                    this on macOS. Apple's video engine does not support Opus via
+                    HLS.
+                  </p>
+                </div>
+
+                <button
+                  aria-label="Toggle Opus"
+                  class="relative mt-2 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary {enableOpus
+                    ? 'bg-primary'
+                    : 'bg-gray-600'}"
+                  onclick={() => (enableOpus = !enableOpus)}
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {enableOpus
+                      ? 'translate-x-6'
+                      : 'translate-x-1'}"
+                  ></span>
+                </button>
+              </div>
             </div>
           </div>
         {/if}

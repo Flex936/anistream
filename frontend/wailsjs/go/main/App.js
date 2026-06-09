@@ -26,6 +26,10 @@ export function GetMpvMetadata() {
   return window['go']['main']['App']['GetMpvMetadata']();
 }
 
+export function GetOpusEnabled() {
+  return window['go']['main']['App']['GetOpusEnabled']();
+}
+
 export function GetResolution() {
   return window['go']['main']['App']['GetResolution']();
 }
@@ -76,6 +80,10 @@ export function UpdateAnimeProgress(arg1, arg2) {
 
 export function UpdateEcchiFilter(arg1) {
   return window['go']['main']['App']['UpdateEcchiFilter'](arg1);
+}
+
+export function UpdateOpusEnabled(arg1) {
+  return window['go']['main']['App']['UpdateOpusEnabled'](arg1);
 }
 
 export function UpdateResolution(arg1, arg2) {

@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -27,7 +29,7 @@ func (m *MpvManager) Init() error {
 	return nil
 }
 
-func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid string, aid string, encoder string) error {
+func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid string, aid string, encoder string, audioEncoder string) error {
 	m.mutex.Lock()
 	m.stopOldProcess()
 
@@ -42,7 +44,20 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 	if encoder == "" {
 		encoder = "libx264"
 	}
+	if audioEncoder == "" {
+		audioEncoder = "aac"
+	}
 
+	// --- Linux hardware translator ---
+	if runtime.GOOS == "linux" {
+		if encoder == "h264_amf" || encoder == "h264_qsv" {
+			encoder = "h264_vaapi"
+		} else if encoder == "av1_amf" || encoder == "av1_qsv" {
+			encoder = "av1_vaapi"
+		}
+	}
+
+	// STRICT TRANSCODE PIPELINE
 	args := []string{
 		sourceURL,
 		"--o=index.m3u8",
@@ -50,17 +65,19 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 		GetIpcArg(),
 		"--ofopts=hls_time=2,hls_segment_type=fmp4,hls_playlist_type=event",
 		"--hwdec=auto-safe",
+		"--msg-level=ffmpeg=error", // Mutes the annoying terminal warnings!
 		"--ovc=" + encoder,
-		"--oac=aac",
+		"--oac=" + audioEncoder,
 	}
 
 	if encoder == "libx264" {
-		args = append(args, "--ovcopts=preset=ultrafast,tune=zerolatency")
-	} else if encoder == "h264_nvenc" {
-		args = append(args, "--vf=format=yuv420p")
+		args = append(args, "--ovcopts=preset=ultrafast,tune=zerolatency,g=48")
+	} else if strings.Contains(encoder, "nvenc") {
+		args = append(args, "--vf=format=yuv420p", "--ovcopts=preset=p2,tune=ll,g=48")
+	} else if strings.Contains(encoder, "vaapi") || strings.Contains(encoder, "amf") || strings.Contains(encoder, "qsv") {
+		args = append(args, "--ovcopts=g=48")
 	}
 
-	// Conditionally append our track and time flags
 	if startTime > 0 {
 		args = append(args, fmt.Sprintf("--start=%.3f", startTime))
 	}
@@ -71,13 +88,11 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 		args = append(args, fmt.Sprintf("--aid=%s", aid))
 	}
 
-	// Pass the dynamic slice to exec.Command
 	cmd := exec.Command("mpv", args...)
 	cmd.Dir = "./tmp_hls"
 
-	// Pipe MPV's output to the terminal
-	/* cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr */
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
 		cancel()
@@ -90,14 +105,13 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 	log.Println("[MPV] Started live background HLS transcode pipeline.")
 	m.mutex.Unlock()
 
-	// Wait for the container header
-	if err := m.waitForFile(ctx, filepath.Join("./tmp_hls", "init.mp4"), 45*time.Second); err != nil {
+	// 60-second timeouts to give the torrent client plenty of breathing room
+	if err := m.waitForFile(ctx, filepath.Join("./tmp_hls", "init.mp4"), 60*time.Second); err != nil {
 		m.StopTranscode()
 		return err
 	}
 
-	// Wait for the actual video chunks to start writing!
-	if err := m.waitForSegments(ctx, "./tmp_hls", 15*time.Second); err != nil {
+	if err := m.waitForSegments(ctx, "./tmp_hls", 60*time.Second); err != nil {
 		m.StopTranscode()
 		return err
 	}
@@ -126,7 +140,6 @@ func (m *MpvManager) waitForFile(ctx context.Context, path string, timeout time.
 	}
 }
 
-// Scans the directory for the first encoded .m4s video segment
 func (m *MpvManager) waitForSegments(ctx context.Context, dir string, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()

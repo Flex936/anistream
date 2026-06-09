@@ -14,6 +14,8 @@ export function GetEpisodeTorrents(arg1:string,arg2:number):Promise<Array<main.T
 
 export function GetMpvMetadata():Promise<main.FrontendPayload>;
 
+export function GetOpusEnabled():Promise<boolean>;
+
 export function GetResolution():Promise<main.Resolution>;
 
 export function GetTranscoder():Promise<string>;
@@ -39,6 +41,8 @@ export function UpdateAV1Enabled(arg1:boolean):Promise<void>;
 export function UpdateAnimeProgress(arg1:number,arg2:number):Promise<void>;
 
 export function UpdateEcchiFilter(arg1:boolean):Promise<void>;
+
+export function UpdateOpusEnabled(arg1:boolean):Promise<void>;
 
 export function UpdateResolution(arg1:number,arg2:number):Promise<void>;
 
