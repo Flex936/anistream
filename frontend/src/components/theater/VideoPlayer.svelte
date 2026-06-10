@@ -260,8 +260,41 @@
       }
     }
   }
+  function handleKeyDown(event: any) {
+    const targetTag = event.target.tagName;
+    if (
+      targetTag === "INPUT" ||
+      targetTag === "TEXTAREA" ||
+      event.target.isContentEditable
+    ) {
+      return;
+    }
+    switch (event.key) {
+      case " ":
+        event.preventDefault();
+        paused = !paused;
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        volume += 0.1;
+        break;
+      case "ArrowDown":
+        event.preventDefault();
+        volume -= 0.1;
+        break;
+      case "ArrowLeft":
+        event.preventDefault();
+        currentTime -= 5;
+        break;
+      case "ArrowRight":
+        event.preventDefault();
+        currentTime += 5;
+        break;
+    }
+  }
 </script>
 
+<svelte:window onkeydown={handleKeyDown} />
 <div class="flex flex-col space-y-4 w-full">
   <VideoHeader {playingEpisode} onBack={handleBack} />
 
