@@ -146,7 +146,7 @@
         <X size={20} />
       </button>
 
-      <div class="p-8 flex-1 overflow-y-auto">
+      <div class="p-8 flex-1 overflow-y-auto custom-scrollbar">
         {#if activeTab === "general"}
           <GeneralTab bind:selectedRes {resolutions} bind:filterEcchi />
         {:else if activeTab === "playback"}

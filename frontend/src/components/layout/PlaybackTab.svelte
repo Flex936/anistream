@@ -64,7 +64,6 @@
         bind:checked={enableAV1}
         disabled={selectedEncoder === "libx264" ||
           selectedEncoder === "h264_videotoolbox"}
-        theme="amber"
       />
     </div>
 
