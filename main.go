@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -14,7 +15,7 @@ var assets embed.FS
 func main() {
 	app := NewApp()
 	cfg := LoadConfig()
-
+	os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--autoplay-policy=no-user-gesture-required")
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:     "AniStream",

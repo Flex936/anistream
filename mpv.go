@@ -48,7 +48,7 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 		"--o=index.m3u8",
 		"--of=hls",
 		GetIpcArg(),
-		"--ofopts=hls_time=2,hls_segment_type=fmp4,hls_playlist_type=event",
+		"--ofopts=hls_time=2,hls_segment_type=fmp4,hls_playlist_type=event,hls_list_size=0",
 		"--hwdec=auto-safe",
 		"--ovc=" + encoder,
 		"--oac=aac",

@@ -160,9 +160,7 @@
     if (!streamUrl || !videoElement) return;
     if (hlsInstance) hlsInstance.destroy();
 
-    if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-      videoElement.src = streamUrl;
-    } else if (Hls.isSupported()) {
+    if (Hls.isSupported()) {
       hlsInstance = new Hls({
         maxBufferLength: 10,
         liveSyncDurationCount: 1,
@@ -174,12 +172,14 @@
 
       hlsInstance.loadSource(streamUrl);
       hlsInstance.attachMedia(videoElement);
+      console.log("running on hls.js");
 
       hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-        videoElement
-          .play()
-          .then(() => (paused = false))
-          .catch(() => (paused = true));
+        attemptAutoplay();
+        if (videoElement) {
+          videoElement.currentTime = 0;
+        }
+        attemptAutoplay();
       });
 
       hlsInstance.on(Hls.Events.ERROR, (event, data) => {
@@ -191,6 +191,9 @@
           else initPlayer();
         }
       });
+    } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+      videoElement.src = streamUrl;
+      console.log("running native hls");
     }
   }
 
@@ -235,6 +238,28 @@
     if (hlsInstance) hlsInstance.destroy();
     StopStream().catch(console.warn);
   });
+  async function attemptAutoplay() {
+    try {
+      // First try normal autoplay (works if env var applied correctly)
+      await videoElement.play();
+      paused = false;
+    } catch {
+      try {
+        // Muted autoplay is ALWAYS allowed — unmute after 300ms
+        videoElement.muted = true;
+        isMuted = true;
+        await videoElement.play();
+        paused = false;
+        setTimeout(() => {
+          videoElement.muted = false;
+          isMuted = false;
+        }, 300);
+      } catch {
+        // Absolute last resort: show the play button, user clicks manually
+        paused = true;
+      }
+    }
+  }
 </script>
 
 <div class="flex flex-col space-y-4 w-full">
