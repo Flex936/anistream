@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -27,7 +29,7 @@ func (m *MpvManager) Init() error {
 	return nil
 }
 
-func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid string, aid string, encoder string) error {
+func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid string, aid string, encoder string, audioEncoder string) error {
 	m.mutex.Lock()
 	m.stopOldProcess()
 
@@ -42,6 +44,17 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 	if encoder == "" {
 		encoder = "libx264"
 	}
+	if audioEncoder == "" {
+		audioEncoder = "aac"
+	}
+
+	if runtime.GOOS == "linux" {
+		if encoder == "h264_amf" || encoder == "h264_qsv" {
+			encoder = "h264_vaapi"
+		} else if encoder == "av1_amf" || encoder == "av1_qsv" {
+			encoder = "av1_vaapi"
+		}
+	}
 
 	args := []string{
 		sourceURL,
@@ -50,17 +63,19 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 		GetIpcArg(),
 		"--ofopts=hls_time=2,hls_segment_type=fmp4,hls_playlist_type=event,hls_list_size=0",
 		"--hwdec=auto-safe",
+		"--msg-level=ffmpeg=error",
 		"--ovc=" + encoder,
-		"--oac=aac",
+		"--oac=" + audioEncoder,
 	}
 
 	if encoder == "libx264" {
-		args = append(args, "--ovcopts=preset=ultrafast,tune=zerolatency")
-	} else if encoder == "h264_nvenc" {
-		args = append(args, "--vf=format=yuv420p")
+		args = append(args, "--ovcopts=preset=ultrafast,tune=zerolatency,g=48")
+	} else if strings.Contains(encoder, "nvenc") {
+		args = append(args, "--vf=format=yuv420p", "--ovcopts=preset=p2,tune=ll,g=48")
+	} else if strings.Contains(encoder, "vaapi") || strings.Contains(encoder, "amf") || strings.Contains(encoder, "qsv") {
+		args = append(args, "--ovcopts=g=48")
 	}
 
-	// Conditionally append our track and time flags
 	if startTime > 0 {
 		args = append(args, fmt.Sprintf("--start=%.3f", startTime))
 	}
@@ -71,13 +86,10 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 		args = append(args, fmt.Sprintf("--aid=%s", aid))
 	}
 
-	// Pass the dynamic slice to exec.Command
 	cmd := exec.Command("mpv", args...)
 	cmd.Dir = "./tmp_hls"
-
-	// Pipe MPV's output to the terminal
-	/* cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr */
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
 		cancel()
@@ -90,14 +102,25 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 	log.Println("[MPV] Started live background HLS transcode pipeline.")
 	m.mutex.Unlock()
 
-	// Wait for the container header
-	if err := m.waitForFile(ctx, filepath.Join("./tmp_hls", "init.mp4"), 45*time.Second); err != nil {
+	err := m.pollForCondition(ctx, 60*time.Second, "init.mp4 was ready", func() (string, bool) {
+		if _, err := os.Stat(filepath.Join("./tmp_hls", "init.mp4")); err == nil {
+			return "init.mp4", true
+		}
+		return "", false
+	})
+	if err != nil {
 		m.StopTranscode()
 		return err
 	}
 
-	// Wait for the actual video chunks to start writing!
-	if err := m.waitForSegments(ctx, "./tmp_hls", 15*time.Second); err != nil {
+	err = m.pollForCondition(ctx, 60*time.Second, "video segments were ready", func() (string, bool) {
+		files, _ := filepath.Glob(filepath.Join("./tmp_hls", "*.m4s"))
+		if len(files) > 0 {
+			return filepath.Base(files[0]), true
+		}
+		return "", false
+	})
+	if err != nil {
 		m.StopTranscode()
 		return err
 	}
@@ -105,7 +128,8 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 	return nil
 }
 
-func (m *MpvManager) waitForFile(ctx context.Context, path string, timeout time.Duration) error {
+// pollForCondition checks a condition function every 250ms until it returns true or times out.
+func (m *MpvManager) pollForCondition(ctx context.Context, timeout time.Duration, abortMsg string, check func() (string, bool)) error {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	ticker := time.NewTicker(250 * time.Millisecond)
@@ -114,35 +138,12 @@ func (m *MpvManager) waitForFile(ctx context.Context, path string, timeout time.
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("transcode stopped before %s was ready", filepath.Base(path))
+			return fmt.Errorf("transcode stopped before %s", abortMsg)
 		case <-timer.C:
-			return fmt.Errorf("timed out waiting for %s", filepath.Base(path))
+			return fmt.Errorf("timed out waiting for %s", abortMsg)
 		case <-ticker.C:
-			if _, err := os.Stat(path); err == nil {
-				log.Printf("[MPV] Ready — %s written to disk.", filepath.Base(path))
-				return nil
-			}
-		}
-	}
-}
-
-// Scans the directory for the first encoded .m4s video segment
-func (m *MpvManager) waitForSegments(ctx context.Context, dir string, timeout time.Duration) error {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("transcode stopped before segments were ready")
-		case <-timer.C:
-			return fmt.Errorf("timed out waiting for video segments")
-		case <-ticker.C:
-			files, _ := filepath.Glob(filepath.Join(dir, "*.m4s"))
-			if len(files) > 0 {
-				log.Printf("[MPV] Ready — First chunk %s written to disk.", filepath.Base(files[0]))
+			if fileName, ok := check(); ok {
+				log.Printf("[MPV] Ready — %s written to disk.", fileName)
 				return nil
 			}
 		}

@@ -43,9 +43,6 @@ type GraphQLPayload struct {
 	Variables map[string]interface{} `json:"variables"`
 }
 
-// doGraphQL is the single HTTP+JSON round-trip for all AniList queries.
-// It is unexported because it is an implementation detail of this file.
-// doGraphQL — reads the token from the in-memory field, no disk I/O.
 func (a *App) doGraphQL(query string, variables map[string]interface{}, result interface{}) error {
 	payload := GraphQLPayload{Query: query, Variables: variables}
 	body, err := json.Marshal(payload)
@@ -79,12 +76,17 @@ func (a *App) doGraphQL(query string, variables map[string]interface{}, result i
 	return json.NewDecoder(resp.Body).Decode(result)
 }
 
-func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
+func getBannedGenres() []string {
 	cfg := LoadConfig()
-	bannedGenres := []string{"Hentai"}
+	genres := []string{"Hentai"}
 	if cfg.FilterEcchi {
-		bannedGenres = append(bannedGenres, "Ecchi")
+		genres = append(genres, "Ecchi")
 	}
+	return genres
+}
+
+func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
+	bannedGenres := getBannedGenres()
 
 	const query = `
     query ($search: String, $bannedGenres: [String]) {
@@ -94,7 +96,7 @@ func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
                 title { romaji english }
                 coverImage { large }
                 episodes status description
-				nextAiringEpisode { episode }
+                nextAiringEpisode { episode }
             }
         }
     }`
@@ -111,11 +113,7 @@ func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
 }
 
 func (a *App) GetTrendingAnime() ([]Anime, error) {
-	cfg := LoadConfig()
-	bannedGenres := []string{"Hentai"}
-	if cfg.FilterEcchi {
-		bannedGenres = append(bannedGenres, "Ecchi")
-	}
+	bannedGenres := getBannedGenres()
 
 	const query = `
     query ($bannedGenres: [String]) {
@@ -125,7 +123,7 @@ func (a *App) GetTrendingAnime() ([]Anime, error) {
                 title { romaji english }
                 coverImage { large }
                 episodes status description
-				nextAiringEpisode { episode }
+                nextAiringEpisode { episode }
             }
         }
     }`
@@ -141,7 +139,6 @@ func (a *App) GetAnimeProgress(animeID int) (int, error) {
 		return 0, nil
 	}
 
-	// We must fetch the user's ID first!
 	viewerID, err := a.getViewerID()
 	if err != nil {
 		return 0, nil
@@ -194,8 +191,6 @@ func (a *App) UpdateAnimeProgress(animeID int, episode int) error {
 	}, &result)
 }
 
-// getViewerID returns the authenticated user's AniList ID, fetching it only
-// once per session and caching the result on the App struct.
 func (a *App) getViewerID() (int, error) {
 	a.mu.RLock()
 	id := a.viewerID

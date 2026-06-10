@@ -10,26 +10,13 @@ import (
 )
 
 func (a *App) StreamTorrent(magnetLink string) (string, error) {
-	// Cancel any currently executing stream setup goroutines immediately
+	// Instantly nuke any currently active stream using our centralized cleanup
+	a.StopStream()
+
+	// Setup the fresh stream context
 	a.mu.Lock()
-	if a.cancelStream != nil {
-		a.cancelStream()
-	}
-	// Create a fresh session context for this specific stream request
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancelStream = cancel
-	a.mu.Unlock()
-
-	// ell MPV manager to drop any previous background transcodes
-	a.mpv.StopTranscode()
-
-	// Drop any previously active torrent stream
-	a.mu.Lock()
-	if a.activeTorrent != nil {
-		a.activeTorrent.Drop()
-		a.activeTorrent = nil
-		a.activeFile = nil
-	}
 	a.mu.Unlock()
 
 	t, err := a.torrentClient.AddMagnet(magnetLink)
@@ -38,7 +25,6 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 		return "", fmt.Errorf("failed to add magnet: %w", err)
 	}
 
-	// Wait for torrent metadata OR timeout OR explicit session cancellation
 	select {
 	case <-t.GotInfo():
 	case <-time.After(30 * time.Second):
@@ -50,7 +36,6 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 		return "", fmt.Errorf("stream setup was cancelled by user navigation")
 	}
 
-	// Double check cancellation status right after waking up
 	if ctx.Err() != nil {
 		t.Drop()
 		return "", fmt.Errorf("stream setup aborted")
@@ -70,10 +55,8 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 		return "", fmt.Errorf("no valid video file found in torrent")
 	}
 
-	//targetFile.Download()
 	PrepareTorrentForStreaming(t, targetFile)
 	a.mu.Lock()
-	// Final safety check before mutating shared app state and launching mpv
 	if ctx.Err() != nil {
 		a.mu.Unlock()
 		t.Drop()
@@ -83,38 +66,15 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 	a.activeFile = targetFile
 	a.mu.Unlock()
 
-	// Delegate background process creation entirely to your MpvManager
 	sourceURL := "http://localhost:8080/stream"
+	sid := "auto"
+	aid := "auto"
 
-	cfg := LoadConfig()
-	encoder := cfg.Encoder
-	if encoder == "" {
-		encoder = "libx264"
-	}
+	encoder, audioEncoder := a.resolveEncoders(sid)
 
-	if cfg.EnableAV1 {
-		switch encoder {
-		case "h264_nvenc":
-			encoder = "av1_nvenc" // Requires RTX 4000 series
-		case "h264_amf":
-			encoder = "av1_amf" // Requires RX 7000 series
-		case "h264_qsv":
-			encoder = "av1_qsv" // Requires Intel Arc / 14th Gen
-		}
-	}
-
-	if err := a.mpv.StartTranscode(sourceURL, 0, "auto", "auto", encoder); err != nil {
-		cancel()
-
-		// Clean up application state and drop torrent if MPV fails/times out
-		a.mu.Lock()
-		if a.activeTorrent == t {
-			a.activeTorrent = nil
-			a.activeFile = nil
-		}
-		a.mu.Unlock()
-		t.Drop()
-
+	if err := a.mpv.StartTranscode(sourceURL, 0, sid, aid, encoder, audioEncoder); err != nil {
+		// Leverage StopStream to automatically drop context, kill MPV, and dump the bad torrent!
+		a.StopStream()
 		return "", fmt.Errorf("transcoder failed to initialize: %w", err)
 	}
 
@@ -122,7 +82,6 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 }
 
 func (a *App) StopStream() {
-	// Cancel any active loading/setup lifecycle phase instantly
 	a.mu.Lock()
 	if a.cancelStream != nil {
 		a.cancelStream()
@@ -130,7 +89,6 @@ func (a *App) StopStream() {
 	}
 	a.mu.Unlock()
 
-	// Force kill any running MPV process
 	a.mpv.StopTranscode()
 
 	a.mu.Lock()
@@ -142,7 +100,6 @@ func (a *App) StopStream() {
 	}
 }
 
-// streamHandler feeds the downloading torrent bytes to the background MPV engine
 func (a *App) streamHandler(w http.ResponseWriter, r *http.Request) {
 	a.mu.RLock()
 	file := a.activeFile
@@ -163,27 +120,15 @@ func (a *App) streamHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func PrepareTorrentForStreaming(t *torrent.Torrent, f *torrent.File) {
-	// Cancel any global sequential downloading temporarily
 	t.CancelPieces(0, t.NumPieces())
-
-	// Calculate the piece range for this specific file
 	pieceLength := t.Info().PieceLength
 	startPiece := int(f.Offset() / pieceLength)
 	endPiece := int((f.Offset() + f.Length()) / pieceLength)
 
-	// Prioritize the head and tail (Critical for MKV metadata)
-	// PiecePriorityNow tells the client to drop everything and fetch these instantly.
 	for i := startPiece; i < startPiece+2 && i <= endPiece; i++ {
 		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
 	}
-
-	// High-priority for the last 2 pieces (contains MKV Cues/Duration/Chapters)
 	for i := endPiece; i > endPiece-2 && i >= startPiece; i-- {
 		t.Piece(i).SetPriority(torrent.PiecePriorityNow)
 	}
-
-	// DO NOT manually call t.DownloadPieces() here!
-	// The `file.NewReader().SetReadahead()` in the streamHandler will dynamically
-	// request the exact sequential pieces it needs as the video plays, keeping the
-	// bandwidth fully dedicated to the exact moment the user is watching.
 }
