@@ -71,8 +71,8 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 	aid := "auto"
 
 	encoder, audioEncoder := a.resolveEncoders(sid)
-
-	if err := a.mpv.StartTranscode(sourceURL, 0, sid, aid, encoder, audioEncoder); err != nil {
+	upscalingMethod, upscalingResolution := a.resolveUpscaling()
+	if err := a.mpv.StartTranscode(sourceURL, 0, sid, aid, encoder, audioEncoder, upscalingResolution, upscalingMethod); err != nil {
 		// Leverage StopStream to automatically drop context, kill MPV, and dump the bad torrent!
 		a.StopStream()
 		return "", fmt.Errorf("transcoder failed to initialize: %w", err)

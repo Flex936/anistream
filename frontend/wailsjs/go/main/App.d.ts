@@ -22,6 +22,10 @@ export function GetTranscoder():Promise<string>;
 
 export function GetTrendingAnime():Promise<Array<main.Anime>>;
 
+export function GetUpscaleMethod():Promise<string>;
+
+export function GetUpscaleResolution():Promise<main.Resolution>;
+
 export function IsLoggedIn():Promise<boolean>;
 
 export function LoginWithAniList():Promise<string>;
@@ -47,3 +51,7 @@ export function UpdateOpusEnabled(arg1:boolean):Promise<void>;
 export function UpdateResolution(arg1:number,arg2:number):Promise<void>;
 
 export function UpdateTranscoder(arg1:string):Promise<void>;
+
+export function UpdateUpscaleMethod(arg1:string):Promise<void>;
+
+export function UpdateUpscaleResolution(arg1:main.Resolution):Promise<void>;

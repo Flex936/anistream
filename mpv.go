@@ -29,7 +29,7 @@ func (m *MpvManager) Init() error {
 	return nil
 }
 
-func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid string, aid string, encoder string, audioEncoder string) error {
+func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid string, aid string, encoder string, audioEncoder string, display Resolution, upscaler string) error {
 	m.mutex.Lock()
 	m.stopOldProcess()
 
@@ -84,6 +84,9 @@ func (m *MpvManager) StartTranscode(sourceURL string, startTime float64, sid str
 	}
 	if aid != "" {
 		args = append(args, fmt.Sprintf("--aid=%s", aid))
+	}
+	if upscaler != "" && display.Height > 0 && display.Width > 0 {
+		args = append(args, fmt.Sprintf("--vf-add=libplacebo=w=%d:h=%d:upscaler=%s", display.Width, display.Height, upscaler))
 	}
 
 	cmd := exec.Command("mpv", args...)

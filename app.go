@@ -150,6 +150,11 @@ func (a *App) resolveEncoders(sid string) (string, string) {
 	return encoder, audioEncoder
 }
 
+func (a *App) resolveUpscaling() (string, Resolution) {
+	cfg := LoadConfig()
+	return cfg.Upscaling, cfg.UpscaleResolution
+}
+
 func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid string) error {
 	a.mu.RLock()
 	file := a.activeFile
@@ -163,8 +168,9 @@ func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid strin
 
 	// Use the central resolver to get the correct encoders based on the config
 	encoder, audioEncoder := a.resolveEncoders(sid)
+	upscalingMethod, upscalingResolution := a.resolveUpscaling()
 
-	if err := a.mpv.StartTranscode(sourceURL, timeInSeconds, sid, aid, encoder, audioEncoder); err != nil {
+	if err := a.mpv.StartTranscode(sourceURL, timeInSeconds, sid, aid, encoder, audioEncoder, upscalingResolution, upscalingMethod); err != nil {
 		return fmt.Errorf("failed to restart stream with new tracks: %w", err)
 	}
 

@@ -7,13 +7,15 @@ import (
 )
 
 type AppConfig struct {
-	AniListToken string `json:"anilistToken"`
-	Width        int    `json:"width"`
-	Height       int    `json:"height"`
-	FilterEcchi  bool   `json:"filterEcchi"`
-	Encoder      string `json:"encoder"`
-	EnableAV1    bool   `json:"enableAV1"`
-	EnableOpus   bool   `json:"enableOpus"`
+	AniListToken      string     `json:"anilistToken"`
+	Width             int        `json:"width"`
+	Height            int        `json:"height"`
+	FilterEcchi       bool       `json:"filterEcchi"`
+	Encoder           string     `json:"encoder"`
+	EnableAV1         bool       `json:"enableAV1"`
+	EnableOpus        bool       `json:"enableOpus"`
+	Upscaling         string     `json:"upscaling"`
+	UpscaleResolution Resolution `json:"upscaleResolution"`
 }
 
 type Resolution struct {
@@ -38,6 +40,9 @@ func LoadConfig() AppConfig {
 	cfg.FilterEcchi = true
 	cfg.EnableAV1 = false
 	cfg.EnableOpus = false
+	cfg.Upscaling = ""
+	cfg.UpscaleResolution.Height = 1920
+	cfg.UpscaleResolution.Width = 1080
 
 	data, err := os.ReadFile(getConfigPath())
 	if err == nil {
@@ -116,4 +121,27 @@ func (a *App) UpdateOpusEnabled(enabled bool) error {
 	cfg := LoadConfig()
 	cfg.EnableOpus = enabled
 	return SaveConfig(cfg)
+}
+
+func (a *App) UpdateUpscaleMethod(Upscaling string) error {
+	cfg := LoadConfig()
+	cfg.Upscaling = Upscaling
+	return SaveConfig(cfg)
+}
+
+func (a *App) GetUpscaleMethod() string {
+	cfg := LoadConfig()
+	return cfg.Upscaling
+}
+
+func (a *App) UpdateUpscaleResolution(Resolution Resolution) error {
+	cfg := LoadConfig()
+	cfg.UpscaleResolution.Height = Resolution.Height
+	cfg.UpscaleResolution.Width = Resolution.Width
+	return SaveConfig(cfg)
+}
+
+func (a *App) GetUpscaleResolution() Resolution {
+	cfg := LoadConfig()
+	return cfg.UpscaleResolution
 }

@@ -42,6 +42,14 @@ export function GetTrendingAnime() {
   return window['go']['main']['App']['GetTrendingAnime']();
 }
 
+export function GetUpscaleMethod() {
+  return window['go']['main']['App']['GetUpscaleMethod']();
+}
+
+export function GetUpscaleResolution() {
+  return window['go']['main']['App']['GetUpscaleResolution']();
+}
+
 export function IsLoggedIn() {
   return window['go']['main']['App']['IsLoggedIn']();
 }
@@ -92,4 +100,12 @@ export function UpdateResolution(arg1, arg2) {
 
 export function UpdateTranscoder(arg1) {
   return window['go']['main']['App']['UpdateTranscoder'](arg1);
+}
+
+export function UpdateUpscaleMethod(arg1) {
+  return window['go']['main']['App']['UpdateUpscaleMethod'](arg1);
+}
+
+export function UpdateUpscaleResolution(arg1) {
+  return window['go']['main']['App']['UpdateUpscaleResolution'](arg1);
 }
