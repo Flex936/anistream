@@ -42,6 +42,10 @@ export function GetTrendingAnime() {
   return window['go']['main']['App']['GetTrendingAnime']();
 }
 
+export function GetUserWatchlist() {
+  return window['go']['main']['App']['GetUserWatchlist']();
+}
+
 export function IsLoggedIn() {
   return window['go']['main']['App']['IsLoggedIn']();
 }
