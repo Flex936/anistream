@@ -43,6 +43,17 @@ type GraphQLPayload struct {
 	Variables map[string]interface{} `json:"variables"`
 }
 
+type MediaListEntry struct {
+	Progress int   `json:"progress"`
+	Media    Anime `json:"media"`
+}
+
+type MediaList struct {
+	Name    string           `json:"name"`
+	Status  string           `json:"status"`
+	Entries []MediaListEntry `json:"entries"`
+}
+
 func (a *App) doGraphQL(query string, variables map[string]interface{}, result interface{}) error {
 	payload := GraphQLPayload{Query: query, Variables: variables}
 	body, err := json.Marshal(payload)
@@ -91,7 +102,7 @@ func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
 	const query = `
     query ($search: String, $bannedGenres: [String]) {
         Page(page: 1, perPage: 15) {
-            media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres) {
+            media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres, status_not: NOT_YET_RELEASED) {
                 id
                 title { romaji english }
                 coverImage { large }
@@ -118,7 +129,7 @@ func (a *App) GetTrendingAnime() ([]Anime, error) {
 	const query = `
     query ($bannedGenres: [String]) {
         Page(page: 1, perPage: 15) {
-            media(type: ANIME, sort: TRENDING_DESC, isAdult: false, genre_not_in: $bannedGenres) {
+            media(type: ANIME, sort: TRENDING_DESC, isAdult: false, genre_not_in: $bannedGenres, status_not: NOT_YET_RELEASED) {
                 id
                 title { romaji english }
                 coverImage { large }
@@ -218,4 +229,53 @@ func (a *App) getViewerID() (int, error) {
 	a.viewerID = result.Data.Viewer.ID
 	a.mu.Unlock()
 	return result.Data.Viewer.ID, nil
+}
+
+func (a *App) GetUserWatchlist() ([]MediaList, error) {
+	if !a.IsLoggedIn() {
+		return nil, fmt.Errorf("user is not logged in")
+	}
+
+	viewerID, err := a.getViewerID()
+	if err != nil {
+		return nil, err
+	}
+
+	// We query the MediaListCollection, grouping by status, specifically requesting CURRENT and PLANNING
+	const query = `
+    query ($userId: Int) {
+        MediaListCollection(userId: $userId, type: ANIME, status_in: [CURRENT, PLANNING]) {
+            lists {
+                name
+                status
+                entries {
+                    progress
+                    media {
+                        id
+                        title { romaji english }
+                        coverImage { large }
+                        episodes
+                        status
+                        description
+                        nextAiringEpisode { episode }
+                    }
+                }
+            }
+        }
+    }`
+
+	var result struct {
+		Data struct {
+			MediaListCollection struct {
+				Lists []MediaList `json:"lists"`
+			} `json:"MediaListCollection"`
+		} `json:"data"`
+	}
+
+	err = a.doGraphQL(query, map[string]interface{}{"userId": viewerID}, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result.Data.MediaListCollection.Lists, nil
 }

@@ -8,6 +8,7 @@
     Maximize2,
     Minimize2,
     X,
+    Library,
   } from "@lucide/svelte";
   import {
     WindowMinimise,
@@ -24,6 +25,7 @@
     onHome,
     onLogin,
     onSettings,
+    onWatchlist,
   } = $props();
 
   let isMaximised = $state(false);
@@ -93,6 +95,17 @@
   </div>
 
   <div class="flex items-center space-x-4 text-muted">
+    {#if isLoggedIn}
+      <button
+        style="--wails-draggable: no-drag;"
+        onclick={onWatchlist}
+        class="hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1"
+        title="My Watchlist"
+      >
+        <Library size={20} />
+      </button>
+    {/if}
+
     <button
       style="--wails-draggable: no-drag;"
       onclick={onLogin}

@@ -25,6 +25,7 @@ export function GetTrendingAnime():Promise<Array<main.Anime>>;
 export function GetUpscaleMethod():Promise<string>;
 
 export function GetUpscaleResolution():Promise<main.Resolution>;
+export function GetUserWatchlist():Promise<Array<main.MediaList>>;
 
 export function IsLoggedIn():Promise<boolean>;
 
