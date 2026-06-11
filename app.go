@@ -6,56 +6,107 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os/exec"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/anacrolix/torrent"
+	"anistream/internal/anilist"
+	"anistream/internal/config"
+	"anistream/internal/mpv"
+	"anistream/internal/scraper"
+	"anistream/internal/torrent"
 )
 
-// App struct holds the application state and aggregates the MPV engine
+// App is the single struct Wails binds to the frontend.
+// It is a thin orchestration layer; all domain logic lives in internal packages.
 type App struct {
-	ctx           context.Context
-	torrentClient *torrent.Client
-	httpClient    *http.Client
-	mpv           *MpvManager
-	cancelStream  context.CancelFunc
+	// ctx is the application lifetime context provided by Wails in startup().
+	// Initialised to context.Background() so pre-startup HTTP calls don't panic.
+	ctx    context.Context
+	ctxMu  sync.RWMutex
+	server *http.Server
 
-	mu            sync.RWMutex
-	activeFile    *torrent.File
-	activeTorrent *torrent.Torrent
-	activeCmd     *exec.Cmd
-	aniListToken  string
-	viewerID      int
+	mpv     *mpv.Manager
+	torrent *torrent.Manager
+	al      *anilist.Client
+	scraper *scraper.Client
 }
 
 func NewApp() *App {
-	cfg := torrent.NewDefaultClientConfig()
-	cfg.DataDir = "./tmp_downloads"
-	cfg.NoUpload = true
+	httpClient := &http.Client{Timeout: 15 * time.Second}
 
-	cfg.EstablishedConnsPerTorrent = 100
-	cfg.HalfOpenConnsPerTorrent = 50
-	cfg.TorrentPeersHighWater = 1000
-	cfg.TorrentPeersLowWater = 500
+	cfg := config.Load()
 
-	client, err := torrent.NewClient(cfg)
+	tm, err := torrent.NewManager()
 	if err != nil {
-		log.Fatalf("failed to create torrent client: %v", err)
+		log.Fatalf("[App] Cannot create torrent manager: %v", err)
 	}
 
 	app := &App{
-		torrentClient: client,
-		httpClient:    &http.Client{Timeout: 10 * time.Second},
-		mpv:           NewMpvManager(),
+		ctx:     context.Background(),
+		mpv:     mpv.NewManager(),
+		torrent: tm,
+		al:      anilist.NewClient(httpClient, cfg.AniListToken),
+		scraper: scraper.NewClient(httpClient),
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/stream", app.streamHandler)
-	mux.HandleFunc("/anime-data", app.handleMetadata)
-	fileServer := http.FileServer(http.Dir("./tmp_hls"))
-	hlsHandler := http.StripPrefix("/hls/", fileServer)
+	app.server = app.buildHTTPServer()
+	go func() {
+		log.Println("[Server] HTTP server listening on :8080")
+		if err := app.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("[Server] Exited: %v", err)
+		}
+	}()
 
+	return app
+}
+
+// ── Wails lifecycle ──────────────────────────────────────────────────────────
+
+func (a *App) startup(ctx context.Context) {
+	a.ctxMu.Lock()
+	a.ctx = ctx
+	a.ctxMu.Unlock()
+}
+
+func (a *App) shutdown(_ context.Context) {
+	log.Println("[App] Shutdown initiated.")
+
+	// 1. Stop active stream: drops torrent + deletes tmp_downloads.
+	a.StopStream()
+
+	// 2. Close the torrent client permanently.
+	a.torrent.Close()
+
+	// 3. Delete any remaining HLS segments (belt-and-suspenders; StopStream
+	//    already removes the dir, but a crash mid-stream could leave orphans).
+	_ = os.RemoveAll(mpv.HLSOutputDir)
+
+	// 4. Gracefully drain in-flight HTTP requests.
+	shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := a.server.Shutdown(shutCtx); err != nil {
+		log.Printf("[Server] Shutdown error: %v", err)
+	}
+
+	log.Println("[App] Shutdown complete.")
+}
+
+func (a *App) getCtx() context.Context {
+	a.ctxMu.RLock()
+	defer a.ctxMu.RUnlock()
+	return a.ctx
+}
+
+// ── HTTP server ──────────────────────────────────────────────────────────────
+
+func (a *App) buildHTTPServer() *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stream", a.streamHandler)
+	mux.HandleFunc("/anime-data", a.metadataHandler)
+
+	fileServer := http.FileServer(http.Dir(mpv.HLSOutputDir))
+	hlsStripped := http.StripPrefix("/hls/", fileServer)
 	mux.Handle("/hls/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
@@ -64,109 +115,180 @@ func NewApp() *App {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("Expires", "0")
-
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		hlsHandler.ServeHTTP(w, r)
+		hlsStripped.ServeHTTP(w, r)
 	}))
 
-	go func() {
-		srv := &http.Server{Addr: ":8080", Handler: mux}
-		log.Println("[Server] Launching HTTP streaming server on :8080...")
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("stream server exited: %v", err)
-		}
-	}()
-
-	return app
+	return &http.Server{Addr: ":8080", Handler: mux}
 }
 
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-	cfg := LoadConfig()
-	a.mu.Lock()
-	a.aniListToken = cfg.AniListToken
-	a.mu.Unlock()
-
-	if err := a.mpv.Init(); err != nil {
-		log.Printf("[MPV] Failed to initialize mpv: %v", err)
+func (a *App) streamHandler(w http.ResponseWriter, r *http.Request) {
+	reader, displayPath, err := a.torrent.NewActiveFileReader()
+	if err != nil {
+		http.Error(w, "no active stream", http.StatusNotFound)
+		return
 	}
+	defer reader.Close()
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	http.ServeContent(w, r, displayPath, time.Time{}, reader)
 }
 
-func (a *App) shutdown(ctx context.Context) {
-	a.mpv.Shutdown()
-}
-
-func (a *App) handleMetadata(w http.ResponseWriter, r *http.Request) {
+func (a *App) metadataHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
 	payload, err := a.mpv.GetMetadata()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(payload)
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func (a *App) GetMpvMetadata() (*FrontendPayload, error) {
+// ── Stream control (Wails-bound) ─────────────────────────────────────────────
+
+func (a *App) StreamTorrent(magnetLink string) (string, error) {
+	cfg := config.Load()
+	sid := "auto"
+	aid := "auto"
+	encoder, audioEncoder := mpv.ResolveEncoders(cfg, sid)
+
+	if err := a.torrent.Stream(magnetLink); err != nil {
+		return "", err
+	}
+
+	if err := a.mpv.StartTranscode("http://localhost:8080/stream", 0, sid, aid, encoder, audioEncoder); err != nil {
+		// Transcode failed: clean up the torrent we just set up.
+		a.StopStream()
+		return "", fmt.Errorf("transcoder failed to initialise: %w", err)
+	}
+
+	return "http://localhost:8080/hls/index.m3u8", nil
+}
+
+// StopStream is the single authoritative cleanup path for an active stream.
+// It is safe to call when no stream is active.
+func (a *App) StopStream() {
+	a.torrent.Stop()                   // cancel context + drop torrent + delete tmp_downloads
+	a.mpv.Stop()                       // cancel context + kill mpv process
+	_ = os.RemoveAll(mpv.HLSOutputDir) // delete live HLS segments
+}
+
+func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid string) error {
+	if _, _, err := a.torrent.NewActiveFileReader(); err != nil {
+		return fmt.Errorf("no active torrent stream to restart")
+	}
+	cfg := config.Load()
+	encoder, audioEncoder := mpv.ResolveEncoders(cfg, sid)
+	return a.mpv.StartTranscode(
+		"http://localhost:8080/stream", timeInSeconds, sid, aid, encoder, audioEncoder,
+	)
+}
+
+// ── MPV (Wails-bound) ────────────────────────────────────────────────────────
+
+func (a *App) GetMpvMetadata() (*mpv.FrontendPayload, error) {
 	return a.mpv.GetMetadata()
 }
 
 func (a *App) SendMpvCommand(command []interface{}) error {
-	conn, err := DialMpv()
+	conn, err := mpv.DialMpv()
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	sendCommand(conn, command)
+	mpv.SendCommand(conn, command)
 	return nil
 }
 
-// --- The Centralized Resolver (Now strictly follows the config) ---
-func (a *App) resolveEncoders(sid string) (string, string) {
-	cfg := LoadConfig()
+// ── AniList (Wails-bound) ────────────────────────────────────────────────────
 
-	encoder := cfg.Encoder
-	if encoder == "" {
-		encoder = "libx264"
-	}
-	audioEncoder := "aac"
-
-	if cfg.EnableOpus {
-		audioEncoder = "libopus"
-	}
-
-	return encoder, audioEncoder
+func (a *App) IsLoggedIn() bool {
+	return a.al.IsLoggedIn()
 }
 
-func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid string) error {
-	a.mu.RLock()
-	file := a.activeFile
-	a.mu.RUnlock()
+func (a *App) SearchAnime(query string) ([]anilist.Anime, error) {
+	return a.al.Search(a.getCtx(), query, config.Load().FilterEcchi)
+}
 
-	if file == nil {
-		return fmt.Errorf("no active torrent stream to restart")
+func (a *App) GetTrendingAnime() ([]anilist.Anime, error) {
+	return a.al.Trending(a.getCtx(), config.Load().FilterEcchi)
+}
+
+func (a *App) GetAnimeProgress(animeID int) (int, error) {
+	return a.al.Progress(a.getCtx(), animeID)
+}
+
+func (a *App) UpdateAnimeProgress(animeID int, episode int) error {
+	return a.al.UpdateProgress(a.getCtx(), animeID, episode)
+}
+
+func (a *App) GetUserWatchlist() ([]anilist.MediaList, error) {
+	return a.al.Watchlist(a.getCtx())
+}
+
+// ── Scraper (Wails-bound) ────────────────────────────────────────────────────
+
+func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]scraper.TorrentResult, error) {
+	return a.scraper.GetEpisodeTorrents(animeTitle, episodeNumber)
+}
+
+// ── Config (Wails-bound) ─────────────────────────────────────────────────────
+
+func (a *App) GetResolution() config.Resolution {
+	cfg := config.Load()
+	return config.Resolution{Width: cfg.Width, Height: cfg.Height}
+}
+
+func (a *App) UpdateResolution(width, height int) error {
+	cfg := config.Load()
+	cfg.Width = width
+	cfg.Height = height
+	return config.Save(cfg)
+}
+
+func (a *App) GetEcchiFilter() bool { return config.Load().FilterEcchi }
+
+func (a *App) UpdateEcchiFilter(filter bool) error {
+	cfg := config.Load()
+	cfg.FilterEcchi = filter
+	return config.Save(cfg)
+}
+
+func (a *App) GetTranscoder() string {
+	cfg := config.Load()
+	if cfg.Encoder == "" {
+		return "libx264"
 	}
+	return cfg.Encoder
+}
 
-	sourceURL := "http://localhost:8080/stream"
+func (a *App) UpdateTranscoder(encoder string) error {
+	cfg := config.Load()
+	cfg.Encoder = encoder
+	return config.Save(cfg)
+}
 
-	// Use the central resolver to get the correct encoders based on the config
-	encoder, audioEncoder := a.resolveEncoders(sid)
+func (a *App) GetAV1Enabled() bool { return config.Load().EnableAV1 }
 
-	if err := a.mpv.StartTranscode(sourceURL, timeInSeconds, sid, aid, encoder, audioEncoder); err != nil {
-		return fmt.Errorf("failed to restart stream with new tracks: %w", err)
-	}
+func (a *App) UpdateAV1Enabled(enabled bool) error {
+	cfg := config.Load()
+	cfg.EnableAV1 = enabled
+	return config.Save(cfg)
+}
 
-	return nil
+func (a *App) GetOpusEnabled() bool { return config.Load().EnableOpus }
+
+func (a *App) UpdateOpusEnabled(enabled bool) error {
+	cfg := config.Load()
+	cfg.EnableOpus = enabled
+	return config.Save(cfg)
 }

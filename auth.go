@@ -9,102 +9,98 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"anistream/internal/config"
 )
 
-// LoginWithAniList opens the browser and starts a temporary local server to catch the token.
+// LoginWithAniList opens the system browser to the AniList OAuth page, then
+// spins up a short-lived local server to capture the returned bearer token.
 func (a *App) LoginWithAniList() (string, error) {
-	clientID := "43011"
+	const clientID = "43011"
 
-	// Buffered so HTTP handler goroutines never block if the select has
-	// already resolved on the other channel.
-	tokenChan := make(chan string, 1)
-	errChan := make(chan error, 1)
+	// Buffered channels prevent the HTTP handler goroutines from blocking if
+	// the select has already resolved on the other channel.
+	tokenCh := make(chan string, 1)
+	errCh := make(chan error, 1)
 
-	m := http.NewServeMux()
-	srv := &http.Server{Addr: ":3456", Handler: m}
+	mux := http.NewServeMux()
+	srv := &http.Server{Addr: ":3456", Handler: mux}
 
-	m.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		html := `<html><body style="font-family: sans-serif; text-align: center; margin-top: 50px; background-color: #0a0a0c; color: #f1f5f9;">
-			<h2>Authenticating...</h2>
+	// Step 1: browser lands here, extracts the hash fragment via JS, POSTs to /store.
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		const html = `<html><body style="font-family:sans-serif;text-align:center;
+			margin-top:50px;background:#0a0a0c;color:#f1f5f9;">
+			<h2>Authenticating…</h2>
 			<script>
 				const hash = window.location.hash.substring(1);
-				fetch('/store', { method: 'POST', body: hash }).then(() => {
-					document.body.innerHTML = "<h2 style='color: #6366f1;'>Success!</h2><p>You can close this window and return to AniStream.</p>";
-				}).catch(() => {
-					document.body.innerHTML = "<h2 style='color: #f87171;'>Authentication Failed</h2>";
-				});
-			</script>
-		</body></html>`
-		w.Write([]byte(html))
+				fetch('/store', {method:'POST', body:hash})
+					.then(() => {
+						document.body.innerHTML =
+							"<h2 style='color:#6366f1'>Success!</h2>" +
+							"<p>You can close this window and return to AniStream.</p>";
+					})
+					.catch(() => {
+						document.body.innerHTML =
+							"<h2 style='color:#f87171'>Authentication Failed</h2>";
+					});
+			</script></body></html>`
+		_, _ = w.Write([]byte(html))
 	})
 
-	m.HandleFunc("/store", func(w http.ResponseWriter, r *http.Request) {
+	// Step 2: JS POSTs the URL-encoded fragment; we extract access_token.
+	mux.HandleFunc("/store", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		params, _ := url.ParseQuery(string(body))
-		token := params.Get("access_token")
-		if token != "" {
-			tokenChan <- token
+		if token := params.Get("access_token"); token != "" {
+			tokenCh <- token
 		} else {
-			errChan <- fmt.Errorf("no token found in redirect")
+			errCh <- fmt.Errorf("no access_token in OAuth callback")
 		}
 		w.WriteHeader(http.StatusOK)
 	})
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errChan <- err
+			errCh <- err
 		}
 	}()
 
-	runtime.BrowserOpenURL(a.ctx, fmt.Sprintf(
+	runtime.BrowserOpenURL(a.getCtx(), fmt.Sprintf(
 		"https://anilist.co/api/v2/oauth/authorize?client_id=%s&response_type=token", clientID,
 	))
 
-	// Always shut down with a fresh context. Using a.ctx is unsafe because
-	// Wails may cancel it during app shutdown before Shutdown() finishes.
-	shutdown := func() {
+	// Always shut down with a fresh context. The Wails app context (a.getCtx())
+	// may already be cancelled when shutdown() runs, which would make
+	// srv.Shutdown hang indefinitely.
+	shutdownSrv := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(ctx)
+		_ = srv.Shutdown(ctx)
 	}
 
 	select {
-	case token := <-tokenChan:
-		cfg := LoadConfig()
+	case token := <-tokenCh:
+		cfg := config.Load()
 		cfg.AniListToken = token
-		if err := SaveConfig(cfg); err != nil {
-			shutdown()
-			return "", fmt.Errorf("failed to save config: %w", err)
+		if err := config.Save(cfg); err != nil {
+			shutdownSrv()
+			return "", fmt.Errorf("save config: %w", err)
 		}
-		// Update in-memory cache immediately so all subsequent API calls
-		// see the new token without another disk read.
-		a.mu.Lock()
-		a.aniListToken = token
-		a.viewerID = 0 // reset in case the user switched accounts
-		a.mu.Unlock()
-		shutdown()
+		// Update the in-memory client immediately — no disk read on next request.
+		a.al.SetToken(token)
+		shutdownSrv()
 		return "success", nil
 
-	case err := <-errChan:
-		shutdown()
+	case err := <-errCh:
+		shutdownSrv()
 		return "", err
 	}
 }
 
-// IsLoggedIn reads from the in-memory cache — no disk I/O.
-func (a *App) IsLoggedIn() bool {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.aniListToken != ""
-}
-
-// Logout clears both the persisted token and every related in-memory field.
+// Logout clears the persisted token and resets all AniList auth state.
 func (a *App) Logout() {
-	cfg := LoadConfig()
+	cfg := config.Load()
 	cfg.AniListToken = ""
-	SaveConfig(cfg)
-	a.mu.Lock()
-	a.aniListToken = ""
-	a.viewerID = 0 // must be invalidated so a future login re-fetches it
-	a.mu.Unlock()
+	_ = config.Save(cfg)
+	a.al.ClearToken()
 }

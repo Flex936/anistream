@@ -7,6 +7,8 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+
+	"anistream/internal/config"
 )
 
 //go:embed all:frontend/dist
@@ -14,9 +16,12 @@ var assets embed.FS
 
 func main() {
 	app := NewApp()
-	cfg := LoadConfig()
+	cfg := config.Load()
+
+	// Allow the WebView2 engine to autoplay media without a user gesture,
+	// which is required for hls.js to start playback programmatically.
 	os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--autoplay-policy=no-user-gesture-required")
-	// Create application with options
+
 	err := wails.Run(&options.App{
 		Title:     "AniStream",
 		Width:     cfg.Width,
@@ -28,12 +33,9 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
-		Bind: []interface{}{
-			app,
-		},
+		Bind:             []interface{}{app},
 	})
-
 	if err != nil {
-		println("Error:", err.Error())
+		println("Fatal:", err.Error())
 	}
 }
