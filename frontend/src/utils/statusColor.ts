@@ -7,8 +7,6 @@ export function getCardStatusColor(status: string | undefined): string {
     switch (status) {
         case "RELEASING":
             return "text-green-400 border-green-400/20";
-        case "NOT_YET_RELEASED":
-            return "text-amber-400 border-amber-400/20";
         case "FINISHED":
             return "text-sky-400 border-sky-400/20";
         case "CANCELLED":
@@ -24,8 +22,6 @@ export function getSidebarBadgeStyle(status: string | undefined): string {
     switch (status) {
         case "RELEASING":
             return "bg-green-400/20 text-green-400 border-green-400/30";
-        case "NOT_YET_RELEASED":
-            return "bg-amber-400/20 text-amber-400 border-amber-400/30";
         case "FINISHED":
             return "bg-sky-400/20 text-sky-400 border-sky-400/30";
         case "CANCELLED":
