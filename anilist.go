@@ -91,7 +91,7 @@ func (a *App) SearchAnime(searchQuery string) ([]Anime, error) {
 	const query = `
     query ($search: String, $bannedGenres: [String]) {
         Page(page: 1, perPage: 15) {
-            media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres) {
+            media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres, status_not: NOT_YET_RELEASED) {
                 id
                 title { romaji english }
                 coverImage { large }
@@ -118,7 +118,7 @@ func (a *App) GetTrendingAnime() ([]Anime, error) {
 	const query = `
     query ($bannedGenres: [String]) {
         Page(page: 1, perPage: 15) {
-            media(type: ANIME, sort: TRENDING_DESC, isAdult: false, genre_not_in: $bannedGenres) {
+            media(type: ANIME, sort: TRENDING_DESC, isAdult: false, genre_not_in: $bannedGenres, status_not: NOT_YET_RELEASED) {
                 id
                 title { romaji english }
                 coverImage { large }
