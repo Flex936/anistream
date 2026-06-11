@@ -232,13 +232,21 @@
     else document.exitFullscreen();
   }
 
-  onMount(async () => {
-    metadataInterval = setInterval(fetchMetadata, 1000);
-    try {
-      isLoggedIn = await IsLoggedIn();
-    } catch (err) {
-      console.error("Failed to check auth status:", err);
-    }
+  onMount(() => {
+    const checkAuthStatus = async () => {
+      try {
+        isLoggedIn = await IsLoggedIn();
+      } catch (err) {
+        console.error("Failed to check auth status:", err);
+      }
+    };
+
+    checkAuthStatus();
+
+    metadataInterval = setInterval(() => {
+      fetchMetadata();
+      checkAuthStatus();
+    }, 1000);
   });
 
   onDestroy(() => {
