@@ -3,6 +3,7 @@
   import {
     GetAnimeProgress,
     UpdateAnimeProgress,
+    IsLoggedIn,
     StopStream,
     GetMpvMetadata,
     SendMpvCommand,
@@ -30,6 +31,7 @@
   } = $props();
 
   // AniList State
+  let isLoggedIn = $state(false);
   let currentProgress = $state(0);
   let hasScrobbled = $state(false);
   let isTrackingTimerActive = $state(false);
@@ -76,10 +78,10 @@
   }
 
   // ==========================================
-  // AniList Tracking Logic (kept exactly as is)
+  // AniList Tracking Logic
   // ==========================================
   $effect(() => {
-    if (animeId && playingEpisode) {
+    if (isLoggedIn && animeId && playingEpisode) {
       resetTracker();
     }
   });
@@ -126,6 +128,7 @@
   function handleBack() {
     clearTimeout(trackingTimeout);
     if (
+      isLoggedIn &&
       !hasScrobbled &&
       duration > 0 &&
       playingEpisode > currentProgress &&
@@ -229,8 +232,13 @@
     else document.exitFullscreen();
   }
 
-  onMount(() => {
+  onMount(async () => {
     metadataInterval = setInterval(fetchMetadata, 1000);
+    try {
+      isLoggedIn = await IsLoggedIn();
+    } catch (err) {
+      console.error("Failed to check auth status:", err);
+    }
   });
 
   onDestroy(() => {
@@ -309,7 +317,9 @@
       ? 'cursor-none'
       : ''}"
   >
-    <TrackingOverlay {hasScrobbled} {isTrackingTimerActive} />
+    {#if isLoggedIn}
+      <TrackingOverlay {hasScrobbled} {isTrackingTimerActive} />
+    {/if}
 
     <video
       bind:this={videoElement}
