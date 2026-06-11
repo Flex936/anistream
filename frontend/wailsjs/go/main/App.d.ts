@@ -22,6 +22,8 @@ export function GetTranscoder():Promise<string>;
 
 export function GetTrendingAnime():Promise<Array<main.Anime>>;
 
+export function GetUserWatchlist():Promise<Array<main.MediaList>>;
+
 export function IsLoggedIn():Promise<boolean>;
 
 export function LoginWithAniList():Promise<string>;

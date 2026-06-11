@@ -5,15 +5,18 @@
   import type { main } from "../wailsjs/go/models";
 
   import NavBar from "./components/layout/NavBar.svelte";
+  import SettingsMenu from "./components/layout/SettingsMenu.svelte";
   import DiscoveryView from "./pages/DiscoveryView.svelte";
   import TheaterView from "./pages/TheaterView.svelte";
-  import SettingsMenu from "./components/layout/SettingsMenu.svelte";
+  import Watchlist from "./pages/Watchlist.svelte";
 
   let searchQuery = $state("");
   let isSearching = $state(false);
   let searchResults = $state<main.Anime[]>([]);
   let isUserLoggedIn = $state(false);
   let isSettingsOpen = $state(false);
+
+  let currentView = $state<"discovery" | "watchlist">("discovery");
   let selectedAnime = $state<main.Anime | null>(null);
 
   let searchTimeout: ReturnType<typeof setTimeout>;
@@ -46,6 +49,7 @@
 
   function handleHome() {
     selectedAnime = null;
+    currentView = "discovery"; // Reset view
     searchQuery = "";
     clearTimeout(searchTimeout);
     loadHomePage();
@@ -73,8 +77,9 @@
   }
 
   function handleInput() {
-    // If they start searching, exit the theater view
+    // If they start searching, exit theater AND watchlist to show results
     selectedAnime = null;
+    currentView = "discovery";
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(performSearch, 500);
   }
@@ -85,6 +90,7 @@
       if (confirm("Are you sure you want to log out of AniList?")) {
         await Logout();
         isUserLoggedIn = false;
+        if (currentView === "watchlist") handleHome(); // Boot them out of watchlist if logged out
       }
     } else {
       // Login Flow
@@ -109,10 +115,16 @@
     onHome={handleHome}
     onLogin={handleLogin}
     onSettings={() => (isSettingsOpen = true)}
+    onWatchlist={() => {
+      selectedAnime = null;
+      currentView = "watchlist";
+    }}
   />
 
   {#if selectedAnime}
     <TheaterView anime={selectedAnime} onBack={() => (selectedAnime = null)} />
+  {:else if currentView === "watchlist"}
+    <Watchlist onSelectAnime={(anime) => (selectedAnime = anime)} />
   {:else}
     <DiscoveryView
       {searchQuery}
