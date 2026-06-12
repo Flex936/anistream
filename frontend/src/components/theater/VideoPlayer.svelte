@@ -179,10 +179,6 @@
 
       hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
         attemptAutoplay();
-        if (videoElement) {
-          videoElement.currentTime = 0;
-        }
-        attemptAutoplay();
       });
 
       hlsInstance.on(Hls.Events.ERROR, (event, data) => {
@@ -258,6 +254,7 @@
     try {
       // First try normal autoplay (works if env var applied correctly)
       await videoElement.play();
+      videoElement.currentTime = 0;
       paused = false;
     } catch {
       try {
@@ -265,6 +262,7 @@
         videoElement.muted = true;
         isMuted = true;
         await videoElement.play();
+        videoElement.currentTime = 0;
         paused = false;
         setTimeout(() => {
           videoElement.muted = false;
@@ -338,7 +336,7 @@
       onclick={() => (paused = !paused)}
       preload="none"
       crossorigin="anonymous"
-      class="w-full h-full object-contain cursor-pointer"
+      class="w-full h-full object-contain cursor-default"
     >
       <track kind="captions" />
     </video>
