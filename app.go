@@ -165,8 +165,7 @@ func (a *App) StreamTorrent(magnetLink string) (string, error) {
 		return "", err
 	}
 
-	if err := a.mpv.StartTranscode("http://localhost:8080/stream", 0, sid, aid, encoder, audioEncoder); err != nil {
-		// Transcode failed: clean up the torrent we just set up.
+	if err := a.mpv.StartTranscode("http://localhost:8080/stream", 0, sid, aid, encoder, audioEncoder, cfg.UpscaleResolution, cfg.Upscaling); err != nil {
 		a.StopStream()
 		return "", fmt.Errorf("transcoder failed to initialise: %w", err)
 	}
@@ -189,7 +188,7 @@ func (a *App) ChangeTrackAndRestart(timeInSeconds float64, sid string, aid strin
 	cfg := config.Load()
 	encoder, audioEncoder := mpv.ResolveEncoders(cfg, sid)
 	return a.mpv.StartTranscode(
-		"http://localhost:8080/stream", timeInSeconds, sid, aid, encoder, audioEncoder,
+		"http://localhost:8080/stream", timeInSeconds, sid, aid, encoder, audioEncoder, cfg.UpscaleResolution, cfg.Upscaling,
 	)
 }
 
@@ -290,5 +289,25 @@ func (a *App) GetOpusEnabled() bool { return config.Load().EnableOpus }
 func (a *App) UpdateOpusEnabled(enabled bool) error {
 	cfg := config.Load()
 	cfg.EnableOpus = enabled
+	return config.Save(cfg)
+}
+
+func (a *App) GetUpscaleMethod() string {
+	return config.Load().Upscaling
+}
+
+func (a *App) UpdateUpscaleMethod(method string) error {
+	cfg := config.Load()
+	cfg.Upscaling = method
+	return config.Save(cfg)
+}
+
+func (a *App) GetUpscaleResolution() config.Resolution {
+	return config.Load().UpscaleResolution
+}
+
+func (a *App) UpdateUpscaleResolution(res config.Resolution) error {
+	cfg := config.Load()
+	cfg.UpscaleResolution = res
 	return config.Save(cfg)
 }

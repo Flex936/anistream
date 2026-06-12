@@ -8,13 +8,15 @@ import (
 )
 
 type AppConfig struct {
-	AniListToken string `json:"anilistToken"`
-	Width        int    `json:"width"`
-	Height       int    `json:"height"`
-	FilterEcchi  bool   `json:"filterEcchi"`
-	Encoder      string `json:"encoder"`
-	EnableAV1    bool   `json:"enableAV1"`
-	EnableOpus   bool   `json:"enableOpus"`
+	AniListToken      string     `json:"anilistToken"`
+	Width             int        `json:"width"`
+	Height            int        `json:"height"`
+	FilterEcchi       bool       `json:"filterEcchi"`
+	Encoder           string     `json:"encoder"`
+	EnableAV1         bool       `json:"enableAV1"`
+	EnableOpus        bool       `json:"enableOpus"`
+	Upscaling         string     `json:"upscaling"`
+	UpscaleResolution Resolution `json:"upscaleResolution"`
 }
 
 type Resolution struct {
@@ -40,6 +42,11 @@ func Load() AppConfig {
 		Width:       1280,
 		Height:      720,
 		FilterEcchi: true,
+		Upscaling:   "",
+		UpscaleResolution: Resolution{
+			Width:  1920,
+			Height: 1080,
+		},
 	}
 
 	data, err := os.ReadFile(getConfigPath())

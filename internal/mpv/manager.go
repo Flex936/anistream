@@ -69,6 +69,8 @@ func (m *Manager) StartTranscode(
 	sourceURL string,
 	startTime float64,
 	sid, aid, encoder, audioEncoder string,
+	display config.Resolution,
+	upscaler string,
 ) error {
 	m.mu.Lock()
 	m.stopLocked() // tear down any existing process before touching the output dir
@@ -93,7 +95,7 @@ func (m *Manager) StartTranscode(
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelFunc = cancel
 
-	args := buildArgs(sourceURL, startTime, sid, aid, encoder, audioEncoder)
+	args := buildArgs(sourceURL, startTime, sid, aid, encoder, audioEncoder, display, upscaler)
 	cmd := exec.Command("mpv", args...)
 	cmd.Dir = HLSOutputDir
 	cmd.Stdout = os.Stdout
@@ -206,7 +208,7 @@ func (m *Manager) GetMetadata() (*FrontendPayload, error) {
 	}, nil
 }
 
-func buildArgs(sourceURL string, startTime float64, sid, aid, encoder, audioEncoder string) []string {
+func buildArgs(sourceURL string, startTime float64, sid, aid, encoder, audioEncoder string, display config.Resolution, upscaler string) []string {
 	args := []string{
 		sourceURL,
 		"--o=index.m3u8",
@@ -217,6 +219,10 @@ func buildArgs(sourceURL string, startTime float64, sid, aid, encoder, audioEnco
 		"--msg-level=ffmpeg=error",
 		"--ovc=" + encoder,
 		"--oac=" + audioEncoder,
+	}
+
+	if upscaler != "" && display.Height > 0 && display.Width > 0 {
+		args = append(args, fmt.Sprintf("--vf-add=libplacebo=w=%d:h=%d:upscaler=%s", display.Width, display.Height, upscaler))
 	}
 
 	switch {
