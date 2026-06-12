@@ -15,11 +15,9 @@
   $effect(() => {
     if (hasScrobbled) {
       showSuccess = true;
-
       const timer = setTimeout(() => {
         showSuccess = false;
       }, 3000);
-
       return () => clearTimeout(timer);
     } else {
       showSuccess = false;

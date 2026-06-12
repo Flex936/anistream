@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ToggleSwitch from "./ToggleSwitch.svelte";
+  import ToggleSwitch from "$lib/components/ui/ToggleSwitch.svelte";
 
   let {
     selectedRes = $bindable(),
@@ -13,14 +13,14 @@
 
   <div class="space-y-6">
     <div class="space-y-3">
-      <span class="text-xs font-semibold text-muted uppercase tracking-wider">
-        Startup Resolution
-      </span>
+      <span class="text-xs font-semibold text-muted uppercase tracking-wider"
+        >Startup Resolution</span
+      >
       <div class="grid grid-cols-2 gap-3">
         {#each resolutions as res}
           <button
-            class="flex flex-col items-start p-3 rounded-xl border-2 transition-all duration-200 {selectedRes.label ===
-            res.label
+            class="flex flex-col items-start p-3 rounded-xl border-2 transition-all duration-200
+                   {selectedRes.label === res.label
               ? 'border-primary bg-primary/10'
               : 'border-border bg-base hover:border-gray-500'}"
             onclick={() => (selectedRes = res)}

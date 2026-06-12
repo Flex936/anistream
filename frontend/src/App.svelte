@@ -1,23 +1,33 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { LoginWithAniList, IsLoggedIn, Logout } from "../wailsjs/go/main/App";
-  import { SearchAnime, GetTrendingAnime } from "../wailsjs/go/main/App";
-  import type { main } from "../wailsjs/go/models";
+  import {
+    LoginWithAniList,
+    IsLoggedIn,
+    Logout,
+    SearchAnime,
+    GetTrendingAnime,
+  } from "$wails/go/main/App";
+  import type { anilist } from "$wails/go/models";
 
-  import NavBar from "./components/layout/NavBar.svelte";
-  import SettingsMenu from "./components/layout/SettingsMenu.svelte";
+  import NavBar from "$lib/components/layout/NavBar.svelte";
+  import SettingsMenu from "$lib/components/layout/SettingsMenu.svelte";
+
   import DiscoveryView from "./pages/DiscoveryView.svelte";
   import TheaterView from "./pages/TheaterView.svelte";
-  import Watchlist from "./pages/Watchlist.svelte";
+  import WatchlistView from "./pages/WatchlistView.svelte";
 
-  let searchQuery = $state("");
-  let isSearching = $state(false);
-  let searchResults = $state<main.Anime[]>([]);
+  import { router } from "$lib/stores/router.svelte";
+
+  // ─── Auth state ──────────────────────────────────────────────────────────
   let isUserLoggedIn = $state(false);
+
+  // ─── Settings overlay ────────────────────────────────────────────────────
   let isSettingsOpen = $state(false);
 
-  let currentView = $state<"discovery" | "watchlist">("discovery");
-  let selectedAnime = $state<main.Anime | null>(null);
+  // ─── Search state ────────────────────────────────────────────────────────
+  let searchQuery = $state("");
+  let isSearching = $state(false);
+  let searchResults = $state<anilist.Anime[]>([]);
 
   let searchTimeout: ReturnType<typeof setTimeout>;
   let searchGen = 0;
@@ -35,27 +45,34 @@
     clearTimeout(searchTimeout);
   });
 
-  async function loadHomePage() {
+  // ─── Home / trending ─────────────────────────────────────────────────────
+  async function loadHomePage(): Promise<void> {
     isSearching = true;
     try {
-      const results = await GetTrendingAnime();
-      searchResults = results || [];
-    } catch (error) {
-      console.error("Failed to load trending anime:", error);
+      searchResults = (await GetTrendingAnime()) || [];
+    } catch (err) {
+      console.error("Failed to load trending anime:", err);
     } finally {
       isSearching = false;
     }
   }
 
-  function handleHome() {
-    selectedAnime = null;
-    currentView = "discovery"; // Reset view
+  // ─── NavBar callbacks ────────────────────────────────────────────────────
+  function handleHome(): void {
+    router.back();
     searchQuery = "";
     clearTimeout(searchTimeout);
     loadHomePage();
   }
 
-  async function performSearch() {
+  function handleInput(): void {
+    // Typing always navigates back to discovery to show results
+    if (router.current.page !== "discovery") router.back();
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(performSearch, 500);
+  }
+
+  async function performSearch(): Promise<void> {
     if (searchQuery.length === 0) {
       await loadHomePage();
       return;
@@ -65,10 +82,7 @@
     isSearching = true;
     try {
       const results = await SearchAnime(searchQuery);
-      // Only commit results if no newer search has been issued
-      if (gen === searchGen) {
-        searchResults = results || [];
-      }
+      if (gen === searchGen) searchResults = results || [];
     } catch (err) {
       if (gen === searchGen) console.error(err);
     } finally {
@@ -76,31 +90,20 @@
     }
   }
 
-  function handleInput() {
-    // If they start searching, exit theater AND watchlist to show results
-    selectedAnime = null;
-    currentView = "discovery";
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(performSearch, 500);
-  }
-
-  async function handleLogin() {
+  async function handleLogin(): Promise<void> {
     if (isUserLoggedIn) {
-      // Logout Flow
       if (confirm("Are you sure you want to log out of AniList?")) {
         await Logout();
         isUserLoggedIn = false;
-        if (currentView === "watchlist") handleHome(); // Boot them out of watchlist if logged out
+        // Boot out of watchlist if we were there
+        if (router.current.page === "watchlist") handleHome();
       }
     } else {
-      // Login Flow
       try {
         const result = await LoginWithAniList();
-        if (result === "success") {
-          isUserLoggedIn = true;
-        }
+        if (result === "success") isUserLoggedIn = true;
       } catch (err) {
-        console.error("OAuth2 Failed:", err);
+        console.error("OAuth2 failed:", err);
         alert("Failed to log in. Please try again.");
       }
     }
@@ -115,22 +118,27 @@
     onHome={handleHome}
     onLogin={handleLogin}
     onSettings={() => (isSettingsOpen = true)}
-    onWatchlist={() => {
-      selectedAnime = null;
-      currentView = "watchlist";
-    }}
+    onWatchlist={() => router.navigate({ page: "watchlist" })}
   />
 
-  {#if selectedAnime}
-    <TheaterView anime={selectedAnime} onBack={() => (selectedAnime = null)} />
-  {:else if currentView === "watchlist"}
-    <Watchlist onSelectAnime={(anime) => (selectedAnime = anime)} />
+  <!-- ─── Router outlet ─────────────────────────────────────────────────── -->
+  {#if router.current.page === "theater"}
+    <TheaterView
+      anime={router.current.anime}
+      isLoggedIn={isUserLoggedIn}
+      onBack={router.back}
+    />
+  {:else if router.current.page === "watchlist"}
+    <WatchlistView
+      onSelectAnime={(anime) => router.navigate({ page: "theater", anime })}
+    />
   {:else}
+    <!-- discovery is the default/fallback -->
     <DiscoveryView
       {searchQuery}
       {isSearching}
       {searchResults}
-      onSelect={(anime) => (selectedAnime = anime)}
+      onSelect={(anime) => router.navigate({ page: "theater", anime })}
     />
   {/if}
 

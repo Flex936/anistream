@@ -16,7 +16,7 @@
     WindowUnmaximise,
     WindowMaximise,
     Quit,
-  } from "../../../wailsjs/runtime/runtime";
+  } from "$wails/runtime/runtime";
 
   let {
     searchQuery = $bindable(""),
@@ -36,7 +36,6 @@
 
   onMount(async () => {
     await syncMaximisedState();
-    // Keep icon in sync when OS resizes the window
     window.addEventListener("resize", syncMaximisedState);
   });
 
@@ -44,12 +43,7 @@
     window.removeEventListener("resize", syncMaximisedState);
   });
 
-  function handleInput() {
-    if (onSearch) onSearch(searchQuery);
-  }
-
   async function handleWindowMaximise() {
-    // Don't trust local state for the decision
     if (await WindowIsMaximised()) {
       WindowUnmaximise();
       isMaximised = false;
@@ -67,7 +61,8 @@
   <button
     style="--wails-draggable: no-drag;"
     onclick={onHome}
-    class="flex items-center space-x-2 text-primary hover:text-primary-hover transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded px-2 py-1 -ml-2 group"
+    class="flex items-center space-x-2 text-primary hover:text-primary-hover transition-colors
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded px-2 py-1 -ml-2 group"
   >
     <h1
       class="text-xl font-bold tracking-tight text-main group-hover:text-white transition-colors"
@@ -79,7 +74,8 @@
   <div class="flex-1 max-w-2xl px-8">
     <div class="relative group">
       <div
-        class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-muted group-focus-within:text-primary transition-colors"
+        class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none
+               text-muted group-focus-within:text-primary transition-colors"
       >
         <Search size={20} />
       </div>
@@ -87,9 +83,11 @@
         style="--wails-draggable: no-drag;"
         type="text"
         bind:value={searchQuery}
-        oninput={handleInput}
+        oninput={() => onSearch?.()}
         placeholder="Search for anime by title..."
-        class="w-full bg-surface border border-border text-main text-sm rounded-full focus:ring-2 focus:ring-primary focus:border-primary block pl-11 p-2.5 transition-all shadow-inner outline-none"
+        class="w-full bg-surface border border-border text-main text-sm rounded-full
+               focus:ring-2 focus:ring-primary focus:border-primary block pl-11 p-2.5
+               transition-all shadow-inner outline-none"
       />
     </div>
   </div>
@@ -99,7 +97,8 @@
       <button
         style="--wails-draggable: no-drag;"
         onclick={onWatchlist}
-        class="hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1"
+        class="hover:text-primary transition-colors focus:outline-none
+               focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1"
         title="My Watchlist"
       >
         <Library size={20} />
@@ -110,7 +109,7 @@
       style="--wails-draggable: no-drag;"
       onclick={onLogin}
       class="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1 transition-colors
-                {isLoggedIn
+             {isLoggedIn
         ? 'text-green-400 hover:text-red-400'
         : 'text-muted hover:text-main'}"
       title={isLoggedIn ? "Log out of AniList" : "Log in to AniList"}
@@ -121,7 +120,8 @@
     <button
       style="--wails-draggable: no-drag;"
       onclick={onSettings}
-      class="hover:text-main transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1"
+      class="hover:text-main transition-colors focus:outline-none
+             focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1"
       title="Settings"
     >
       <Settings size={20} />
@@ -140,11 +140,9 @@
         onclick={handleWindowMaximise}
         class="hover:text-accent transition-colors"
       >
-        {#if isMaximised}
-          <Minimize2 size={20} />
-        {:else}
-          <Maximize2 size={20} />
-        {/if}
+        {#if isMaximised}<Minimize2 size={20} />{:else}<Maximize2
+            size={20}
+          />{/if}
       </button>
       <button
         style="--wails-draggable: no-drag;"

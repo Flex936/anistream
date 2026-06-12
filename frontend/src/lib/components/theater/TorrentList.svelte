@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Search, HardDrive, Play, LoaderCircle } from "@lucide/svelte";
-  import type { main } from "../../../wailsjs/go/models";
+  import type { scraper } from "$wails/go/models";
 
   let {
     fetchedTorrents,
@@ -9,7 +9,7 @@
     onBack,
     onPlay,
   }: {
-    fetchedTorrents: main.TorrentResult[];
+    fetchedTorrents: scraper.TorrentResult[];
     loadingEpisode: number;
     isStartingStream: boolean;
     onBack?: () => void;
@@ -26,7 +26,7 @@
 </script>
 
 <div class="flex items-center justify-between mb-4">
-  <h3 class="text-xl font-semibold text-main flex items-center">
+  <h3 class="text-xl font-semibold text-main">
     Select Release for Episode {loadingEpisode}
   </h3>
   <button
@@ -47,7 +47,8 @@
     type="text"
     bind:value={torrentSearch}
     placeholder="Filter release groups (e.g., SubsPlease, 1080p)..."
-    class="w-full bg-surface border border-border text-main text-sm rounded-lg focus:ring-1 focus:ring-primary block pl-10 p-3 outline-none transition-colors"
+    class="w-full bg-surface border border-border text-main text-sm rounded-lg
+           focus:ring-1 focus:ring-primary block pl-10 p-3 outline-none transition-colors"
   />
 </div>
 
@@ -56,24 +57,24 @@
 >
   {#each filteredTorrents as torrent, index}
     <div
-      class="group flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-white/5 border {index ===
-        0 && !torrentSearch
+      class="group flex items-center justify-between p-3 rounded-lg transition-colors hover:bg-white/5 border
+             {index === 0 && !torrentSearch
         ? 'bg-primary/10 border-primary/30'
         : 'border-transparent'}"
     >
       <div class="flex flex-col pr-4">
-        <div class="flex items-center space-x-2">
-          {#if index === 0 && !torrentSearch}
-            <span class="text-xs font-bold text-accent uppercase tracking-wider"
-              >Recommended</span
-            >
-          {/if}
-        </div>
+        {#if index === 0 && !torrentSearch}
+          <span class="text-xs font-bold text-accent uppercase tracking-wider"
+            >Recommended</span
+          >
+        {/if}
 
         <button
           onclick={() => onPlay?.(torrent.magnetLink)}
           disabled={isStartingStream}
-          class="text-left font-medium text-sm text-main mt-1 line-clamp-2 leading-snug group-hover:text-white hover:text-primary! transition-colors disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+          class="text-left font-medium text-sm text-main mt-1 line-clamp-2 leading-snug
+                 group-hover:text-white hover:text-primary! transition-colors
+                 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
         >
           {torrent.title}
         </button>
@@ -82,8 +83,7 @@
           class="flex items-center space-x-4 mt-2 text-xs font-mono text-muted"
         >
           <span class="flex items-center"
-            ><HardDrive size={12} class="mr-1" />
-            {torrent.size}</span
+            ><HardDrive size={12} class="mr-1" />{torrent.size}</span
           >
           <span class="text-green-400/80">▲ {torrent.seeders} Seeders</span>
           <span>Score: {torrent.score}</span>
@@ -94,9 +94,10 @@
         onclick={() => onPlay?.(torrent.magnetLink)}
         disabled={isStartingStream}
         class="shrink-0 flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200
-                    {isStartingStream
+               {isStartingStream
           ? 'bg-primary/20 text-primary'
-          : 'bg-transparent text-muted/30 group-hover:bg-primary/10 group-hover:text-primary hover:!bg-primary! hover:!text-white!'} disabled:cursor-not-allowed"
+          : 'bg-transparent text-muted/30 group-hover:bg-primary/10 group-hover:text-primary hover:!bg-primary! hover:!text-white!'}
+               disabled:cursor-not-allowed"
       >
         {#if isStartingStream}
           <LoaderCircle size={18} class="animate-spin" />
@@ -106,6 +107,7 @@
       </button>
     </div>
   {/each}
+
   {#if filteredTorrents.length === 0}
     <div class="p-8 text-center text-muted">No releases match your filter.</div>
   {/if}

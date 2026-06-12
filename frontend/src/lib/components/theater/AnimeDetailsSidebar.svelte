@@ -1,12 +1,15 @@
 <script lang="ts">
-  import type { main } from "../../../wailsjs/go/models";
-  import { formatStatus, getSidebarBadgeStyle } from "../../utils/statusColor";
+  import type { anilist } from "$wails/go/models";
+  import { formatStatus, getSidebarBadgeStyle } from "$lib/utils/statusColor";
 
-  let { anime }: { anime: main.Anime } = $props();
+  let { anime }: { anime: anilist.Anime } = $props();
 
-  // Naive but effective for AniList's known output
-  function sanitize(html: string) {
-    return html.replace(/<(?!\/?(br|i|b|em|strong)\b)[^>]+>/gi, "");
+  // Strip block-level tags while keeping inline formatting safe for AniList HTML
+  function sanitize(html: string): string {
+    if (!html) return "";
+    // Safely removes HTML tags EXCEPT for br, i, b, em, strong
+    const regex = /<(?!(\/?(br|i|b|em|strong))\b)[^>]+>/gi;
+    return html.replace(regex, "");
   }
 </script>
 

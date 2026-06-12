@@ -1,14 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { GetUserWatchlist } from "../../wailsjs/go/main/App";
-  import type { main } from "../../wailsjs/go/models";
+  import { GetUserWatchlist } from "$wails/go/main/App";
+  import type { anilist } from "$wails/go/models";
   import { Play, Calendar, LoaderCircle } from "@lucide/svelte";
 
-  // Optional prop to handle navigation (e.g., clicking an anime takes them to the episode list)
-  let { onSelectAnime }: { onSelectAnime?: (anime: main.Anime) => void } =
+  let { onSelectAnime }: { onSelectAnime?: (anime: anilist.Anime) => void } =
     $props();
 
-  let watchlists = $state<main.MediaList[]>([]);
+  let watchlists = $state<anilist.MediaList[]>([]);
   let isLoading = $state(true);
   let activeTab = $state<"CURRENT" | "PLANNING">("CURRENT");
 
@@ -22,7 +21,6 @@
     }
   });
 
-  // Derived state to quickly grab the currently active list
   let activeList = $derived(
     watchlists.find((list) => list.status === activeTab)?.entries || [],
   );
@@ -34,24 +32,22 @@
 
     <div class="flex bg-surface p-1 rounded-xl border border-border">
       <button
-        class="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold transition-all {activeTab ===
-        'CURRENT'
+        class="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold transition-all
+               {activeTab === 'CURRENT'
           ? 'bg-primary text-white shadow-md'
           : 'text-muted hover:text-main'}"
         onclick={() => (activeTab = "CURRENT")}
       >
-        <Play size={16} />
-        <span>Watching</span>
+        <Play size={16} /><span>Watching</span>
       </button>
       <button
-        class="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold transition-all {activeTab ===
-        'PLANNING'
+        class="flex items-center space-x-2 px-6 py-2 rounded-lg text-sm font-semibold transition-all
+               {activeTab === 'PLANNING'
           ? 'bg-primary text-white shadow-md'
           : 'text-muted hover:text-main'}"
         onclick={() => (activeTab = "PLANNING")}
       >
-        <Calendar size={16} />
-        <span>Planning</span>
+        <Calendar size={16} /><span>Planning</span>
       </button>
     </div>
   </div>
@@ -77,7 +73,7 @@
           onclick={() => onSelectAnime?.(entry.media)}
         >
           <div
-            class="relative aspect-[2/3] w-full rounded-xl overflow-hidden shadow-lg border border-border mb-3"
+            class="relative aspect-2/3 w-full rounded-xl overflow-hidden shadow-lg border border-border mb-3"
           >
             <img
               src={entry.media.coverImage.large}
@@ -86,7 +82,9 @@
             />
 
             <div
-              class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4"
+              class="absolute inset-0 bg-linear-to-t from-black/80 via-transparent to-transparent
+                     opacity-0 group-hover:opacity-100 transition-opacity duration-300
+                     flex items-end p-4"
             >
               <div
                 class="bg-primary text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg"

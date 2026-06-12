@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { X, Monitor, Film, ImageUpscale } from "@lucide/svelte";
+  import { X, Monitor, Film } from "@lucide/svelte";
   import {
     GetResolution,
     UpdateResolution,
@@ -12,16 +12,11 @@
     UpdateAV1Enabled,
     GetOpusEnabled,
     UpdateOpusEnabled,
-    GetUpscaleMethod,
-    GetUpscaleResolution,
-    UpdateUpscaleMethod,
-    UpdateUpscaleResolution,
-  } from "../../../wailsjs/go/main/App";
-  import { WindowSetSize } from "../../../wailsjs/runtime/runtime";
+  } from "$wails/go/main/App";
+  import { WindowSetSize } from "$wails/runtime/runtime";
 
-  import GeneralTab from "./GeneralTab.svelte";
-  import PlaybackTab from "./PlaybackTab.svelte";
-  import UpscaleTab from "./UpscaleTab.svelte";
+  import GeneralTab from "$lib/components/settings/GeneralTab.svelte";
+  import PlaybackTab from "$lib/components/settings/PlaybackTab.svelte";
 
   let { onClose }: { onClose?: () => void } = $props();
 
@@ -31,7 +26,6 @@
   let selectedEncoder = $state("libx264");
   let enableAV1 = $state(false);
   let enableOpus = $state(false);
-  let upscalingMethod = $state("");
 
   const resolutions = [
     { label: "720p HD (1280 x 720)", w: 1280, h: 720 },
@@ -51,31 +45,8 @@
       desc: "For M1/M2/M3 Mac users.",
     },
   ];
-  const upscalers = [
-    { id: "", name: "None", desc: "Disable upscaling" },
-    {
-      id: "lanczos",
-      name: "Lanczos",
-      desc: "Sharp, traditional 2D grid scaling.",
-    },
-    {
-      id: "ewa_lanczos",
-      name: "EWA Lanczos",
-      desc: "Circular, natural, high-performance reconstruction.",
-    },
-    {
-      id: "ewa_lanczossharp",
-      name: "EWA Lanczos Sharp",
-      desc: "Mathematically tweaked EWA for maximum crispness.",
-    },
-  ];
-  const targetResolutions = [
-    { id: "0", label: "1080p Full HD (1920 x 1080)", w: 1920, h: 1080 },
-    { id: "1", label: "1440p QHD (2560 x 1440)", w: 2560, h: 1440 },
-    { id: "2", label: "2160p UHD (3840 x 2160)", w: 3840, h: 2160 },
-  ];
+
   let selectedRes = $state(resolutions[0]);
-  let upscalingResolution: any = $state({ ...targetResolutions[0] });
 
   onMount(async () => {
     document.body.style.overflow = "hidden";
@@ -90,27 +61,12 @@
       enableAV1 = await GetAV1Enabled();
       enableOpus = await GetOpusEnabled();
 
-      let savedEncoder = await GetTranscoder();
-
+      const savedEncoder = await GetTranscoder();
       if (savedEncoder.startsWith("av1_")) {
         selectedEncoder = savedEncoder.replace("av1_", "h264_");
         enableAV1 = true;
       } else {
         selectedEncoder = savedEncoder;
-      }
-      upscalingMethod = await GetUpscaleMethod();
-      const savedUpscaleRes = await GetUpscaleResolution();
-      const matchUpscale = targetResolutions.find(
-        (r) => r.w === savedUpscaleRes.width && r.h === savedUpscaleRes.height,
-      );
-      if (matchUpscale) {
-        upscalingResolution = { ...matchUpscale };
-      } else {
-        upscalingResolution = {
-          id: "4",
-          w: savedUpscaleRes.width,
-          h: savedUpscaleRes.height,
-        };
       }
     } catch (err) {
       console.error("Failed to fetch settings:", err);
@@ -135,12 +91,6 @@
       await UpdateTranscoder(finalEncoder);
       await UpdateAV1Enabled(enableAV1);
       await UpdateOpusEnabled(enableOpus);
-      await UpdateUpscaleMethod(upscalingMethod);
-      let res = {
-        height: upscalingResolution?.h,
-        width: upscalingResolution?.w,
-      };
-      await UpdateUpscaleResolution(res);
 
       WindowSetSize(selectedRes.w, selectedRes.h);
       onClose?.();
@@ -157,16 +107,18 @@
   class="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
 >
   <div
-    class="w-full max-w-3xl bg-surface border border-border rounded-xl shadow-2xl flex overflow-hidden animate-in fade-in zoom-in-95 duration-200 h-[600px]"
+    class="w-full max-w-3xl bg-surface border border-border rounded-xl shadow-2xl
+           flex overflow-hidden animate-in fade-in zoom-in-95 duration-200 h-[600px]"
   >
+    <!-- Sidebar -->
     <div
       class="w-64 bg-base border-r border-border p-4 flex flex-col space-y-2"
     >
       <h2 class="text-xl font-bold text-main px-4 py-2 mb-4">Settings</h2>
 
       <button
-        class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors {activeTab ===
-        'general'
+        class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors
+               {activeTab === 'general'
           ? 'bg-primary/20 text-primary'
           : 'text-muted hover:bg-surface hover:text-main'}"
         onclick={() => (activeTab = "general")}
@@ -176,8 +128,8 @@
       </button>
 
       <button
-        class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors {activeTab ===
-        'playback'
+        class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors
+               {activeTab === 'playback'
           ? 'bg-primary/20 text-primary'
           : 'text-muted hover:bg-surface hover:text-main'}"
         onclick={() => (activeTab = "playback")}
@@ -185,21 +137,13 @@
         <Film size={18} />
         <span class="font-medium">Playback</span>
       </button>
-      <button
-        class="flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors {activeTab ===
-        'upscale'
-          ? 'bg-primary/20 text-primary'
-          : 'text-muted hover:bg-surface hover:text-main'}"
-        onclick={() => (activeTab = "upscale")}
-      >
-        <ImageUpscale size={18} />
-        <span class="font-medium">Upscale</span>
-      </button>
     </div>
 
+    <!-- Content -->
     <div class="flex-1 flex flex-col relative h-full">
       <button
-        class="absolute top-4 right-4 p-2 text-muted hover:text-red-400 hover:bg-red-400/10 rounded-full transition-colors z-10"
+        class="absolute top-4 right-4 p-2 text-muted hover:text-red-400 hover:bg-red-400/10
+               rounded-full transition-colors z-10"
         onclick={() => onClose?.()}
       >
         <X size={20} />
@@ -215,13 +159,6 @@
             bind:enableAV1
             bind:enableOpus
           />
-        {:else if activeTab === "upscale"}
-          <UpscaleTab
-            bind:upscalingMethod
-            bind:upscalingResolution
-            {upscalers}
-            {targetResolutions}
-          />
         {/if}
       </div>
 
@@ -229,7 +166,8 @@
         <button
           onclick={handleSave}
           disabled={isSaving}
-          class="bg-primary hover:bg-primary/90 text-white font-medium px-8 py-2 rounded-lg transition-colors shadow-lg disabled:opacity-50"
+          class="bg-primary hover:bg-primary/90 text-white font-medium px-8 py-2 rounded-lg
+                 transition-colors shadow-lg disabled:opacity-50"
         >
           {isSaving ? "Saving..." : "Save Changes"}
         </button>

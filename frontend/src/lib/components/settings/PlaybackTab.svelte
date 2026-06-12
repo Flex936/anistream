@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Zap, Cpu, TriangleAlert } from "@lucide/svelte";
-  import ToggleSwitch from "./ToggleSwitch.svelte";
+  import ToggleSwitch from "$lib/components/ui/ToggleSwitch.svelte";
 
   let {
     selectedEncoder = $bindable(),
@@ -19,16 +19,17 @@
   <div class="space-y-3">
     {#each encoders as enc}
       <button
-        class="w-full flex items-center p-4 rounded-xl border-2 transition-all duration-200 {selectedEncoder ===
-        enc.id
+        class="w-full flex items-center p-4 rounded-xl border-2 transition-all duration-200
+               {selectedEncoder === enc.id
           ? 'border-primary bg-primary/10'
           : 'border-border bg-base hover:border-gray-500 text-left'}"
         onclick={() => (selectedEncoder = enc.id)}
       >
         <div
-          class="p-2 rounded-lg {selectedEncoder === enc.id
+          class="p-2 rounded-lg mr-4
+                 {selectedEncoder === enc.id
             ? 'bg-primary text-white'
-            : 'bg-surface text-muted'} mr-4"
+            : 'bg-surface text-muted'}"
         >
           {#if enc.id === "libx264"}<Cpu size={20} />{:else}<Zap
               size={20}
@@ -46,27 +47,23 @@
     {/each}
   </div>
 
+  <!-- AV1 toggle -->
   <div class="pt-6 border-t border-border mt-6">
     <div class="flex items-start justify-between">
       <div class="flex flex-col max-w-[80%]">
-        <span class="text-sm font-bold text-main flex items-center gap-2">
-          Enable AV1 Encoding
-        </span>
+        <span class="text-sm font-bold text-main">Enable AV1 Encoding</span>
         <p class="text-xs text-muted mt-1 leading-relaxed">
-          Upgrades NVENC, AMF, or QuickSync to use the AV1 codec instead of
-          H.264.<br />
-          <strong class="text-red-400">WARNING:</strong> This will only work on RTX
-          40-series, RX 7000-series, or Intel Arc GPU (and above).
+          Upgrades NVENC, AMF, or QuickSync to AV1 instead of H.264.<br />
+          <strong class="text-red-400">WARNING:</strong> Requires RTX 40-series, RX
+          7000-series, or Intel Arc (and above).
         </p>
       </div>
-
       <ToggleSwitch
         bind:checked={enableAV1}
         disabled={selectedEncoder === "libx264" ||
           selectedEncoder === "h264_videotoolbox"}
       />
     </div>
-
     {#if selectedEncoder === "libx264" || selectedEncoder === "h264_videotoolbox"}
       <p class="text-[10px] text-amber-500/80 mt-2 flex items-center gap-1">
         <TriangleAlert size={12} /> Requires a dedicated GPU encoder to be selected
@@ -75,20 +72,17 @@
     {/if}
   </div>
 
+  <!-- Opus toggle -->
   <div class="pt-6 border-t border-border mt-6">
     <div class="flex items-start justify-between">
       <div class="flex flex-col max-w-[80%]">
-        <span class="text-sm font-bold text-main flex items-center gap-2">
-          Enable Opus encoding
-        </span>
+        <span class="text-sm font-bold text-main">Enable Opus Encoding</span>
         <p class="text-xs text-muted mt-1 leading-relaxed">
-          Uses the Opus codec for slightly better audio quality at lower
-          bitrates instead of standard AAC.<br />
-          <strong class="text-red-400">WARNING:</strong> Do not enable this on macOS.
-          Apple's video engine does not support Opus via HLS.
+          Better audio quality at lower bitrates vs standard AAC.<br />
+          <strong class="text-red-400">WARNING:</strong> Do not enable on macOS —
+          Apple's HLS engine doesn't support Opus.
         </p>
       </div>
-
       <ToggleSwitch bind:checked={enableOpus} />
     </div>
   </div>

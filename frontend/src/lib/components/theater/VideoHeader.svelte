@@ -13,7 +13,6 @@
       Episode {playingEpisode}
     </h3>
   </div>
-
   <button
     onclick={() => onBack?.()}
     class="flex items-center space-x-2 text-sm text-primary hover:text-primary-hover transition-colors group"

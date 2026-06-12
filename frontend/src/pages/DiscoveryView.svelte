@@ -1,7 +1,7 @@
 <script lang="ts">
-  import AnimeCard from "../components/shared/AnimeCard.svelte";
+  import AnimeCard from "$lib/components/ui/AnimeCard.svelte";
   import { LoaderCircle } from "@lucide/svelte";
-  import type { main } from "../../wailsjs/go/models";
+  import type { anilist } from "$wails/go/models";
 
   let {
     searchQuery,
@@ -11,23 +11,16 @@
   }: {
     searchQuery: string;
     isSearching: boolean;
-    searchResults: main.Anime[];
-    onSelect: (anime: main.Anime) => void;
+    searchResults: anilist.Anime[];
+    onSelect: (anime: anilist.Anime) => void;
   } = $props();
 </script>
 
 <div class="flex-1 p-8 max-w-7xl mx-auto w-full">
   <div class="mb-8 flex items-center justify-between">
-    <div>
-      <h2 class="text-2xl font-semibold text-main">
-        {#if searchQuery}
-          Results for "{searchQuery}"
-        {:else}
-          Discover
-        {/if}
-      </h2>
-    </div>
-
+    <h2 class="text-2xl font-semibold text-main">
+      {#if searchQuery}Results for "{searchQuery}"{:else}Discover{/if}
+    </h2>
     {#if isSearching}
       <LoaderCircle class="w-6 h-6 text-primary animate-spin" />
     {/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Search, LoaderCircle } from "@lucide/svelte";
-  import type { main } from "../../../wailsjs/go/models";
+  import { LoaderCircle, Search } from "@lucide/svelte";
+  import type { anilist } from "$wails/go/models";
 
   let {
     availableEpisodes,
@@ -10,7 +10,7 @@
     onSelect,
   }: {
     availableEpisodes: number;
-    anime: main.Anime;
+    anime: anilist.Anime;
     isScraping: boolean;
     loadingEpisode: number;
     onSelect?: (epNum: number) => void;
@@ -48,16 +48,15 @@
         </span>
         <span
           class="font-medium text-muted group-hover:text-main transition-colors"
+          >Episode {epNum}</span
         >
-          Episode {epNum}
-        </span>
       </div>
 
       <button
         onclick={() => onSelect?.(epNum)}
         disabled={isScraping}
         class="flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-200
-                    {isScraping && loadingEpisode === epNum
+               {isScraping && loadingEpisode === epNum
           ? 'bg-primary/20 text-primary'
           : 'bg-transparent text-muted/70 group-hover:bg-white/10 group-hover:text-main hover:bg-primary! hover:text-white!'}"
       >

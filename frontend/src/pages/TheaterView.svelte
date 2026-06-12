@@ -1,23 +1,26 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { ArrowLeft } from "@lucide/svelte";
-  import type { main } from "../../wailsjs/go/models";
+  import type { anilist, scraper } from "$wails/go/models";
   import {
     GetEpisodeTorrents,
     StreamTorrent,
     StopStream,
-  } from "../../wailsjs/go/main/App";
+  } from "$wails/go/main/App";
 
-  import AnimeDetailsSidebar from "../components/theater/AnimeDetailsSidebar.svelte";
-  import EpisodeList from "../components/theater/EpisodeList.svelte";
-  import TorrentList from "../components/theater/TorrentList.svelte";
-  import VideoPlayer from "../components/theater/VideoPlayer.svelte";
+  import AnimeDetailsSidebar from "$lib/components/theater/AnimeDetailsSidebar.svelte";
+  import EpisodeList from "$lib/components/theater/EpisodeList.svelte";
+  import TorrentList from "$lib/components/theater/TorrentList.svelte";
+  import VideoPlayer from "$lib/components/theater/VideoPlayer.svelte";
 
   let {
     anime,
     onBack,
+    isLoggedIn = false,
   }: {
-    anime: main.Anime;
+    anime: anilist.Anime;
     onBack: () => void;
+    isLoggedIn?: boolean;
   } = $props();
 
   let isScraping = $state(false);
@@ -25,8 +28,9 @@
   let loadingEpisode = $state(0);
   let playingEpisode = $state(0);
   let streamUrl = $state<string | null>(null);
-  let fetchedTorrents = $state<main.TorrentResult[]>([]);
+  let fetchedTorrents = $state<scraper.TorrentResult[]>([]);
 
+  // Generation counter invalidates stale async results after navigation
   let scrapingGen = 0;
 
   let availableEpisodes = $derived.by(() => {
@@ -36,31 +40,15 @@
     return anime.episodes || 0;
   });
 
-  let episodeList = $derived(
-    anime.episodes
-      ? Array.from({ length: anime.episodes }, (_, i) => i + 1)
-      : [],
-  );
-
-  function goBack() {
-    scrapingGen++; // Invalidate requests
-    streamUrl = null;
-    fetchedTorrents = [];
-    playingEpisode = 0;
-    loadingEpisode = 0;
-    isScraping = false;
-
+  // Simplified: state cleanup is handled by unmounting; StopStream is in onDestroy.
+  function goBack(): void {
+    scrapingGen++;
     onBack();
-
-    // Ensure we kill the torrent if the user backs out
-    StopStream().catch((err) =>
-      console.error("Failed to cancel torrent load:", err),
-    );
   }
 
-  async function handleFetchTorrents(epNum: number) {
-    const titleToSearch = anime.title?.romaji || anime.title?.english || "";
-    if (!titleToSearch) return;
+  async function handleFetchTorrents(epNum: number): Promise<void> {
+    const title = anime.title?.romaji || anime.title?.english || "";
+    if (!title) return;
 
     const gen = ++scrapingGen;
     isScraping = true;
@@ -68,7 +56,7 @@
     fetchedTorrents = [];
 
     try {
-      const results = await GetEpisodeTorrents(titleToSearch, epNum);
+      const results = await GetEpisodeTorrents(title, epNum);
       if (gen === scrapingGen) fetchedTorrents = results || [];
     } catch (err) {
       if (gen === scrapingGen) alert(`Error: ${err}`);
@@ -77,8 +65,7 @@
     }
   }
 
-  // Magnet link passed directly instead of CustomEvent
-  async function handleStartStream(magnet: string) {
+  async function handleStartStream(magnet: string): Promise<void> {
     isStartingStream = true;
     try {
       const url = await StreamTorrent(magnet);
@@ -90,6 +77,13 @@
       isStartingStream = false;
     }
   }
+
+  // StopStream is called here (not inside VideoPlayer) so it fires on any
+  // navigation event — including NavBar home/search — not just explicit back presses.
+  onDestroy(() => {
+    scrapingGen++;
+    StopStream().catch(console.warn);
+  });
 </script>
 
 <div
@@ -115,6 +109,7 @@
           {streamUrl}
           {playingEpisode}
           animeId={anime.id}
+          {isLoggedIn}
           onBack={() => {
             streamUrl = null;
             playingEpisode = 0;

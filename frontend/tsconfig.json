@@ -6,25 +6,25 @@
     "module": "ESNext",
     "resolveJsonModule": true,
     "baseUrl": ".",
-    
+
     /* Modern Vite / Svelte 5 Requirements */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    
+
     "allowJs": true,
     "checkJs": true,
     "isolatedModules": true,
     "strict": true,
     "sourceMap": true,
-    "lib": ["ESNext", "DOM"]
+    "lib": ["ESNext", "DOM"],
+
+    "paths": {
+      "$lib/*": ["src/lib/*"],
+      "$wails/*": ["wailsjs/*"]
+    }
   },
-  "include": [
-    "src/**/*.d.ts",
-    "src/**/*.ts",
-    "src/**/*.js",
-    "src/**/*.svelte"
-  ],
+  "include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.js", "src/**/*.svelte"],
   "references": [
     {
       "path": "./tsconfig.node.json"
