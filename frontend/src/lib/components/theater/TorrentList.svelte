@@ -1,17 +1,15 @@
 <script lang="ts">
-  import { Search, HardDrive, Play, LoaderCircle } from "@lucide/svelte";
+  import { Search, HardDrive, Play } from "@lucide/svelte";
   import type { scraper } from "$wails/go/models";
 
   let {
     fetchedTorrents,
     loadingEpisode,
-    isStartingStream,
     onBack,
     onPlay,
   }: {
     fetchedTorrents: scraper.TorrentResult[];
     loadingEpisode: number;
-    isStartingStream: boolean;
     onBack?: () => void;
     onPlay?: (magnet: string) => void;
   } = $props();
@@ -71,10 +69,8 @@
 
         <button
           onclick={() => onPlay?.(torrent.magnetLink)}
-          disabled={isStartingStream}
           class="text-left font-medium text-sm text-main mt-1 line-clamp-2 leading-snug
-                 group-hover:text-white hover:text-primary! transition-colors
-                 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
+                 group-hover:text-white hover:text-primary! transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
         >
           {torrent.title}
         </button>
@@ -92,18 +88,9 @@
 
       <button
         onclick={() => onPlay?.(torrent.magnetLink)}
-        disabled={isStartingStream}
-        class="shrink-0 flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200
-               {isStartingStream
-          ? 'bg-primary/20 text-primary'
-          : 'bg-transparent text-muted/30 group-hover:bg-primary/10 group-hover:text-primary hover:!bg-primary! hover:!text-white!'}
-               disabled:cursor-not-allowed"
+        class="shrink-0 flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 bg-transparent text-muted/30 group-hover:bg-primary/10 group-hover:text-primary hover:!bg-primary! hover:!text-white!"
       >
-        {#if isStartingStream}
-          <LoaderCircle size={18} class="animate-spin" />
-        {:else}
-          <Play size={18} class="ml-0.5" />
-        {/if}
+        <Play size={18} class="ml-0.5" />
       </button>
     </div>
   {/each}

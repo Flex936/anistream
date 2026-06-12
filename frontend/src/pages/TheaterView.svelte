@@ -40,7 +40,6 @@
     return anime.episodes || 0;
   });
 
-  // Simplified: state cleanup is handled by unmounting; StopStream is in onDestroy.
   function goBack(): void {
     scrapingGen++;
     onBack();
@@ -66,20 +65,22 @@
   }
 
   async function handleStartStream(magnet: string): Promise<void> {
+    // Instantly trigger the UI state change
     isStartingStream = true;
+    playingEpisode = loadingEpisode;
+
     try {
+      // Start the torrent in the background
       const url = await StreamTorrent(magnet);
-      playingEpisode = loadingEpisode;
       streamUrl = url;
     } catch (err) {
       alert(`Failed to connect to peers.\n${err}`);
+      playingEpisode = 0;
     } finally {
       isStartingStream = false;
     }
   }
 
-  // StopStream is called here (not inside VideoPlayer) so it fires on any
-  // navigation event — including NavBar home/search — not just explicit back presses.
   onDestroy(() => {
     scrapingGen++;
     StopStream().catch(console.warn);
@@ -104,7 +105,7 @@
     <AnimeDetailsSidebar {anime} />
 
     <div class="w-full md:w-2/3 lg:w-3/4 flex flex-col min-h-[500px]">
-      {#if streamUrl}
+      {#if isStartingStream || streamUrl !== null}
         <VideoPlayer
           {streamUrl}
           {playingEpisode}
@@ -113,13 +114,13 @@
           onBack={() => {
             streamUrl = null;
             playingEpisode = 0;
+            isStartingStream = false;
           }}
         />
       {:else if fetchedTorrents.length > 0}
         <TorrentList
           {fetchedTorrents}
           {loadingEpisode}
-          {isStartingStream}
           onBack={() => {
             fetchedTorrents = [];
             loadingEpisode = 0;
