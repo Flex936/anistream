@@ -228,29 +228,11 @@
 
   function startWatchdog(): void {
     clearInterval(watchdogInterval);
-
-    // We need to track the time to detect silent Chromium freezes
-    let lastTime = -1;
-
     watchdogInterval = setInterval(() => {
       if (!videoElement || !streamUrl) return;
 
-      // If the video actually paused itself, force it back on. (WebKit)
       if (userWantsToPlay && videoElement.paused && !isPlayPending) {
         attemptAutoplay();
-        return;
-      }
-
-      // The video claims it is playing, but the time hasn't moved (Chromium)
-      if (userWantsToPlay && !videoElement.paused && !isBuffering) {
-        if (videoElement.currentTime === lastTime) {
-          if (!isPlayPending) {
-            console.log("Watchdog: Detected silent freeze. Nudging...");
-            attemptAutoplay();
-          }
-        } else {
-          lastTime = videoElement.currentTime;
-        }
       }
     }, 1000);
   }
