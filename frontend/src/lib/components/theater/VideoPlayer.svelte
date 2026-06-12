@@ -328,7 +328,7 @@
       onclick={() => (paused = !paused)}
       preload="none"
       crossorigin="anonymous"
-      class="w-full h-full object-contain cursor-pointer"
+      class="w-full h-full object-contain cursor-default"
     >
       <track kind="captions" />
     </video>
