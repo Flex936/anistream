@@ -95,8 +95,10 @@ Go requires you to map the internal packages to your local directory target. Che
 
 Wails handles live hot-reloading for both Go and Svelte automatically.
 
+_For Windows environments build with the target tag:_
+
 ```bash
-wails dev
+wails dev -tags windows
 ```
 
 _For Linux environments running WebKit2GTK 4.1 layout engines explicitly, build with the target tag:_
@@ -121,6 +123,12 @@ To compile a highly optimized, production-ready, standalone binary for your curr
 
 ```bash
 wails build -clean
+```
+
+_For Windows environments build with the target tag:_
+
+```bash
+wails build -clean -tags windows
 ```
 
 This strips debug symbols, optimizes asset packaging, and outputs a native executable inside the `build/bin` subdirectory.
