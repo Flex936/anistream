@@ -48,6 +48,8 @@ export function GetUpscaleMethod() {
 
 export function GetUpscaleResolution() {
   return window['go']['main']['App']['GetUpscaleResolution']();
+}
+
 export function GetUserWatchlist() {
   return window['go']['main']['App']['GetUserWatchlist']();
 }
