@@ -232,12 +232,14 @@
   async function attemptAutoplay(): Promise<void> {
     try {
       await videoElement.play();
+      currentTime = 0;
       paused = false;
     } catch {
       try {
         videoElement.muted = true;
         isMuted = true;
         await videoElement.play();
+        currentTime = 0;
         paused = false;
         setTimeout(() => {
           videoElement.muted = false;
