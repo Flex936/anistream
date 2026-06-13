@@ -27,16 +27,27 @@ type MpvChapter struct {
 	Time  float64 `json:"time"`
 }
 
+// FrontendPayload carries the complete live playback state polled from MPV.
+// TimePos, Paused, Volume, and Muted are new additions required by the glass UI
+// — the old HLS architecture derived these from the HTML <video> element instead.
 type FrontendPayload struct {
 	Duration    float64      `json:"duration"`
+	TimePos     float64      `json:"time_pos"` // current playback position in seconds
+	Paused      bool         `json:"paused"`
+	Volume      float64      `json:"volume"` // 0–100 (MPV's native scale)
+	Muted       bool         `json:"muted"`
 	AudioTracks []MpvTrack   `json:"audio_tracks"`
 	Subtitles   []MpvTrack   `json:"subtitles"`
 	Chapters    []MpvChapter `json:"chapters"`
 }
 
-// Internal response shapes — unexported, only used within this package.
+// ── Internal wire response types ─────────────────────────────────────────────
+
 type floatResp struct {
 	Data float64 `json:"data"`
+}
+type boolResp struct {
+	Data bool `json:"data"`
 }
 type trackResp struct {
 	Data []MpvTrack `json:"data"`
@@ -44,6 +55,11 @@ type trackResp struct {
 type chapterResp struct {
 	Data []MpvChapter `json:"data"`
 }
+
+// ── Low-level property readers ────────────────────────────────────────────────
+// Each function sends one IPC request and reads the response on conn.
+// They must be called sequentially on the same connection because the socket
+// is a simple line-oriented request/response protocol.
 
 // SendCommand serialises cmd as a newline-terminated JSON IPC command and
 // writes it to conn. Exported so app.go can implement SendMpvCommand.
@@ -57,6 +73,14 @@ func getFloatProperty(conn net.Conn, r *bufio.Reader, prop string) float64 {
 	SendCommand(conn, []interface{}{"get_property", prop})
 	line, _ := r.ReadBytes('\n')
 	var res floatResp
+	_ = json.Unmarshal(line, &res)
+	return res.Data
+}
+
+func getBoolProperty(conn net.Conn, r *bufio.Reader, prop string) bool {
+	SendCommand(conn, []interface{}{"get_property", prop})
+	line, _ := r.ReadBytes('\n')
+	var res boolResp
 	_ = json.Unmarshal(line, &res)
 	return res.Data
 }

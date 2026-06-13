@@ -1,88 +1,208 @@
 <script lang="ts">
+  /**
+   * VideoPlayer.svelte — the "glass pane"
+   *
+   * Architecture
+   * ────────────
+   * There is NO <video> element and NO hls.js.  MPV is rendering natively BELOW
+   * this component via --wid (HWND on Windows, X11 XID on Linux, NSView on macOS).
+   *
+   * This component is a fixed full-viewport transparent overlay (z-[100]).
+   * All UI elements sit on top of the transparent background; the native video
+   * layer shows through everywhere else.
+   *
+   * Theatre-mode CSS
+   * ────────────────
+   * On mount we add `theater-mode` to <html>.  style.css uses that class to make
+   * #app and <main> transparent so nothing blocks the native render layer.
+   * The class is removed on destroy to restore normal backgrounds.
+   *
+   * Stream lifecycle
+   * ────────────────
+   * VideoPlayer does NOT call StopStream().  Stream lifecycle is owned by
+   * TheaterView.svelte — VideoPlayer just fires onBack() when the user leaves.
+   */
+
   import { onMount, onDestroy } from "svelte";
   import {
     GetAnimeProgress,
     UpdateAnimeProgress,
-    StopStream,
     GetMpvMetadata,
-    ChangeTrackAndRestart,
+    ToggleMPV,
+    SeekMPV,
+    SetVolumeMPV,
+    ToggleMuteMPV,
+    SetSubtitleMPV,
+    SetAudioTrackMPV,
+    ToggleFullscreen,
   } from "$wails/go/main/App";
-  import Hls from "hls.js";
+  import type { mpv } from "$wails/go/models";
 
   import VideoHeader from "$lib/components/theater/VideoHeader.svelte";
   import TrackingOverlay from "$lib/components/theater/TrackingOverlay.svelte";
   import VideoControls from "$lib/components/theater/VideoControls.svelte";
   import VideoSettings from "$lib/components/theater/VideoSettings.svelte";
 
-  import type { mpv } from "$wails/go/models";
-
-  // ─── Props ──────────────────────────────────────────────────────────────
+  // ── Props ─────────────────────────────────────────────────────────────────
   let {
-    streamUrl,
     playingEpisode,
     animeId,
-    // FIX: isLoggedIn is now a prop — App.svelte checks auth once; no polling needed here.
     isLoggedIn = false,
     onBack,
   }: {
-    streamUrl: string;
     playingEpisode: number;
     animeId: number;
     isLoggedIn?: boolean;
     onBack?: () => void;
   } = $props();
 
-  // ─── AniList tracking state ─────────────────────────────────────────────
+  // ── Playback state — sourced entirely from GetMpvMetadata() polling ────────
+  // These values no longer come from a <video> element; they are pushed to us
+  // by the Go backend which reads them from the MPV IPC socket every ~500 ms.
+  let paused = $state(false);
+  let currentTime = $state(0);
+  let duration = $state(0);
+  let volume = $state(1); // 0–1 for UI sliders; MPV works in 0–100
+  let isMuted = $state(false);
+  let animeData = $state<mpv.FrontendPayload | undefined>(undefined);
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  let isIdle = $state(false);
+  let settingsOpen = $state(false);
+  let metadataInterval: ReturnType<typeof setInterval>;
+  let idleTimeout: ReturnType<typeof setTimeout>;
+
+  // ── AniList progress tracking ──────────────────────────────────────────────
   let currentProgress = $state(0);
   let hasScrobbled = $state(false);
   let isTrackingTimerActive = $state(false);
   let trackingTimeout: ReturnType<typeof setTimeout>;
 
-  // ─── Shared video state ─────────────────────────────────────────────────
-  let currentTime = $state(0);
-  let duration = $state(0);
+  // ── Derived track selection ────────────────────────────────────────────────
+  let SelectedSub = $derived(animeData?.subtitles.find((x) => x.selected));
+  let SelectedAudio = $derived(animeData?.audio_tracks.find((x) => x.selected));
 
-  // ─── Player state ───────────────────────────────────────────────────────
-  let hlsInstance: Hls | undefined;
-  let videoElement: HTMLVideoElement;
-  let playerContainer: HTMLDivElement;
-  let paused = $state(true);
-  let volume = $state(1);
-  let isMuted = $state(false);
-  let SettingsOpen = $state(false);
-  let animeData = $state<mpv.FrontendPayload | undefined>(undefined);
-  let metadataInterval: ReturnType<typeof setInterval>;
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  onMount(() => {
+    // Theatre mode: make the native MPV render layer visible through the app.
+    document.documentElement.classList.add("theater-mode");
+    startMetadataPolling();
+    if (isLoggedIn && animeId && playingEpisode) resetTracker();
+  });
 
-  // ─── Idle / auto-hide cursor ────────────────────────────────────────────
-  let isIdle = $state(false);
-  let idleTimeout: ReturnType<typeof setTimeout>;
+  onDestroy(() => {
+    // Restore normal app backgrounds.
+    document.documentElement.classList.remove("theater-mode");
+    clearInterval(metadataInterval);
+    clearTimeout(idleTimeout);
+    clearTimeout(trackingTimeout);
+    // Note: StopStream() is intentionally NOT called here.
+    // Stream lifecycle belongs to TheaterView.svelte.
+  });
 
-  function handleMouseMove() {
+  // ── Metadata polling ───────────────────────────────────────────────────────
+  // Replaces the <video> element's timeupdate / volumechange / pause events.
+  function startMetadataPolling(): void {
+    clearInterval(metadataInterval);
+    metadataInterval = setInterval(async () => {
+      try {
+        const data = await GetMpvMetadata();
+        if (!data) return;
+        animeData = data;
+        duration = data.duration;
+        currentTime = data.time_pos;
+        paused = data.paused;
+        isMuted = data.muted;
+        volume = data.volume / 100; // MPV 0–100 → UI 0–1
+      } catch {
+        /* MPV IPC not yet ready — silently retry next tick */
+      }
+    }, 500);
+  }
+
+  // ── Idle / cursor autohide ────────────────────────────────────────────────
+  function handlePointerMove(): void {
     isIdle = false;
     clearTimeout(idleTimeout);
-    if (!paused && !SettingsOpen) {
+    if (!paused && !settingsOpen) {
       idleTimeout = setTimeout(() => {
         isIdle = true;
       }, 2500);
     }
   }
 
-  function handleMouseLeave() {
-    if (!paused && !SettingsOpen) {
+  function handlePointerLeave(): void {
+    if (!paused && !settingsOpen) {
       isIdle = true;
       clearTimeout(idleTimeout);
     }
   }
 
-  // ─── Derived track selection ────────────────────────────────────────────
-  let SelectedSub = $derived(animeData?.subtitles.find((x) => x.selected));
-  let SelectedAudio = $derived(animeData?.audio_tracks.find((x) => x.selected));
+  // ── Playback control callbacks ─────────────────────────────────────────────
+  // Each handler updates local state optimistically so the UI responds instantly,
+  // then fires the IPC command.  If the command fails it reverts.
 
-  // ─── AniList: reset tracker when episode changes ────────────────────────
-  $effect(() => {
-    if (isLoggedIn && animeId && playingEpisode) {
-      resetTracker();
+  async function handleToggle(): Promise<void> {
+    paused = !paused;
+    await ToggleMPV().catch(() => {
+      paused = !paused;
+    });
+  }
+
+  async function handleSeek(seconds: number): Promise<void> {
+    currentTime = seconds;
+    await SeekMPV(seconds).catch(console.error);
+  }
+
+  async function handleVolumeChange(vol01: number): Promise<void> {
+    volume = vol01;
+    await SetVolumeMPV(Math.round(vol01 * 100)).catch(console.error);
+  }
+
+  async function handleMuteToggle(): Promise<void> {
+    isMuted = !isMuted;
+    await ToggleMuteMPV().catch(() => {
+      isMuted = !isMuted;
+    });
+  }
+
+  async function handleFullscreen(): Promise<void> {
+    // ToggleFullscreen() is a void Go function; no return value to handle.
+    await ToggleFullscreen().catch(console.error);
+  }
+
+  // ── Track changes — pure IPC, no MPV restart required ─────────────────────
+  // This replaces the old ChangeTrackAndRestart() which had to tear down and
+  // rebuild the entire HLS pipeline whenever the user switched subtitle/audio.
+  async function handleTrackChange(sid: string, aid: string): Promise<void> {
+    try {
+      await SetSubtitleMPV(sid);
+      await SetAudioTrackMPV(aid);
+    } catch (err) {
+      console.error("Track change IPC failed:", err);
     }
+  }
+
+  // ── Back button ────────────────────────────────────────────────────────────
+  function handleBack(): void {
+    clearTimeout(trackingTimeout);
+    // Scrobble on exit if the 90 % threshold was already met but the
+    // 5-second confirmation timer hadn't fired yet.
+    if (
+      isLoggedIn &&
+      !hasScrobbled &&
+      duration > 0 &&
+      playingEpisode > currentProgress &&
+      currentTime / duration >= 0.9
+    ) {
+      void triggerAniListUpdate();
+    }
+    onBack?.();
+  }
+
+  // ── AniList 90 % threshold tracking ───────────────────────────────────────
+  $effect(() => {
+    if (isLoggedIn && animeId && playingEpisode) resetTracker();
   });
 
   async function resetTracker(): Promise<void> {
@@ -92,20 +212,15 @@
     try {
       currentProgress = await GetAnimeProgress(animeId);
     } catch (err) {
-      console.error("Failed to fetch progress:", err);
+      console.error("Failed to fetch AniList progress:", err);
     }
   }
 
-  // ─── AniList: 90 % threshold tracking ───────────────────────────────────
-  // NOTE: We do NOT return a cleanup here on purpose. The cleanup would fire
-  // every second (on each currentTime tick) and cancel the pending timeout
-  // before it ever fires. Cleanup is handled explicitly in onDestroy and
-  // handleBack instead.
+  // Note: no cleanup returned here intentionally — see VideoPlayer.svelte
+  // comments in the original codebase for the reasoning.
   $effect(() => {
     if (duration <= 0 || hasScrobbled) return;
-
     const pct = currentTime / duration;
-
     if (pct >= 0.9) {
       if (!isTrackingTimerActive && playingEpisode > currentProgress) {
         isTrackingTimerActive = true;
@@ -130,226 +245,101 @@
     }
   }
 
-  function handleBack(): void {
-    clearTimeout(trackingTimeout);
-    // Scrobble on the way out if the threshold was met but timer hadn't fired yet
-    if (
-      isLoggedIn &&
-      !hasScrobbled &&
-      duration > 0 &&
-      playingEpisode > currentProgress &&
-      currentTime / duration >= 0.9
-    ) {
-      triggerAniListUpdate();
-    }
-    onBack?.();
-  }
-
-  // ─── Metadata polling ───────────────────────────────────────────────────
-  async function fetchMetadata(): Promise<void> {
-    try {
-      const data = await GetMpvMetadata();
-      if (data?.duration > 0) {
-        animeData = data;
-        duration = data.duration;
-      }
-    } catch {
-      /* backend not ready yet — silently retry next tick */
-    }
-  }
-
-  // FIX: extracted helper so both onMount and handleTrackChange use the
-  //      exact same loop setup (previously handleTrackChange was missing
-  //      the checkAuthStatus call from the original interval).
-  function startMetadataLoop(): void {
-    clearInterval(metadataInterval);
-    metadataInterval = setInterval(fetchMetadata, 1000);
-  }
-
-  // ─── HLS player ─────────────────────────────────────────────────────────
-  function initPlayer(): void {
-    if (!streamUrl || !videoElement) return;
-    hlsInstance?.destroy();
-
-    if (Hls.isSupported()) {
-      hlsInstance = new Hls({
-        maxBufferLength: 10,
-        liveSyncDurationCount: 1,
-        manifestLoadingMaxRetry: 10,
-        manifestLoadingRetryDelay: 500,
-        fragLoadingMaxRetry: 10,
-        fragLoadingRetryDelay: 500,
-      });
-
-      hlsInstance.loadSource(streamUrl);
-      hlsInstance.attachMedia(videoElement);
-
-      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-        // FIX: set currentTime before autoplay; was calling attemptAutoplay() twice
-        if (videoElement) videoElement.currentTime = 0;
-        attemptAutoplay();
-      });
-
-      hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
-        if (!data.fatal) return;
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR)
-          setTimeout(() => hlsInstance?.startLoad(), 1000);
-        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR)
-          hlsInstance?.recoverMediaError();
-        else initPlayer();
-      });
-    } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-      videoElement.src = streamUrl;
-    }
-  }
-
-  // FIX: handleTrackChange now restarts the loop even on error, and uses
-  //      startMetadataLoop() instead of an inline setInterval.
-  async function handleTrackChange(sid: string, aid: string): Promise<void> {
-    const savedTime = currentTime;
-    clearInterval(metadataInterval);
-    try {
-      await ChangeTrackAndRestart(savedTime, sid, aid);
-    } catch (err) {
-      console.error("Failed to change tracks:", err);
-    } finally {
-      // Always restart the loop regardless of success/failure
-      startMetadataLoop();
-      initPlayer();
-    }
-  }
-
-  $effect(() => {
-    if (streamUrl && videoElement) initPlayer();
-  });
-
-  function toggleFullscreen(): void {
-    if (!document.fullscreenElement)
-      playerContainer.requestFullscreen().catch(console.error);
-    else document.exitFullscreen();
-  }
-
-  async function attemptAutoplay(): Promise<void> {
-    try {
-      await videoElement.play();
-      currentTime = 0;
-      paused = false;
-    } catch {
-      try {
-        videoElement.muted = true;
-        isMuted = true;
-        await videoElement.play();
-        currentTime = 0;
-        paused = false;
-        setTimeout(() => {
-          videoElement.muted = false;
-          isMuted = false;
-        }, 300);
-      } catch {
-        paused = true;
-      }
-    }
-  }
-
-  // FIX: clamp volume to [0, 1] — previously arrow keys could push it out of range
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   function handleKeyDown(event: KeyboardEvent): void {
     const tag = (event.target as HTMLElement).tagName;
-    if (
-      tag === "INPUT" ||
-      tag === "TEXTAREA" ||
-      (event.target as HTMLElement).isContentEditable
-    )
-      return;
-
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
     switch (event.key) {
       case " ":
         event.preventDefault();
-        paused = !paused;
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        volume = Math.min(1, volume + 0.1);
-        break;
-      case "ArrowDown":
-        event.preventDefault();
-        volume = Math.max(0, volume - 0.1);
+        void handleToggle();
         break;
       case "ArrowLeft":
         event.preventDefault();
-        currentTime -= 5;
+        void handleSeek(Math.max(0, currentTime - 5));
         break;
       case "ArrowRight":
         event.preventDefault();
-        currentTime += 5;
+        void handleSeek(Math.min(duration, currentTime + 5));
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        void handleVolumeChange(Math.min(1, volume + 0.1));
+        break;
+      case "ArrowDown":
+        event.preventDefault();
+        void handleVolumeChange(Math.max(0, volume - 0.1));
+        break;
+      case "Escape":
+        handleBack();
         break;
     }
   }
-
-  onMount(() => {
-    startMetadataLoop();
-  });
-
-  onDestroy(() => {
-    clearInterval(metadataInterval);
-    // FIX: trackingTimeout was never cleared here — could fire on dead state after unmount
-    clearTimeout(trackingTimeout);
-    clearTimeout(idleTimeout);
-    hlsInstance?.destroy();
-    StopStream().catch(console.warn);
-  });
 </script>
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="flex flex-col space-y-4 w-full">
-  <VideoHeader {playingEpisode} onBack={handleBack} />
+<!--
+  ═══════════════════════════════════════════════════════════════
+  THE GLASS PANE
+  ═══════════════════════════════════════════════════════════════
+  fixed inset-0 z-[100]:
+    Covers the entire viewport including NavBar (z-50).
+    Higher z-index wins; NavBar input is intentionally blocked in theater mode.
 
+  background: transparent:
+    This is the critical property.  The OS compositor shows whatever is below
+    the WebView where no opaque Svelte element is rendered.  In theater mode
+    that "below" layer is the native MPV video surface embedded via --wid.
+
+  cursor-none when idle:
+    Hides the OS cursor so the video fills without distraction.
+  ═══════════════════════════════════════════════════════════════
+-->
+<div
+  class="fixed inset-0 z-100 select-none {isIdle ? 'cursor-none' : ''}"
+  style="background: transparent;"
+  onpointermove={handlePointerMove}
+  onpointerleave={handlePointerLeave}
+  role="region"
+  aria-label="Video player controls"
+>
+  <!-- ── Top scrim + header ──────────────────────────────────────────────── -->
   <div
-    bind:this={playerContainer}
-    onpointermove={handleMouseMove}
-    onpointerleave={handleMouseLeave}
-    aria-label="video-player"
-    role="dialog"
-    tabindex="0"
-    class="relative w-full aspect-video bg-black rounded-xl overflow-hidden
-           border border-zinc-800 shadow-2xl
-           {isIdle ? 'cursor-none' : ''}"
+    class="absolute top-0 left-0 right-0 p-5 player-top-scrim
+           transition-opacity duration-300
+           {isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}"
   >
-    {#if isLoggedIn}
-      <TrackingOverlay {hasScrobbled} {isTrackingTimerActive} />
-    {/if}
-
-    <video
-      bind:this={videoElement}
-      bind:paused
-      bind:currentTime
-      bind:volume
-      bind:muted={isMuted}
-      onclick={() => (paused = !paused)}
-      preload="none"
-      crossorigin="anonymous"
-      class="w-full h-full object-contain cursor-default"
-    >
-      <track kind="captions" />
-    </video>
-
-    <VideoControls
-      bind:paused
-      bind:currentTime
-      {duration}
-      bind:volume
-      bind:isMuted
-      bind:SettingsOpen
-      onFullscreen={toggleFullscreen}
-      {isIdle}
-    />
-
-    <VideoSettings
-      bind:SettingsOpen
-      {animeData}
-      {SelectedSub}
-      {SelectedAudio}
-      OnTrackChange={handleTrackChange}
-    />
+    <VideoHeader {playingEpisode} onBack={handleBack} />
   </div>
+
+  <!-- ── AniList scrobble notification (top-right) ──────────────────────── -->
+  {#if isLoggedIn}
+    <TrackingOverlay {hasScrobbled} {isTrackingTimerActive} />
+  {/if}
+
+  <!-- ── Settings panel (floats above controls bar) ─────────────────────── -->
+  <VideoSettings
+    bind:SettingsOpen={settingsOpen}
+    {animeData}
+    {SelectedSub}
+    {SelectedAudio}
+    OnTrackChange={handleTrackChange}
+  />
+
+  <!-- ── Bottom controls (seek bar + transport + volume + settings) ─────── -->
+  <VideoControls
+    {paused}
+    {currentTime}
+    {duration}
+    {volume}
+    {isMuted}
+    {isIdle}
+    bind:settingsOpen
+    onToggle={handleToggle}
+    onSeek={handleSeek}
+    onVolumeChange={handleVolumeChange}
+    onMuteToggle={handleMuteToggle}
+    onFullscreen={handleFullscreen}
+  />
 </div>

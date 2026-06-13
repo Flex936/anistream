@@ -5,8 +5,6 @@ import {mpv} from '../models';
 import {config} from '../models';
 import {anilist} from '../models';
 
-export function ChangeTrackAndRestart(arg1:number,arg2:string,arg3:string):Promise<void>;
-
 export function GetAV1Enabled():Promise<boolean>;
 
 export function GetAnimeProgress(arg1:number):Promise<number>;
@@ -37,13 +35,31 @@ export function LoginWithAniList():Promise<string>;
 
 export function Logout():Promise<void>;
 
+export function PauseMPV():Promise<void>;
+
+export function PlayMPV():Promise<void>;
+
 export function SearchAnime(arg1:string):Promise<Array<anilist.Anime>>;
+
+export function SeekMPV(arg1:number):Promise<void>;
 
 export function SendMpvCommand(arg1:Array<any>):Promise<void>;
 
+export function SetAudioTrackMPV(arg1:string):Promise<void>;
+
+export function SetSubtitleMPV(arg1:string):Promise<void>;
+
+export function SetVolumeMPV(arg1:number):Promise<void>;
+
 export function StopStream():Promise<void>;
 
-export function StreamTorrent(arg1:string):Promise<string>;
+export function StreamTorrent(arg1:string):Promise<void>;
+
+export function ToggleFullscreen():Promise<void>;
+
+export function ToggleMPV():Promise<void>;
+
+export function ToggleMuteMPV():Promise<void>;
 
 export function UpdateAV1Enabled(arg1:boolean):Promise<void>;
 

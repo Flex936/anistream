@@ -3,30 +3,24 @@
 package mpv
 
 import (
+	"fmt"
 	"net"
-	"os/exec"
-	"strconv"
+	"time"
 
 	"gopkg.in/natefinch/npipe.v2"
 )
 
-// GetIpcArg returns the mpv flag for Windows named pipes.
+const pipeName = `\\.\pipe\anistream_mpv_ipc`
+
+// GetIpcArg returns the MPV argument for creating the IPC socket.
 func GetIpcArg() string {
-	return `--input-ipc-server=\\.\pipe\mpv-pipe`
+	return fmt.Sprintf("--input-ipc-server=%s", pipeName)
 }
 
-// CleanupIpc is a no-op on Windows; named pipes are self-cleaning.
+// CleanupIpc is a no-op on Windows; named pipes clean up automatically.
 func CleanupIpc() {}
 
-// DialMpv connects to the running mpv IPC server via a named pipe.
+// DialMpv connects to the running MPV instance via Windows Named Pipe.
 func DialMpv() (net.Conn, error) {
-	return npipe.Dial(`\\.\pipe\mpv-pipe`)
-}
-
-// killProcess terminates the entire process tree on Windows.
-// taskkill /T is required because mpv may spawn FFmpeg child processes.
-func killProcess(cmd *exec.Cmd) error {
-	return exec.Command(
-		"taskkill", "/F", "/T", "/PID", strconv.Itoa(cmd.Process.Pid),
-	).Run()
+	return npipe.DialTimeout(pipeName, 2*time.Second)
 }

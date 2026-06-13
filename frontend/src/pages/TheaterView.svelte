@@ -27,10 +27,18 @@
   let isStartingStream = $state(false);
   let loadingEpisode = $state(0);
   let playingEpisode = $state(0);
-  let streamUrl = $state<string | null>(null);
-  let fetchedTorrents = $state<scraper.TorrentResult[]>([]);
 
-  // Generation counter invalidates stale async results after navigation
+  // ── Stream state ────────────────────────────────────────────────────────────
+  // Old architecture: streamUrl (string | null) — the HLS manifest URL returned
+  //   by StreamTorrent was handed to hls.js which played it in a <video> element.
+  //
+  // New architecture: isStreaming (boolean) — StreamTorrent no longer returns a
+  //   URL because there is no HLS manifest.  MPV plays the torrent natively via
+  //   --wid.  When isStreaming = true, VideoPlayer mounts as a fixed full-screen
+  //   transparent overlay; MPV's render layer shows through behind it.
+  let isStreaming = $state(false);
+
+  let fetchedTorrents = $state<scraper.TorrentResult[]>([]);
   let scrapingGen = 0;
 
   let availableEpisodes = $derived.by(() => {
@@ -40,12 +48,13 @@
     return anime.episodes || 0;
   });
 
-  // Simplified: state cleanup is handled by unmounting; StopStream is in onDestroy.
+  // ── Navigation ─────────────────────────────────────────────────────────────
   function goBack(): void {
     scrapingGen++;
     onBack();
   }
 
+  // ── Torrent scraping ────────────────────────────────────────────────────────
   async function handleFetchTorrents(epNum: number): Promise<void> {
     const title = anime.title?.romaji || anime.title?.english || "";
     if (!title) return;
@@ -59,36 +68,58 @@
       const results = await GetEpisodeTorrents(title, epNum);
       if (gen === scrapingGen) fetchedTorrents = results || [];
     } catch (err) {
-      if (gen === scrapingGen) alert(`Error: ${err}`);
+      if (gen === scrapingGen) alert(`Error fetching torrents: ${err}`);
     } finally {
       if (gen === scrapingGen) isScraping = false;
     }
   }
 
+  // ── Stream start ────────────────────────────────────────────────────────────
   async function handleStartStream(magnet: string): Promise<void> {
     isStartingStream = true;
     try {
-      const url = await StreamTorrent(magnet);
+      // StreamTorrent now returns void (error becomes a rejected Promise).
+      // It: (1) starts the torrent, (2) launches MPV with --wid, (3) waits for
+      // the IPC socket to be ready before resolving.
+      await StreamTorrent(magnet);
       playingEpisode = loadingEpisode;
-      streamUrl = url;
+      isStreaming = true;
     } catch (err) {
-      alert(`Failed to connect to peers.\n${err}`);
+      alert(`Failed to start stream.\n${err}`);
     } finally {
       isStartingStream = false;
     }
   }
 
-  // StopStream is called here (not inside VideoPlayer) so it fires on any
-  // navigation event — including NavBar home/search — not just explicit back presses.
+  // ── Stream stop — called by VideoPlayer's back button ──────────────────────
+  async function handleStopStream(): Promise<void> {
+    isStreaming = false; // unmounts VideoPlayer overlay first
+    playingEpisode = 0;
+    await StopStream().catch(console.warn);
+    // Return to torrent list so the user can pick a different release.
+  }
+
+  // ── Cleanup on navigation away from TheaterView ────────────────────────────
+  // This fires when the user navigates to Discovery or Watchlist while a stream
+  // is active — VideoPlayer's own onDestroy does NOT call StopStream() so the
+  // two paths don't race.
   onDestroy(() => {
     scrapingGen++;
     StopStream().catch(console.warn);
   });
 </script>
 
+<!--
+  Theater layout:
+    • Normal mode:  sidebar + episode/torrent list (standard flex layout).
+    • Streaming:    VideoPlayer mounts as a fixed inset-0 z-[100] glass pane.
+      The sidebar and lists remain mounted in the DOM but are fully covered by
+      the transparent overlay; MPV's native video layer shows through behind it.
+-->
 <div
   class="flex-1 p-8 max-w-7xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500"
 >
+  <!-- Back to discovery -->
   <button
     onclick={goBack}
     class="flex items-center space-x-2 text-muted hover:text-main transition-colors mb-8 group"
@@ -104,18 +135,7 @@
     <AnimeDetailsSidebar {anime} />
 
     <div class="w-full md:w-2/3 lg:w-3/4 flex flex-col min-h-[500px]">
-      {#if streamUrl}
-        <VideoPlayer
-          {streamUrl}
-          {playingEpisode}
-          animeId={anime.id}
-          {isLoggedIn}
-          onBack={() => {
-            streamUrl = null;
-            playingEpisode = 0;
-          }}
-        />
-      {:else if fetchedTorrents.length > 0}
+      {#if fetchedTorrents.length > 0}
         <TorrentList
           {fetchedTorrents}
           {loadingEpisode}
@@ -138,3 +158,17 @@
     </div>
   </div>
 </div>
+
+<!--
+  VideoPlayer is rendered OUTSIDE the content flex container so that its
+  fixed positioning is relative to the viewport, not a positioned ancestor.
+  It only mounts when isStreaming = true.
+-->
+{#if isStreaming}
+  <VideoPlayer
+    {playingEpisode}
+    animeId={anime.id}
+    {isLoggedIn}
+    onBack={handleStopStream}
+  />
+{/if}

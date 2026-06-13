@@ -211,6 +211,10 @@ export namespace mpv {
 	}
 	export class FrontendPayload {
 	    duration: number;
+	    time_pos: number;
+	    paused: boolean;
+	    volume: number;
+	    muted: boolean;
 	    audio_tracks: MpvTrack[];
 	    subtitles: MpvTrack[];
 	    chapters: MpvChapter[];
@@ -222,6 +226,10 @@ export namespace mpv {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.duration = source["duration"];
+	        this.time_pos = source["time_pos"];
+	        this.paused = source["paused"];
+	        this.volume = source["volume"];
+	        this.muted = source["muted"];
 	        this.audio_tracks = this.convertValues(source["audio_tracks"], MpvTrack);
 	        this.subtitles = this.convertValues(source["subtitles"], MpvTrack);
 	        this.chapters = this.convertValues(source["chapters"], MpvChapter);
