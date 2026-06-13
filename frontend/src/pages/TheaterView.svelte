@@ -77,15 +77,14 @@
   // ── Stream start ────────────────────────────────────────────────────────────
   async function handleStartStream(magnet: string): Promise<void> {
     isStartingStream = true;
+    playingEpisode = loadingEpisode;
+    isStreaming = true;
+
     try {
-      // StreamTorrent now returns void (error becomes a rejected Promise).
-      // It: (1) starts the torrent, (2) launches MPV with --wid, (3) waits for
-      // the IPC socket to be ready before resolving.
       await StreamTorrent(magnet);
-      playingEpisode = loadingEpisode;
-      isStreaming = true;
     } catch (err) {
       alert(`Failed to start stream.\n${err}`);
+      isStreaming = false;
     } finally {
       isStartingStream = false;
     }
@@ -169,6 +168,7 @@
     {playingEpisode}
     animeId={anime.id}
     {isLoggedIn}
+    isLoading={isStartingStream}
     onBack={handleStopStream}
   />
 {/if}

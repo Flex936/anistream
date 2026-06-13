@@ -24,6 +24,7 @@
    */
 
   import { onMount, onDestroy } from "svelte";
+  import { LoaderCircle } from "@lucide/svelte";
   import {
     GetAnimeProgress,
     UpdateAnimeProgress,
@@ -48,11 +49,13 @@
     playingEpisode,
     animeId,
     isLoggedIn = false,
+    isLoading = false,
     onBack,
   }: {
     playingEpisode: number;
     animeId: number;
     isLoggedIn?: boolean;
+    isLoading?: boolean;
     onBack?: () => void;
   } = $props();
 
@@ -297,18 +300,31 @@
   ═══════════════════════════════════════════════════════════════
 -->
 <div
-  class="fixed inset-0 z-100 select-none {isIdle ? 'cursor-none' : ''}"
+  class="fixed inset-0 z-[100] select-none {isIdle ? 'cursor-none' : ''}"
   style="background: transparent;"
   onpointermove={handlePointerMove}
   onpointerleave={handlePointerLeave}
   role="region"
   aria-label="Video player controls"
 >
-  <!-- ── Top scrim + header ──────────────────────────────────────────────── -->
+  {#if isLoading || !animeData}
+    <div
+      class="absolute inset-0 bg-black z-[120] flex flex-col items-center justify-center text-white"
+    >
+      <LoaderCircle class="animate-spin mb-4 text-sky-400" size={48} />
+      <h2 class="text-xl font-bold">Buffering Stream...</h2>
+      <p class="text-zinc-400 mt-2 text-sm">
+        Allocating native MPV surface and connecting to peers
+      </p>
+    </div>
+  {/if}
+
   <div
     class="absolute top-0 left-0 right-0 p-5 player-top-scrim
            transition-opacity duration-300
-           {isIdle ? 'opacity-0 pointer-events-none' : 'opacity-100'}"
+           {isIdle && !isLoading && animeData
+      ? 'opacity-0 pointer-events-none'
+      : 'opacity-100'}"
   >
     <VideoHeader {playingEpisode} onBack={handleBack} />
   </div>

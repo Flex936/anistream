@@ -19,6 +19,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -103,6 +105,23 @@ func (e *Engine) Play(streamURL string, startTime float64) error {
 	e.cmd = cmd
 	log.Printf("[MPV Engine] Started PID=%d  wid=0x%x  url=%s",
 		cmd.Process.Pid, surface, streamURL)
+
+	if runtime.GOOS == "linux" {
+		go func(pid int) {
+			// MPV creates its X11 window a fraction of a second after starting.
+			// In X11, newer siblings are placed on top. We must push MPV to the
+			// bottom of the Z-stack so the WebKitGTK glass UI remains clickable.
+			for i := 0; i < 30; i++ {
+				time.Sleep(100 * time.Millisecond)
+				out, err := exec.Command("xdotool", "search", "--pid", fmt.Sprint(pid)).Output()
+				if err == nil && len(strings.TrimSpace(string(out))) > 0 {
+					_ = exec.Command("xdotool", "search", "--pid", fmt.Sprint(pid), "windowlower").Run()
+					log.Println("[MPV Engine] Linux Z-Order fix applied (MPV pushed behind UI).")
+					break
+				}
+			}
+		}(cmd.Process.Pid)
+	}
 
 	// Reap the process in the background so Wait() never blocks Stop().
 	go func() {
