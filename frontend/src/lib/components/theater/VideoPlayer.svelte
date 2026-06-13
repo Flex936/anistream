@@ -44,6 +44,7 @@
     levelLoadingMaxRetry: 999,
     fragLoadingRetryDelay: 100,
     manifestLoadingRetryDelay: 1000,
+    startPosition: 0,
   };
 
   // ==========================================
