@@ -173,13 +173,57 @@
 
     if (Hls.isSupported()) {
       hlsInstance = new Hls({
-        maxBufferLength: 10,
-        liveSyncDurationCount: 1,
+        startPosition: 0,
+        liveMaxLatencyDurationCount: 99999,
+        maxBufferLength: 30,
+        liveSyncDurationCount: 3,
         manifestLoadingMaxRetry: 10,
         manifestLoadingRetryDelay: 500,
         fragLoadingMaxRetry: 10,
-        fragLoadingRetryDelay: 500,
+        fragLoadingRetryDelay: 100,
       });
+      // ── Diagnostics ─────────────────────────────────────────────────────
+      // Remove this block once the stutter is confirmed fixed.
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_e, data) => {
+        const details = data.levels[0]?.details;
+        console.log("[HLS] manifest parsed", {
+          live: details?.live,
+          fragments: details?.fragments?.length,
+          liveSyncPosition: hlsInstance?.liveSyncPosition,
+          startPosition: hlsInstance?.startPosition,
+        });
+      });
+      hlsInstance.on(Hls.Events.FRAG_CHANGED, (_e, data) => {
+        console.log(
+          `[HLS] frag → start:${data.frag.start.toFixed(2)}s sn:${data.frag.sn}`,
+        );
+      });
+      hlsInstance.on(Hls.Events.BUFFER_FLUSHING, (_e, data) => {
+        console.log(
+          `[HLS] buffer flush [${data.startOffset}–${data.endOffset}]`,
+        );
+      });
+      videoElement.addEventListener("seeking", () =>
+        console.log(
+          `[Video] seeking → ${videoElement.currentTime.toFixed(3)}s`,
+        ),
+      );
+      videoElement.addEventListener("seeked", () =>
+        console.log(
+          `[Video] seeked  → ${videoElement.currentTime.toFixed(3)}s`,
+        ),
+      );
+      videoElement.addEventListener("waiting", () =>
+        console.log(
+          `[Video] waiting  @ ${videoElement.currentTime.toFixed(3)}s`,
+        ),
+      );
+      videoElement.addEventListener("stalled", () =>
+        console.log(
+          `[Video] stalled  @ ${videoElement.currentTime.toFixed(3)}s`,
+        ),
+      );
+      // ── End diagnostics ──────────────────────────────────────────────────
 
       hlsInstance.loadSource(streamUrl);
       hlsInstance.attachMedia(videoElement);

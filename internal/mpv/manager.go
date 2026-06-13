@@ -123,7 +123,7 @@ func (m *Manager) StartTranscode(
 
 	if err := m.poll(ctx, 60*time.Second, "first .m4s segment", func() bool {
 		segs, _ := filepath.Glob(filepath.Join(HLSOutputDir, "*.m4s"))
-		return len(segs) > 0
+		return len(segs) > 3
 	}); err != nil {
 		m.Stop()
 		return err
