@@ -7,8 +7,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"anistream/internal/anilist"
 	"anistream/internal/config"
@@ -100,12 +103,18 @@ func (a *App) getCtx() context.Context {
 
 // ── HTTP server ──────────────────────────────────────────────────────────────
 
+type dynamicHLSDir struct{}
+
+func (d dynamicHLSDir) Open(name string) (http.File, error) {
+	return http.Dir(mpv.HLSOutputDir).Open(name)
+}
+
 func (a *App) buildHTTPServer() *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stream", a.streamHandler)
 	mux.HandleFunc("/anime-data", a.metadataHandler)
 
-	fileServer := http.FileServer(http.Dir(mpv.HLSOutputDir))
+	fileServer := http.FileServer(dynamicHLSDir{})
 	hlsStripped := http.StripPrefix("/hls/", fileServer)
 	mux.Handle("/hls/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -310,4 +319,32 @@ func (a *App) UpdateUpscaleResolution(res config.Resolution) error {
 	cfg := config.Load()
 	cfg.UpscaleResolution = res
 	return config.Save(cfg)
+}
+func (a *App) OpenDirectoryDialog() (string, error) {
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Download Destination",
+	})
+}
+
+func (a *App) UpdateDownloadFolder(dir string) error {
+	if dir == "" {
+		return nil
+	}
+	cfg := config.Load()
+	cfg.DownloadDir = dir
+	if err := config.Save(cfg); err != nil {
+		return err
+	}
+
+	// Safely clean up any active stream and delete the old tmp folders
+	// BEFORE we update the underlying paths.
+	a.StopStream()
+
+	a.torrent.SetDataDir(filepath.Join(dir, "tmp_downloads"))
+	mpv.HLSOutputDir = filepath.Join(dir, "tmp_hls")
+	return nil
+}
+
+func (a *App) GetFolder() string {
+	return config.Load().DownloadDir
 }

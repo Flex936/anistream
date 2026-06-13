@@ -15,6 +15,8 @@ export function GetEcchiFilter():Promise<boolean>;
 
 export function GetEpisodeTorrents(arg1:string,arg2:number):Promise<Array<scraper.TorrentResult>>;
 
+export function GetFolder():Promise<string>;
+
 export function GetMpvMetadata():Promise<mpv.FrontendPayload>;
 
 export function GetOpusEnabled():Promise<boolean>;
@@ -37,6 +39,8 @@ export function LoginWithAniList():Promise<string>;
 
 export function Logout():Promise<void>;
 
+export function OpenDirectoryDialog():Promise<string>;
+
 export function SearchAnime(arg1:string):Promise<Array<anilist.Anime>>;
 
 export function SendMpvCommand(arg1:Array<any>):Promise<void>;
@@ -48,6 +52,8 @@ export function StreamTorrent(arg1:string):Promise<string>;
 export function UpdateAV1Enabled(arg1:boolean):Promise<void>;
 
 export function UpdateAnimeProgress(arg1:number,arg2:number):Promise<void>;
+
+export function UpdateDownloadFolder(arg1:string):Promise<void>;
 
 export function UpdateEcchiFilter(arg1:boolean):Promise<void>;
 

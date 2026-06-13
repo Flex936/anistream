@@ -18,7 +18,7 @@ import (
 
 // HLSOutputDir is the working directory for live HLS segments.
 // Exported so that app.go can delete it during StopStream / shutdown.
-const HLSOutputDir = "./tmp_hls"
+var HLSOutputDir = filepath.Join(config.Load().DownloadDir, "tmp_hls")
 
 // Manager owns the lifecycle of the background mpv transcode process.
 type Manager struct {

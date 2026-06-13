@@ -1,10 +1,13 @@
 <script lang="ts">
   import ToggleSwitch from "$lib/components/ui/ToggleSwitch.svelte";
+  import { FolderOpen } from "@lucide/svelte";
 
   let {
     selectedRes = $bindable(),
     resolutions,
     filterEcchi = $bindable(),
+    chosenPath = $bindable(),
+    changeDownloadFolder,
   } = $props();
 </script>
 
@@ -53,6 +56,32 @@
         <span class="text-xs text-muted">Hide borderline NSFW shows.</span>
       </div>
       <ToggleSwitch bind:checked={filterEcchi} />
+    </div>
+    <div
+      class="pt-6 w-full border-t border-border flex items-center justify-between"
+    >
+      <div>
+        <span
+          class="text-sm font-semibold text-main uppercase tracking-wider block"
+          >Download Directory</span
+        >
+        <span class="text-xs text-muted"
+          >Change your temporary downloads folder</span
+        >
+        <div class="relative flex items-center pt-6">
+          <button
+            class="absolute left-3 top-6 h-4 w-4 text-muted/70 hover:cursor-pointer"
+            onclick={() => changeDownloadFolder()}
+          >
+            <FolderOpen class="absolute" />
+          </button>
+          <input
+            type="text"
+            bind:value={chosenPath}
+            class="w-full rounded-xl border-2 border-border bg-base py-2 text-center text-sm text-main shadow-sm transition-all placeholder:text-muted/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none invalid:focus:border-red-500 invalid:focus:ring-red-500/70 invalid:border-red-500"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </div>

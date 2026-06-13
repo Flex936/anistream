@@ -6,14 +6,17 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"anistream/internal/config"
 
 	// Alias avoids a package-name collision: this package is also named "torrent".
 	tlib "github.com/anacrolix/torrent"
 )
 
-const dataDir = "./tmp_downloads"
+
 
 // Manager owns a single active torrent stream and its lifecycle.
 type Manager struct {
@@ -23,18 +26,21 @@ type Manager struct {
 	activeTorrent *tlib.Torrent
 	activeFile    *tlib.File
 	cancelStream  context.CancelFunc
+	dataDir       string
 }
 
 func NewManager() (*Manager, error) {
+	dir := filepath.Join(config.Load().DownloadDir, "tmp_downloads")
+
 	cfg := tlib.NewDefaultClientConfig()
-	cfg.DataDir = dataDir
+	cfg.DataDir = dir
 	cfg.NoUpload = true
 	cfg.EstablishedConnsPerTorrent = 100
 	cfg.HalfOpenConnsPerTorrent = 50
 	cfg.TorrentPeersHighWater = 1000
 	cfg.TorrentPeersLowWater = 500
 
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("create torrent data dir: %w", err)
 	}
 
@@ -42,7 +48,38 @@ func NewManager() (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create torrent client: %w", err)
 	}
-	return &Manager{client: client}, nil
+	return &Manager{client: client, dataDir: dir}, nil
+}
+
+// SetDataDir dynamically updates the data directory by recreating the torrent client.
+func (m *Manager) SetDataDir(dir string) error {
+	m.Stop()
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.client.Close()
+	m.dataDir = dir
+
+	cfg := tlib.NewDefaultClientConfig()
+	cfg.DataDir = dir
+	cfg.NoUpload = true
+	cfg.EstablishedConnsPerTorrent = 100
+	cfg.HalfOpenConnsPerTorrent = 50
+	cfg.TorrentPeersHighWater = 1000
+	cfg.TorrentPeersLowWater = 500
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create torrent data dir: %w", err)
+	}
+
+	client, err := tlib.NewClient(cfg)
+	if err != nil {
+		return fmt.Errorf("create torrent client: %w", err)
+	}
+
+	m.client = client
+	return nil
 }
 
 // Stream sets up a new torrent, waits for metadata, selects the largest file,
@@ -53,7 +90,7 @@ func (m *Manager) Stream(magnetLink string) error {
 	m.Stop()
 
 	// Recreate the data dir that Stop() deleted.
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(m.dataDir, 0755); err != nil {
 		return fmt.Errorf("recreate torrent data dir: %w", err)
 	}
 
@@ -151,7 +188,7 @@ func (m *Manager) Stop() {
 	}
 
 	// Safe to delete after Drop() — the client holds no more write handles.
-	if err := os.RemoveAll(dataDir); err != nil {
+	if err := os.RemoveAll(m.dataDir); err != nil {
 		log.Printf("[Torrent] Warning: failed to clean data dir: %v", err)
 	}
 }
@@ -162,7 +199,7 @@ func (m *Manager) Close() {
 	m.Stop()
 	m.client.Close()
 	// Stop() already deleted the data dir; this is a belt-and-suspenders safety net.
-	_ = os.RemoveAll(dataDir)
+	_ = os.RemoveAll(m.dataDir)
 }
 
 // --- helpers ---

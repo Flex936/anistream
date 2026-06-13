@@ -22,6 +22,10 @@ export function GetEpisodeTorrents(arg1, arg2) {
   return window['go']['main']['App']['GetEpisodeTorrents'](arg1, arg2);
 }
 
+export function GetFolder() {
+  return window['go']['main']['App']['GetFolder']();
+}
+
 export function GetMpvMetadata() {
   return window['go']['main']['App']['GetMpvMetadata']();
 }
@@ -66,6 +70,10 @@ export function Logout() {
   return window['go']['main']['App']['Logout']();
 }
 
+export function OpenDirectoryDialog() {
+  return window['go']['main']['App']['OpenDirectoryDialog']();
+}
+
 export function SearchAnime(arg1) {
   return window['go']['main']['App']['SearchAnime'](arg1);
 }
@@ -88,6 +96,10 @@ export function UpdateAV1Enabled(arg1) {
 
 export function UpdateAnimeProgress(arg1, arg2) {
   return window['go']['main']['App']['UpdateAnimeProgress'](arg1, arg2);
+}
+
+export function UpdateDownloadFolder(arg1) {
+  return window['go']['main']['App']['UpdateDownloadFolder'](arg1);
 }
 
 export function UpdateEcchiFilter(arg1) {

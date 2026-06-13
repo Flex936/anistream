@@ -17,6 +17,7 @@ type AppConfig struct {
 	EnableOpus        bool       `json:"enableOpus"`
 	Upscaling         string     `json:"upscaling"`
 	UpscaleResolution Resolution `json:"upscaleResolution"`
+	DownloadDir       string     `json:"downloadDir"`
 }
 
 type Resolution struct {
@@ -47,6 +48,7 @@ func Load() AppConfig {
 			Width:  1920,
 			Height: 1080,
 		},
+		DownloadDir: "./tmp_downloads",
 	}
 
 	data, err := os.ReadFile(getConfigPath())
