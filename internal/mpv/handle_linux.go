@@ -4,6 +4,7 @@ package mpv
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -102,4 +103,56 @@ func getXidWithXprop() (uintptr, error) {
 
 func PrepareVideoSurface(parent uintptr, _, _ int) (uintptr, error) {
 	return parent, nil
+}
+
+// applyLinuxZOrderFix polls for MPV's X11 child window under parentXID and
+// lowers it in the stacking order so the WebKit2GTK surface sits on top.
+// This makes the Svelte glass UI visible over the native video layer.
+func applyLinuxZOrderFix(parentXID uintptr) {
+	// Poll for up to 5 s for MPV to create its child window.
+	deadline := time.Now().Add(5 * time.Second)
+	parentHex := fmt.Sprintf("0x%x", parentXID)
+
+	for time.Now().Before(deadline) {
+		// xdotool search returns child window IDs of the given parent.
+		out, err := exec.Command("xdotool", "search", "--onlyvisible", "--classname", "mpv").Output()
+		if err == nil && len(strings.TrimSpace(string(out))) > 0 {
+			lines := strings.Fields(strings.TrimSpace(string(out)))
+			for _, wid := range lines {
+				// Lower the MPV window so WebKit2GTK sits on top.
+				if err2 := exec.Command("xdotool", "windowlower", wid).Run(); err2 == nil {
+					log.Printf("[MPV Engine] Linux Z-Order fix applied (mpv wid=%s parent=%s).", wid, parentHex)
+					return
+				}
+			}
+		}
+
+		// Fallback: query child windows of the parent XID directly via xwininfo.
+		out2, err2 := exec.Command("xwininfo", "-id", parentHex, "-children").Output()
+		if err2 == nil {
+			for _, line := range strings.Split(string(out2), "\n") {
+				line = strings.TrimSpace(line)
+				if !strings.HasPrefix(line, "0x") {
+					continue
+				}
+				fields := strings.Fields(line)
+				if len(fields) == 0 {
+					continue
+				}
+				child := fields[0]
+				parsed, perr := strconv.ParseUint(strings.TrimPrefix(child, "0x"), 16, 64)
+				if perr != nil {
+					continue
+				}
+				child = fmt.Sprintf("%d", parsed)
+				if err3 := exec.Command("xdotool", "windowlower", child).Run(); err3 == nil {
+					log.Printf("[MPV Engine] Linux Z-Order fix applied via xwininfo (child=%s parent=%s).", child, parentHex)
+					return
+				}
+			}
+		}
+
+		time.Sleep(200 * time.Millisecond)
+	}
+	log.Println("[MPV Engine] Linux Z-Order fix: timed out waiting for MPV child window.")
 }

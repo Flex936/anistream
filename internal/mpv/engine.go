@@ -4,8 +4,6 @@ package mpv
 //
 // Architecture change summary
 // ───────────────────────────
-// Old path:  torrent → HTTP /stream → mpv --stream-record → HLS segments → hls.js <video>
-// New path:  torrent → HTTP /stream → mpv --wid → native OS render layer → glass Svelte UI
 //
 // MPV is launched with --wid=<handle> which embeds its video output directly into the
 // application's native OS window. The Wails WebView (with transparent background) floats
@@ -19,25 +17,33 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"runtime"
-	"strings"
 	"sync"
 	"time"
 )
 
 // Engine owns the lifecycle of the native MPV process embedded via --wid.
 type Engine struct {
-	mu           sync.Mutex
-	cmd          *exec.Cmd
-	cancelFunc   context.CancelFunc
-	windowHandle uintptr
-	windowWidth  int
-	windowHeight int
+	mu               sync.Mutex
+	cmd              *exec.Cmd
+	cancelFunc       context.CancelFunc
+	windowHandle     uintptr
+	windowWidth      int
+	windowHeight     int
+	internalPlayback bool // true = --wid embedded, false = separate window
 }
 
 func NewEngine() *Engine {
 	log.Println("[MPV Engine] Native video engine initialised.")
 	return &Engine{}
+}
+
+// SetInternalPlayback controls whether MPV embeds via --wid (true) or opens its
+// own window (false). Must be called before Play().
+func (e *Engine) SetInternalPlayback(enabled bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.internalPlayback = enabled
+	log.Printf("[MPV Engine] Internal playback = %v", enabled)
 }
 
 // SetWindowHandle stores the native OS window handle and dimensions acquired
@@ -69,25 +75,32 @@ func (e *Engine) Play(streamURL string, startTime float64) error {
 	e.stopLocked()
 	CleanupIpc()
 
-	if e.windowHandle == 0 {
-		return fmt.Errorf(
-			"[MPV Engine] native window handle was not acquired during startup; " +
-				"check AcquireWindowHandle() for your platform")
-	}
+	var surface uintptr
 
-	// PrepareVideoSurface is platform-specific (see handle_*.go):
-	//   Windows → creates a child HWND at HWND_BOTTOM (behind WebView2 sibling)
-	//   macOS   → creates an NSView subview below WKWebView
-	//   Linux   → returns the X11 XID unchanged (MPV creates its own child window)
-	surface, err := PrepareVideoSurface(e.windowHandle, e.windowWidth, e.windowHeight)
-	if err != nil {
-		return fmt.Errorf("prepare video surface: %w", err)
+	if e.internalPlayback {
+		// Internal mode: embed MPV into the application window via --wid.
+		if e.windowHandle == 0 {
+			return fmt.Errorf(
+				"[MPV Engine] native window handle was not acquired during startup; " +
+					"check AcquireWindowHandle() for your platform")
+		}
+
+		// PrepareVideoSurface is platform-specific (see handle_*.go):
+		//   Windows → creates a child HWND at HWND_BOTTOM (behind WebView2 sibling)
+		//   macOS   → creates an NSView subview below WKWebView
+		//   Linux   → returns the X11 XID unchanged (MPV creates its own child window)
+		var err error
+		surface, err = PrepareVideoSurface(e.windowHandle, e.windowWidth, e.windowHeight)
+		if err != nil {
+			return fmt.Errorf("prepare video surface: %w", err)
+		}
 	}
+	// External mode: surface stays 0, --wid is omitted.
 
 	ctx, cancel := context.WithCancel(context.Background())
 	e.cancelFunc = cancel
 
-	args := buildMPVArgs(streamURL, surface, startTime)
+	args := buildMPVArgs(streamURL, surface, startTime, e.internalPlayback)
 
 	// exec.CommandContext: when cancel() is called, the OS sends SIGKILL (Unix)
 	// or TerminateProcess (Windows) to the mpv process — killProcess() also does
@@ -103,24 +116,16 @@ func (e *Engine) Play(streamURL string, startTime float64) error {
 	}
 
 	e.cmd = cmd
-	log.Printf("[MPV Engine] Started PID=%d  wid=0x%x  url=%s",
-		cmd.Process.Pid, surface, streamURL)
 
-	if runtime.GOOS == "linux" {
-		go func(pid int) {
-			// MPV creates its X11 window a fraction of a second after starting.
-			// In X11, newer siblings are placed on top. We must push MPV to the
-			// bottom of the Z-stack so the WebKitGTK glass UI remains clickable.
-			for i := 0; i < 30; i++ {
-				time.Sleep(100 * time.Millisecond)
-				out, err := exec.Command("xdotool", "search", "--pid", fmt.Sprint(pid)).Output()
-				if err == nil && len(strings.TrimSpace(string(out))) > 0 {
-					_ = exec.Command("xdotool", "search", "--pid", fmt.Sprint(pid), "windowlower").Run()
-					log.Println("[MPV Engine] Linux Z-Order fix applied (MPV pushed behind UI).")
-					break
-				}
-			}
-		}(cmd.Process.Pid)
+	if e.internalPlayback {
+		log.Printf("[MPV Engine] Started PID=%d  wid=0x%x  url=%s (internal)",
+			cmd.Process.Pid, surface, streamURL)
+		// On Linux, MPV's child window spawns on top of the WebKit2GTK surface.
+		// Lower it in the stacking order so the Svelte glass UI is visible.
+		go applyLinuxZOrderFix(surface)
+	} else {
+		log.Printf("[MPV Engine] Started PID=%d  url=%s (external window)",
+			cmd.Process.Pid, streamURL)
 	}
 
 	// Reap the process in the background so Wait() never blocks Stop().
@@ -294,34 +299,31 @@ func (e *Engine) GetMetadata() (*FrontendPayload, error) {
 
 // ── MPV argument builder ──────────────────────────────────────────────────────
 
-func buildMPVArgs(url string, wid uintptr, startTime float64) []string {
+func buildMPVArgs(url string, wid uintptr, startTime float64, internal bool) []string {
 	args := []string{
 		url,
-		// Core embedding: attach to the prepared native surface.
-		fmt.Sprintf("--wid=%d", wid),
-		// IPC: all UI interactions go through the socket.
 		GetIpcArg(),
-
-		// Visual: no MPV chrome — the Svelte glass pane is our UI.
-		"--no-border",
 		"--no-osd-bar",
 		"--osd-level=0",
-
-		// Process behaviour.
 		"--really-quiet",
 		"--no-terminal",
-		"--keep-open=yes", // hold last frame; don't exit at EOF
-		"--idle=yes",      // accept IPC commands before a file is loaded
+		"--keep-open=yes",
+		"--idle=yes",
 		"--force-window=yes",
-
-		// Decoding: prefer GPU decode paths; fall back to SW silently.
 		"--hwdec=auto-safe",
-
-		// Input: the glass UI owns all pointer and keyboard interaction.
-		"--no-input-default-bindings",
-		"--input-cursor=no",
-		"--cursor-autohide=no",
 	}
+
+	if internal {
+		// Embedded mode: render inside the application window.
+		args = append(args,
+			fmt.Sprintf("--wid=%d", wid),
+			"--no-border",
+			"--no-input-default-bindings",
+			"--input-cursor=no",
+			"--cursor-autohide=no",
+		)
+	}
+	// External mode: MPV manages its own window. Default keybinds/cursor active.
 
 	if startTime > 0 {
 		args = append(args, fmt.Sprintf("--start=%.3f", startTime))
@@ -337,3 +339,4 @@ func killProcess(cmd *exec.Cmd) error {
 	}
 	return nil
 }
+

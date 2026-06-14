@@ -69,18 +69,22 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.ctxMu.Unlock()
 
-	// Acquire the native OS window handle for MPV --wid embedding.
-	// This is called after Wails has created and shown the window, so the handle
-	// is guaranteed to be valid by the time startup() executes.
-	handle, err := mpv.AcquireWindowHandle()
-	if err != nil {
-		log.Printf("[App] WARNING: could not acquire native window handle: %v", err)
-		log.Printf("[App] Native MPV embedding unavailable; streaming will fail.")
-		return
-	}
-
 	cfg := config.Load()
-	a.mpv.SetWindowHandle(handle, cfg.Width, cfg.Height)
+	a.mpv.SetInternalPlayback(cfg.InternalPlayback)
+
+	// Only acquire the native OS window handle when internal playback is enabled.
+	// External mode doesn't need --wid embedding.
+	if cfg.InternalPlayback {
+		handle, err := mpv.AcquireWindowHandle()
+		if err != nil {
+			log.Printf("[App] WARNING: could not acquire native window handle: %v", err)
+			log.Printf("[App] Native MPV embedding unavailable; streaming will fail.")
+			return
+		}
+		a.mpv.SetWindowHandle(handle, cfg.Width, cfg.Height)
+	} else {
+		log.Println("[App] External playback mode — skipping window handle acquisition.")
+	}
 }
 
 func (a *App) shutdown(_ context.Context) {
@@ -119,12 +123,6 @@ func (a *App) getCtx() context.Context {
 // ── HTTP server ──────────────────────────────────────────────────────────────
 // The server now has a single purpose: serve the active torrent file as a
 // seekable HTTP byte-stream that MPV reads directly.  No HLS file server needed.
-
-type dynamicHLSDir struct{}
-
-func (d dynamicHLSDir) Open(name string) (http.File, error) {
-	return http.Dir(mpv.HLSOutputDir).Open(name)
-}
 
 func (a *App) buildHTTPServer() *http.Server {
 	mux := http.NewServeMux()
@@ -289,35 +287,14 @@ func (a *App) UpdateEcchiFilter(filter bool) error {
 	return config.Save(cfg)
 }
 
-// GetTranscoder / UpdateTranscoder are kept for settings UI compatibility
-// even though the transcoder is no longer used for playback.
-func (a *App) GetTranscoder() string {
+// GetInternalPlayback returns the current internal playback setting.
+func (a *App) GetInternalPlayback() bool { return config.Load().InternalPlayback }
+
+// UpdateInternalPlayback persists the internal playback toggle.
+// Requires an app restart to take effect (window handle acquisition happens at startup).
+func (a *App) UpdateInternalPlayback(enabled bool) error {
 	cfg := config.Load()
-	if cfg.Encoder == "" {
-		return "libx264"
-	}
-	return cfg.Encoder
-}
-
-func (a *App) UpdateTranscoder(encoder string) error {
-	cfg := config.Load()
-	cfg.Encoder = encoder
-	return config.Save(cfg)
-}
-
-func (a *App) GetAV1Enabled() bool { return config.Load().EnableAV1 }
-
-func (a *App) UpdateAV1Enabled(enabled bool) error {
-	cfg := config.Load()
-	cfg.EnableAV1 = enabled
-	return config.Save(cfg)
-}
-
-func (a *App) GetOpusEnabled() bool { return config.Load().EnableOpus }
-
-func (a *App) UpdateOpusEnabled(enabled bool) error {
-	cfg := config.Load()
-	cfg.EnableOpus = enabled
+	cfg.InternalPlayback = enabled
 	return config.Save(cfg)
 }
 
@@ -360,7 +337,6 @@ func (a *App) UpdateDownloadFolder(dir string) error {
 	a.StopStream()
 
 	a.torrent.SetDataDir(filepath.Join(dir, "tmp_downloads"))
-	mpv.HLSOutputDir = filepath.Join(dir, "tmp_hls")
 	return nil
 }
 

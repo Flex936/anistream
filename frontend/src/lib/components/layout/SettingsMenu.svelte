@@ -6,12 +6,8 @@
     UpdateResolution,
     GetEcchiFilter,
     UpdateEcchiFilter,
-    GetTranscoder,
-    UpdateTranscoder,
-    GetAV1Enabled,
-    UpdateAV1Enabled,
-    GetOpusEnabled,
-    UpdateOpusEnabled,
+    GetInternalPlayback,
+    UpdateInternalPlayback,
     GetUpscaleMethod,
     UpdateUpscaleMethod,
     GetUpscaleResolution,
@@ -31,9 +27,7 @@
   let activeTab = $state("general");
   let isSaving = $state(false);
   let filterEcchi = $state(true);
-  let selectedEncoder = $state("libx264");
-  let enableAV1 = $state(false);
-  let enableOpus = $state(false);
+  let internalPlayback = $state(false);
   let upscalingMethod = $state("");
   let chosenPath = $state("");
 
@@ -44,17 +38,7 @@
     { label: "1440p QHD (2560 x 1440)", w: 2560, h: 1440 },
   ];
 
-  const encoders = [
-    { id: "libx264", name: "Software", desc: "Compatible with all." },
-    { id: "h264_nvenc", name: "NVENC", desc: "For NVIDIA cards." },
-    { id: "h264_amf", name: "AMF", desc: "For AMD graphics." },
-    { id: "h264_qsv", name: "QuickSync", desc: "For Intel graphics." },
-    {
-      id: "h264_videotoolbox",
-      name: "Apple Silicon",
-      desc: "For M1/M2/M3 Mac users.",
-    },
-  ];
+
 
   const upscalers = [
     { id: "", name: "None", desc: "Disable upscaling" },
@@ -94,18 +78,8 @@
       if (match) selectedRes = match;
 
       filterEcchi = await GetEcchiFilter();
-      enableAV1 = await GetAV1Enabled();
-      enableOpus = await GetOpusEnabled();
+      internalPlayback = await GetInternalPlayback();
       chosenPath = await GetFolder();
-
-      const savedEncoder = await GetTranscoder();
-      if (savedEncoder.startsWith("av1_")) {
-        selectedEncoder = savedEncoder.replace("av1_", "h264_");
-        enableAV1 = true;
-      } else {
-        selectedEncoder = savedEncoder;
-      }
-
       upscalingMethod = await GetUpscaleMethod();
       const savedUpscaleRes = await GetUpscaleResolution();
       const matchUpscale = targetResolutions.find(
@@ -134,15 +108,7 @@
     try {
       await UpdateResolution(selectedRes.w, selectedRes.h);
       await UpdateEcchiFilter(filterEcchi);
-
-      let finalEncoder = selectedEncoder;
-      if (enableAV1 && selectedEncoder.startsWith("h264_")) {
-        finalEncoder = selectedEncoder.replace("h264_", "av1_");
-      }
-
-      await UpdateTranscoder(finalEncoder);
-      await UpdateAV1Enabled(enableAV1);
-      await UpdateOpusEnabled(enableOpus);
+      await UpdateInternalPlayback(internalPlayback);
       await UpdateUpscaleMethod(upscalingMethod);
       await UpdateUpscaleResolution({
         width: upscalingResolution?.w,
@@ -239,10 +205,7 @@
           />
         {:else if activeTab === "playback"}
           <PlaybackTab
-            bind:selectedEncoder
-            {encoders}
-            bind:enableAV1
-            bind:enableOpus
+            bind:internalPlayback
           />
         {:else if activeTab === "upscale"}
           <UpscaleTab

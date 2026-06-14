@@ -12,9 +12,7 @@ type AppConfig struct {
 	Width             int        `json:"width"`
 	Height            int        `json:"height"`
 	FilterEcchi       bool       `json:"filterEcchi"`
-	Encoder           string     `json:"encoder"`
-	EnableAV1         bool       `json:"enableAV1"`
-	EnableOpus        bool       `json:"enableOpus"`
+	InternalPlayback  bool       `json:"internalPlayback"`
 	Upscaling         string     `json:"upscaling"`
 	UpscaleResolution Resolution `json:"upscaleResolution"`
 	DownloadDir       string     `json:"downloadDir"`

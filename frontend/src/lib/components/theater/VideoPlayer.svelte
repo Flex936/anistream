@@ -1,10 +1,7 @@
 <script lang="ts">
   /**
-   * VideoPlayer.svelte — the "glass pane"
-   *
-   * Architecture
    * ────────────
-   * There is NO <video> element and NO hls.js.  MPV is rendering natively BELOW
+   * MPV is rendering natively
    * this component via --wid (HWND on Windows, X11 XID on Linux, NSView on macOS).
    *
    * This component is a fixed full-viewport transparent overlay (z-[100]).
@@ -49,12 +46,14 @@
     playingEpisode,
     animeId,
     isLoggedIn = false,
+    internalPlayback = false,
     isLoading = false,
     onBack,
   }: {
     playingEpisode: number;
     animeId: number;
     isLoggedIn?: boolean;
+    internalPlayback?: boolean;
     isLoading?: boolean;
     onBack?: () => void;
   } = $props();
@@ -88,7 +87,10 @@
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   onMount(() => {
     // Theatre mode: make the native MPV render layer visible through the app.
-    document.documentElement.classList.add("theater-mode");
+    // Only needed when MPV is embedded via --wid (internal playback).
+    if (internalPlayback) {
+      document.documentElement.classList.add("theater-mode");
+    }
     startMetadataPolling();
     if (isLoggedIn && animeId && playingEpisode) resetTracker();
   });
@@ -300,16 +302,16 @@
   ═══════════════════════════════════════════════════════════════
 -->
 <div
-  class="fixed inset-0 z-[100] select-none {isIdle ? 'cursor-none' : ''}"
-  style="background: transparent;"
+  class="video-player-overlay fixed inset-0 z-100 select-none {isIdle ? 'cursor-none' : ''}"
+  style="background: {internalPlayback ? 'transparent' : '#000'};"
   onpointermove={handlePointerMove}
   onpointerleave={handlePointerLeave}
   role="region"
   aria-label="Video player controls"
 >
-  {#if isLoading || !animeData}
+  {#if isLoading || duration === 0}
     <div
-      class="absolute inset-0 bg-black z-[120] flex flex-col items-center justify-center text-white"
+      class="absolute inset-0 bg-black z-120 flex flex-col items-center justify-center text-white"
     >
       <LoaderCircle class="animate-spin mb-4 text-sky-400" size={48} />
       <h2 class="text-xl font-bold">Buffering Stream...</h2>
@@ -322,7 +324,7 @@
   <div
     class="absolute top-0 left-0 right-0 p-5 player-top-scrim
            transition-opacity duration-300
-           {isIdle && !isLoading && animeData
+           {isIdle || isLoading || duration === 0
       ? 'opacity-0 pointer-events-none'
       : 'opacity-100'}"
   >

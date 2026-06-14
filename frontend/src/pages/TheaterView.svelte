@@ -6,6 +6,7 @@
     GetEpisodeTorrents,
     StreamTorrent,
     StopStream,
+    GetInternalPlayback,
   } from "$wails/go/main/App";
 
   import AnimeDetailsSidebar from "$lib/components/theater/AnimeDetailsSidebar.svelte";
@@ -27,6 +28,7 @@
   let isStartingStream = $state(false);
   let loadingEpisode = $state(0);
   let playingEpisode = $state(0);
+  let internalPlayback = $state(false);
 
   // ── Stream state ────────────────────────────────────────────────────────────
   // Old architecture: streamUrl (string | null) — the HLS manifest URL returned
@@ -82,6 +84,7 @@
     isStreaming = true;
 
     try {
+      internalPlayback = await GetInternalPlayback();
       await StreamTorrent(magnet);
     } catch (err) {
       alert(`Failed to start stream.\n${err}`);
@@ -105,19 +108,22 @@
   // two paths don't race.
   onDestroy(() => {
     scrapingGen++;
+    document.body.style.overflow = "";
     StopStream().catch(console.warn);
+  });
+
+  // Lock body scroll while streaming so the native video doesn't fight with
+  // the page scroll container.
+  $effect(() => {
+    document.body.style.overflow = isStreaming ? "hidden" : "";
   });
 </script>
 
-<!--
-  Theater layout:
-    • Normal mode:  sidebar + episode/torrent list (standard flex layout).
-    • Streaming:    VideoPlayer mounts as a fixed inset-0 z-[100] glass pane.
-      The sidebar and lists remain mounted in the DOM but are fully covered by
-      the transparent overlay; MPV's native video layer shows through behind it.
--->
+<!-- Theater layout: -->
 <div
   class="flex-1 p-8 max-w-7xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500"
+  class:streaming={isStreaming}
+  style={isStreaming ? "pointer-events: none; overflow: hidden; user-select: none;" : ""}
 >
   <!-- Back to discovery -->
   <button
@@ -158,16 +164,12 @@
   </div>
 </div>
 
-<!--
-  VideoPlayer is rendered OUTSIDE the content flex container so that its
-  fixed positioning is relative to the viewport, not a positioned ancestor.
-  It only mounts when isStreaming = true.
--->
 {#if isStreaming}
   <VideoPlayer
     {playingEpisode}
     animeId={anime.id}
     {isLoggedIn}
+    {internalPlayback}
     isLoading={isStartingStream}
     onBack={handleStopStream}
   />

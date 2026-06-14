@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -40,10 +41,13 @@ var (
 
 // Win32 constants — declare locally so we don't need an external package.
 const (
-	wsChild       uintptr = 0x40000000
-	wsVisible     uintptr = 0x10000000
-	swpNoActivate uintptr = 0x0010
-	hwndBottom    uintptr = 1
+	wsChild         uintptr = 0x40000000
+	wsVisible       uintptr = 0x10000000
+	wsClipSiblings  uintptr = 0x04000000
+	swpNoActivate   uintptr = 0x0010
+	swpNoMove       uintptr = 0x0002
+	swpNoSize       uintptr = 0x0001
+	hwndBottom      uintptr = 1
 )
 
 // RECT mirrors the Win32 RECT structure used by GetClientRect.
@@ -104,7 +108,7 @@ func PrepareVideoSurface(parent uintptr, w, h int) (uintptr, error) {
 		0,                            // dwExStyle
 		uintptr(unsafe.Pointer(cls)), // lpClassName = "STATIC"
 		0,                            // lpWindowName (null — no title)
-		wsChild|wsVisible,            // dwStyle
+		wsChild|wsVisible|wsClipSiblings, // dwStyle — WS_CLIPSIBLINGS prevents WebView2 from overpainting
 		0, 0,                         // x, y
 		uintptr(w), uintptr(h), // nWidth, nHeight
 		parent,  // hWndParent
@@ -123,5 +127,27 @@ func PrepareVideoSurface(parent uintptr, w, h int) (uintptr, error) {
 		swpNoActivate,
 	)
 
+	// Schedule a deferred re-enforcement: WebView2 may reorder siblings during
+	// its own initialisation, so we push the MPV surface back down after a delay.
+	go applyWindowsZOrderFix(hwnd, w, h)
+
 	return hwnd, nil
 }
+
+// applyWindowsZOrderFix re-applies HWND_BOTTOM after a delay to counteract
+// WebView2's sibling reordering during initialisation.
+func applyWindowsZOrderFix(hwnd uintptr, w, h int) {
+	for i := 0; i < 5; i++ {
+		time.Sleep(300 * time.Millisecond)
+		procSetWindowPos.Call(
+			hwnd,
+			hwndBottom,
+			0, 0, uintptr(w), uintptr(h),
+			swpNoActivate|swpNoMove|swpNoSize,
+		)
+	}
+}
+
+// applyLinuxZOrderFix is a no-op on Windows.
+func applyLinuxZOrderFix(_ uintptr) {}
+
