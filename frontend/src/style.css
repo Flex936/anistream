@@ -48,10 +48,21 @@
    * Theater mode — applied by VideoPlayer.svelte while MPV is running.
    * When this class is on <html>, every ancestor becomes transparent so the
    * native video layer shows through the entire viewport.
+   * We also lock scrolling and pointer events on the background so nothing
+   * behind the fixed VideoPlayer overlay is interactable.
    */
   html.theater-mode #app,
   html.theater-mode main {
     background-color: transparent !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+
+  /* The VideoPlayer overlay itself is fixed + z-100, so it is NOT a child of
+     main in the stacking sense — but Svelte renders it inside <main>.
+     Re-enable pointer events on the overlay itself so controls still work. */
+  html.theater-mode .video-player-overlay {
+    pointer-events: auto !important;
   }
 }
 

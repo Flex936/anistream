@@ -5,8 +5,6 @@ import {mpv} from '../models';
 import {config} from '../models';
 import {anilist} from '../models';
 
-export function GetAV1Enabled():Promise<boolean>;
-
 export function GetAnimeProgress(arg1:number):Promise<number>;
 
 export function GetEcchiFilter():Promise<boolean>;
@@ -15,15 +13,13 @@ export function GetEpisodeTorrents(arg1:string,arg2:number):Promise<Array<scrape
 
 export function GetFolder():Promise<string>;
 
-export function GetMpvMetadata():Promise<mpv.FrontendPayload>;
+export function GetInternalPlayback():Promise<boolean>;
 
-export function GetOpusEnabled():Promise<boolean>;
+export function GetMpvMetadata():Promise<mpv.FrontendPayload>;
 
 export function GetResolution():Promise<config.Resolution>;
 
 export function GetSeasonalAnime():Promise<Array<anilist.Anime>>;
-
-export function GetTranscoder():Promise<string>;
 
 export function GetTrendingAnime():Promise<Array<anilist.Anime>>;
 
@@ -67,19 +63,15 @@ export function ToggleMPV():Promise<void>;
 
 export function ToggleMuteMPV():Promise<void>;
 
-export function UpdateAV1Enabled(arg1:boolean):Promise<void>;
-
 export function UpdateAnimeProgress(arg1:number,arg2:number):Promise<void>;
 
 export function UpdateDownloadFolder(arg1:string):Promise<void>;
 
 export function UpdateEcchiFilter(arg1:boolean):Promise<void>;
 
-export function UpdateOpusEnabled(arg1:boolean):Promise<void>;
+export function UpdateInternalPlayback(arg1:boolean):Promise<void>;
 
 export function UpdateResolution(arg1:number,arg2:number):Promise<void>;
-
-export function UpdateTranscoder(arg1:string):Promise<void>;
 
 export function UpdateUpscaleMethod(arg1:string):Promise<void>;
 

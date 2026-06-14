@@ -83,3 +83,6 @@ func PrepareVideoSurface(_ uintptr, w, h int) (uintptr, error) {
 	}
 	return view, nil
 }
+
+// applyLinuxZOrderFix is a no-op on macOS.
+func applyLinuxZOrderFix(_ uintptr) {}
