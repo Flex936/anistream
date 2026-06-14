@@ -107,7 +107,7 @@
           >
             {entry.media.title.english || entry.media.title.romaji}
           </h3>
-          {#if entry.media.nextAiringEpisode}
+          {#if entry.media.nextAiringEpisode.episode > 0}
             <p class="text-xs text-primary font-semibold mt-1">
               Ep {entry.media.nextAiringEpisode.episode} airing soon
             </p>

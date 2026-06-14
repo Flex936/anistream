@@ -243,6 +243,10 @@ func (a *App) GetUserWatchlist() ([]anilist.MediaList, error) {
 	return a.al.Watchlist(a.getCtx())
 }
 
+func (a *App) GetSeasonalAnime() ([]anilist.Anime, error) {
+	return a.al.Seasonal(a.getCtx(), config.Load().FilterEcchi)
+}
+
 // ── Scraper (Wails-bound) ────────────────────────────────────────────────────
 
 func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]scraper.TorrentResult, error) {

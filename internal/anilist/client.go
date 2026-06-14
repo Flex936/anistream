@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 )
 
 const apiURL = "https://graphql.anilist.co"
@@ -47,6 +48,22 @@ func (c *Client) IsLoggedIn() bool {
 	return c.token != ""
 }
 
+func (c *Client) GetSeason() (string, int) {
+	now := time.Now()
+	month := now.Month()
+	year := now.Year()
+	switch {
+	case month >= 1 && month <= 3:
+		return "WINTER", year
+	case month >= 4 && month <= 6:
+		return "SPRING", year
+	case month >= 7 && month <= 9:
+		return "SUMMER", year
+	default:
+		return "FALL", year
+	}
+}
+
 func (c *Client) Search(ctx context.Context, query string, filterEcchi bool) ([]Anime, error) {
 	const gql = `
 	query ($search: String, $bannedGenres: [String]) {
@@ -81,6 +98,44 @@ func (c *Client) Trending(ctx context.Context, filterEcchi bool) ([]Anime, error
 	}`
 	var out pageResponse
 	err := c.do(ctx, gql, map[string]interface{}{"bannedGenres": blockedGenres(filterEcchi)}, &out)
+	return out.Data.Page.Media, err
+}
+
+func (c *Client) Seasonal(ctx context.Context, filterEcchi bool) ([]Anime, error) {
+	const gql = `
+    query GetCurrentlyAiring($page: Int, $perPage: Int = 50, $bannedGenres: [String], $currentSeason: MediaSeason, $currentYear: Int) {
+
+        Page(page: $page, perPage: $perPage) {
+            media(
+                type: ANIME, 
+                season: $currentSeason, 
+                seasonYear: $currentYear,
+                sort: TRENDING_DESC, 
+                countryOfOrigin: "JP",
+                isAdult: false, 
+                format_not_in: [SPECIAL, OVA, ONA, MOVIE],
+                genre_not_in: $bannedGenres
+            ) {
+              id 
+              title { romaji english } 
+              status
+              episodes 
+              nextAiringEpisode { episode timeUntilAiring airingAt } 
+              coverImage { large }
+            }
+        }
+    }`
+
+	var out pageResponse
+	currentSeason, currentYear := c.GetSeason()
+
+	variables := map[string]interface{}{
+		"bannedGenres":  blockedGenres(filterEcchi),
+		"currentSeason": currentSeason,
+		"currentYear":   currentYear,
+	}
+
+	err := c.do(ctx, gql, variables, &out)
 	return out.Data.Page.Media, err
 }
 

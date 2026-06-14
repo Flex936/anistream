@@ -38,6 +38,10 @@ export function GetResolution() {
   return window['go']['main']['App']['GetResolution']();
 }
 
+export function GetSeasonalAnime() {
+  return window['go']['main']['App']['GetSeasonalAnime']();
+}
+
 export function GetTranscoder() {
   return window['go']['main']['App']['GetTranscoder']();
 }

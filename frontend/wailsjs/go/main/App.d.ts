@@ -23,6 +23,8 @@ export function GetOpusEnabled():Promise<boolean>;
 
 export function GetResolution():Promise<config.Resolution>;
 
+export function GetSeasonalAnime():Promise<Array<anilist.Anime>>;
+
 export function GetTranscoder():Promise<string>;
 
 export function GetTrendingAnime():Promise<Array<anilist.Anime>>;
