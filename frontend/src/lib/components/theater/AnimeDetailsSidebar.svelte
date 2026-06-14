@@ -31,7 +31,9 @@
       >
         {formatStatus(anime.status)}
       </span>
-      <span>{anime.episodes || "?"} Episodes</span>
+      <span
+        >{anime.episodes || anime.nextAiringEpisode.episode - 1 || "?"} Episodes</span
+      >
     </div>
 
     <div class="text-muted text-sm leading-relaxed line-clamp-6 text-justify">

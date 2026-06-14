@@ -67,7 +67,8 @@
     >
       {anime.title?.romaji || anime.title?.english || "Unknown Title"}
     </h3>
-    <span class="text-xs text-muted mt-1">{anime.episodes || "?"} Episodes</span
+    <span class="text-xs text-muted mt-1"
+      >{anime.episodes || anime.nextAiringEpisode.episode - 1 || "?"} Episodes</span
     >
   </div>
 </button>

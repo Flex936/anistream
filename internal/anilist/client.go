@@ -55,7 +55,7 @@ func (c *Client) Search(ctx context.Context, query string, filterEcchi bool) ([]
 			      isAdult: false, genre_not_in: $bannedGenres,
 			      status_not: NOT_YET_RELEASED) {
 				id title { romaji english } coverImage { large }
-				episodes status description nextAiringEpisode { episode }
+				episodes status description nextAiringEpisode { episode airingAt }
 			}
 		}
 	}`
@@ -75,7 +75,7 @@ func (c *Client) Trending(ctx context.Context, filterEcchi bool) ([]Anime, error
 			      isAdult: false, genre_not_in: $bannedGenres,
 			      status_not: NOT_YET_RELEASED) {
 				id title { romaji english } coverImage { large }
-				episodes status description nextAiringEpisode { episode }
+				episodes status description nextAiringEpisode { episode airingAt }
 			}
 		}
 	}`
@@ -143,7 +143,7 @@ func (c *Client) Watchlist(ctx context.Context) ([]MediaList, error) {
 					progress
 					media {
 						id title { romaji english } coverImage { large }
-						episodes status description nextAiringEpisode { episode }
+						episodes status description nextAiringEpisode { episode airingAt }
 					}
 				}
 			}

@@ -4,7 +4,8 @@ package anilist
 // TypeScript interfaces remain compatible with the existing Svelte frontend.
 
 type NextAiringEpisode struct {
-	Episode int `json:"episode"`
+	Episode  int   `json:"episode"`
+	AiringAt int64 `json:"airingAt"`
 }
 
 type AnimeTitle struct {
@@ -17,13 +18,13 @@ type AnimeCover struct {
 }
 
 type Anime struct {
-	ID                int                `json:"id"`
-	Title             AnimeTitle         `json:"title"`
-	CoverImage        AnimeCover         `json:"coverImage"`
-	Episodes          int                `json:"episodes"`
-	Status            string             `json:"status"`
-	Description       string             `json:"description"`
-	NextAiringEpisode *NextAiringEpisode `json:"nextAiringEpisode"`
+	ID                int               `json:"id"`
+	Title             AnimeTitle        `json:"title"`
+	CoverImage        AnimeCover        `json:"coverImage"`
+	Episodes          int               `json:"episodes"`
+	Status            string            `json:"status"`
+	Description       string            `json:"description"`
+	NextAiringEpisode NextAiringEpisode `json:"nextAiringEpisode"`
 }
 
 type MediaListEntry struct {

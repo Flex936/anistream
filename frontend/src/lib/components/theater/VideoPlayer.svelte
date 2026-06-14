@@ -447,7 +447,7 @@
       onclick={togglePlayState}
       preload="none"
       crossorigin="anonymous"
-      class="w-full h-full object-contain cursor-default"
+      class="w-full h-full object-contain cursor-auto"
     >
       <track kind="captions" />
     </video>

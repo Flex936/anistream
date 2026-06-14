@@ -2,6 +2,7 @@ export namespace anilist {
 	
 	export class NextAiringEpisode {
 	    episode: number;
+	    airingAt: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new NextAiringEpisode(source);
@@ -10,6 +11,7 @@ export namespace anilist {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.episode = source["episode"];
+	        this.airingAt = source["airingAt"];
 	    }
 	}
 	export class AnimeCover {
@@ -45,7 +47,7 @@ export namespace anilist {
 	    episodes: number;
 	    status: string;
 	    description: string;
-	    nextAiringEpisode?: NextAiringEpisode;
+	    nextAiringEpisode: NextAiringEpisode;
 	
 	    static createFrom(source: any = {}) {
 	        return new Anime(source);

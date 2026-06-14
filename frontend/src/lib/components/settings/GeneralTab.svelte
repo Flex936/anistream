@@ -1,7 +1,6 @@
 <script lang="ts">
   import ToggleSwitch from "$lib/components/ui/ToggleSwitch.svelte";
   import { FolderOpen } from "@lucide/svelte";
-
   let {
     selectedRes = $bindable(),
     resolutions,
