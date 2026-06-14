@@ -4,7 +4,8 @@ import type { anilist } from "$wails/go/models";
 export type Route =
   | { page: "discovery" }
   | { page: "theater"; anime: anilist.Anime }
-  | { page: "watchlist" };
+  | { page: "watchlist" }
+  | { page: "scheduled"};
 
 // ─── Closure-based singleton (works in .svelte.ts files) ──────────────────
 function createRouter() {

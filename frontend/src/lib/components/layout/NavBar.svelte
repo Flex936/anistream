@@ -9,6 +9,7 @@
     Minimize2,
     X,
     Library,
+    Calendar,
   } from "@lucide/svelte";
   import {
     WindowMinimise,
@@ -26,6 +27,7 @@
     onLogin,
     onSettings,
     onWatchlist,
+    onScheduled,
   } = $props();
 
   let isMaximised = $state(false);
@@ -93,6 +95,15 @@
   </div>
 
   <div class="flex items-center space-x-4 text-muted">
+    <button
+      style="--wails-draggable: no-drag;"
+      onclick={onScheduled}
+      class="hover:text-primary transition-colors focus:outline-none
+               focus-visible:ring-2 focus-visible:ring-primary rounded-full p-1"
+      title="Scheduled"
+    >
+      <Calendar size={20} />
+    </button>
     {#if isLoggedIn}
       <button
         style="--wails-draggable: no-drag;"

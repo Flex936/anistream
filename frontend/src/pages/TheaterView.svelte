@@ -76,6 +76,7 @@
 
   // ── Stream start ────────────────────────────────────────────────────────────
   async function handleStartStream(magnet: string): Promise<void> {
+    // Instantly trigger the UI state change
     isStartingStream = true;
     playingEpisode = loadingEpisode;
     isStreaming = true;
@@ -138,7 +139,6 @@
         <TorrentList
           {fetchedTorrents}
           {loadingEpisode}
-          {isStartingStream}
           onBack={() => {
             fetchedTorrents = [];
             loadingEpisode = 0;

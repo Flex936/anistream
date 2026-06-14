@@ -6,16 +6,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"anistream/internal/anilist"
 	"anistream/internal/config"
 	"anistream/internal/mpv"
 	"anistream/internal/scraper"
 	"anistream/internal/torrent"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App is the single struct Wails binds to the frontend.
@@ -118,6 +119,12 @@ func (a *App) getCtx() context.Context {
 // ── HTTP server ──────────────────────────────────────────────────────────────
 // The server now has a single purpose: serve the active torrent file as a
 // seekable HTTP byte-stream that MPV reads directly.  No HLS file server needed.
+
+type dynamicHLSDir struct{}
+
+func (d dynamicHLSDir) Open(name string) (http.File, error) {
+	return http.Dir(mpv.HLSOutputDir).Open(name)
+}
 
 func (a *App) buildHTTPServer() *http.Server {
 	mux := http.NewServeMux()
@@ -250,6 +257,10 @@ func (a *App) GetUserWatchlist() ([]anilist.MediaList, error) {
 	return a.al.Watchlist(a.getCtx())
 }
 
+func (a *App) GetSeasonalAnime() ([]anilist.Anime, error) {
+	return a.al.Seasonal(a.getCtx(), config.Load().FilterEcchi)
+}
+
 // ── Scraper (Wails-bound) ────────────────────────────────────────────────────
 
 func (a *App) GetEpisodeTorrents(animeTitle string, episodeNumber int) ([]scraper.TorrentResult, error) {
@@ -328,5 +339,31 @@ func (a *App) UpdateUpscaleResolution(res config.Resolution) error {
 	return config.Save(cfg)
 }
 
-// metadataHandler has been removed: the frontend no longer polls an HTTP endpoint
-// for metadata.  It calls GetMpvMetadata() directly via Wails IPC instead.
+func (a *App) OpenDirectoryDialog() (string, error) {
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Download Destination",
+	})
+}
+
+func (a *App) UpdateDownloadFolder(dir string) error {
+	if dir == "" {
+		return nil
+	}
+	cfg := config.Load()
+	cfg.DownloadDir = dir
+	if err := config.Save(cfg); err != nil {
+		return err
+	}
+
+	// Safely clean up any active stream and delete the old tmp folders
+	// BEFORE we update the underlying paths.
+	a.StopStream()
+
+	a.torrent.SetDataDir(filepath.Join(dir, "tmp_downloads"))
+	mpv.HLSOutputDir = filepath.Join(dir, "tmp_hls")
+	return nil
+}
+
+func (a *App) GetFolder() string {
+	return config.Load().DownloadDir
+}

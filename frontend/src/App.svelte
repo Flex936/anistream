@@ -6,6 +6,7 @@
     Logout,
     SearchAnime,
     GetTrendingAnime,
+    GetSeasonalAnime,
   } from "$wails/go/main/App";
   import type { anilist } from "$wails/go/models";
 
@@ -15,6 +16,7 @@
   import DiscoveryView from "./pages/DiscoveryView.svelte";
   import TheaterView from "./pages/TheaterView.svelte";
   import WatchlistView from "./pages/WatchlistView.svelte";
+  import ScheduledView from "./pages/ScheduledView.svelte";
 
   import { router } from "$lib/stores/router.svelte";
 
@@ -28,6 +30,7 @@
   let searchQuery = $state("");
   let isSearching = $state(false);
   let searchResults = $state<anilist.Anime[]>([]);
+  let seasonalAnime = $state<anilist.Anime[]>([]);
 
   let searchTimeout: ReturnType<typeof setTimeout>;
   let searchGen = 0;
@@ -39,6 +42,11 @@
       console.error("Failed to check login status:", err);
     }
     await loadHomePage();
+    try {
+      seasonalAnime = (await GetSeasonalAnime()) || [];
+    } catch (err) {
+      console.error("Failed to get seasonal anime:", err);
+    }
   });
 
   onDestroy(() => {
@@ -119,6 +127,7 @@
     onLogin={handleLogin}
     onSettings={() => (isSettingsOpen = true)}
     onWatchlist={() => router.navigate({ page: "watchlist" })}
+    onScheduled={() => router.navigate({ page: "scheduled" })}
   />
 
   <!-- ─── Router outlet ─────────────────────────────────────────────────── -->
@@ -130,6 +139,11 @@
     />
   {:else if router.current.page === "watchlist"}
     <WatchlistView
+      onSelectAnime={(anime) => router.navigate({ page: "theater", anime })}
+    />
+  {:else if router.current.page === "scheduled"}
+    <ScheduledView
+      {seasonalAnime}
       onSelectAnime={(anime) => router.navigate({ page: "theater", anime })}
     />
   {:else}

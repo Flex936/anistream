@@ -16,6 +16,9 @@
     UpdateUpscaleMethod,
     GetUpscaleResolution,
     UpdateUpscaleResolution,
+    GetFolder,
+    OpenDirectoryDialog,
+    UpdateDownloadFolder,
   } from "$wails/go/main/App";
   import { WindowSetSize } from "$wails/runtime/runtime";
 
@@ -32,6 +35,7 @@
   let enableAV1 = $state(false);
   let enableOpus = $state(false);
   let upscalingMethod = $state("");
+  let chosenPath = $state("");
 
   const resolutions = [
     { label: "720p HD (1280 x 720)", w: 1280, h: 720 },
@@ -92,6 +96,7 @@
       filterEcchi = await GetEcchiFilter();
       enableAV1 = await GetAV1Enabled();
       enableOpus = await GetOpusEnabled();
+      chosenPath = await GetFolder();
 
       const savedEncoder = await GetTranscoder();
       if (savedEncoder.startsWith("av1_")) {
@@ -138,12 +143,12 @@
       await UpdateTranscoder(finalEncoder);
       await UpdateAV1Enabled(enableAV1);
       await UpdateOpusEnabled(enableOpus);
-
       await UpdateUpscaleMethod(upscalingMethod);
       await UpdateUpscaleResolution({
         width: upscalingResolution?.w,
         height: upscalingResolution?.h,
       });
+      await UpdateDownloadFolder(chosenPath);
 
       WindowSetSize(selectedRes.w, selectedRes.h);
       onClose?.();
@@ -152,6 +157,18 @@
       alert("Error saving settings");
     } finally {
       isSaving = false;
+    }
+  }
+
+  async function changeDownloadFolder() {
+    try {
+      // Call the exposed Go method
+      const path = await OpenDirectoryDialog();
+      if (path) {
+        chosenPath = path;
+      }
+    } catch (err) {
+      console.error("Failed to select directory:", err);
     }
   }
 </script>
@@ -213,7 +230,13 @@
 
       <div class="p-8 flex-1 overflow-y-auto custom-scrollbar">
         {#if activeTab === "general"}
-          <GeneralTab bind:selectedRes {resolutions} bind:filterEcchi />
+          <GeneralTab
+            bind:selectedRes
+            {resolutions}
+            bind:filterEcchi
+            bind:chosenPath
+            {changeDownloadFolder}
+          />
         {:else if activeTab === "playback"}
           <PlaybackTab
             bind:selectedEncoder
