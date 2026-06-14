@@ -70,14 +70,16 @@ export function Logout() {
   return window['go']['main']['App']['Logout']();
 }
 
+export function OpenDirectoryDialog() {
+  return window['go']['main']['App']['OpenDirectoryDialog']();
+}
+
 export function PauseMPV() {
   return window['go']['main']['App']['PauseMPV']();
 }
 
 export function PlayMPV() {
   return window['go']['main']['App']['PlayMPV']();
-export function OpenDirectoryDialog() {
-  return window['go']['main']['App']['OpenDirectoryDialog']();
 }
 
 export function SearchAnime(arg1) {
