@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+// Import our shiny new home screen!
+import 'screens/home_screen.dart';
+
 void main() {
   // Ensures component bindings are ready before initialization
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,16 +25,21 @@ class AniStreamApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0A0A0C),
+        scaffoldBackgroundColor: AppPalette.base, // Uses Claude's custom token!
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
+          seedColor: AppPalette.primary,
           brightness: Brightness.dark,
         ),
       ),
-      home: const TheaterTestScreen(),
+      // Set the initial route to Claude's new Discovery page
+      home: const HomeScreen(),
     );
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Temporary Theater Screen (We will move this to screens/ later)
+// ════════════════════════════════════════════════════════════════════════════
 
 class TheaterTestScreen extends StatefulWidget {
   const TheaterTestScreen({super.key});
@@ -47,7 +55,6 @@ class _TheaterTestScreenState extends State<TheaterTestScreen> {
   @override
   void initState() {
     super.initState();
-    // Opens a reliable public test stream to verify the hardware decoding pipeline
     player.open(Media('http://localhost:8080/stream'));
   }
 
@@ -60,34 +67,22 @@ class _TheaterTestScreenState extends State<TheaterTestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // The native video layer rendering underneath
           Center(
             child: SizedBox(
               width: 1280,
               height: 720,
               child: Video(controller: controller),
-            ),
-          ),
-          // Proof of concept: This text overlays natively on top of the video canvas
-          Positioned(
-            top: 40,
-            left: 40,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                "AniStream Native Canvas Test",
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
             ),
           ),
         ],
