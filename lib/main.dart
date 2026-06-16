@@ -1,15 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_palette.dart';
 import 'screens/home_screen.dart';
 
-void main() {
-  // Ensures component bindings are ready before initialization
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Directs libmpv to spin up its native rendering context
   MediaKit.ensureInitialized();
+
+  await windowManager.ensureInitialized();
+
+  WindowOptions windowOptions = const WindowOptions(
+    title: 'AniStream',
+    minimumSize: Size(
+      1000,
+      700,
+    ), // Prevents the UI from crushing on tiny screens
+    center: true,
+  );
+
+  windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.maximize(); // Force maximized state
+    await windowManager.show(); // Reveal the window
+    await windowManager.focus(); // Bring it to the front
+  });
 
   runApp(const AniStreamApp());
 }
