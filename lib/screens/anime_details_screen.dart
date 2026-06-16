@@ -1,5 +1,3 @@
-// lib/screens/anime_details_screen.dart
-//
 // Anime details + episode picker for AniStream's desktop layout.
 // Translates TheaterView.svelte + AnimeDetailsSidebar.svelte + TorrentList.svelte
 // into a single Flutter screen using a premium split-pane Row.
@@ -13,8 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:anistream/main.dart';
 
 import '../services/anilist_api.dart';
-import 'home_screen.dart'; // AppPalette
-import '../services/torrent_scraper.dart'; // Torrent, TorrentScraperService
+import '../services/torrent_scraper.dart';
+import 'home_screen.dart';
+import 'theater_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  File-private helpers
@@ -661,18 +660,13 @@ class _EpisodeTileState extends State<_EpisodeTile> {
                   torrent: torrents[i],
                   isRecommended: i == 0,
                   onStream: () {
-                    // Print logging for testing torrent resolution parameters
-                    debugPrint(
-                      '[AniStream] Streaming ep ${widget.episodeNumber} '
-                      '· ${torrents[i].releaseGroup} ${torrents[i].resolution}'
-                      '\n  magnet: ${torrents[i].magnetLink}',
-                    );
-
-                    // Push the theater player viewport onto the stack
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const TheaterTestScreen(),
+                        builder: (_) => TheaterScreen(
+                          episode: widget.episodeNumber,
+                          torrent: torrents[i],
+                        ),
                       ),
                     );
                   },

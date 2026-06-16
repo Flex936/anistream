@@ -1,5 +1,3 @@
-// lib/screens/home_screen.dart
-//
 // Discovery / Home screen for AniStream.
 // Translates the Wails/Svelte DiscoveryView + AnimeCard into Flutter widgets.
 //

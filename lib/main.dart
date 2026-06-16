@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
-// Import our shiny new home screen!
 import 'screens/home_screen.dart';
 
 void main() {
@@ -33,60 +31,6 @@ class AniStreamApp extends StatelessWidget {
       ),
       // Set the initial route to Claude's new Discovery page
       home: const HomeScreen(),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  Temporary Theater Screen (We will move this to screens/ later)
-// ════════════════════════════════════════════════════════════════════════════
-
-class TheaterTestScreen extends StatefulWidget {
-  const TheaterTestScreen({super.key});
-
-  @override
-  State<TheaterTestScreen> createState() => _TheaterTestScreenState();
-}
-
-class _TheaterTestScreenState extends State<TheaterTestScreen> {
-  late final Player player = Player();
-  late final VideoController controller = VideoController(player);
-
-  @override
-  void initState() {
-    super.initState();
-    player.open(Media('http://localhost:8080/stream'));
-  }
-
-  @override
-  void dispose() {
-    player.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          Center(
-            child: SizedBox(
-              width: 1280,
-              height: 720,
-              child: Video(controller: controller),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
