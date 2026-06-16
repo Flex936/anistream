@@ -3,7 +3,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_palette.dart';
-import 'screens/home_screen.dart';
+import 'screens/app_shell.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,7 +47,7 @@ class AniStreamApp extends StatelessWidget {
         ),
       ),
       // Set the initial route to Claude's new Discovery page
-      home: const HomeScreen(),
+      home: const AppShell(),
     );
   }
 }
