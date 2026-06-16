@@ -47,13 +47,16 @@ class _EpisodeTileState extends State<EpisodeTile> {
                 color: widget.isExpanded
                     ? AppPalette.primary.withValues(alpha: 0.06)
                     : _hovered
-                    ? Colors.white.withValues(alpha: 0.025)
-                    : Colors.transparent,
+                    // ── FIXED: AppPalette.white ──
+                    ? AppPalette.white.withValues(alpha: 0.025)
+                    // ── FIXED: AppPalette.transparent ──
+                    : AppPalette.transparent,
                 border: Border(
                   left: BorderSide(
                     color: widget.isExpanded
                         ? AppPalette.primary
-                        : Colors.transparent,
+                        // ── FIXED: AppPalette.transparent ──
+                        : AppPalette.transparent,
                     width: 3,
                   ),
                 ),

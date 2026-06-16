@@ -14,6 +14,7 @@ abstract final class AppPalette {
 
   // ── Text ──────────────────────────────────────────────────────────────────
   static const Color textMain = Color(0xFFF1F5F9);
+  static const Color textLight = Color(0xFFE2E8F0);
   static const Color textMuted = Color(0xFF94A3B8);
 
   // ── Status badges ────────────────────────────────────────────────────────
@@ -22,4 +23,9 @@ abstract final class AppPalette {
   static const Color statusCancelled = Color(0xFFF87171);
   static const Color statusHiatus = Color(0xFFFB923C);
   static const Color statusDefault = Color(0xFF94A3B8);
+
+  // ── Standard Absolute Colors ─────────────────────────────────────────────
+  static const Color white = Color(0xFFFFFFFF);
+  static const Color black = Color(0xFF000000);
+  static const Color transparent = Color(0x00000000);
 }

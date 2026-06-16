@@ -193,12 +193,16 @@ class _PosterGradient extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 48, 10, 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.transparent, Color(0xB3000000), Color(0xE6000000)],
-          stops: [0.0, 0.5, 1.0],
+          colors: [
+            AppPalette.transparent,
+            AppPalette.black.withValues(alpha: 0.70),
+            AppPalette.black.withValues(alpha: 0.90),
+          ],
+          stops: const [0.0, 0.5, 1.0],
         ),
       ),
       child: score != null
@@ -240,7 +244,7 @@ class _StatusBadge extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.58),
+            color: AppPalette.black.withValues(alpha: 0.58),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: color.withValues(alpha: 0.40)),
           ),
@@ -270,7 +274,7 @@ class _HoverOverlay extends StatelessWidget {
         opacity: visible ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 200),
         child: ColoredBox(
-          color: Colors.black.withValues(alpha: 0.42),
+          color: AppPalette.black.withValues(alpha: 0.42),
           child: Center(
             child: AnimatedSlide(
               offset: visible ? Offset.zero : const Offset(0.0, 0.12),
@@ -291,7 +295,7 @@ class _HoverOverlay extends StatelessWidget {
                 ),
                 child: const Icon(
                   Icons.play_arrow_rounded,
-                  color: Colors.white,
+                  color: AppPalette.white,
                   size: 30,
                 ),
               ),

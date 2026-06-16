@@ -67,13 +67,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // True black for video playback borders
+      // ── FIXED: AppPalette.black ──
+      backgroundColor: AppPalette.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        // ── FIXED: AppPalette.transparent ──
+        backgroundColor: AppPalette.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          // ── FIXED: AppPalette.white ──
+          icon: const Icon(Icons.arrow_back_rounded, color: AppPalette.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -90,7 +93,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
                 ? const SizedBox.shrink() // Disappears when ready
                 : Container(
                     key: const ValueKey('loading_overlay'),
-                    color: Colors.black.withValues(alpha: 0.85),
+                    // ── FIXED: AppPalette.black ──
+                    color: AppPalette.black.withValues(alpha: 0.85),
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -112,7 +116,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
                           Text(
                             'Episode ${widget.episode}',
                             style: const TextStyle(
-                              color: Colors.white,
+                              // ── FIXED: AppPalette.white ──
+                              color: AppPalette.white,
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                             ),

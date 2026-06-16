@@ -22,7 +22,7 @@ class _NavLogoState extends State<NavLogo> {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 150),
           style: TextStyle(
-            color: _hovered ? Colors.white : AppPalette.textMain,
+            color: _hovered ? AppPalette.white : AppPalette.textMain,
             fontSize: 20,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.5,

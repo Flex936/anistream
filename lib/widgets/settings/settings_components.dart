@@ -125,7 +125,7 @@ class ToggleSwitch extends StatelessWidget {
               width: 16,
               height: 16,
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppPalette.white,
                 shape: BoxShape.circle,
               ),
             ),

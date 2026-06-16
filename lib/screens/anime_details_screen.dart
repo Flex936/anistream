@@ -10,7 +10,6 @@ import '../widgets/network_image.dart';
 //  File-private helpers
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Strips HTML from AniList's description, converting <br> tags to newlines.
 String _stripHtml(String? html) {
   if (html == null || html.isEmpty) return 'No synopsis available.';
   return html
@@ -20,7 +19,6 @@ String _stripHtml(String? html) {
       .trim();
 }
 
-/// Status → colour
 Color _statusColor(String? s) => switch (s) {
   'RELEASING' => AppPalette.statusReleasing,
   'FINISHED' => AppPalette.statusFinished,
@@ -29,7 +27,6 @@ Color _statusColor(String? s) => switch (s) {
   _ => AppPalette.statusDefault,
 };
 
-/// Status → display string
 String _formatStatus(String? s) => (s ?? 'UNKNOWN').replaceAll('_', ' ');
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -46,11 +43,7 @@ class AnimeDetailsScreen extends StatefulWidget {
 
 class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   final TorrentScraperService _scraper = TorrentScraperService();
-
-  /// Episode number currently open in the accordion (-1 = none).
   int _expandedEpisode = -1;
-
-  /// Future cache guarantees each episode is fetched once.
   final Map<int, Future<List<Torrent>>> _torrentFutures = {};
 
   int get _episodeCount {
@@ -143,7 +136,10 @@ class _NavBarState extends State<_NavBar> {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: _backHovered ? AppPalette.border : Colors.transparent,
+                  // ── FIXED: AppPalette.transparent ──
+                  color: _backHovered
+                      ? AppPalette.border
+                      : AppPalette.transparent,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(
@@ -366,13 +362,11 @@ class _EpisodePanel extends StatelessWidget {
             itemCount: episodeCount,
             itemBuilder: (context, index) {
               final ep = index + 1;
-              final isExpanded = expandedEpisode == ep;
-
               return EpisodeTile(
                 key: ValueKey(ep),
                 episodeNumber: ep,
-                isExpanded: isExpanded,
-                torrentFuture: isExpanded ? futureFor(ep) : null,
+                isExpanded: expandedEpisode == ep,
+                torrentFuture: expandedEpisode == ep ? futureFor(ep) : null,
                 onToggle: () => onToggle(ep),
               );
             },

@@ -10,7 +10,8 @@ Future<void> showSettingsMenu(BuildContext context) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Settings',
-    barrierColor: Colors.black.withValues(alpha: 0.60),
+    // ── FIXED: AppPalette.black ──
+    barrierColor: AppPalette.black.withValues(alpha: 0.60),
     transitionDuration: const Duration(milliseconds: 200),
     transitionBuilder: (context, animation, _, child) {
       final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
@@ -124,7 +125,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.transparent,
+      // ── FIXED: AppPalette.transparent ──
+      backgroundColor: AppPalette.transparent,
       insetPadding: const EdgeInsets.all(16),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 768, maxHeight: 600),
@@ -282,7 +284,9 @@ class _SideNavButtonState extends State<_SideNavButton> {
       ? AppPalette.primary.withValues(alpha: 0.15)
       : _hovered
       ? AppPalette.surface
-      : Colors.transparent;
+      // ── FIXED: AppPalette.transparent ──
+      : AppPalette.transparent;
+
   Color get _foreground => widget.active
       ? AppPalette.primary
       : _hovered
@@ -347,7 +351,8 @@ class _CloseButtonState extends State<_CloseButton> {
           decoration: BoxDecoration(
             color: _hovered
                 ? AppPalette.statusCancelled.withValues(alpha: 0.12)
-                : Colors.transparent,
+                // ── FIXED: AppPalette.transparent ──
+                : AppPalette.transparent,
             shape: BoxShape.circle,
           ),
           child: Icon(
@@ -381,7 +386,8 @@ class _SettingsFooter extends StatelessWidget {
           onPressed: saving ? null : onSave,
           style: FilledButton.styleFrom(
             backgroundColor: AppPalette.primary,
-            foregroundColor: Colors.white,
+            // ── FIXED: AppPalette.white ──
+            foregroundColor: AppPalette.white,
             disabledBackgroundColor: AppPalette.primary.withValues(alpha: 0.50),
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
             shape: RoundedRectangleBorder(
@@ -394,7 +400,8 @@ class _SettingsFooter extends StatelessWidget {
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                    // ── FIXED: AppPalette.white ──
+                    valueColor: AlwaysStoppedAnimation(AppPalette.white),
                   ),
                 )
               : const Text(

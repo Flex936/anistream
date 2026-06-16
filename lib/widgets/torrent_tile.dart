@@ -161,7 +161,8 @@ class _TorrentTileState extends State<TorrentTile> {
                     child: Icon(
                       Icons.play_arrow_rounded,
                       size: 22,
-                      color: _hovered ? Colors.white : AppPalette.primary,
+                      // FIXED HERE: Using AppPalette.white instead of Colors.white
+                      color: _hovered ? AppPalette.white : AppPalette.primary,
                     ),
                   ),
                 ),
