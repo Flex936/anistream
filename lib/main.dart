@@ -19,6 +19,7 @@ void main() async {
       700,
     ), // Prevents the UI from crushing on tiny screens
     center: true,
+    titleBarStyle: TitleBarStyle.hidden,
   );
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {

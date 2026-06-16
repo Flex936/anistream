@@ -224,7 +224,6 @@ class _LeftSidebar extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               child: AspectRatio(
                 aspectRatio: 2 / 3,
-                // FIX: Now using the globally extracted AppNetworkImage widget!
                 child: AppNetworkImage(
                   url: anime.coverImage?.extraLarge ?? anime.bannerImage,
                 ),
@@ -369,7 +368,6 @@ class _EpisodePanel extends StatelessWidget {
               final ep = index + 1;
               final isExpanded = expandedEpisode == ep;
 
-              // FIX: Now using the globally extracted EpisodeTile widget!
               return EpisodeTile(
                 key: ValueKey(ep),
                 episodeNumber: ep,

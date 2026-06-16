@@ -146,6 +146,55 @@ query GetTrendingAnime($page: Int, $perPage: Int) {
         .toList();
   }
 
+  Future<List<Anime>> searchAnime(
+    String query, {
+    bool filterEcchi = true,
+  }) async {
+    const searchQuery = r'''
+      query ($search: String, $bannedGenres: [String]) {
+        Page(page: 1, perPage: 15) {
+          media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres, status_not: NOT_YET_RELEASED) {
+            id
+            title { romaji english }
+            coverImage { extraLarge }
+            bannerImage
+            description
+            episodes
+            status
+            averageScore
+            nextAiringEpisode { episode }
+          }
+        }
+      }''';
+
+    final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
+
+    final response = await _httpClient.post(
+      Uri.parse(_endpoint),
+      headers: const {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        'query': searchQuery,
+        'variables': {'search': query, 'bannedGenres': bannedGenres},
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw AnilistException('AniList returned HTTP ${response.statusCode}');
+    }
+
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final data = decoded['data'] as Map<String, dynamic>?;
+    final page0 = data?['Page'] as Map<String, dynamic>?;
+    final mediaList = page0?['media'] as List<dynamic>? ?? const [];
+
+    return mediaList
+        .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
+        .toList();
+  }
+
   void dispose() => _httpClient.close();
 }
 

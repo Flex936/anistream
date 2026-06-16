@@ -39,10 +39,10 @@ dependencies:
   media_kit_libs_video: ^1.0.7
   libtorrent_flutter: ^1.8.5
   http: ^1.6.0
-  xml: ^6.6.1
+  xml: ^7.0.1
   window_manager: ^0.5.1
   shared_preferences: ^2.5.5
-  file_picker: ^3.0.4
+  file_picker: ^11.0.2
 
 dev_dependencies:
   flutter_test:
