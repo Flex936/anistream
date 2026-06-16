@@ -12,7 +12,7 @@
 
 import 'dart:ui';
 
-import 'package:anistream/main.dart';
+import 'package:anistream/screens/anime_details_screen.dart';
 import 'package:flutter/material.dart';
 
 import '../services/anilist_api.dart';
@@ -325,7 +325,7 @@ class _AnimeCardState extends State<AnimeCard> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const TheaterTestScreen(),
+                    builder: (_) => AnimeDetailsScreen(anime: anime),
                   ),
                 );
               },
@@ -338,14 +338,14 @@ class _AnimeCardState extends State<AnimeCard> {
                   // mirroring group-hover:border-primary/50 in AnimeCard.svelte.
                   border: Border.all(
                     color: _hovered
-                        ? AppPalette.primary.withOpacity(0.55)
+                        ? AppPalette.primary.withValues(alpha: 0.55)
                         : AppPalette.border,
                   ),
                   // Glow shadow on hover, matching the primary ring effect.
                   boxShadow: _hovered
                       ? [
                           BoxShadow(
-                            color: AppPalette.primary.withOpacity(0.18),
+                            color: AppPalette.primary.withValues(alpha: 0.18),
                             blurRadius: 24,
                             spreadRadius: 2,
                           ),
@@ -486,7 +486,7 @@ class _CoverImage extends StatelessWidget {
             ],
           );
         },
-        errorBuilder: (_, __, ___) => const ColoredBox(
+        errorBuilder: (_, _, _) => const ColoredBox(
           color: AppPalette.surface,
           child: Center(
             child: Icon(
@@ -577,9 +577,9 @@ class _StatusBadge extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.58),
+            color: Colors.black.withValues(alpha: 0.58),
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: color.withOpacity(0.40)),
+            border: Border.all(color: color.withValues(alpha: 0.40)),
           ),
           child: Text(
             label,
@@ -620,7 +620,7 @@ class _HoverOverlay extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         // ColoredBox fills StackFit.expand from the parent Stack.
         child: ColoredBox(
-          color: Colors.black.withOpacity(0.42),
+          color: Colors.black.withValues(alpha: 0.42),
           child: Center(
             child: AnimatedSlide(
               // Slide up from +12 % when appearing — mirrors translate-y-4
@@ -634,7 +634,7 @@ class _HoverOverlay extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: AppPalette.primary.withOpacity(0.55),
+                      color: AppPalette.primary.withValues(alpha: 0.55),
                       blurRadius: 22,
                       spreadRadius: 2,
                     ),
