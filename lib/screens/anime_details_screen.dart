@@ -8,7 +8,6 @@
 //   never cross-import each other.
 
 import 'package:flutter/material.dart';
-import 'package:anistream/main.dart';
 
 import '../services/anilist_api.dart';
 import '../services/torrent_scraper.dart';
@@ -76,7 +75,14 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   final Map<int, Future<List<Torrent>>> _torrentFutures = {};
 
   /// Fallback episode count when AniList omits the field.
-  int get _episodeCount => widget.anime.episodes ?? 12;
+  int get _episodeCount {
+    if (widget.anime.status == 'RELEASING' &&
+        widget.anime.nextAiringEpisode != null) {
+      // If the next episode to air is episode 5, only 1, 2, 3, and 4 are available.
+      return widget.anime.nextAiringEpisode!.episode - 1;
+    }
+    return widget.anime.episodes ?? 12;
+  }
 
   /// Returns a cached future for [ep], starting a new fetch on first call.
   Future<List<Torrent>> _futureFor(int ep) => _torrentFutures.putIfAbsent(
@@ -766,57 +772,55 @@ class _TorrentTileState extends State<_TorrentTile> {
             ),
             child: Row(
               children: [
-                // ── Left: release group + metadata ──────────────────────────
+                // ── Left: Full Title + metadata ──────────────────────────
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Release group chip — monospace to match bracket formatting
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppPalette.surface,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: AppPalette.border),
-                        ),
-                        child: Text(
-                          t.releaseGroup,
-                          style: const TextStyle(
-                            color: AppPalette.textMain,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            fontFamily: 'monospace',
-                          ),
+                      // Full Title (No truncation / maxLines)
+                      Text(
+                        t.title,
+                        style: const TextStyle(
+                          color: AppPalette.textMain,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          height: 1.4,
                         ),
                       ),
                       const SizedBox(height: 8),
 
-                      // Metadata row: resolution pill · size · seeder count
-                      Row(
+                      // Metadata row: Release Group · Resolution · Size · Seeders
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 10,
+                        runSpacing: 8,
                         children: [
-                          _Pill(t.resolution),
-                          const SizedBox(width: 10),
-                          const Icon(
-                            Icons.save_rounded,
-                            size: 11,
-                            color: AppPalette.textMuted,
+                          if (t.releaseGroup != 'Unknown')
+                            _Pill(t.releaseGroup),
+                          if (t.resolution != 'Unknown') _Pill(t.resolution),
+
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.save_rounded,
+                                size: 12,
+                                color: AppPalette.textMuted,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                t.size,
+                                style: const TextStyle(
+                                  color: AppPalette.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 3),
+
                           Text(
-                            t.size,
-                            style: const TextStyle(
-                              color: AppPalette.textMuted,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          // ▲ seeder count with health colour (mirrors TorrentList.svelte)
-                          Text(
-                            '▲ ${t.seeders}',
+                            '▲ ${t.seeders} Seeders',
                             style: TextStyle(
                               color: _seederColor(t.seeders),
                               fontSize: 12,
@@ -829,18 +833,15 @@ class _TorrentTileState extends State<_TorrentTile> {
                   ),
                 ),
 
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
 
                 // ── Right: stream button ─────────────────────────────────────
-                // Mirrors the round play icon in TorrentList.svelte:
-                //   bg-transparent text-muted/30 → group-hover:bg-primary/10
-                //   group-hover:text-primary     → hover:!bg-primary hover:!text-white
                 GestureDetector(
                   onTap: widget.onStream,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
-                    width: 38,
-                    height: 38,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: _hovered
@@ -859,7 +860,7 @@ class _TorrentTileState extends State<_TorrentTile> {
                     ),
                     child: Icon(
                       Icons.play_arrow_rounded,
-                      size: 20,
+                      size: 22,
                       color: _hovered ? Colors.white : AppPalette.primary,
                     ),
                   ),

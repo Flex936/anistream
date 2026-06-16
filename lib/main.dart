@@ -23,7 +23,7 @@ class AniStreamApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppPalette.base, // Uses Claude's custom token!
+        scaffoldBackgroundColor: AppPalette.base,
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppPalette.primary,
           brightness: Brightness.dark,

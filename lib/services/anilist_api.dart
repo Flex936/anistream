@@ -1,12 +1,18 @@
 import 'dart:convert';
-
 import 'package:http/http.dart' as http;
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Data models
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Anime title in multiple languages, mirroring [AnimeTitle] in types.go.
+class NextAiringEpisode {
+  final int episode;
+  const NextAiringEpisode({required this.episode});
+
+  factory NextAiringEpisode.fromJson(Map<String, dynamic> json) =>
+      NextAiringEpisode(episode: json['episode'] as int);
+}
+
 class AnimeTitle {
   final String? romaji;
   final String? english;
@@ -18,24 +24,17 @@ class AnimeTitle {
     english: json['english'] as String?,
   );
 
-  /// Returns the best available title, preferring Romaji over English.
   String get display => romaji ?? english ?? 'Unknown Title';
 }
 
-/// Poster image URLs at various resolutions.
 class AnimeCoverImage {
   final String? extraLarge;
-
   const AnimeCoverImage({this.extraLarge});
 
   factory AnimeCoverImage.fromJson(Map<String, dynamic> json) =>
       AnimeCoverImage(extraLarge: json['extraLarge'] as String?);
 }
 
-/// A single AniList media entry, nullable-safe.
-///
-/// Fields that the API may omit (episodes, averageScore, etc.) are typed
-/// as nullable so [fromJson] never throws on partial responses.
 class Anime {
   final int id;
   final AnimeTitle title;
@@ -45,6 +44,7 @@ class Anime {
   final int? episodes;
   final String? status;
   final int? averageScore;
+  final NextAiringEpisode? nextAiringEpisode;
 
   const Anime({
     required this.id,
@@ -55,12 +55,13 @@ class Anime {
     this.episodes,
     this.status,
     this.averageScore,
+    this.nextAiringEpisode,
   });
 
   factory Anime.fromJson(Map<String, dynamic> json) {
-    // Defensive casts — the API may return null for any nested object.
     final rawTitle = json['title'] as Map<String, dynamic>?;
     final rawCover = json['coverImage'] as Map<String, dynamic>?;
+    final rawNextEp = json['nextAiringEpisode'] as Map<String, dynamic>?;
 
     return Anime(
       id: json['id'] as int,
@@ -73,6 +74,9 @@ class Anime {
       episodes: json['episodes'] as int?,
       status: json['status'] as String?,
       averageScore: json['averageScore'] as int?,
+      nextAiringEpisode: rawNextEp != null
+          ? NextAiringEpisode.fromJson(rawNextEp)
+          : null,
     );
   }
 }
@@ -81,21 +85,12 @@ class Anime {
 //  Service
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Communicates with the AniList GraphQL endpoint.
-///
-/// ```dart
-/// final api = AnilistApiService();
-/// final trending = await api.getTrendingAnime();
-/// api.dispose(); // release the connection pool when done
-/// ```
 class AnilistApiService {
   static const String _endpoint = 'https://graphql.anilist.co';
-
-  /// Exact query requested in the migration spec.
   static const String _trendingQuery = r'''
 query GetTrendingAnime($page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
-    media(sort: TRENDING_DESC, type: ANIME, isAdult: false) {
+    media(sort: TRENDING_DESC, type: ANIME, isAdult: false, status_not: NOT_YET_RELEASED) {
       id
       title {
         romaji
@@ -109,20 +104,18 @@ query GetTrendingAnime($page: Int, $perPage: Int) {
       episodes
       status
       averageScore
+      nextAiringEpisode {
+        episode
+      }
     }
   }
 }''';
 
   final http.Client _httpClient;
 
-  /// Creates the service. Pass a custom [client] to mock in tests.
   AnilistApiService({http.Client? client})
     : _httpClient = client ?? http.Client();
 
-  /// Fetches the top [perPage] trending anime.
-  ///
-  /// Throws [AnilistException] if the API returns a non-200 status.
-  /// Network errors from [http.Client] propagate as-is.
   Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) async {
     final response = await _httpClient.post(
       Uri.parse(_endpoint),
@@ -144,8 +137,6 @@ query GetTrendingAnime($page: Int, $perPage: Int) {
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-
-    // Safe drill: data → Page → media
     final data = decoded['data'] as Map<String, dynamic>?;
     final page0 = data?['Page'] as Map<String, dynamic>?;
     final mediaList = page0?['media'] as List<dynamic>? ?? const [];
@@ -155,22 +146,13 @@ query GetTrendingAnime($page: Int, $perPage: Int) {
         .toList();
   }
 
-  /// Releases the underlying HTTP connection pool.
-  /// Call this when the owning widget is disposed.
   void dispose() => _httpClient.close();
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  Exception
-// ════════════════════════════════════════════════════════════════════════════
-
-/// Thrown when AniList returns an unexpected HTTP status code.
 class AnilistException implements Exception {
   final String message;
   final int? statusCode;
-
   const AnilistException(this.message, {this.statusCode});
-
   @override
   String toString() => 'AnilistException($statusCode): $message';
 }

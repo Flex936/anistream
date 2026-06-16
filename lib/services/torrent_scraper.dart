@@ -8,21 +8,23 @@ import 'package:xml/xml.dart';
 
 class Torrent {
   final String id;
+  final String title;
   final String releaseGroup;
   final String resolution;
   final String size;
   final int seeders;
   final String magnetLink;
-  final double score; // FIX: Made public to satisfy initializing formals lint
+  final double score;
 
   const Torrent({
     required this.id,
+    required this.title,
     required this.releaseGroup,
     required this.resolution,
     required this.size,
     required this.seeders,
     required this.magnetLink,
-    this.score = 0.0, // FIX: Direct initialization
+    this.score = 0.0,
   });
 }
 
@@ -34,15 +36,12 @@ abstract class _Regex {
   static final whitespace = RegExp(r'\s+');
   static final punct = RegExp(r"[:!?',]");
 
-  // FIX: Removed (?i) and used caseSensitive: false
   static final season = RegExp(
     r'(?:season\s*(\d+)|\bs(\d+)\b|(\d+)(?:st|nd|rd|th)\s+season|(?:part|cour)\s*(\d+))',
     caseSensitive: false,
   );
 
-  // FIX: Removed (?i) and used caseSensitive: false
   static final ep1 = RegExp(r'(?:e|ep|episode)\s*(\d+)', caseSensitive: false);
-
   static final ep2 = RegExp(r'\s+-\s+(\d+)(?:v\d)?\s+');
   static final ep3 = RegExp(r'\s+(0\d+)\s+');
   static final batch = RegExp(r'\d{2,}\s*[-~]\s*\d{2,}');
@@ -279,12 +278,13 @@ class TorrentScraperService {
 
     return Torrent(
       id: infoHash,
+      title: rawTitle,
       releaseGroup: groupName,
       resolution: resolution,
       size: size,
       seeders: seedCount,
       magnetLink: _buildMagnet(infoHash, rawTitle),
-      score: score, // FIX: Matches the newly public variable
+      score: score,
     );
   }
 
