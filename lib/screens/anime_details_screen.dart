@@ -132,7 +132,6 @@ class _NavBarState extends State<_NavBar> {
       child: Row(
         children: [
           MouseRegion(
-            cursor: SystemMouseCursors.click,
             onEnter: (_) => setState(() => _backHovered = true),
             onExit: (_) => setState(() => _backHovered = false),
             child: GestureDetector(

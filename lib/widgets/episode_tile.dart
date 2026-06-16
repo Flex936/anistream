@@ -35,7 +35,6 @@ class _EpisodeTileState extends State<EpisodeTile> {
       children: [
         // ── Header row ──────────────────────────────────────────────────────
         MouseRegion(
-          cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _hovered = true),
           onExit: (_) => setState(() => _hovered = false),
           child: GestureDetector(
