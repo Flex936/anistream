@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../theme/app_palette.dart';
 import '../services/torrent_scraper.dart';
 import '../services/streaming_controller.dart';
-import 'home_screen.dart';
 
 class TheaterScreen extends StatefulWidget {
   final int episode;
