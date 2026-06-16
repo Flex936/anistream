@@ -58,9 +58,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   @override
   void dispose() {
+    // Remove listeners first
     _torrentController.removeListener(_onTorrentStateChanged);
-    _torrentController.dispose(); // Stops the torrent cleanly
-    _player.dispose(); // Flushes the video memory cleanly
+
+    // Use a microtask to ensure the engine finishes its current frame
+    // before we flush the video memory.
+    Future.microtask(() {
+      _torrentController.dispose();
+      _player.dispose();
+    });
+
     super.dispose();
   }
 
