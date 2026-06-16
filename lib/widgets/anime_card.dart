@@ -37,7 +37,6 @@ class _AnimeCardState extends State<AnimeCard> {
         // ── Poster ──────────────────────────────────────────────────────────
         Expanded(
           child: MouseRegion(
-            cursor: SystemMouseCursors.click,
             onEnter: (_) => setState(() => _hovered = true),
             onExit: (_) => setState(() => _hovered = false),
             child: GestureDetector(

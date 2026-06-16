@@ -59,7 +59,6 @@ class _TorrentTileState extends State<TorrentTile> {
           const SizedBox(height: 6),
         ],
         MouseRegion(
-          cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _hovered = true),
           onExit: (_) => setState(() => _hovered = false),
           child: AnimatedContainer(
