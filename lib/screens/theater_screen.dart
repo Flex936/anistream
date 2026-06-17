@@ -36,7 +36,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
     debugPrint('\n[TheaterScreen] INITIALIZING EPISODE ${widget.episode}');
 
     // Initialize the media player (it stays completely dormant right now)
-    _player = Player();
+    _player = Player(
+      configuration: const PlayerConfiguration(
+        libass: true,
+        libassAndroidFont: 'assets/fonts/Roboto-Regular.ttf',
+      ),
+    );
 
     // Pipe the native mpv logs directly to the Flutter terminal
     _player.stream.log.listen((event) {
@@ -114,7 +119,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
         fit: StackFit.expand,
         children: [
           // ── Layer 1: The Hardware Accelerated Video Canvas ──
-          if (_videoInitialized) Video(controller: _videoController),
+          if (_videoInitialized)
+            Video(
+              controller: _videoController,
+              subtitleViewConfiguration: const SubtitleViewConfiguration(
+                visible: false,
+              ),
+            ),
 
           // ── Layer 2: The Loading Overlay ──
           AnimatedSwitcher(
