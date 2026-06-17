@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../services/anilist_api.dart';
@@ -20,12 +21,12 @@ String _stripHtml(String? html) {
 }
 
 Color _statusColor(String? s) => switch (s) {
-  'RELEASING' => AppPalette.statusReleasing,
-  'FINISHED' => AppPalette.statusFinished,
-  'CANCELLED' => AppPalette.statusCancelled,
-  'HIATUS' => AppPalette.statusHiatus,
-  _ => AppPalette.statusDefault,
-};
+      'RELEASING' => AppPalette.statusReleasing,
+      'FINISHED' => AppPalette.statusFinished,
+      'CANCELLED' => AppPalette.statusCancelled,
+      'HIATUS' => AppPalette.statusHiatus,
+      _ => AppPalette.statusDefault,
+    };
 
 String _formatStatus(String? s) => (s ?? 'UNKNOWN').replaceAll('_', ' ');
 
@@ -35,8 +36,6 @@ String _formatStatus(String? s) => (s ?? 'UNKNOWN').replaceAll('_', ' ');
 
 class AnimeDetailsScreen extends StatefulWidget {
   final Anime anime;
-  // ── NEW: when set by AppShell, the back button calls this instead of
-  //        Navigator.pop so the shell stays in control of navigation.
   final VoidCallback? onBack;
 
   const AnimeDetailsScreen({super.key, required this.anime, this.onBack});
@@ -59,43 +58,98 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   }
 
   Future<List<Torrent>> _futureFor(int ep) => _torrentFutures.putIfAbsent(
-    ep,
-    () => _scraper.fetchTorrents(widget.anime.title.display, ep),
-  );
+        ep,
+        () => _scraper.fetchTorrents(widget.anime.title.display, ep),
+      );
 
   void _toggleEpisode(int ep) => setState(() {
-    _expandedEpisode = _expandedEpisode == ep ? -1 : ep;
-  });
+        _expandedEpisode = _expandedEpisode == ep ? -1 : ep;
+      });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppPalette.base,
-      body: Column(
+      body: Stack(
         children: [
-          // ── CHANGED: pass onBack through to _NavBar.
-          _NavBar(anime: widget.anime, onBack: widget.onBack),
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 3, child: _LeftSidebar(anime: widget.anime)),
-                const VerticalDivider(
-                  width: 1,
-                  thickness: 1,
-                  color: AppPalette.border,
-                ),
-                Expanded(
-                  flex: 7,
-                  child: _EpisodePanel(
-                    episodeCount: _episodeCount,
-                    expandedEpisode: _expandedEpisode,
-                    futureFor: _futureFor,
-                    onToggle: _toggleEpisode,
+          // ── The seamless scrolling content ──
+          CustomScrollView(
+            slivers: [
+              // 1. The Edge-to-Edge Hero Banner
+              SliverToBoxAdapter(
+                child: _HeroSection(anime: widget.anime),
+              ),
+
+              // 2. The Episode List Header
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(48, 16, 48, 16),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Episodes',
+                        style: TextStyle(
+                          color: AppPalette.textMain,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppPalette.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppPalette.primary.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Text(
+                          '$_episodeCount',
+                          style: const TextStyle(
+                            color: AppPalette.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+
+              // 3. The Frameless Episode List
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 64),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final ep = index + 1;
+                      return EpisodeTile(
+                        key: ValueKey(ep),
+                        episodeNumber: ep,
+                        isExpanded: _expandedEpisode == ep,
+                        torrentFuture:
+                            _expandedEpisode == ep ? _futureFor(ep) : null,
+                        onToggle: () => _toggleEpisode(ep),
+                      );
+                    },
+                    childCount: _episodeCount,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // ── The Floating Frosted Navigation Bar ──
+          Positioned(
+            top: 24,
+            left: 24,
+            child: _FloatingNavBar(onBack: widget.onBack),
           ),
         ],
       ),
@@ -104,108 +158,140 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _NavBar
+//  _HeroSection (The Apple TV / Netflix Vibe)
 // ════════════════════════════════════════════════════════════════════════════
 
-class _NavBar extends StatefulWidget {
+class _HeroSection extends StatelessWidget {
   final Anime anime;
-  // ── NEW: shell back-navigation callback.
-  final VoidCallback? onBack;
-
-  const _NavBar({required this.anime, this.onBack});
-
-  @override
-  State<_NavBar> createState() => _NavBarState();
-}
-
-class _NavBarState extends State<_NavBar> {
-  bool _backHovered = false;
+  const _HeroSection({required this.anime});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        color: AppPalette.surface,
-        border: Border(bottom: BorderSide(color: AppPalette.border)),
-      ),
-      child: Row(
+    // Prefer the ultra-wide banner, fallback to cover image
+    final bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
+    final posterUrl = anime.coverImage?.extraLarge;
+
+    return SizedBox(
+      width: double.infinity,
+      height: 600, // Immersive height
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          MouseRegion(
-            onEnter: (_) => setState(() => _backHovered = true),
-            onExit: (_) => setState(() => _backHovered = false),
-            child: GestureDetector(
-              // ── CHANGED: prefer the shell callback; fall back to
-              //    Navigator.maybePop when used without an AppShell.
-              onTap: () {
-                if (widget.onBack != null) {
-                  widget.onBack!();
-                } else {
-                  Navigator.maybePop(context);
-                }
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: _backHovered
-                      ? AppPalette.border
-                      : AppPalette.transparent,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedSlide(
-                      offset: _backHovered
-                          ? const Offset(-0.15, 0)
-                          : Offset.zero,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      child: Icon(
-                        Icons.arrow_back_rounded,
-                        size: 16,
-                        color: _backHovered
-                            ? AppPalette.textMain
-                            : AppPalette.textMuted,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Back to Discovery',
-                      style: TextStyle(
-                        color: _backHovered
-                            ? AppPalette.textMain
-                            : AppPalette.textMuted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          // ── Layer 1: Background Image ──
+          if (bannerUrl != null) AppNetworkImage(url: bannerUrl),
+
+          // ── Layer 2: Seamless Fade Gradient ──
           Container(
-            width: 1,
-            height: 18,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            color: AppPalette.border,
-          ),
-          Expanded(
-            child: Text(
-              widget.anime.title.display,
-              style: const TextStyle(
-                color: AppPalette.textMain,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppPalette.base.withValues(alpha: 0.1), // Top: Mostly clear
+                  AppPalette.base.withValues(alpha: 0.7), // Mid: Darkening
+                  AppPalette.base,                        // Bottom: Solid background
+                ],
+                stops: const [0.0, 0.5, 1.0],
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+
+          // ── Layer 3: Organic Content Layout ──
+          Positioned(
+            bottom: 40,
+            left: 48,
+            right: 48,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Floating Poster with soft shadow
+                if (posterUrl != null)
+                  Container(
+                    width: 220,
+                    height: 330,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppPalette.black.withValues(alpha: 0.6),
+                          blurRadius: 40,
+                          offset: const Offset(0, 20),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AppNetworkImage(url: posterUrl),
+                    ),
+                  ),
+
+                const SizedBox(width: 48),
+
+                // Floating Meta Column
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        anime.title.display,
+                        style: const TextStyle(
+                          color: AppPalette.textMain,
+                          fontSize: 48,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
+                          letterSpacing: -1.0,
+                        ),
+                      ),
+                      if (anime.title.english != null &&
+                          anime.title.english != anime.title.romaji) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          anime.title.english!,
+                          style: const TextStyle(
+                            color: AppPalette.textMuted,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _MetaChip(
+                            label: _formatStatus(anime.status),
+                            color: _statusColor(anime.status),
+                          ),
+                          if (anime.episodes != null)
+                            _MetaChip(
+                              label: '${anime.episodes} Episodes',
+                              color: AppPalette.textLight,
+                            ),
+                          if (anime.averageScore != null)
+                            _MetaChip(
+                              label:
+                                  '★ ${(anime.averageScore! / 10).toStringAsFixed(1)} Score',
+                              color: AppPalette.accent,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        _stripHtml(anime.description),
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppPalette.textMuted,
+                          fontSize: 15,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -215,96 +301,75 @@ class _NavBarState extends State<_NavBar> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _LeftSidebar  (unchanged)
+//  _FloatingNavBar (Minimal frosted glass pill)
 // ════════════════════════════════════════════════════════════════════════════
 
-class _LeftSidebar extends StatelessWidget {
-  final Anime anime;
-  const _LeftSidebar({required this.anime});
+class _FloatingNavBar extends StatefulWidget {
+  final VoidCallback? onBack;
+  const _FloatingNavBar({this.onBack});
+
+  @override
+  State<_FloatingNavBar> createState() => _FloatingNavBarState();
+}
+
+class _FloatingNavBarState extends State<_FloatingNavBar> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AppPalette.surface,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 2 / 3,
-                child: AppNetworkImage(
-                  url: anime.coverImage?.extraLarge ?? anime.bannerImage,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () {
+          if (widget.onBack != null) {
+            widget.onBack!();
+          } else {
+            Navigator.maybePop(context);
+          }
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: _hovered
+                    ? AppPalette.white.withValues(alpha: 0.15)
+                    : AppPalette.black.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(
+                  color: AppPalette.white.withValues(alpha: 0.1),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              anime.title.romaji ?? anime.title.english ?? 'Unknown Title',
-              style: const TextStyle(
-                color: AppPalette.textMain,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-            if (anime.title.english != null &&
-                anime.title.english != anime.title.romaji) ...[
-              const SizedBox(height: 4),
-              Text(
-                anime.title.english!,
-                style: const TextStyle(
-                  color: AppPalette.textMuted,
-                  fontSize: 12,
-                  height: 1.4,
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _MetaChip(
-                  label: _formatStatus(anime.status),
-                  color: _statusColor(anime.status),
-                ),
-                if (anime.episodes != null)
-                  _MetaChip(
-                    label: '${anime.episodes} ep',
-                    color: AppPalette.textMuted,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSlide(
+                    offset: _hovered ? const Offset(-0.15, 0) : Offset.zero,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: const Icon(
+                      Icons.arrow_back_rounded,
+                      size: 18,
+                      color: AppPalette.textMain,
+                    ),
                   ),
-                if (anime.averageScore != null)
-                  _MetaChip(
-                    label: '★ ${(anime.averageScore! / 10).toStringAsFixed(1)}',
-                    color: AppPalette.accent,
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Back',
+                    style: TextStyle(
+                      color: AppPalette.textMain,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Divider(color: AppPalette.border),
-            const SizedBox(height: 16),
-            const Text(
-              'SYNOPSIS',
-              style: TextStyle(
-                color: AppPalette.textMuted,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
+                ],
               ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              _stripHtml(anime.description),
-              style: const TextStyle(
-                color: AppPalette.textMuted,
-                fontSize: 13,
-                height: 1.75,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -312,88 +377,7 @@ class _LeftSidebar extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _EpisodePanel  (unchanged)
-// ════════════════════════════════════════════════════════════════════════════
-
-class _EpisodePanel extends StatelessWidget {
-  final int episodeCount;
-  final int expandedEpisode;
-  final Future<List<Torrent>> Function(int ep) futureFor;
-  final ValueChanged<int> onToggle;
-
-  const _EpisodePanel({
-    required this.episodeCount,
-    required this.expandedEpisode,
-    required this.futureFor,
-    required this.onToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 16),
-          child: Row(
-            children: [
-              const Text(
-                'Episodes',
-                style: TextStyle(
-                  color: AppPalette.textMain,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppPalette.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppPalette.primary.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Text(
-                  '$episodeCount',
-                  style: const TextStyle(
-                    color: AppPalette.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1, thickness: 1, color: AppPalette.border),
-        Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.zero,
-            itemCount: episodeCount,
-            itemBuilder: (context, index) {
-              final ep = index + 1;
-              return EpisodeTile(
-                key: ValueKey(ep),
-                episodeNumber: ep,
-                isExpanded: expandedEpisode == ep,
-                torrentFuture: expandedEpisode == ep ? futureFor(ep) : null,
-                onToggle: () => onToggle(ep),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  _MetaChip  (unchanged)
+//  _MetaChip (Refined padding for the new layout)
 // ════════════════════════════════════════════════════════════════════════════
 
 class _MetaChip extends StatelessWidget {
@@ -404,9 +388,9 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
@@ -414,8 +398,8 @@ class _MetaChip extends StatelessWidget {
         label,
         style: TextStyle(
           color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

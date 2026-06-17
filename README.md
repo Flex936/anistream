@@ -107,7 +107,7 @@ Once your Flutter environment is ready, navigate to the project directory to lau
 
 ### 1. Install Dart Packages
 
-Fetch the necessary dependencies (like `media_kit`, `libtorrent_flutter`, and `http`):
+Fetch the necessary dependencies (like `media_kit`, `libtorrent_flutter`, etc):
 
 ```bash
 flutter pub get
