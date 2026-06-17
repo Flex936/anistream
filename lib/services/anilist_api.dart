@@ -20,9 +20,9 @@ class AnimeTitle {
   const AnimeTitle({this.romaji, this.english});
 
   factory AnimeTitle.fromJson(Map<String, dynamic> json) => AnimeTitle(
-    romaji: json['romaji'] as String?,
-    english: json['english'] as String?,
-  );
+        romaji: json['romaji'] as String?,
+        english: json['english'] as String?,
+      );
 
   String get display => romaji ?? english ?? 'Unknown Title';
 }
@@ -65,18 +65,14 @@ class Anime {
 
     return Anime(
       id: json['id'] as int,
-      title: rawTitle != null
-          ? AnimeTitle.fromJson(rawTitle)
-          : const AnimeTitle(),
+      title: rawTitle != null ? AnimeTitle.fromJson(rawTitle) : const AnimeTitle(),
       coverImage: rawCover != null ? AnimeCoverImage.fromJson(rawCover) : null,
       bannerImage: json['bannerImage'] as String?,
       description: json['description'] as String?,
       episodes: json['episodes'] as int?,
       status: json['status'] as String?,
       averageScore: json['averageScore'] as int?,
-      nextAiringEpisode: rawNextEp != null
-          ? NextAiringEpisode.fromJson(rawNextEp)
-          : null,
+      nextAiringEpisode: rawNextEp != null ? NextAiringEpisode.fromJson(rawNextEp) : null,
     );
   }
 }
@@ -87,112 +83,128 @@ class Anime {
 
 class AnilistApiService {
   static const String _endpoint = 'https://graphql.anilist.co';
+
+  // ── 1. Trending Query ──
   static const String _trendingQuery = r'''
 query GetTrendingAnime($page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
     media(sort: TRENDING_DESC, type: ANIME, isAdult: false, status_not: NOT_YET_RELEASED) {
       id
-      title {
-        romaji
-        english
-      }
-      coverImage {
-        extraLarge
-      }
+      title { romaji english }
+      coverImage { extraLarge }
       bannerImage
       description
       episodes
       status
       averageScore
-      nextAiringEpisode {
-        episode
-      }
+      nextAiringEpisode { episode }
+    }
+  }
+}''';
+
+  // ── 2. Popular This Season Query ──
+  static const String _seasonPopularQuery = r'''
+query GetSeasonPopular($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
+  Page(page: $page, perPage: $perPage) {
+    media(season: $season, seasonYear: $seasonYear, sort: POPULAR_DESC, type: ANIME, isAdult: false) {
+      id
+      title { romaji english }
+      coverImage { extraLarge }
+      bannerImage
+      description
+      episodes
+      status
+      averageScore
+      nextAiringEpisode { episode }
+    }
+  }
+}''';
+
+  // ── 3. All Time Popular Query ──
+  static const String _allTimePopularQuery = r'''
+query GetAllTimePopular($page: Int, $perPage: Int) {
+  Page(page: $page, perPage: $perPage) {
+    media(sort: POPULAR_DESC, type: ANIME, isAdult: false) {
+      id
+      title { romaji english }
+      coverImage { extraLarge }
+      bannerImage
+      description
+      episodes
+      status
+      averageScore
+      nextAiringEpisode { episode }
     }
   }
 }''';
 
   final http.Client _httpClient;
 
-  AnilistApiService({http.Client? client})
-    : _httpClient = client ?? http.Client();
+  AnilistApiService({http.Client? client}) : _httpClient = client ?? http.Client();
 
-  Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) async {
+  String get _currentSeason {
+    final month = DateTime.now().month;
+    if (month >= 4 && month <= 6) return 'SPRING';
+    if (month >= 7 && month <= 9) return 'SUMMER';
+    if (month >= 10 && month <= 12) return 'FALL';
+    return 'WINTER';
+  }
+
+  Future<List<Anime>> _execute(String query, Map<String, dynamic> variables) async {
     final response = await _httpClient.post(
       Uri.parse(_endpoint),
-      headers: const {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode({
-        'query': _trendingQuery,
-        'variables': {'page': page, 'perPage': perPage},
-      }),
+      headers: const {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode({'query': query, 'variables': variables}),
     );
 
     if (response.statusCode != 200) {
-      throw AnilistException(
-        'AniList returned HTTP ${response.statusCode}',
-        statusCode: response.statusCode,
-      );
+      throw AnilistException('AniList returned HTTP ${response.statusCode}', statusCode: response.statusCode);
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final data = decoded['data'] as Map<String, dynamic>?;
-    final page0 = data?['Page'] as Map<String, dynamic>?;
-    final mediaList = page0?['media'] as List<dynamic>? ?? const [];
 
-    return mediaList
-        .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
-        .toList();
+    // ── FIXED: Intercept explicit GraphQL syntax/validation errors hidden inside 200 OK ──
+    if (decoded.containsKey('errors')) {
+      final errors = decoded['errors'] as List<dynamic>;
+      final errorMessage = errors.isNotEmpty ? errors[0]['message'] : 'Unknown GraphQL Error';
+      throw AnilistException('GraphQL Error: $errorMessage');
+    }
+
+    final data = decoded['data'] as Map<String, dynamic>?;
+    final pageData = data?['Page'] as Map<String, dynamic>?;
+    final mediaList = pageData?['media'] as List<dynamic>? ?? const [];
+
+    return mediaList.map((raw) => Anime.fromJson(raw as Map<String, dynamic>)).toList();
   }
 
-  Future<List<Anime>> searchAnime(
-    String query, {
-    bool filterEcchi = true,
-  }) async {
+  Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) {
+    return _execute(_trendingQuery, {'page': page, 'perPage': perPage});
+  }
+
+  Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) {
+    return _execute(_seasonPopularQuery, {
+      'page': page,
+      'perPage': perPage,
+      'season': _currentSeason,
+      'seasonYear': DateTime.now().year,
+    });
+  }
+
+  Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) {
+    return _execute(_allTimePopularQuery, {'page': page, 'perPage': perPage});
+  }
+
+  Future<List<Anime>> searchAnime(String query, {bool filterEcchi = true}) async {
     const searchQuery = r'''
       query ($search: String, $bannedGenres: [String]) {
         Page(page: 1, perPage: 15) {
           media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres, status_not: NOT_YET_RELEASED) {
-            id
-            title { romaji english }
-            coverImage { extraLarge }
-            bannerImage
-            description
-            episodes
-            status
-            averageScore
-            nextAiringEpisode { episode }
+            id title { romaji english } coverImage { extraLarge } bannerImage description episodes status averageScore nextAiringEpisode { episode }
           }
         }
       }''';
-
     final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
-
-    final response = await _httpClient.post(
-      Uri.parse(_endpoint),
-      headers: const {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode({
-        'query': searchQuery,
-        'variables': {'search': query, 'bannedGenres': bannedGenres},
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw AnilistException('AniList returned HTTP ${response.statusCode}');
-    }
-
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final data = decoded['data'] as Map<String, dynamic>?;
-    final page0 = data?['Page'] as Map<String, dynamic>?;
-    final mediaList = page0?['media'] as List<dynamic>? ?? const [];
-
-    return mediaList
-        .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
-        .toList();
+    return _execute(searchQuery, {'search': query, 'bannedGenres': bannedGenres});
   }
 
   void dispose() => _httpClient.close();

@@ -4,24 +4,7 @@ import '../theme/app_palette.dart';
 import '../widgets/anime_card.dart';
 import '../services/anilist_api.dart';
 
-// ════════════════════════════════════════════════════════════════════════════
-//  Private helpers
-// ════════════════════════════════════════════════════════════════════════════
-
-int _animeGridColumns(double width) {
-  if (width < 600) return 2;
-  if (width < 900) return 3;
-  if (width < 1200) return 4;
-  if (width < 1500) return 5;
-  return 6;
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  HomeScreen
-// ════════════════════════════════════════════════════════════════════════════
-
 class HomeScreen extends StatefulWidget {
-  // ── NEW: forwarded from AppShell so card taps stay inside the shell.
   final ValueChanged<Anime>? onSelectAnime;
 
   const HomeScreen({super.key, this.onSelectAnime});
@@ -32,13 +15,18 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final AnilistApiService _api;
+  
   late Future<List<Anime>> _trendingFuture;
+  late Future<List<Anime>> _seasonPopularFuture;
+  late Future<List<Anime>> _allTimePopularFuture;
 
   @override
   void initState() {
     super.initState();
     _api = AnilistApiService();
     _loadTrending();
+    _loadSeasonPopular();
+    _loadAllTimePopular();
   }
 
   @override
@@ -47,69 +35,57 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  // ── FIXED: Individual loading functions to prevent single rows from wiping out the whole screen ──
   void _loadTrending() {
-    _trendingFuture = _api.getTrendingAnime(perPage: 24);
+    setState(() {
+      _trendingFuture = _api.getTrendingAnime(perPage: 15);
+    });
+  }
+
+  void _loadSeasonPopular() {
+    setState(() {
+      _seasonPopularFuture = _api.getPopularThisSeason(perPage: 15);
+    });
+  }
+
+  void _loadAllTimePopular() {
+    setState(() {
+      _allTimePopularFuture = _api.getAllTimePopular(perPage: 15);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppPalette.base,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _SectionHeader(title: 'Discover'),
-          Expanded(
-            child: FutureBuilder<List<Anime>>(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 48),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            
+            _AnimeCarousel(
+              title: 'Trending Now',
               future: _trendingFuture,
-              builder: _buildContent,
+              onSelectAnime: widget.onSelectAnime,
+              onRetry: _loadTrending,
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            
+            _AnimeCarousel(
+              title: 'Popular This Season',
+              future: _seasonPopularFuture,
+              onSelectAnime: widget.onSelectAnime,
+              onRetry: _loadSeasonPopular,
+            ),
 
-  Widget _buildContent(
-    BuildContext context,
-    AsyncSnapshot<List<Anime>> snapshot,
-  ) {
-    if (snapshot.connectionState != ConnectionState.done) {
-      return const _LoadingPane();
-    }
-    if (snapshot.hasError) {
-      return _ErrorPane(
-        message: snapshot.error.toString(),
-        onRetry: () => setState(_loadTrending),
-      );
-    }
-    // ── CHANGED: pass onSelectAnime through to the grid.
-    return _AnimeGrid(
-      items: snapshot.data ?? const [],
-      onSelectAnime: widget.onSelectAnime,
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  Section header
-// ════════════════════════════════════════════════════════════════════════════
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 32, 32, 16),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: AppPalette.textMain,
-          fontSize: 24,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.4,
+            _AnimeCarousel(
+              title: 'All Time Popular',
+              future: _allTimePopularFuture,
+              onSelectAnime: widget.onSelectAnime,
+              onRetry: _loadAllTimePopular,
+            ),
+          ],
         ),
       ),
     );
@@ -117,117 +93,96 @@ class _SectionHeader extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Loading pane
+//  Anime Carousel (Horizontal List)
 // ════════════════════════════════════════════════════════════════════════════
 
-class _LoadingPane extends StatelessWidget {
-  const _LoadingPane();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(
-        valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
-        strokeWidth: 2.5,
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  Error pane
-// ════════════════════════════════════════════════════════════════════════════
-
-class _ErrorPane extends StatelessWidget {
-  final String message;
+class _AnimeCarousel extends StatelessWidget {
+  final String title;
+  final Future<List<Anime>> future;
+  final ValueChanged<Anime>? onSelectAnime;
   final VoidCallback onRetry;
 
-  const _ErrorPane({required this.message, required this.onRetry});
+  const _AnimeCarousel({
+    required this.title,
+    required this.future,
+    this.onSelectAnime,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.wifi_off_rounded,
-            color: AppPalette.textMuted,
-            size: 52,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Could not load anime',
-            style: TextStyle(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 24, 32, 16),
+          child: Text(
+            title,
+            style: const TextStyle(
               color: AppPalette.textMain,
-              fontSize: 17,
+              fontSize: 22,
               fontWeight: FontWeight.w600,
+              letterSpacing: -0.4,
             ),
           ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              message,
-              style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Try again'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppPalette.primary,
-              side: const BorderSide(color: AppPalette.primary),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  Anime grid
-// ════════════════════════════════════════════════════════════════════════════
-
-class _AnimeGrid extends StatelessWidget {
-  final List<Anime> items;
-  // ── NEW: forwarded straight to each AnimeCard.
-  final ValueChanged<Anime>? onSelectAnime;
-
-  const _AnimeGrid({required this.items, this.onSelectAnime});
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return const Center(
-        child: Text(
-          'No trending anime found.',
-          style: TextStyle(color: AppPalette.textMuted, fontSize: 15),
         ),
-      );
-    }
+        SizedBox(
+          height: 330,
+          child: FutureBuilder<List<Anime>>(
+            future: future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
+                    strokeWidth: 2.5,
+                  ),
+                );
+              }
+              
+              if (snapshot.hasError) {
+                // Helpful trace to identify formatting issues if they happen on AniList's end
+                debugPrint('[HomeScreen] Carousel Error inside "$title": ${snapshot.error}');
+                return Center(
+                  child: OutlinedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Retry'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppPalette.primary,
+                      side: const BorderSide(color: AppPalette.primary),
+                    ),
+                  ),
+                );
+              }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cols = _animeGridColumns(constraints.maxWidth);
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(32, 8, 32, 32),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 24,
-            childAspectRatio: 0.55,
+              final items = snapshot.data ?? [];
+              if (items.isEmpty) {
+                return const Center(
+                  child: Text('No anime found.', style: TextStyle(color: AppPalette.textMuted)),
+                );
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                // FIXED: Resolved unnecessary underscores linting rule
+                separatorBuilder: (context, index) => const SizedBox(width: 20),
+                itemBuilder: (context, i) {
+                  return SizedBox(
+                    width: 170,
+                    child: AnimeCard(
+                      anime: items[i],
+                      onSelect: onSelectAnime,
+                    ),
+                  );
+                },
+              );
+            },
           ),
-          itemCount: items.length,
-          // ── CHANGED: onSelect wired up so taps route through AppShell.
-          itemBuilder: (_, i) =>
-              AnimeCard(anime: items[i], onSelect: onSelectAnime),
-        );
-      },
+        ),
+      ],
     );
   }
 }
