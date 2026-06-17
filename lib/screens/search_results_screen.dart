@@ -6,8 +6,14 @@ import '../widgets/anime_card.dart';
 
 class SearchResultsScreen extends StatefulWidget {
   final String query;
+  // ── NEW: forwarded from AppShell so card taps stay inside the shell.
+  final ValueChanged<Anime>? onSelectAnime;
 
-  const SearchResultsScreen({super.key, required this.query});
+  const SearchResultsScreen({
+    super.key,
+    required this.query,
+    this.onSelectAnime,
+  });
 
   @override
   State<SearchResultsScreen> createState() => _SearchResultsScreenState();
@@ -27,7 +33,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   @override
   void didUpdateWidget(SearchResultsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // If the user types a new query while already on the search screen, re-fire.
     if (oldWidget.query != widget.query) {
       _executeSearch();
     }
@@ -73,7 +78,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                 ),
               ),
               const Spacer(),
-              // Show a spinner next to the title while searching
               if (_searchFuture != null)
                 FutureBuilder(
                   future: _searchFuture,
@@ -112,7 +116,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                         ),
                       );
                     }
-
                     if (snapshot.hasError) {
                       return Center(
                         child: Text(
@@ -150,7 +153,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                                 childAspectRatio: 0.55,
                               ),
                           itemCount: results.length,
-                          itemBuilder: (_, i) => AnimeCard(anime: results[i]),
+                          // ── CHANGED: onSelect wired up so taps route through AppShell.
+                          itemBuilder: (_, i) => AnimeCard(
+                            anime: results[i],
+                            onSelect: widget.onSelectAnime,
+                          ),
                         );
                       },
                     );

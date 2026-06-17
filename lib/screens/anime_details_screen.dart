@@ -35,7 +35,11 @@ String _formatStatus(String? s) => (s ?? 'UNKNOWN').replaceAll('_', ' ');
 
 class AnimeDetailsScreen extends StatefulWidget {
   final Anime anime;
-  const AnimeDetailsScreen({super.key, required this.anime});
+  // ── NEW: when set by AppShell, the back button calls this instead of
+  //        Navigator.pop so the shell stays in control of navigation.
+  final VoidCallback? onBack;
+
+  const AnimeDetailsScreen({super.key, required this.anime, this.onBack});
 
   @override
   State<AnimeDetailsScreen> createState() => _AnimeDetailsScreenState();
@@ -69,7 +73,8 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       backgroundColor: AppPalette.base,
       body: Column(
         children: [
-          _NavBar(anime: widget.anime),
+          // ── CHANGED: pass onBack through to _NavBar.
+          _NavBar(anime: widget.anime, onBack: widget.onBack),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,7 +109,10 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
 class _NavBar extends StatefulWidget {
   final Anime anime;
-  const _NavBar({required this.anime});
+  // ── NEW: shell back-navigation callback.
+  final VoidCallback? onBack;
+
+  const _NavBar({required this.anime, this.onBack});
 
   @override
   State<_NavBar> createState() => _NavBarState();
@@ -128,7 +136,15 @@ class _NavBarState extends State<_NavBar> {
             onEnter: (_) => setState(() => _backHovered = true),
             onExit: (_) => setState(() => _backHovered = false),
             child: GestureDetector(
-              onTap: () => Navigator.maybePop(context),
+              // ── CHANGED: prefer the shell callback; fall back to
+              //    Navigator.maybePop when used without an AppShell.
+              onTap: () {
+                if (widget.onBack != null) {
+                  widget.onBack!();
+                } else {
+                  Navigator.maybePop(context);
+                }
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(
@@ -136,7 +152,6 @@ class _NavBarState extends State<_NavBar> {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  // ── FIXED: AppPalette.transparent ──
                   color: _backHovered
                       ? AppPalette.border
                       : AppPalette.transparent,
@@ -200,7 +215,7 @@ class _NavBarState extends State<_NavBar> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _LeftSidebar
+//  _LeftSidebar  (unchanged)
 // ════════════════════════════════════════════════════════════════════════════
 
 class _LeftSidebar extends StatelessWidget {
@@ -297,7 +312,7 @@ class _LeftSidebar extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _EpisodePanel
+//  _EpisodePanel  (unchanged)
 // ════════════════════════════════════════════════════════════════════════════
 
 class _EpisodePanel extends StatelessWidget {
@@ -378,7 +393,7 @@ class _EpisodePanel extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _MetaChip
+//  _MetaChip  (unchanged)
 // ════════════════════════════════════════════════════════════════════════════
 
 class _MetaChip extends StatelessWidget {

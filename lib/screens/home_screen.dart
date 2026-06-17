@@ -8,8 +8,6 @@ import '../services/anilist_api.dart';
 //  Private helpers
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Maps a viewport width to a grid column count, mirroring the Svelte
-/// grid-cols-2 / md:grid-cols-4 / lg:grid-cols-5 / xl:grid-cols-6 classes.
 int _animeGridColumns(double width) {
   if (width < 600) return 2;
   if (width < 900) return 3;
@@ -19,11 +17,14 @@ int _animeGridColumns(double width) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  HomeScreen  (replaces DiscoveryView.svelte + App.svelte search logic)
+//  HomeScreen
 // ════════════════════════════════════════════════════════════════════════════
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  // ── NEW: forwarded from AppShell so card taps stay inside the shell.
+  final ValueChanged<Anime>? onSelectAnime;
+
+  const HomeScreen({super.key, this.onSelectAnime});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -46,8 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  /// Assigns a fresh future. Calling setState(_loadTrending) retries the
-  /// request and triggers FutureBuilder to reset to ConnectionState.waiting.
   void _loadTrending() {
     _trendingFuture = _api.getTrendingAnime(perPage: 24);
   }
@@ -59,9 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section heading — matches "Discover" h2 in DiscoveryView.svelte
           const _SectionHeader(title: 'Discover'),
-
           Expanded(
             child: FutureBuilder<List<Anime>>(
               future: _trendingFuture,
@@ -77,20 +74,20 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context,
     AsyncSnapshot<List<Anime>> snapshot,
   ) {
-    // Show spinner for every non-terminal connection state (none / waiting / active)
     if (snapshot.connectionState != ConnectionState.done) {
       return const _LoadingPane();
     }
-
     if (snapshot.hasError) {
       return _ErrorPane(
         message: snapshot.error.toString(),
-        // setState(_loadTrending) replaces _trendingFuture and rebuilds
         onRetry: () => setState(_loadTrending),
       );
     }
-
-    return _AnimeGrid(items: snapshot.data ?? const []);
+    // ── CHANGED: pass onSelectAnime through to the grid.
+    return _AnimeGrid(
+      items: snapshot.data ?? const [],
+      onSelectAnime: widget.onSelectAnime,
+    );
   }
 }
 
@@ -105,14 +102,13 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // Mirrors p-8 (32 px) padding from DiscoveryView.svelte
       padding: const EdgeInsets.fromLTRB(32, 32, 32, 16),
       child: Text(
         title,
         style: const TextStyle(
           color: AppPalette.textMain,
           fontSize: 24,
-          fontWeight: FontWeight.w600, // font-semibold
+          fontWeight: FontWeight.w600,
           letterSpacing: -0.4,
         ),
       ),
@@ -194,12 +190,15 @@ class _ErrorPane extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Anime grid  (replaces the <div class="grid …"> in DiscoveryView.svelte)
+//  Anime grid
 // ════════════════════════════════════════════════════════════════════════════
 
 class _AnimeGrid extends StatelessWidget {
   final List<Anime> items;
-  const _AnimeGrid({required this.items});
+  // ── NEW: forwarded straight to each AnimeCard.
+  final ValueChanged<Anime>? onSelectAnime;
+
+  const _AnimeGrid({required this.items, this.onSelectAnime});
 
   @override
   Widget build(BuildContext context) {
@@ -216,19 +215,17 @@ class _AnimeGrid extends StatelessWidget {
       builder: (context, constraints) {
         final cols = _animeGridColumns(constraints.maxWidth);
         return GridView.builder(
-          // p-8 (32 px) horizontal padding, 32 px bottom padding
           padding: const EdgeInsets.fromLTRB(32, 8, 32, 32),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
-            crossAxisSpacing: 20, // gap-6 ≈ 24 px; 20 px suits desktop density
+            crossAxisSpacing: 20,
             mainAxisSpacing: 24,
-            // childAspectRatio = card_width / card_total_height.
-            // A 2:3 poster (ratio 0.667) + ~66 px of text below ≈ 0.55.
-            // Adjust this value if the typography height changes.
             childAspectRatio: 0.55,
           ),
           itemCount: items.length,
-          itemBuilder: (_, i) => AnimeCard(anime: items[i]),
+          // ── CHANGED: onSelect wired up so taps route through AppShell.
+          itemBuilder: (_, i) =>
+              AnimeCard(anime: items[i], onSelect: onSelectAnime),
         );
       },
     );

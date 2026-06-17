@@ -7,7 +7,11 @@ import '../theme/app_palette.dart';
 
 class AnimeCard extends StatefulWidget {
   final Anime anime;
-  const AnimeCard({super.key, required this.anime});
+  // ── NEW: when provided by a parent screen, called instead of Navigator.push
+  //        so the card stays inside the AppShell and the NavBar stays visible.
+  final ValueChanged<Anime>? onSelect;
+
+  const AnimeCard({super.key, required this.anime, this.onSelect});
 
   @override
   State<AnimeCard> createState() => _AnimeCardState();
@@ -41,12 +45,18 @@ class _AnimeCardState extends State<AnimeCard> {
             onExit: (_) => setState(() => _hovered = false),
             child: GestureDetector(
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AnimeDetailsScreen(anime: anime),
-                  ),
-                );
+                // ── CHANGED: prefer the shell callback; fall back to
+                //    Navigator.push only when used outside an AppShell context.
+                if (widget.onSelect != null) {
+                  widget.onSelect!(anime);
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AnimeDetailsScreen(anime: anime),
+                    ),
+                  );
+                }
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -100,7 +110,7 @@ class _AnimeCardState extends State<AnimeCard> {
           ),
         ),
 
-        // ── Title + episode count ───────────────────────────
+        // ── Title + episode count ────────────────────────────────────────────
         const SizedBox(height: 10),
         AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 200),
@@ -126,7 +136,8 @@ class _AnimeCardState extends State<AnimeCard> {
   }
 }
 
-// Private sub-widgets for the card
+// ── Private sub-widgets (unchanged) ─────────────────────────────────────────
+
 class _CoverImage extends StatelessWidget {
   final String? url;
   final bool hovered;
