@@ -33,20 +33,38 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('\n[TheaterScreen] INITIALIZING EPISODE ${widget.episode}');
 
     // Initialize the media player (it stays completely dormant right now)
     _player = Player();
+
+    // Pipe the native mpv logs directly to the Flutter terminal
+    _player.stream.log.listen((event) {
+      debugPrint('[media_kit_native] ${event.level}: ${event.text}');
+    });
+
     _videoController = VideoController(_player);
 
     // Initialize the torrent stream and listen to its lifecycle
+    debugPrint('[TheaterScreen] Starting P2P Engine...');
     _torrentController = StreamingController();
     _torrentController.addListener(_onTorrentStateChanged);
     _torrentController.initialize(widget.torrent.magnetLink);
   }
 
   void _onTorrentStateChanged() {
+    // Log the current status of the engine
+    debugPrint(
+      '[TheaterScreen] P2P Status: ${_torrentController.statusText} | Ready: ${_torrentController.isReadyToPlay}',
+    );
+
     // Once the engine reports the file headers are parsed and pieces are buffered...
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
+      debugPrint(
+        '[TheaterScreen] Engine is ready! Feeding localhost stream to media_kit...',
+      );
+      debugPrint('[TheaterScreen] Stream URL: ${_torrentController.streamUrl}');
+
       _videoInitialized = true;
       // Feed the local HTTP stream URL directly to the native GPU player
       _player.open(Media(_torrentController.streamUrl!));
@@ -58,14 +76,19 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   @override
   void dispose() {
+    debugPrint('\n[TheaterScreen] DISPOSING THEATER SCREEN...');
+
     // Remove listeners first
     _torrentController.removeListener(_onTorrentStateChanged);
 
     // Use a microtask to ensure the engine finishes its current frame
     // before we flush the video memory.
     Future.microtask(() {
+      debugPrint('[TheaterScreen] Tearing down P2P engine and Video player...');
       _torrentController.dispose();
+      _player.stop();
       _player.dispose();
+      debugPrint('[TheaterScreen] Teardown complete.');
     });
 
     super.dispose();
@@ -74,17 +97,17 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ── FIXED: AppPalette.black ──
       backgroundColor: AppPalette.black,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        // ── FIXED: AppPalette.transparent ──
         backgroundColor: AppPalette.transparent,
         elevation: 0,
         leading: IconButton(
-          // ── FIXED: AppPalette.white ──
           icon: const Icon(Icons.arrow_back_rounded, color: AppPalette.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            debugPrint('[TheaterScreen] Back button pressed');
+            Navigator.pop(context);
+          },
         ),
       ),
       body: Stack(
@@ -100,7 +123,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
                 ? const SizedBox.shrink() // Disappears when ready
                 : Container(
                     key: const ValueKey('loading_overlay'),
-                    // ── FIXED: AppPalette.black ──
                     color: AppPalette.black.withValues(alpha: 0.85),
                     child: Center(
                       child: Column(
@@ -123,7 +145,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
                           Text(
                             'Episode ${widget.episode}',
                             style: const TextStyle(
-                              // ── FIXED: AppPalette.white ──
                               color: AppPalette.white,
                               fontSize: 18,
                               fontWeight: FontWeight.w600,

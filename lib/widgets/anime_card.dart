@@ -7,8 +7,8 @@ import '../theme/app_palette.dart';
 
 class AnimeCard extends StatefulWidget {
   final Anime anime;
-  // ── NEW: when provided by a parent screen, called instead of Navigator.push
-  //        so the card stays inside the AppShell and the NavBar stays visible.
+  // When provided by a parent screen, called instead of Navigator.push
+  // so the card stays inside the AppShell and the NavBar stays visible.
   final ValueChanged<Anime>? onSelect;
 
   const AnimeCard({super.key, required this.anime, this.onSelect});
@@ -45,8 +45,8 @@ class _AnimeCardState extends State<AnimeCard> {
             onExit: (_) => setState(() => _hovered = false),
             child: GestureDetector(
               onTap: () {
-                // ── CHANGED: prefer the shell callback; fall back to
-                //    Navigator.push only when used outside an AppShell context.
+                // prefer the shell callback; fall back to
+                // Navigator.push only when used outside an AppShell context.
                 if (widget.onSelect != null) {
                   widget.onSelect!(anime);
                 } else {
@@ -59,7 +59,9 @@ class _AnimeCardState extends State<AnimeCard> {
                 }
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(
+                  milliseconds: 150,
+                ), // Snappier duration
                 curve: Curves.easeOut,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
@@ -83,10 +85,7 @@ class _AnimeCardState extends State<AnimeCard> {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      _CoverImage(
-                        url: anime.coverImage?.extraLarge,
-                        hovered: _hovered,
-                      ),
+                      _CoverImage(url: anime.coverImage?.extraLarge),
                       Positioned(
                         left: 0,
                         right: 0,
@@ -113,7 +112,7 @@ class _AnimeCardState extends State<AnimeCard> {
         // ── Title + episode count ────────────────────────────────────────────
         const SizedBox(height: 10),
         AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 150),
           style: TextStyle(
             color: _hovered ? AppPalette.primary : AppPalette.textMain,
             fontSize: 13,
@@ -136,12 +135,11 @@ class _AnimeCardState extends State<AnimeCard> {
   }
 }
 
-// ── Private sub-widgets (unchanged) ─────────────────────────────────────────
+// ── Private sub-widgets ─────────────────────────────────────────
 
 class _CoverImage extends StatelessWidget {
   final String? url;
-  final bool hovered;
-  const _CoverImage({this.url, required this.hovered});
+  const _CoverImage({this.url});
 
   @override
   Widget build(BuildContext context) {
@@ -157,38 +155,35 @@ class _CoverImage extends StatelessWidget {
         ),
       );
     }
-    return AnimatedScale(
-      scale: hovered ? 1.05 : 1.0,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOut,
-      child: Image.network(
-        url!,
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-          if (wasSynchronouslyLoaded) return child;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              const ColoredBox(color: AppPalette.surface),
-              AnimatedOpacity(
-                opacity: frame != null ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 500),
-                curve: Curves.easeOut,
-                child: child,
-              ),
-            ],
-          );
-        },
-        errorBuilder: (_, _, _) => const ColoredBox(
-          color: AppPalette.surface,
-          child: Center(
-            child: Icon(
-              Icons.broken_image_outlined,
-              color: AppPalette.textMuted,
-              size: 36,
+
+    // Removed the AnimatedScale entirely for butter-smooth performance
+    return Image.network(
+      url!,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded) return child;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: AppPalette.surface),
+            AnimatedOpacity(
+              opacity: frame != null ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeOut,
+              child: child,
             ),
+          ],
+        );
+      },
+      errorBuilder: (_, _, _) => const ColoredBox(
+        color: AppPalette.surface,
+        child: Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            color: AppPalette.textMuted,
+            size: 36,
           ),
         ),
       ),
@@ -283,13 +278,13 @@ class _HoverOverlay extends StatelessWidget {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 150), // Snappier fade
         child: ColoredBox(
           color: AppPalette.black.withValues(alpha: 0.42),
           child: Center(
             child: AnimatedSlide(
               offset: visible ? Offset.zero : const Offset(0.0, 0.12),
-              duration: const Duration(milliseconds: 250),
+              duration: const Duration(milliseconds: 200), // Snappier slide
               curve: Curves.easeOut,
               child: Container(
                 padding: const EdgeInsets.all(11),
