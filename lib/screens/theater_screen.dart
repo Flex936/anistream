@@ -11,14 +11,17 @@ import '../theme/app_palette.dart';
 import '../services/torrent_scraper.dart';
 import '../services/streaming_controller.dart';
 import '../widgets/theater/theater_components.dart';
-import '../widgets/theater/theater_controls.dart';
 import '../widgets/theater/theater_settings.dart';
 
 class TheaterScreen extends StatefulWidget {
   final int episode;
   final Torrent torrent;
 
-  const TheaterScreen({super.key, required this.episode, required this.torrent});
+  const TheaterScreen({
+    super.key,
+    required this.episode,
+    required this.torrent,
+  });
 
   @override
   State<TheaterScreen> createState() => _TheaterScreenState();
@@ -39,18 +42,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   void initState() {
     super.initState();
-    
+
     // libass: true enables high-quality "burned-in" style subtitle rendering
-    _player = Player(
-      configuration: const PlayerConfiguration(
-        libass: true,
-      ),
-    );
+    _player = Player(configuration: const PlayerConfiguration(libass: true));
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
       if (Platform.isLinux || Platform.isWindows) {
-    platform.setProperty('hwdec', 'cuda-copy'); // NVIDIA Desktop
+        platform.setProperty('hwdec', 'cuda-copy'); // NVIDIA Desktop
       } else if (Platform.isAndroid) {
         platform.setProperty('hwdec', 'mediacodec-copy');
       } else if (Platform.isIOS) {
@@ -75,34 +74,32 @@ class _TheaterScreenState extends State<TheaterScreen> {
     setState(() {});
   }
 
-void _handleKeyEvent(KeyEvent event) {
+  void _handleKeyEvent(KeyEvent event) {
     if (event is! KeyDownEvent) return;
     final key = event.logicalKey;
 
     if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyK) {
       _player.playOrPause();
-    } 
+    }
     // ── Clamp negative seek to 0:00 ──
-    else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyJ) {
+    else if (key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.keyJ) {
       final target = _player.state.position - const Duration(seconds: 10);
       _player.seek(target.isNegative ? Duration.zero : target);
-    } 
+    }
     // ── Clamp forward seek to the end of the video ──
-    else if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyL) {
+    else if (key == LogicalKeyboardKey.arrowRight ||
+        key == LogicalKeyboardKey.keyL) {
       final target = _player.state.position + const Duration(seconds: 10);
       final duration = _player.state.duration;
       _player.seek(target > duration ? duration : target);
-    } 
-    else if (key == LogicalKeyboardKey.arrowUp) {
+    } else if (key == LogicalKeyboardKey.arrowUp) {
       _player.setVolume((_player.state.volume + 5).clamp(0, 100));
-    } 
-    else if (key == LogicalKeyboardKey.arrowDown) {
+    } else if (key == LogicalKeyboardKey.arrowDown) {
       _player.setVolume((_player.state.volume - 5).clamp(0, 100));
-    } 
-    else if (key == LogicalKeyboardKey.keyF) {
+    } else if (key == LogicalKeyboardKey.keyF) {
       _toggleFullscreen();
-    } 
-    else if (key == LogicalKeyboardKey.escape) {
+    } else if (key == LogicalKeyboardKey.escape) {
       if (_isSettingsOpen) {
         setState(() => _isSettingsOpen = false);
       } else if (_isFullscreen) {
@@ -155,7 +152,9 @@ void _handleKeyEvent(KeyEvent event) {
       child: Scaffold(
         backgroundColor: AppPalette.black,
         body: MouseRegion(
-          cursor: _showControls ? SystemMouseCursors.basic : SystemMouseCursors.none,
+          cursor: _showControls
+              ? SystemMouseCursors.basic
+              : SystemMouseCursors.none,
           onHover: (_) => _startHideControlsTimer(),
           child: GestureDetector(
             onTap: () {
@@ -170,8 +169,11 @@ void _handleKeyEvent(KeyEvent event) {
               fit: StackFit.expand,
               children: [
                 if (_videoInitialized)
-                  Video(controller: _videoController, controls: NoVideoControls),
-                
+                  Video(
+                    controller: _videoController,
+                    controls: NoVideoControls,
+                  ),
+
                 if (_videoInitialized)
                   AnimatedOpacity(
                     opacity: _showControls ? 1.0 : 0.0,
@@ -181,19 +183,31 @@ void _handleKeyEvent(KeyEvent event) {
                       child: Stack(
                         children: [
                           Positioned(
-                            bottom: 0, left: 0, right: 0, height: 200,
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: 200,
                             child: Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter, end: Alignment.topCenter,
-                                  colors: [AppPalette.black.withValues(alpha: 0.9), AppPalette.transparent],
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                  colors: [
+                                    AppPalette.black.withValues(alpha: 0.9),
+                                    AppPalette.transparent,
+                                  ],
                                 ),
                               ),
                             ),
                           ),
                           Positioned(
-                            top: 40, left: 24, right: 24,
-                            child: TheaterTopBar(episode: widget.episode, onBack: () => Navigator.pop(context)),
+                            top: 40,
+                            left: 24,
+                            right: 24,
+                            child: TheaterTopBar(
+                              episode: widget.episode,
+                              onBack: () => Navigator.pop(context),
+                            ),
                           ),
                         ],
                       ),
@@ -201,13 +215,24 @@ void _handleKeyEvent(KeyEvent event) {
                   ),
 
                 if (_isSettingsOpen)
-                  Positioned(bottom: 110, right: 32, child: TheaterSettingsMenu(player: _player, onClose: () => setState(() => _isSettingsOpen = false))),
+                  Positioned(
+                    bottom: 110,
+                    right: 32,
+                    child: TheaterSettingsMenu(
+                      player: _player,
+                      onClose: () => setState(() => _isSettingsOpen = false),
+                    ),
+                  ),
 
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 600),
-                  child: _torrentController.isReadyToPlay 
-                    ? const SizedBox.shrink() 
-                    : TheaterLoadingOverlay(episode: widget.episode, torrent: widget.torrent, controller: _torrentController),
+                  child: _torrentController.isReadyToPlay
+                      ? const SizedBox.shrink()
+                      : TheaterLoadingOverlay(
+                          episode: widget.episode,
+                          torrent: widget.torrent,
+                          controller: _torrentController,
+                        ),
                 ),
               ],
             ),

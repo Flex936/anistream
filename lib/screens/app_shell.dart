@@ -17,6 +17,7 @@ import 'home_screen.dart';
 import 'search_results_screen.dart';
 import '../services/anilist_auth_service.dart';
 import 'watchlist_screen.dart';
+import 'scheduled_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  AppShell
@@ -183,8 +184,8 @@ class _AppShellState extends State<AppShell> {
           });
         },
         onSearch: _handleSearch,
-        onScheduled: () {
-          /* TODO: _navigateTo(const ScheduleScreen()) */
+        onScheduled: () => {
+          _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
         },
         onWatchlist: () =>
             _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),

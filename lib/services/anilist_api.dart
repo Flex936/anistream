@@ -270,6 +270,28 @@ query ($userId: Int) {
   }
 }''';
 
+  static const String _currentlyAiringQuery = r'''
+query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason, $currentYear: Int) {
+  Page(page: $page, perPage: $perPage) {
+    media(
+      type: ANIME,
+      season: $currentSeason,
+      seasonYear: $currentYear,
+      sort: TRENDING_DESC,
+      countryOfOrigin: "JP",
+      isAdult: false,
+      format_not_in: [SPECIAL, OVA, ONA, MOVIE]
+    ) {
+      id
+      title { romaji english }
+      coverImage { large }
+      episodes
+      status
+      nextAiringEpisode { episode airingAt }
+    }
+  }
+}''';
+
   String get _currentSeason {
     final month = DateTime.now().month;
     if (month >= 4 && month <= 6) return 'SPRING';
@@ -369,6 +391,15 @@ query ($userId: Int) {
     return lists
         .map((r) => MediaList.fromJson(r as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) {
+    return _execute(_currentlyAiringQuery, {
+      'page': page,
+      'perPage': perPage,
+      'currentSeason': _currentSeason,
+      'currentYear': DateTime.now().year,
+    });
   }
 
   Future<List<Anime>> searchAnime(
