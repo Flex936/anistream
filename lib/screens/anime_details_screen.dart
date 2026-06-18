@@ -59,7 +59,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
   Future<List<Torrent>> _futureFor(int ep) => _torrentFutures.putIfAbsent(
         ep,
-        () => _scraper.fetchTorrents(widget.anime.title.display, ep),
+        () => _scraper.fetchTorrents(widget.anime.title, ep),
       );
 
   void _toggleEpisode(int ep) => setState(() {

@@ -29,7 +29,7 @@ class AnimeTitle {
     english: json['english'] as String?,
   );
 
-  String get display => english ?? romaji ?? 'Unknown Title';
+  String get display => romaji ?? english ?? 'Unknown Title';
 }
 
 class AnimeCoverImage {

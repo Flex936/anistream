@@ -2,6 +2,8 @@ import 'dart:developer';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 
+import 'anilist_query_service.dart'; // ── ADDED: Needed for AnimeTitle
+
 // ════════════════════════════════════════════════════════════════════════════
 //  Model
 // ════════════════════════════════════════════════════════════════════════════
@@ -29,12 +31,13 @@ class Torrent {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Regex Constants (Ported from nyaa.go)
+//  Regex Constants
 // ════════════════════════════════════════════════════════════════════════════
 
 abstract class _Regex {
   static final whitespace = RegExp(r'\s+');
-  static final punct = RegExp(r"[:!?',]");
+  // ── FIXED: Added hyphens and periods to punctuation stripping ──
+  static final punct = RegExp(r"[:!?',\-.]"); 
 
   static final season = RegExp(
     r'(?:season\s*(\d+)|\bs(\d+)\b|(\d+)(?:st|nd|rd|th)\s+season|(?:part|cour)\s*(\d+))',
@@ -57,51 +60,71 @@ abstract class _Regex {
 //  Service
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Dart implementation of the Nyaa.si RSS scraper and scoring engine.
 class TorrentScraperService {
   final http.Client _client;
 
   TorrentScraperService({http.Client? client})
     : _client = client ?? http.Client();
 
-  /// Fetches, scores, and ranks torrents for a given anime and episode.
+  /// Fetches, scores, and ranks torrents using a robust fallback hierarchy.
   Future<List<Torrent>> fetchTorrents(
-    String animeTitle,
+    AnimeTitle title, // ── FIXED: Now accepts the entire Title object ──
     int episodeNumber,
   ) async {
     final epStr = episodeNumber.toString().padLeft(2, '0');
+    List<Torrent> results = [];
 
-    // Sanitize the title exactly like the Go pipeline
-    final safeTitle = animeTitle
-        .replaceAll(_Regex.punct, ' ')
-        .replaceAll(_Regex.whitespace, ' ')
-        .trim();
+    // Helper to execute a search and immediately apply fallbacks
+    Future<void> trySearch(String titleText, bool isMovie) async {
+      if (results.isNotEmpty) return; // Stop if we already found torrents
 
-    // 1. Primary Search (TV Series format)
-    var results = await _searchAndScore(
-      searchQuery: '$safeTitle $epStr',
-      animeTitle: animeTitle,
-      episodeNumber: episodeNumber,
-      isMovieFallback: false,
-    );
+      // 1. Clean the title (strip "Season X" and punctuation for higher match rates)
+      final safeTitle = titleText
+          .replaceAll(_Regex.season, '')
+          .replaceAll(_Regex.punct, ' ')
+          .replaceAll(_Regex.whitespace, ' ')
+          .trim();
 
-    // 2. Movie / OVA Fallback
-    if (results.isEmpty && episodeNumber == 1) {
-      log(
-        "[Scraper] No TV results for '$safeTitle'; trying movie/OVA fallback.",
-      );
       results = await _searchAndScore(
-        searchQuery: safeTitle,
-        animeTitle: animeTitle,
+        searchQuery: isMovie ? safeTitle : '$safeTitle $epStr',
+        animeTitle: titleText,
         episodeNumber: episodeNumber,
-        isMovieFallback: true,
+        isMovieFallback: isMovie,
       );
+
+      // 2. Truncation Fallback: If the full title fails, try just the first 4 words.
+      // (Uploaders frequently truncate long Light Novel titles like Re:Zero).
+      if (results.isEmpty) {
+        final words = safeTitle.split(' ');
+        if (words.length > 4) {
+          final shortTitle = words.take(4).join(' ');
+          log("[Scraper] Truncated fallback query: '$shortTitle'");
+          results = await _searchAndScore(
+            searchQuery: isMovie ? shortTitle : '$shortTitle $epStr',
+            animeTitle: titleText,
+            episodeNumber: episodeNumber,
+            isMovieFallback: isMovie,
+          );
+        }
+      }
+    }
+
+    // ── The Hierarchy of Nyaa Search ──
+    
+    // 1. Try Romaji (The standard for Nyaa)
+    if (title.romaji != null) await trySearch(title.romaji!, false);
+    
+    // 2. Try English (Fallback for Netflix/Crunchyroll exclusive rips)
+    if (title.english != null) await trySearch(title.english!, false);
+    
+    // 3. Movie Fallbacks (Only trigger on Episode 1)
+    if (episodeNumber == 1) {
+      if (title.romaji != null) await trySearch(title.romaji!, true);
+      if (title.english != null) await trySearch(title.english!, true);
     }
 
     if (results.isEmpty) {
-      throw Exception(
-        'No seeded torrents found for $animeTitle Episode $epStr',
-      );
+      throw Exception('No seeded torrents found for ${title.display} Episode $epStr');
     }
 
     return results;
@@ -124,7 +147,6 @@ class TorrentScraperService {
       throw Exception('Nyaa returned HTTP ${response.statusCode}');
     }
 
-    // Parse the RSS XML
     final document = XmlDocument.parse(response.body);
     final items = document.findAllElements('item');
 
@@ -156,7 +178,6 @@ class TorrentScraperService {
       }
     }
 
-    // FIX: Updated reference from _score to score
     validTorrents.sort((a, b) => b.score.compareTo(a.score));
     return validTorrents;
   }
@@ -176,19 +197,15 @@ class TorrentScraperService {
     final tl = rawTitle.toLowerCase();
     final ql = animeTitle.toLowerCase();
 
-    // --- Meta Extraction ---
     final infoHash = item.findElements('nyaa:infoHash').firstOrNull?.innerText;
-    final size =
-        item.findElements('nyaa:size').firstOrNull?.innerText ?? 'Unknown';
-    final seedersStr =
-        item.findElements('nyaa:seeders').firstOrNull?.innerText ?? '0';
+    final size = item.findElements('nyaa:size').firstOrNull?.innerText ?? 'Unknown';
+    final seedersStr = item.findElements('nyaa:seeders').firstOrNull?.innerText ?? '0';
 
     if (infoHash == null || infoHash.isEmpty) return null;
 
     final seedCount = int.tryParse(seedersStr) ?? 0;
     if (seedCount == 0) return null;
 
-    // --- Season matching ---
     if (_extractSeason(tl) == targetSeason) {
       score += 100;
     } else {
@@ -203,7 +220,6 @@ class TorrentScraperService {
       score -= 100;
     }
 
-    // --- Episode filter ---
     final torrentEp = _extractEpisode(tl);
     if (!isMovieFallback) {
       if (torrentEp != -1 && torrentEp != episodeNumber) return null;
