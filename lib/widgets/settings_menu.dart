@@ -11,11 +11,9 @@ Future<void> showSettingsMenu(BuildContext context) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Settings',
-    // ── Transparent, dark barrier so you can still see the UI behind it ──
     barrierColor: AppPalette.black.withValues(alpha: 0.40),
     transitionDuration: const Duration(milliseconds: 300),
     transitionBuilder: (context, animation, _, child) {
-      // ── Smooth slide in from the right edge ──
       return SlideTransition(
         position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
             .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
@@ -41,6 +39,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   late bool _filterEcchi;
   late String _hardwareDecoding;
+  late bool _autoPlayRecommended;
 
   bool get _isDesktop => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
@@ -56,6 +55,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     setState(() {
       _filterEcchi = s.filterEcchi;
       _hardwareDecoding = s.hardwareDecoding;
+      _autoPlayRecommended = s.autoPlayRecommended;
       _loading = false;
     });
   }
@@ -67,6 +67,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         AppSettings(
           filterEcchi: _filterEcchi,
           hardwareDecoding: _hardwareDecoding,
+          autoPlayRecommended: _autoPlayRecommended,
         ),
       );
       if (mounted) Navigator.of(context).pop();
@@ -146,6 +147,31 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                   ],
                                 ),
                                 
+                                // ── NEW PLAYBACK SECTION ──
+                                const SizedBox(height: 32),
+                                const Divider(color: AppPalette.border),
+                                const SizedBox(height: 32),
+
+                                const SectionLabel(label: 'Playback Preferences'),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Auto-Play Recommended', style: TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w600)),
+                                          SizedBox(height: 4),
+                                          Text('Skip the release list and instantly stream the highest-rated torrent.', style: TextStyle(color: AppPalette.textMuted, fontSize: 12, height: 1.4)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    ToggleSwitch(value: _autoPlayRecommended, onChanged: (v) => setState(() => _autoPlayRecommended = v)),
+                                  ],
+                                ),
+
                                 if (_isDesktop) ...[
                                   const SizedBox(height: 32),
                                   const Divider(color: AppPalette.border),
