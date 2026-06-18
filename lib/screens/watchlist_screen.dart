@@ -286,7 +286,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
       itemCount: _activeEntries.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      separatorBuilder: (_, _) => const SizedBox(height: 16),
       itemBuilder: (_, i) => _ListCard(
         entry: _activeEntries[i],
         showProgress: _activeStatus == 'CURRENT',
