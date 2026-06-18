@@ -115,6 +115,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             switchOutCurve: Curves.easeIn,
             child: (_hoveredBanner != null && _hoveredBanner!.trim().isNotEmpty)
                 ? Stack(
+                    // ── Key ensures AnimatedSwitcher registers the change properly ──
                     key: ValueKey(_hoveredBanner),
                     fit: StackFit.expand,
                     children: [
@@ -131,7 +132,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                       ),
                     ],
                   )
-                : const SizedBox.shrink(key: ValueKey('empty')),
+                // ── Removed the hardcoded key to prevent duplicate key crashes ──
+                : const SizedBox.shrink(),
           ),
         ),
 

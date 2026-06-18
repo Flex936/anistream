@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 
 import '../services/anilist_query_service.dart';
 import '../services/torrent_scraper_service.dart';
+import '../services/settings_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/episode_tile.dart';
 import '../widgets/network_image.dart';
+import '../screens/theater_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  File-private helpers
@@ -48,6 +50,20 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   final TorrentScraperService _scraper = TorrentScraperService();
   int _expandedEpisode = -1;
   final Map<int, Future<List<Torrent>>> _torrentFutures = {};
+  
+  bool _autoPlayRecommended = false;
+  
+  // ── Locking states to prevent double-click crashes ──
+  bool _isAutoPlaying = false;
+  int _autoPlayTargetEpisode = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    SettingsService().load().then((s) {
+      if (mounted) setState(() => _autoPlayRecommended = s.autoPlayRecommended);
+    });
+  }
 
   int get _episodeCount {
     if (widget.anime.status == 'RELEASING' &&
@@ -62,85 +78,164 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         () => _scraper.fetchTorrents(widget.anime.title, ep),
       );
 
-  void _toggleEpisode(int ep) => setState(() {
+  void _toggleEpisode(int ep) async {
+    // ── Immediately abort if we are already attempting to load an episode ──
+    if (_isAutoPlaying) return;
+
+    // Normal behavior (Auto-play OFF)
+    if (!_autoPlayRecommended) {
+      setState(() {
         _expandedEpisode = _expandedEpisode == ep ? -1 : ep;
       });
+      return;
+    }
+
+    // ── Auto-Play Behavior ──
+    setState(() {
+      _isAutoPlaying = true;
+      _autoPlayTargetEpisode = ep;
+      _expandedEpisode = -1; // Force the dropdown to stay closed
+    });
+
+    try {
+      final torrents = await _futureFor(ep);
+      if (!mounted) return;
+      
+      if (torrents.isNotEmpty) {
+        // Wait for the user to return from the video player before unlocking
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TheaterScreen(
+              episode: ep,
+              torrent: torrents.first, // The highest rated torrent
+            ),
+          ),
+        );
+      } else {
+        // If no torrents are found, gracefully fallback and expand the 
+        // dropdown so they can see the "No releases found" text.
+        setState(() => _expandedEpisode = ep);
+      }
+    } catch (_) {
+      // On scrape error, expand the dropdown to show the error message
+      setState(() => _expandedEpisode = ep);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAutoPlaying = false;
+          _autoPlayTargetEpisode = -1;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppPalette.base,
-      // ── FIXED: Removed the outer Stack. The scroll view now owns the screen ──
-      body: CustomScrollView(
-        slivers: [
-          // 1. The Edge-to-Edge Hero Banner
-          SliverToBoxAdapter(
-            // ── FIXED: Passed the onBack function directly into the Hero ──
-            child: _HeroSection(anime: widget.anime, onBack: widget.onBack),
-          ),
-
-          // 2. The Episode List Header
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(48, 16, 48, 16),
-            sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  const Text(
-                    'Episodes',
-                    style: TextStyle(
-                      color: AppPalette.textMain,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppPalette.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppPalette.primary.withValues(alpha: 0.25),
-                      ),
-                    ),
-                    child: Text(
-                      '$_episodeCount',
-                      style: const TextStyle(
-                        color: AppPalette.primary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
+      body: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: _HeroSection(anime: widget.anime, onBack: widget.onBack),
               ),
-            ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(48, 16, 48, 16),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Episodes',
+                        style: TextStyle(
+                          color: AppPalette.textMain,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppPalette.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppPalette.primary.withValues(alpha: 0.25)),
+                        ),
+                        child: Text(
+                          '$_episodeCount',
+                          style: const TextStyle(
+                            color: AppPalette.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 64),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final ep = index + 1;
+                      return EpisodeTile(
+                        key: ValueKey(ep),
+                        episodeNumber: ep,
+                        isExpanded: _expandedEpisode == ep,
+                        torrentFuture: _expandedEpisode == ep ? _futureFor(ep) : null,
+                        onToggle: () => _toggleEpisode(ep),
+                      );
+                    },
+                    childCount: _episodeCount,
+                  ),
+                ),
+              ),
+            ],
           ),
 
-          // 3. The Frameless Episode List
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 64),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final ep = index + 1;
-                  return EpisodeTile(
-                    key: ValueKey(ep),
-                    episodeNumber: ep,
-                    isExpanded: _expandedEpisode == ep,
-                    torrentFuture:
-                        _expandedEpisode == ep ? _futureFor(ep) : null,
-                    onToggle: () => _toggleEpisode(ep),
+          // ── Beautiful frosted glass overlay for the Auto-Play scraper ──
+          if (_isAutoPlaying)
+            Positioned.fill(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 250),
+                builder: (context, opacity, child) {
+                  return Opacity(
+                    opacity: opacity,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        color: AppPalette.base.withValues(alpha: 0.75),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
+                                strokeWidth: 3,
+                              ),
+                              const SizedBox(height: 24),
+                              Text(
+                                'Finding best source for Episode $_autoPlayTargetEpisode...',
+                                style: const TextStyle(
+                                  color: AppPalette.textMain,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   );
                 },
-                childCount: _episodeCount,
               ),
             ),
-          ),
         ],
       ),
     );
@@ -153,49 +248,44 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
 class _HeroSection extends StatelessWidget {
   final Anime anime;
-  final VoidCallback? onBack; // ── ADDED ──
+  final VoidCallback? onBack;
 
   const _HeroSection({required this.anime, this.onBack});
 
   @override
   Widget build(BuildContext context) {
-    // Prefer the ultra-wide banner, fallback to cover image
     final bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
     final posterUrl = anime.coverImage?.extraLarge;
 
     return SizedBox(
       width: double.infinity,
-      height: 600, // Immersive height
+      height: 600, 
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Layer 1: Background Image ──
           if (bannerUrl != null) AppNetworkImage(url: bannerUrl),
 
-          // ── Layer 2: Seamless Fade Gradient ──
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  AppPalette.base.withValues(alpha: 0.1), // Top: Mostly clear
-                  AppPalette.base.withValues(alpha: 0.7), // Mid: Darkening
-                  AppPalette.base,                        // Bottom: Solid background
+                  AppPalette.base.withValues(alpha: 0.1), 
+                  AppPalette.base.withValues(alpha: 0.7), 
+                  AppPalette.base,                        
                 ],
                 stops: const [0.0, 0.5, 1.0],
               ),
             ),
           ),
 
-          // ── Layer 2.5: The Anchored Back Button ──
           Positioned(
             top: 96,
-            left: 48, // ── FIXED: Perfectly aligns with the poster below it ──
+            left: 48, 
             child: _FloatingNavBar(onBack: onBack),
           ),
 
-          // ── Layer 3: Organic Content Layout ──
           Positioned(
             bottom: 24,
             left: 48,
@@ -203,7 +293,6 @@ class _HeroSection extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Floating Poster with soft shadow
                 if (posterUrl != null)
                   Container(
                     width: 220,
@@ -226,7 +315,6 @@ class _HeroSection extends StatelessWidget {
 
                 const SizedBox(width: 48),
 
-                // Floating Meta Column
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,7 +388,7 @@ class _HeroSection extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _FloatingNavBar (Minimal frosted glass pill)
+//  _FloatingNavBar 
 // ════════════════════════════════════════════════════════════════════════════
 
 class _FloatingNavBar extends StatefulWidget {
@@ -376,7 +464,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _MetaChip (Refined padding for the new layout)
+//  _MetaChip 
 // ════════════════════════════════════════════════════════════════════════════
 
 class _MetaChip extends StatelessWidget {
