@@ -169,113 +169,115 @@ class _TheaterScreenState extends State<TheaterScreen> {
       onKeyEvent: _handleKeyEvent,
       child: Scaffold(
         backgroundColor: AppPalette.black,
-        body: MouseRegion(
-          cursor: _showControls
-              ? SystemMouseCursors.basic
-              : SystemMouseCursors.none,
-          // Wakes up UI when mouse moves on desktop
-          onHover: (_) => _startHideControlsTimer(),
-          child: GestureDetector(
-            onTap: () {
-              if (_isSettingsOpen) {
-                setState(() => _isSettingsOpen = false);
-              } else {
-                _player.playOrPause();
-              }
-              // Wakes up UI when screen is tapped on mobile
-              _startHideControlsTimer();
-            },
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (_videoInitialized)
-                  Video(
-                    controller: _videoController,
-                    controls: NoVideoControls,
-                  ),
+        body: ExcludeSemantics(
+          child: MouseRegion(
+            cursor: _showControls
+                ? SystemMouseCursors.basic
+                : SystemMouseCursors.none,
+            // Wakes up UI when mouse moves on desktop
+            onHover: (_) => _startHideControlsTimer(),
+            child: GestureDetector(
+              onTap: () {
+                if (_isSettingsOpen) {
+                  setState(() => _isSettingsOpen = false);
+                } else {
+                  _player.playOrPause();
+                }
+                // Wakes up UI when screen is tapped on mobile
+                _startHideControlsTimer();
+              },
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (_videoInitialized)
+                    Video(
+                      controller: _videoController,
+                      controls: NoVideoControls,
+                    ),
 
-                if (_videoInitialized)
-                  AnimatedOpacity(
-                    opacity: _showControls ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 300),
-                    child: IgnorePointer(
-                      ignoring: !_showControls,
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            height: 200,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [
-                                    AppPalette.black.withValues(alpha: 0.9),
-                                    AppPalette.transparent,
-                                  ],
+                  if (_videoInitialized)
+                    AnimatedOpacity(
+                      opacity: _showControls ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 300),
+                      child: IgnorePointer(
+                        ignoring: !_showControls,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              height: 200,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.bottomCenter,
+                                    end: Alignment.topCenter,
+                                    colors: [
+                                      AppPalette.black.withValues(alpha: 0.9),
+                                      AppPalette.transparent,
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          Positioned(
-                            top: 40,
-                            left: 24,
-                            right: 24,
-                            // Gesture blocker to prevent pausing when clicking back
-                            child: GestureDetector(
-                              onTap: () {},
-                              child: TheaterTopBar(
-                                episode: widget.episode,
-                                onBack: () => Navigator.pop(context),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: 24,
-                            left: 32,
-                            right: 32,
-                            // Gesture blocker to prevent pausing when using sliders
-                            child: GestureDetector(
-                              onTap: () {},
-                              child: TheaterControls(
-                                player: _player,
-                                isSettingsOpen: _isSettingsOpen,
-                                onInteract: _startHideControlsTimer,
-                                onToggleSettings: () => setState(
-                                  () => _isSettingsOpen = !_isSettingsOpen,
+                            Positioned(
+                              top: 40,
+                              left: 24,
+                              right: 24,
+                              // Gesture blocker to prevent pausing when clicking back
+                              child: GestureDetector(
+                                onTap: () {},
+                                child: TheaterTopBar(
+                                  episode: widget.episode,
+                                  onBack: () => Navigator.pop(context),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                            Positioned(
+                              bottom: 24,
+                              left: 32,
+                              right: 32,
+                              // Gesture blocker to prevent pausing when using sliders
+                              child: GestureDetector(
+                                onTap: () {},
+                                child: TheaterControls(
+                                  player: _player,
+                                  isSettingsOpen: _isSettingsOpen,
+                                  onInteract: _startHideControlsTimer,
+                                  onToggleSettings: () => setState(
+                                    () => _isSettingsOpen = !_isSettingsOpen,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                if (_isSettingsOpen)
-                  Positioned(
-                    bottom: 110,
-                    right: 32,
-                    child: TheaterSettingsMenu(
-                      player: _player,
-                      onClose: () => setState(() => _isSettingsOpen = false),
+                  if (_isSettingsOpen)
+                    Positioned(
+                      bottom: 110,
+                      right: 32,
+                      child: TheaterSettingsMenu(
+                        player: _player,
+                        onClose: () => setState(() => _isSettingsOpen = false),
+                      ),
                     ),
-                  ),
 
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 600),
-                  child: _torrentController.isReadyToPlay
-                      ? const SizedBox.shrink()
-                      : TheaterLoadingOverlay(
-                          episode: widget.episode,
-                          torrent: widget.torrent,
-                          controller: _torrentController,
-                        ),
-                ),
-              ],
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 600),
+                    child: _torrentController.isReadyToPlay
+                        ? const SizedBox.shrink()
+                        : TheaterLoadingOverlay(
+                            episode: widget.episode,
+                            torrent: widget.torrent,
+                            controller: _torrentController,
+                          ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
