@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -47,7 +49,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
-      platform.setProperty('hwdec', 'cuda-copy');
+      if (Platform.isLinux || Platform.isWindows) {
+    platform.setProperty('hwdec', 'cuda-copy'); // NVIDIA Desktop
+      } else if (Platform.isAndroid) {
+        platform.setProperty('hwdec', 'mediacodec-copy');
+      } else if (Platform.isIOS) {
+        platform.setProperty('hwdec', 'videotoolbox-copy');
+      }
     }
 
     _videoController = VideoController(_player);
@@ -126,7 +134,11 @@ void _handleKeyEvent(KeyEvent event) {
     _hideControlsTimer?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     Future.microtask(() async {
-      if (await windowManager.isFullScreen()) await windowManager.setFullScreen(false);
+      if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+        if (await windowManager.isFullScreen()) {
+          await windowManager.setFullScreen(false);
+        }
+      }
       _torrentController.dispose();
       _player.stop();
       _player.dispose();
@@ -182,17 +194,6 @@ void _handleKeyEvent(KeyEvent event) {
                           Positioned(
                             top: 40, left: 24, right: 24,
                             child: TheaterTopBar(episode: widget.episode, onBack: () => Navigator.pop(context)),
-                          ),
-                          Positioned(
-                            bottom: 24, left: 32, right: 32,
-                            child: TheaterControls(
-                              player: _player,
-                              isFullscreen: _isFullscreen,
-                              isSettingsOpen: _isSettingsOpen,
-                              onInteract: _startHideControlsTimer,
-                              onToggleFullscreen: _toggleFullscreen,
-                              onToggleSettings: () => setState(() => _isSettingsOpen = !_isSettingsOpen),
-                            ),
                           ),
                         ],
                       ),

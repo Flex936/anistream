@@ -125,7 +125,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      // ── FIXED: AppPalette.transparent ──
       backgroundColor: AppPalette.transparent,
       insetPadding: const EdgeInsets.all(16),
       child: ConstrainedBox(
