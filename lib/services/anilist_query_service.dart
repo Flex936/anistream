@@ -56,6 +56,7 @@ class Anime {
   final int? episodes;
   final String? status;
   final int? averageScore;
+  final List<String>? genres; 
   final NextAiringEpisode? nextAiringEpisode;
 
   const Anime({
@@ -67,6 +68,7 @@ class Anime {
     this.episodes,
     this.status,
     this.averageScore,
+    this.genres,
     this.nextAiringEpisode,
   });
 
@@ -84,6 +86,7 @@ class Anime {
       episodes: (json['episodes'] as num?)?.toInt(),
       status: json['status'] as String?,
       averageScore: (json['averageScore'] as num?)?.toInt(),
+      genres: (json['genres'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
       nextAiringEpisode: rawNextEp != null ? NextAiringEpisode.fromJson(rawNextEp) : null,
     );
   }
@@ -125,7 +128,6 @@ class MediaList {
 //  Service
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── FIXED: Renamed Class to AnilistQueryService ──
 class AnilistQueryService {
   static const String _endpoint = 'https://graphql.anilist.co';
 
@@ -201,11 +203,12 @@ query GetAllTimePopular($page: Int, $perPage: Int) {
   }
 }''';
 
+  // ── FIXED: Added COMPLETED to the status_in array ──
   static const String _userWatchList = r'''
 query ($userId: Int) {
-  MediaListCollection(userId: $userId, type: ANIME, status_in: [CURRENT, PLANNING]) {
+  MediaListCollection(userId: $userId, type: ANIME, status_in: [CURRENT, PLANNING, COMPLETED]) {
     lists {
-      name status entries { progress media { id title { romaji english } coverImage { extraLarge large } episodes status description nextAiringEpisode { episode airingAt } } }
+      name status entries { progress media { id title { romaji english } coverImage { extraLarge large } bannerImage genres averageScore episodes status description nextAiringEpisode { episode airingAt } } }
     }
   }
 }''';
@@ -287,7 +290,6 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
     return _execute(_currentlyAiringQuery, {'page': page, 'perPage': perPage, 'currentSeason': _currentSeason, 'currentYear': DateTime.now().year});
   }
 
-  // ── FIXED: Fully implemented dynamic filter passing ──
   Future<List<Anime>> searchAnime(
     String query, {
     bool filterEcchi = true,

@@ -3,10 +3,24 @@
 // Tapping a card calls [onSelectAnime], routing through AppShell so the
 // NavBar stays visible — identical to HomeScreen and SearchResultsScreen.
 
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../services/anilist_query_service.dart';
 import '../theme/app_palette.dart';
+
+// ════════════════════════════════════════════════════════════════════════════
+//  File-private helpers
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── FIXED: Status coloring utility injected locally ──
+Color _statusColor(String? s) => switch (s) {
+      'RELEASING' => AppPalette.statusReleasing,
+      'FINISHED' => AppPalette.statusFinished,
+      'CANCELLED' => AppPalette.statusCancelled,
+      'HIATUS' => AppPalette.statusHiatus,
+      _ => AppPalette.statusDefault,
+    };
 
 // ════════════════════════════════════════════════════════════════════════════
 //  WatchlistScreen
@@ -24,10 +38,13 @@ class WatchlistScreen extends StatefulWidget {
 class _WatchlistScreenState extends State<WatchlistScreen> {
   final _api = AnilistQueryService();
 
-  bool            _loading = true;
-  String?         _error;
-  List<MediaList> _lists   = [];
-  String          _activeStatus = 'CURRENT'; // 'CURRENT' | 'PLANNING'
+  bool _loading = true;
+  String? _error;
+  List<MediaList> _lists = [];
+  String _activeStatus = 'CURRENT'; // 'CURRENT' | 'PLANNING' | 'COMPLETED'
+  
+  bool _isListView = false;
+  String? _hoveredBanner;
 
   @override
   void initState() {
@@ -56,147 +73,600 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       .expand((l) => l.entries)
       .toList();
 
-  int _columns(double width) {
-    if (width < 600)  return 2;
-    if (width < 900)  return 3;
+  int _verticalColumns(double width) {
+    if (width < 600) return 2;
+    if (width < 900) return 3;
     if (width < 1200) return 4;
     if (width < 1500) return 5;
     return 6;
   }
 
+  int _landscapeColumns(double width) {
+    if (width < 600) return 1;
+    if (width < 900) return 2;
+    if (width < 1200) return 3;
+    if (width < 1500) return 4;
+    return 5;
+  }
+
+  void _handleHover(String? bannerUrl, bool isHovered) {
+    if (isHovered && bannerUrl != null) {
+      setState(() => _hoveredBanner = bannerUrl);
+    } else if (!isHovered && _hoveredBanner == bannerUrl) {
+      setState(() => _hoveredBanner = null);
+    }
+  }
+
+  String _getEmptyMessage() {
+    if (_activeStatus == 'CURRENT') return "You're not watching anything yet.";
+    if (_activeStatus == 'PLANNING') return "Your planning list is empty.";
+    return "You haven't completed any anime yet.";
+  }
+
   @override
   Widget build(BuildContext context) {
-    // SingleChildScrollView allows the whole page to slide under the NavBar ──
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Pushes the content safely below the 72px NavBar ──
-          const SizedBox(height: 96),
-
-          // ── Header + tabs ──────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(32, 0, 32, 0),
-            child: Row(
-              children: [
-                const Text(
-                  'My Library',
-                  style: TextStyle(
-                    color: AppPalette.textMain,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.4,
-                  ),
-                ),
-                const Spacer(),
-                // Tab pill — mirrors the bg-surface/rounded-xl tab switcher
-                // in WatchlistView.svelte.
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: AppPalette.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppPalette.border),
-                  ),
-                  child: Row(
+    return Stack(
+      children: [
+        // 1. Dynamic Background Layer
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 600),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: (_hoveredBanner != null && _hoveredBanner!.trim().isNotEmpty)
+                ? Stack(
+                    key: ValueKey(_hoveredBanner),
+                    fit: StackFit.expand,
                     children: [
-                      _TabButton(
-                        icon:   Icons.play_arrow_rounded,
-                        label:  'Watching',
-                        active: _activeStatus == 'CURRENT',
-                        onTap:  () => setState(() => _activeStatus = 'CURRENT'),
+                      Image.network(
+                        _hoveredBanner!, 
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const ColoredBox(color: AppPalette.base);
+                        },
                       ),
-                      _TabButton(
-                        icon:   Icons.calendar_today_outlined,
-                        label:  'Planning',
-                        active: _activeStatus == 'PLANNING',
-                        onTap:  () => setState(() => _activeStatus = 'PLANNING'),
+                      BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+                        child: Container(color: AppPalette.base.withValues(alpha: 0.85)),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(key: ValueKey('empty')),
+          ),
+        ),
+
+        // 2. The scrollable content
+        Positioned.fill(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 96),
+
+                // ── Header + tabs + toggles ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 24),
+                  child: Wrap(
+                    alignment: WrapAlignment.start,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 32, 
+                    runSpacing: 16,
+                    children: [
+                      const Text(
+                        'My Library',
+                        style: TextStyle(color: AppPalette.textMain, fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.4),
+                      ),
+                      
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Grid vs List Toggle
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppPalette.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppPalette.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  IconButton(
+                                    icon: Icon(Icons.grid_view_rounded, size: 20, color: !_isListView ? AppPalette.primary : AppPalette.textMuted),
+                                    onPressed: () => setState(() => _isListView = false),
+                                  ),
+                                  IconButton(
+                                    icon: Icon(Icons.view_list_rounded, size: 20, color: _isListView ? AppPalette.primary : AppPalette.textMuted),
+                                    onPressed: () => setState(() => _isListView = true),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            // Watching / Planning / Watched Tabs
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppPalette.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppPalette.border),
+                              ),
+                              child: Row(
+                                children: [
+                                  _TabButton(
+                                    icon: Icons.play_arrow_rounded, label: 'Watching',
+                                    active: _activeStatus == 'CURRENT',
+                                    onTap: () => setState(() => _activeStatus = 'CURRENT'),
+                                  ),
+                                  _TabButton(
+                                    icon: Icons.calendar_today_outlined, label: 'Planning',
+                                    active: _activeStatus == 'PLANNING',
+                                    onTap: () => setState(() => _activeStatus = 'PLANNING'),
+                                  ),
+                                  _TabButton(
+                                    icon: Icons.check_circle_outline_rounded, label: 'Watched',
+                                    active: _activeStatus == 'COMPLETED',
+                                    onTap: () => setState(() => _activeStatus = 'COMPLETED'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
+
+                // ── Body ──
+                if (_loading)
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.5, child: const _LoadingPane())
+                else if (_error != null)
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.5, child: _ErrorPane(message: _error!, onRetry: _fetchWatchlist))
+                else if (_activeEntries.isEmpty)
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.5, child: _EmptyPane(message: _getEmptyMessage()))
+                else
+                  _isListView ? _buildListLayout() : _buildGridLayout(),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-
-          // ── Body ───────────────────────────────────────────────────────────
-          if (_loading)
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.5,
-              child: const _LoadingPane(),
-            )
-          else if (_error != null)
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.5,
-              child: _ErrorPane(message: _error!, onRetry: _fetchWatchlist),
-            )
-          else
-            _buildGrid(),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildGrid() {
-    final entries = _activeEntries;
-
-    if (entries.isEmpty) {
-      return SizedBox(
-        height: MediaQuery.of(context).size.height * 0.5,
-        child: _EmptyPane(
-          message: _activeStatus == 'CURRENT'
-              ? "You're not watching anything yet."
-              : "Your planning list is empty.",
-        ),
-      );
-    }
+  Widget _buildGridLayout() {
+    final isWatching = _activeStatus == 'CURRENT';
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cols = _columns(constraints.maxWidth);
+        // Both PLANNING and COMPLETED will use the vertical poster layout
+        final cols = isWatching ? _landscapeColumns(constraints.maxWidth) : _verticalColumns(constraints.maxWidth);
+        final aspectRatio = isWatching ? 1.77 : 0.52;
+
         return GridView.builder(
-          // ── FIXED: Required for a GridView inside a SingleChildScrollView ──
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount:  cols,
+            crossAxisCount: cols,
             crossAxisSpacing: 20,
-            mainAxisSpacing:  24,
-            // Slightly taller than the home grid to fit the extra info line.
-            childAspectRatio: 0.52,
+            mainAxisSpacing: 24,
+            childAspectRatio: aspectRatio,
           ),
-          itemCount: entries.length,
-          itemBuilder: (_, i) => _WatchlistCard(
-            entry:        entries[i],
-            showProgress: _activeStatus == 'CURRENT',
-            onTap: () => widget.onSelectAnime?.call(entries[i].media),
-          ),
+          itemCount: _activeEntries.length,
+          itemBuilder: (_, i) {
+            final entry = _activeEntries[i];
+            final hoverImage = entry.media.bannerImage ?? entry.media.coverImage?.display;
+
+            if (isWatching) {
+              return _HeroCard(
+                entry: entry,
+                onTap: () => widget.onSelectAnime?.call(entry.media),
+                onHover: (hovered) => _handleHover(hoverImage, hovered),
+              );
+            } else {
+              return _WatchlistCard(
+                entry: entry,
+                // Only show progress logic for Currently Watching items
+                showProgress: false, 
+                onTap: () => widget.onSelectAnime?.call(entry.media),
+                onHover: (hovered) => _handleHover(hoverImage, hovered),
+              );
+            }
+          },
         );
       },
+    );
+  }
+
+  Widget _buildListLayout() {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
+      itemCount: _activeEntries.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (_, i) => _ListCard(
+        entry: _activeEntries[i],
+        showProgress: _activeStatus == 'CURRENT',
+        onTap: () => widget.onSelectAnime?.call(_activeEntries[i].media),
+        onHover: (hovered) => _handleHover(_activeEntries[i].media.bannerImage ?? _activeEntries[i].media.coverImage?.display, hovered),
+      ),
     );
   }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _TabButton
+//  _HeroCard (16:9 Continue Watching Card)
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Watching / Planning tab pill button.
-/// Active state mirrors `bg-primary text-white shadow-md` from Svelte.
+class _HeroCard extends StatefulWidget {
+  final MediaListEntry entry;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onHover;
+
+  const _HeroCard({required this.entry, required this.onTap, required this.onHover});
+
+  @override
+  State<_HeroCard> createState() => _HeroCardState();
+}
+
+class _HeroCardState extends State<_HeroCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = widget.entry.media;
+    final progress = widget.entry.progress;
+    final imgUrl = media.bannerImage ?? media.coverImage?.display;
+    
+    double percent = 0.0;
+    if (media.episodes != null && media.episodes! > 0) {
+      percent = progress / media.episodes!;
+    } else if (progress > 0) {
+      percent = 0.1;
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) { setState(() => _hovered = true); widget.onHover(true); },
+      onExit: (_) { setState(() => _hovered = false); widget.onHover(false); },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _hovered ? AppPalette.primary.withValues(alpha: 0.5) : AppPalette.border),
+            boxShadow: _hovered ? [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.2), blurRadius: 20)] : [],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(15),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _PosterImage(url: imgUrl, hovered: _hovered),
+                
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, AppPalette.black.withValues(alpha: 0.9)],
+                    ),
+                  ),
+                ),
+
+                Center(
+                  child: AnimatedScale(
+                    scale: _hovered ? 1.1 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppPalette.primary.withValues(alpha: 0.8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.play_arrow_rounded, color: AppPalette.white, size: 32),
+                    ),
+                  ),
+                ),
+
+                Positioned(
+                  bottom: 16, left: 16, right: 16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(media.title.display, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppPalette.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text('Continue Episode ${progress + 1}', style: const TextStyle(color: AppPalette.textLight, fontSize: 12)),
+                    ],
+                  ),
+                ),
+
+                Positioned(
+                  bottom: 0, left: 0, right: 0,
+                  child: Container(
+                    height: 3,
+                    alignment: Alignment.centerLeft,
+                    color: AppPalette.black,
+                    child: FractionallySizedBox(
+                      widthFactor: percent.clamp(0.0, 1.0),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: AppPalette.primary,
+                          boxShadow: [BoxShadow(color: AppPalette.primary, blurRadius: 4)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  _ListCard (Dense layout for Planning/Watched list)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _ListCard extends StatefulWidget {
+  final MediaListEntry entry;
+  final bool showProgress;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onHover;
+
+  const _ListCard({required this.entry, required this.showProgress, required this.onTap, required this.onHover});
+
+  @override
+  State<_ListCard> createState() => _ListCardState();
+}
+
+class _ListCardState extends State<_ListCard> {
+  bool _hovered = false;
+
+  String _stripHtml(String? html) {
+    if (html == null || html.isEmpty) return 'No synopsis available.';
+    return html.replaceAll(RegExp(r'<[^>]+>'), '').trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = widget.entry.media;
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) { setState(() => _hovered = true); widget.onHover(true); },
+      onExit: (_) { setState(() => _hovered = false); widget.onHover(false); },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: 150,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _hovered ? AppPalette.surface.withValues(alpha: 0.8) : AppPalette.surface.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _hovered ? AppPalette.primary.withValues(alpha: 0.5) : AppPalette.border),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: AspectRatio(
+                  aspectRatio: 0.7,
+                  child: _PosterImage(url: media.coverImage?.display, hovered: _hovered),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(media.title.display, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppPalette.textMain, fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    
+                    // ── FIXED: Added back Text.rich for distinct status & score colors ──
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: (media.status ?? 'UNKNOWN').replaceAll('_', ' '),
+                            style: TextStyle(
+                              color: _statusColor(media.status),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const TextSpan(
+                            text: '  •  ',
+                            style: TextStyle(color: AppPalette.textMuted, fontSize: 12),
+                          ),
+                          TextSpan(
+                            text: '★ ${(media.averageScore ?? 0) / 10}',
+                            style: const TextStyle(
+                              color: AppPalette.accent,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '  •  ${media.episodes ?? "?"} EPS',
+                            style: const TextStyle(color: AppPalette.textMuted, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (!isMobile && media.genres != null && media.genres!.isNotEmpty) ...[
+                      Wrap(
+                        spacing: 8,
+                        children: media.genres!.take(4).map((g) => Text('#$g', style: const TextStyle(color: AppPalette.primary, fontSize: 11))).toList(),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        _stripHtml(media.description),
+                        maxLines: isMobile ? 3 : 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppPalette.textMuted, fontSize: 13, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  _WatchlistCard (Upgraded Grid Layout for Planning/Watched Tab)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _WatchlistCard extends StatefulWidget {
+  final MediaListEntry entry;
+  final bool showProgress;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onHover;
+
+  const _WatchlistCard({required this.entry, required this.showProgress, required this.onTap, required this.onHover});
+
+  @override
+  State<_WatchlistCard> createState() => _WatchlistCardState();
+}
+
+class _WatchlistCardState extends State<_WatchlistCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = widget.entry.media;
+    final progress = widget.entry.progress;
+    final nextEp = media.nextAiringEpisode;
+
+    double percent = 0.0;
+    if (media.episodes != null && media.episodes! > 0) {
+      percent = progress / media.episodes!;
+    } else if (progress > 0) {
+      percent = 0.1;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) { setState(() => _hovered = true); widget.onHover(true); },
+            onExit: (_) { setState(() => _hovered = false); widget.onHover(false); },
+            child: GestureDetector(
+              onTap: widget.onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _hovered ? AppPalette.primary.withValues(alpha: 0.55) : AppPalette.border),
+                  boxShadow: _hovered ? [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.18), blurRadius: 24)] : [],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _PosterImage(url: media.coverImage?.display, hovered: _hovered),
+
+                      if (widget.showProgress)
+                        Positioned(
+                          top: 8, right: 8,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppPalette.black.withValues(alpha: 0.6),
+                                  border: Border.all(color: AppPalette.white.withValues(alpha: 0.15)),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.play_arrow_rounded, color: AppPalette.primary, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text('EP $progress / ${media.episodes ?? "?"}', style: const TextStyle(color: AppPalette.textMain, fontSize: 10, fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      _PlayOverlay(visible: _hovered, episode: progress + 1),
+
+                      if (widget.showProgress)
+                        Positioned(
+                          bottom: 0, left: 0, right: 0,
+                          child: Container(
+                            height: 3,
+                            alignment: Alignment.centerLeft,
+                            color: AppPalette.black,
+                            child: FractionallySizedBox(
+                              widthFactor: percent.clamp(0.0, 1.0),
+                              child: Container(
+                                decoration: const BoxDecoration(
+                                  color: AppPalette.primary,
+                                  boxShadow: [BoxShadow(color: AppPalette.primary, blurRadius: 4)],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 10),
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 200),
+          style: TextStyle(color: _hovered ? AppPalette.primary : AppPalette.textMain, fontSize: 13, fontWeight: FontWeight.w600, height: 1.35),
+          child: Text(media.title.display, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+        const SizedBox(height: 4),
+        if (nextEp != null && nextEp.episode > 0)
+          Text('Ep ${nextEp.episode} airing soon', style: const TextStyle(color: AppPalette.primary, fontSize: 11, fontWeight: FontWeight.w600))
+        else
+          Text('${media.episodes ?? "?"} episodes', style: const TextStyle(color: AppPalette.textMuted, fontSize: 11)),
+      ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  _TabButton 
+// ════════════════════════════════════════════════════════════════════════════
+
 class _TabButton extends StatelessWidget {
   final IconData icon;
-  final String   label;
-  final bool     active;
+  final String label;
+  final bool active;
   final VoidCallback onTap;
 
-  const _TabButton({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
+  const _TabButton({required this.icon, required this.label, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -208,31 +678,14 @@ class _TabButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? AppPalette.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: active
-              ? [BoxShadow(
-                  color: AppPalette.primary.withValues(alpha: 0.35),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                )]
-              : const [],
+          boxShadow: active ? [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 2))] : [],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 15,
-              color: active ? Colors.white : AppPalette.textMuted,
-            ),
+            Icon(icon, size: 15, color: active ? Colors.white : AppPalette.textMuted),
             const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: active ? Colors.white : AppPalette.textMuted,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Text(label, style: TextStyle(color: active ? Colors.white : AppPalette.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -241,198 +694,29 @@ class _TabButton extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  _WatchlistCard
+//  _PosterImage 
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Individual media card — mirrors the `<button>` block in WatchlistView.svelte.
-///
-/// Shows:
-///   • Poster with hover overlay ("Play EP N")
-///   • Progress badge top-right (CURRENT tab only)
-///   • Title (single line, ellipsis)
-///   • Airing-soon chip  OR  episode count
-class _WatchlistCard extends StatefulWidget {
-  final MediaListEntry entry;
-  final bool           showProgress;
-  final VoidCallback?  onTap;
-
-  const _WatchlistCard({
-    required this.entry,
-    required this.showProgress,
-    this.onTap,
-  });
-
-  @override
-  State<_WatchlistCard> createState() => _WatchlistCardState();
-}
-
-class _WatchlistCardState extends State<_WatchlistCard> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final media    = widget.entry.media;
-    final progress = widget.entry.progress;
-    final nextEp   = media.nextAiringEpisode;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Poster ──────────────────────────────────────────────────────────
-        Expanded(
-          child: MouseRegion(
-            cursor:  SystemMouseCursors.click,
-            onEnter: (_) => setState(() => _hovered = true),
-            onExit:  (_) => setState(() => _hovered = false),
-            child: GestureDetector(
-              onTap: widget.onTap,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOut,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _hovered
-                        ? AppPalette.primary.withValues(alpha: 0.55)
-                        : AppPalette.border,
-                  ),
-                  boxShadow: _hovered
-                      ? [BoxShadow(
-                          color:       AppPalette.primary.withValues(alpha: 0.18),
-                          blurRadius:  24,
-                          spreadRadius: 2,
-                        )]
-                      : const [],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Cover image with zoom-on-hover
-                      _PosterImage(
-                        url:     media.coverImage?.display,
-                        hovered: _hovered,
-                      ),
-
-                      // Progress badge — top-right, CURRENT tab only.
-                      // Mirrors `{entry.progress} / {media.episodes || "?"}` in Svelte.
-                      if (widget.showProgress)
-                        Positioned(
-                          top:   8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical:   4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.80),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.10),
-                              ),
-                            ),
-                            child: Text(
-                              '$progress / ${media.episodes ?? "?"}',
-                              style: const TextStyle(
-                                color:      Colors.white,
-                                fontSize:   10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                      // Hover overlay — "Play EP N" pill, mirroring
-                      // `Play EP {entry.progress + 1}` in WatchlistView.svelte.
-                      _PlayOverlay(
-                        visible: _hovered,
-                        episode: progress + 1,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-
-        // ── Title ────────────────────────────────────────────────────────────
-        const SizedBox(height: 10),
-        AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 200),
-          style: TextStyle(
-            color:      _hovered ? AppPalette.primary : AppPalette.textMain,
-            fontSize:   13,
-            fontWeight: FontWeight.w600,
-            height:     1.35,
-          ),
-          child: Text(
-            media.title.display,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-
-        // ── Sub-line: airing chip or episode count ────────────────────────
-        const SizedBox(height: 4),
-        if (nextEp != null && nextEp.episode > 0)
-          Text(
-            'Ep ${nextEp.episode} airing soon',
-            style: const TextStyle(
-              color:      AppPalette.primary,
-              fontSize:   11,
-              fontWeight: FontWeight.w600,
-            ),
-          )
-        else
-          Text(
-            '${media.episodes ?? "?"} episodes',
-            style: const TextStyle(
-              color:    AppPalette.textMuted,
-              fontSize: 11,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  _PosterImage
-// ════════════════════════════════════════════════════════════════════════════
-
-/// Network image with a dark skeleton placeholder, fade-in, and scale-on-hover.
 class _PosterImage extends StatelessWidget {
   final String? url;
-  final bool    hovered;
+  final bool hovered;
 
   const _PosterImage({this.url, required this.hovered});
 
   @override
   Widget build(BuildContext context) {
     if (url == null || url!.isEmpty) {
-      return const ColoredBox(
-        color: AppPalette.surface,
-        child: Center(
-          child: Icon(
-            Icons.image_not_supported_outlined,
-            color: AppPalette.textMuted,
-            size: 36,
-          ),
-        ),
-      );
+      return const ColoredBox(color: AppPalette.surface, child: Center(child: Icon(Icons.image_not_supported_outlined, color: AppPalette.textMuted, size: 36)));
     }
 
     return AnimatedScale(
-      scale:    hovered ? 1.05 : 1.0,
+      scale: hovered ? 1.05 : 1.0,
       duration: const Duration(milliseconds: 350),
-      curve:    Curves.easeOut,
+      curve: Curves.easeOut,
       child: Image.network(
         url!,
-        fit:    BoxFit.cover,
-        width:  double.infinity,
+        fit: BoxFit.cover,
+        width: double.infinity,
         height: double.infinity,
         frameBuilder: (_, child, frame, wasSynchronouslyLoaded) {
           if (wasSynchronouslyLoaded) return child;
@@ -440,25 +724,11 @@ class _PosterImage extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               const ColoredBox(color: AppPalette.surface),
-              AnimatedOpacity(
-                opacity:  frame != null ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 500),
-                curve:    Curves.easeOut,
-                child:    child,
-              ),
+              AnimatedOpacity(opacity: frame != null ? 1.0 : 0.0, duration: const Duration(milliseconds: 500), curve: Curves.easeOut, child: child),
             ],
           );
         },
-        errorBuilder: (_, _, _) => const ColoredBox(
-          color: AppPalette.surface,
-          child: Center(
-            child: Icon(
-              Icons.broken_image_outlined,
-              color: AppPalette.textMuted,
-              size: 36,
-            ),
-          ),
-        ),
+        errorBuilder: (_, _, _) => const ColoredBox(color: AppPalette.surface, child: Center(child: Icon(Icons.broken_image_outlined, color: AppPalette.textMuted, size: 36))),
       ),
     );
   }
@@ -468,12 +738,9 @@ class _PosterImage extends StatelessWidget {
 //  _PlayOverlay
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Hover overlay that shows a "Play EP N" pill — mirrors the
-/// `opacity-0 group-hover:opacity-100 … Play EP {entry.progress + 1}` block
-/// in WatchlistView.svelte.
 class _PlayOverlay extends StatelessWidget {
   final bool visible;
-  final int  episode;
+  final int episode;
 
   const _PlayOverlay({required this.visible, required this.episode});
 
@@ -481,39 +748,19 @@ class _PlayOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: AnimatedOpacity(
-        opacity:  visible ? 1.0 : 0.0,
+        opacity: visible ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 200),
         child: ColoredBox(
           color: Colors.black.withValues(alpha: 0.52),
           child: Center(
             child: AnimatedSlide(
-              offset:   visible ? Offset.zero : const Offset(0, 0.12),
+              offset: visible ? Offset.zero : const Offset(0, 0.12),
               duration: const Duration(milliseconds: 250),
-              curve:    Curves.easeOut,
+              curve: Curves.easeOut,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical:   9,
-                ),
-                decoration: BoxDecoration(
-                  color:         AppPalette.primary,
-                  borderRadius:  BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color:      AppPalette.primary.withValues(alpha: 0.55),
-                      blurRadius: 18,
-                    ),
-                  ],
-                ),
-                child: Text(
-                  'Play EP $episode',
-                  style: const TextStyle(
-                    color:      Colors.white,
-                    fontSize:   12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                  ),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                decoration: BoxDecoration(color: AppPalette.primary, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.55), blurRadius: 18)]),
+                child: Text('Play EP $episode', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
               ),
             ),
           ),
@@ -524,18 +771,13 @@ class _PlayOverlay extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  State panes
+//  State panes 
 // ════════════════════════════════════════════════════════════════════════════
 
 class _LoadingPane extends StatelessWidget {
   const _LoadingPane();
   @override
-  Widget build(BuildContext context) => const Center(
-    child: CircularProgressIndicator(
-      valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
-      strokeWidth: 2.5,
-    ),
-  );
+  Widget build(BuildContext context) => const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary), strokeWidth: 2.5));
 }
 
 class _EmptyPane extends StatelessWidget {
@@ -549,36 +791,15 @@ class _EmptyPane extends StatelessWidget {
         width: double.infinity,
         margin: const EdgeInsets.fromLTRB(32, 0, 32, 32),
         padding: const EdgeInsets.symmetric(vertical: 48),
-        decoration: BoxDecoration(
-          color: AppPalette.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppPalette.border,
-            style: BorderStyle.solid,
-          ),
-        ),
+        decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppPalette.border, style: BorderStyle.solid)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.video_library_outlined,
-              color: AppPalette.textMuted,
-              size: 48,
-            ),
+            const Icon(Icons.video_library_outlined, color: AppPalette.textMuted, size: 48),
             const SizedBox(height: 16),
-            Text(
-              message,
-              style: const TextStyle(
-                color: AppPalette.textMuted,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            Text(message, style: const TextStyle(color: AppPalette.textMuted, fontSize: 15, fontWeight: FontWeight.w500)),
             const SizedBox(height: 6),
-            const Text(
-              'Find something new to watch!',
-              style: TextStyle(color: AppPalette.textMuted, fontSize: 13),
-            ),
+            const Text('Find something new to watch!', style: TextStyle(color: AppPalette.textMuted, fontSize: 13)),
           ],
         ),
       ),
@@ -587,7 +808,7 @@ class _EmptyPane extends StatelessWidget {
 }
 
 class _ErrorPane extends StatelessWidget {
-  final String       message;
+  final String message;
   final VoidCallback onRetry;
   const _ErrorPane({required this.message, required this.onRetry});
 
@@ -597,41 +818,20 @@ class _ErrorPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.wifi_off_rounded,
-            color: AppPalette.textMuted,
-            size: 52,
-          ),
+          const Icon(Icons.wifi_off_rounded, color: AppPalette.textMuted, size: 52),
           const SizedBox(height: 16),
-          const Text(
-            'Could not load watchlist',
-            style: TextStyle(
-              color: AppPalette.textMain,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          const Text('Could not load watchlist', style: TextStyle(color: AppPalette.textMain, fontSize: 17, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppPalette.textMuted,
-                fontSize: 13,
-              ),
-            ),
+            child: Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppPalette.textMuted, fontSize: 13)),
           ),
           const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon:  const Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded),
             label: const Text('Try again'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppPalette.primary,
-              side: const BorderSide(color: AppPalette.primary),
-            ),
+            style: OutlinedButton.styleFrom(foregroundColor: AppPalette.primary, side: const BorderSide(color: AppPalette.primary)),
           ),
         ],
       ),
