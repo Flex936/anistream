@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/theater_screen.dart';
-import '../services/torrent_scraper.dart';
+import '../services/torrent_scraper_service.dart';
 import '../theme/app_palette.dart';
 import 'torrent_tile.dart';
 

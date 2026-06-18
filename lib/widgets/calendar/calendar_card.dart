@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/anilist_api.dart';
+import '../../services/anilist_query_service.dart';
 import '../../theme/app_palette.dart';
 
 /// Compact 2 : 3 portrait card used inside each day column of the schedule.

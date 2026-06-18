@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../screens/anime_details_screen.dart';
-import '../services/anilist_api.dart';
+import '../services/anilist_query_service.dart';
 import '../theme/app_palette.dart';
 
 class AnimeCard extends StatefulWidget {

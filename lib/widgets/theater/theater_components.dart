@@ -1,8 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../theme/app_palette.dart';
-import '../../services/torrent_scraper.dart';
-import '../../services/streaming_controller.dart';
+import '../../services/torrent_scraper_service.dart';
+import '../../services/streaming_controller_service.dart';
 
 class FrostedIconButton extends StatelessWidget {
   final IconData icon;

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_palette.dart';
 import '../widgets/anime_card.dart';
-import '../services/anilist_api.dart';
+import '../services/anilist_query_service.dart';
 
 class HomeScreen extends StatefulWidget {
   final ValueChanged<Anime>? onSelectAnime;
@@ -14,7 +14,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late final AnilistApiService _api;
+  late final AnilistQueryService _api;
   
   late Future<List<Anime>> _trendingFuture;
   late Future<List<Anime>> _seasonPopularFuture;
@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _api = AnilistApiService();
+    _api = AnilistQueryService();
     _loadTrending();
     _loadSeasonPopular();
     _loadAllTimePopular();

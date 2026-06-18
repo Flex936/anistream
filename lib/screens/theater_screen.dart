@@ -8,8 +8,8 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_palette.dart';
-import '../services/torrent_scraper.dart';
-import '../services/streaming_controller.dart';
+import '../services/torrent_scraper_service.dart';
+import '../services/streaming_controller_service.dart';
 import '../widgets/theater/theater_components.dart';
 import '../widgets/theater/theater_controls.dart';
 import '../widgets/theater/theater_settings.dart';

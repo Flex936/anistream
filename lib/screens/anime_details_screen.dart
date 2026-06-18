@@ -1,8 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-import '../services/anilist_api.dart';
-import '../services/torrent_scraper.dart';
+import '../services/anilist_query_service.dart';
+import '../services/torrent_scraper_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/episode_tile.dart';
 import '../widgets/network_image.dart';
@@ -70,86 +70,76 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppPalette.base,
-      body: Stack(
-        children: [
-          // ── The seamless scrolling content ──
-          CustomScrollView(
-            slivers: [
-              // 1. The Edge-to-Edge Hero Banner
-              SliverToBoxAdapter(
-                child: _HeroSection(anime: widget.anime),
-              ),
-
-              // 2. The Episode List Header
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(48, 16, 48, 16),
-                sliver: SliverToBoxAdapter(
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Episodes',
-                        style: TextStyle(
-                          color: AppPalette.textMain,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppPalette.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppPalette.primary.withValues(alpha: 0.25),
-                          ),
-                        ),
-                        child: Text(
-                          '$_episodeCount',
-                          style: const TextStyle(
-                            color: AppPalette.primary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 3. The Frameless Episode List
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 64),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final ep = index + 1;
-                      return EpisodeTile(
-                        key: ValueKey(ep),
-                        episodeNumber: ep,
-                        isExpanded: _expandedEpisode == ep,
-                        torrentFuture:
-                            _expandedEpisode == ep ? _futureFor(ep) : null,
-                        onToggle: () => _toggleEpisode(ep),
-                      );
-                    },
-                    childCount: _episodeCount,
-                  ),
-                ),
-              ),
-            ],
+      // ── FIXED: Removed the outer Stack. The scroll view now owns the screen ──
+      body: CustomScrollView(
+        slivers: [
+          // 1. The Edge-to-Edge Hero Banner
+          SliverToBoxAdapter(
+            // ── FIXED: Passed the onBack function directly into the Hero ──
+            child: _HeroSection(anime: widget.anime, onBack: widget.onBack),
           ),
 
-          // ── The Floating Frosted Navigation Bar ──
-          Positioned(
-            top: 24,
-            left: 24,
-            child: _FloatingNavBar(onBack: widget.onBack),
+          // 2. The Episode List Header
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(48, 16, 48, 16),
+            sliver: SliverToBoxAdapter(
+              child: Row(
+                children: [
+                  const Text(
+                    'Episodes',
+                    style: TextStyle(
+                      color: AppPalette.textMain,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppPalette.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppPalette.primary.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Text(
+                      '$_episodeCount',
+                      style: const TextStyle(
+                        color: AppPalette.primary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. The Frameless Episode List
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 64),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final ep = index + 1;
+                  return EpisodeTile(
+                    key: ValueKey(ep),
+                    episodeNumber: ep,
+                    isExpanded: _expandedEpisode == ep,
+                    torrentFuture:
+                        _expandedEpisode == ep ? _futureFor(ep) : null,
+                    onToggle: () => _toggleEpisode(ep),
+                  );
+                },
+                childCount: _episodeCount,
+              ),
+            ),
           ),
         ],
       ),
@@ -163,7 +153,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
 class _HeroSection extends StatelessWidget {
   final Anime anime;
-  const _HeroSection({required this.anime});
+  final VoidCallback? onBack; // ── ADDED ──
+
+  const _HeroSection({required this.anime, this.onBack});
 
   @override
   Widget build(BuildContext context) {
@@ -196,9 +188,16 @@ class _HeroSection extends StatelessWidget {
             ),
           ),
 
+          // ── Layer 2.5: The Anchored Back Button ──
+          Positioned(
+            top: 96,
+            left: 48, // ── FIXED: Perfectly aligns with the poster below it ──
+            child: _FloatingNavBar(onBack: onBack),
+          ),
+
           // ── Layer 3: Organic Content Layout ──
           Positioned(
-            bottom: 40,
+            bottom: 24,
             left: 48,
             right: 48,
             child: Row(

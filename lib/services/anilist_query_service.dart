@@ -1,12 +1,3 @@
-// lib/services/anilist_api.dart
-//
-// AniList GraphQL client — data models + service.
-//
-// Auth state (_token, _viewerId) is stored in static fields so every
-// instance (HomeScreen, SearchResultsScreen, WatchlistScreen…) shares the
-// same session without needing a singleton or dependency injection.
-// Call [AnilistApiService.setToken] / [AnilistApiService.clearToken] from
-// AppShell after a login/logout event.
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -16,7 +7,6 @@ import 'package:http/http.dart' as http;
 
 class NextAiringEpisode {
   final int episode;
-  // Unix timestamp — consumed by ScheduledView for countdown timers.
   final int airingAt;
 
   const NextAiringEpisode({required this.episode, required this.airingAt});
@@ -39,7 +29,6 @@ class AnimeTitle {
     english: json['english'] as String?,
   );
 
-  // Prefers English title for display if available, falling back to Romaji
   String get display => english ?? romaji ?? 'Unknown Title';
 }
 
@@ -55,7 +44,6 @@ class AnimeCoverImage {
         large: json['large'] as String?,
       );
 
-  /// Best available cover URL — prefers extraLarge, falls back to large.
   String? get display => extraLarge ?? large;
 }
 
@@ -89,23 +77,17 @@ class Anime {
 
     return Anime(
       id: (json['id'] as num).toInt(),
-      title: rawTitle != null
-          ? AnimeTitle.fromJson(rawTitle)
-          : const AnimeTitle(),
+      title: rawTitle != null ? AnimeTitle.fromJson(rawTitle) : const AnimeTitle(),
       coverImage: rawCover != null ? AnimeCoverImage.fromJson(rawCover) : null,
       bannerImage: json['bannerImage'] as String?,
       description: json['description'] as String?,
       episodes: (json['episodes'] as num?)?.toInt(),
       status: json['status'] as String?,
       averageScore: (json['averageScore'] as num?)?.toInt(),
-      nextAiringEpisode: rawNextEp != null
-          ? NextAiringEpisode.fromJson(rawNextEp)
-          : null,
+      nextAiringEpisode: rawNextEp != null ? NextAiringEpisode.fromJson(rawNextEp) : null,
     );
   }
 }
-
-// ── Watchlist models ──────────────────────────────────────────────────────────
 
 class MediaListEntry {
   final int progress;
@@ -121,7 +103,7 @@ class MediaListEntry {
 
 class MediaList {
   final String name;
-  final String status; // 'CURRENT' | 'PLANNING'
+  final String status;
   final List<MediaListEntry> entries;
 
   const MediaList({
@@ -143,16 +125,16 @@ class MediaList {
 //  Service
 // ════════════════════════════════════════════════════════════════════════════
 
-class AnilistApiService {
+// ── FIXED: Renamed Class to AnilistQueryService ──
+class AnilistQueryService {
   static const String _endpoint = 'https://graphql.anilist.co';
 
-  // ── Shared auth state ─────────────────────────────────────────────────────
   static String? _token;
-  static int? _viewerId; // cached after first Viewer query
+  static int? _viewerId; 
 
   static void setToken(String token) {
     _token = token;
-    _viewerId = null; // reset cache — new token = potentially different user
+    _viewerId = null; 
   }
 
   static void clearToken() {
@@ -162,20 +144,15 @@ class AnilistApiService {
 
   static bool get isLoggedIn => _token != null && _token!.isNotEmpty;
 
-  // ── Instance ──────────────────────────────────────────────────────────────
-
   final http.Client _httpClient;
 
-  AnilistApiService({http.Client? client})
-    : _httpClient = client ?? http.Client();
+  AnilistQueryService({http.Client? client}) : _httpClient = client ?? http.Client();
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
     if (_token != null) 'Authorization': 'Bearer $_token',
   };
-
-  // ── Viewer ID resolution ─────────────────────────────────────────────────
 
   Future<int?> _resolveViewerId() async {
     if (_viewerId != null) return _viewerId;
@@ -195,21 +172,13 @@ class AnilistApiService {
     return id;
   }
 
-  // ── GraphQL Queries (Updated with large coverImage and airingAt fields) ──
+  // ── GraphQL Queries ──
 
   static const String _trendingQuery = r'''
 query GetTrendingAnime($page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
     media(sort: TRENDING_DESC, type: ANIME, isAdult: false, status_not: NOT_YET_RELEASED) {
-      id
-      title { romaji english }
-      coverImage { extraLarge large }
-      bannerImage
-      description
-      episodes
-      status
-      averageScore
-      nextAiringEpisode { episode airingAt }
+      id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status averageScore nextAiringEpisode { episode airingAt }
     }
   }
 }''';
@@ -218,15 +187,7 @@ query GetTrendingAnime($page: Int, $perPage: Int) {
 query GetSeasonPopular($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
   Page(page: $page, perPage: $perPage) {
     media(season: $season, seasonYear: $seasonYear, sort: POPULARITY_DESC, type: ANIME, isAdult: false) {
-      id
-      title { romaji english }
-      coverImage { extraLarge large }
-      bannerImage
-      description
-      episodes
-      status
-      averageScore
-      nextAiringEpisode { episode airingAt }
+      id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status averageScore nextAiringEpisode { episode airingAt }
     }
   }
 }''';
@@ -235,15 +196,7 @@ query GetSeasonPopular($page: Int, $perPage: Int, $season: MediaSeason, $seasonY
 query GetAllTimePopular($page: Int, $perPage: Int) {
   Page(page: $page, perPage: $perPage) {
     media(sort: POPULARITY_DESC, type: ANIME, isAdult: false) {
-      id
-      title { romaji english }
-      coverImage { extraLarge large }
-      bannerImage
-      description
-      episodes
-      status
-      averageScore
-      nextAiringEpisode { episode airingAt }
+      id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status averageScore nextAiringEpisode { episode airingAt }
     }
   }
 }''';
@@ -252,20 +205,7 @@ query GetAllTimePopular($page: Int, $perPage: Int) {
 query ($userId: Int) {
   MediaListCollection(userId: $userId, type: ANIME, status_in: [CURRENT, PLANNING]) {
     lists {
-      name
-      status
-      entries {
-        progress
-        media {
-          id
-          title { romaji english }
-          coverImage { extraLarge large }
-          episodes
-          status
-          description
-          nextAiringEpisode { episode airingAt }
-        }
-      }
+      name status entries { progress media { id title { romaji english } coverImage { extraLarge large } episodes status description nextAiringEpisode { episode airingAt } } }
     }
   }
 }''';
@@ -273,21 +213,8 @@ query ($userId: Int) {
   static const String _currentlyAiringQuery = r'''
 query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason, $currentYear: Int) {
   Page(page: $page, perPage: $perPage) {
-    media(
-      type: ANIME,
-      season: $currentSeason,
-      seasonYear: $currentYear,
-      sort: TRENDING_DESC,
-      countryOfOrigin: "JP",
-      isAdult: false,
-      format_not_in: [SPECIAL, OVA, ONA, MOVIE]
-    ) {
-      id
-      title { romaji english }
-      coverImage { large }
-      episodes
-      status
-      nextAiringEpisode { episode airingAt }
+    media(type: ANIME, season: $currentSeason, seasonYear: $currentYear, sort: TRENDING_DESC, countryOfOrigin: "JP", isAdult: false, format_not_in: [SPECIAL, OVA, ONA, MOVIE]) {
+      id title { romaji english } coverImage { large } episodes status nextAiringEpisode { episode airingAt }
     }
   }
 }''';
@@ -300,17 +227,10 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
     return 'WINTER';
   }
 
-  // ── Core Executive Helpers ────────────────────────────────────────────────
-
-  /// Internal helper for page-based queries that return a list of Anime objects.
-  Future<List<Anime>> _execute(
-    String query,
-    Map<String, dynamic> variables,
-  ) async {
+  Future<List<Anime>> _execute(String query, Map<String, dynamic> variables) async {
     final response = await _httpClient.post(
       Uri.parse(_endpoint),
-      headers:
-          _headers, // Fixed: Use dynamic headers to pass authentication token
+      headers: _headers,
       body: jsonEncode({'query': query, 'variables': variables}),
     );
 
@@ -321,104 +241,91 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
     final pageData = data?['Page'] as Map<String, dynamic>?;
     final mediaList = pageData?['media'] as List<dynamic>? ?? const [];
 
-    return mediaList
-        .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
-        .toList();
+    return mediaList.map((raw) => Anime.fromJson(raw as Map<String, dynamic>)).toList();
   }
 
   void _assertResponse(http.Response response) {
-    if (response.statusCode != 200) {
-      throw AnilistException(
-        'AniList returned HTTP ${response.statusCode}',
-        statusCode: response.statusCode,
-      );
-    }
+    if (response.statusCode != 200) throw AnilistException('AniList returned HTTP ${response.statusCode}', statusCode: response.statusCode);
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded.containsKey('errors')) {
       final errors = decoded['errors'] as List<dynamic>;
-      final errorMessage = errors.isNotEmpty
-          ? errors[0]['message']
-          : 'Unknown GraphQL Error';
+      final errorMessage = errors.isNotEmpty ? errors[0]['message'] : 'Unknown GraphQL Error';
       throw AnilistException('GraphQL Error: $errorMessage');
     }
   }
-
-  // ── Public API Methods ────────────────────────────────────────────────────
 
   Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) {
     return _execute(_trendingQuery, {'page': page, 'perPage': perPage});
   }
 
   Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) {
-    return _execute(_seasonPopularQuery, {
-      'page': page,
-      'perPage': perPage,
-      'season': _currentSeason,
-      'seasonYear': DateTime.now().year,
-    });
+    return _execute(_seasonPopularQuery, {'page': page, 'perPage': perPage, 'season': _currentSeason, 'seasonYear': DateTime.now().year});
   }
 
   Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) {
     return _execute(_allTimePopularQuery, {'page': page, 'perPage': perPage});
   }
 
-  /// Fetches the current user's CURRENT + PLANNING watchlist collections.
   Future<List<MediaList>> getUserWatchlist() async {
     if (!isLoggedIn) throw const AnilistException('Not logged in');
-
     final viewerId = await _resolveViewerId();
-    if (viewerId == null) {
-      throw const AnilistException('Could not resolve viewer ID');
-    }
+    if (viewerId == null) throw const AnilistException('Could not resolve viewer ID');
 
     final response = await _httpClient.post(
       Uri.parse(_endpoint),
       headers: _headers,
-      body: jsonEncode({
-        'query': _userWatchList,
-        'variables': {'userId': viewerId},
-      }),
+      body: jsonEncode({'query': _userWatchList, 'variables': {'userId': viewerId}}),
     );
-
     _assertResponse(response);
-
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final lists =
-        decoded['data']?['MediaListCollection']?['lists'] as List<dynamic>? ??
-        const [];
-
-    return lists
-        .map((r) => MediaList.fromJson(r as Map<String, dynamic>))
-        .toList();
+    final lists = decoded['data']?['MediaListCollection']?['lists'] as List<dynamic>? ?? const [];
+    return lists.map((r) => MediaList.fromJson(r as Map<String, dynamic>)).toList();
   }
 
   Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) {
-    return _execute(_currentlyAiringQuery, {
-      'page': page,
-      'perPage': perPage,
-      'currentSeason': _currentSeason,
-      'currentYear': DateTime.now().year,
-    });
+    return _execute(_currentlyAiringQuery, {'page': page, 'perPage': perPage, 'currentSeason': _currentSeason, 'currentYear': DateTime.now().year});
   }
 
+  // ── FIXED: Fully implemented dynamic filter passing ──
   Future<List<Anime>> searchAnime(
     String query, {
     bool filterEcchi = true,
+    int? minScore,
+    String? status,
+    int? year,
   }) async {
     const searchQuery = r'''
-      query ($search: String, $bannedGenres: [String]) {
+      query ($search: String, $bannedGenres: [String], $minScore: Int, $status: MediaStatus, $seasonYear: Int) {
         Page(page: 1, perPage: 15) {
-          media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres, status_not: NOT_YET_RELEASED) {
+          media(
+            search: $search, 
+            type: ANIME, 
+            sort: SEARCH_MATCH, 
+            isAdult: false, 
+            genre_not_in: $bannedGenres, 
+            status_not: NOT_YET_RELEASED,
+            averageScore_greater: $minScore,
+            status: $status,
+            seasonYear: $seasonYear
+          ) {
             id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status averageScore nextAiringEpisode { episode airingAt }
           }
         }
       }''';
+    
     final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
-    return _execute(searchQuery, {
+    
+    final variables = <String, dynamic>{
       'search': query,
       'bannedGenres': bannedGenres,
-    });
+    };
+    
+    if (minScore != null && minScore > 0) variables['minScore'] = minScore;
+    if (status != null && status != 'ANY') variables['status'] = status;
+    if (year != null) variables['seasonYear'] = year;
+
+    return _execute(searchQuery, variables);
   }
 
   void dispose() => _httpClient.close();

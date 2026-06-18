@@ -6,7 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../services/anilist_api.dart';
+import '../services/anilist_query_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/navbar.dart';
 import '../widgets/settings_menu.dart';
@@ -70,18 +70,25 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  void _handleSearch(String query) {
+  void _handleTextChange(String query) {
+    // Only update the string so the Spotlight dropdown gets the text.
+    // Do NOT navigate or debounce to the Search Screen here.
     setState(() => _searchQuery = query);
-    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
+  }
+
+  void _handleSubmit(String query) {
+    // Hide the spotlight dropdown
+    FocusScope.of(context).unfocus();
+
     if (query.trim().isEmpty) {
       _goHome();
       return;
     }
-    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
-      _navigateTo(
-        SearchResultsScreen(query: query, onSelectAnime: _handleSelectAnime),
-      );
-    });
+    
+    // Instantly navigate to the Search Screen
+    _navigateTo(
+      SearchResultsScreen(query: query, onSelectAnime: _handleSelectAnime),
+    );
   }
 
   void _goHome() {
@@ -102,7 +109,7 @@ class _AppShellState extends State<AppShell> {
   Future<void> _restoreSession() async {
     final token = await _auth.getStoredToken();
     if (token != null && mounted) {
-      AnilistApiService.setToken(token);
+      AnilistQueryService.setToken(token);
       setState(() => _isLoggedIn = true);
     }
   }
@@ -116,7 +123,7 @@ class _AppShellState extends State<AppShell> {
 
     if (_isLoggedIn) {
       await _auth.logout();
-      AnilistApiService.clearToken();
+      AnilistQueryService.clearToken();
       setState(() => _isLoggedIn = false);
       if (_currentView is WatchlistScreen) _goHome();
       return;
@@ -128,7 +135,7 @@ class _AppShellState extends State<AppShell> {
       if (!mounted) return;
 
       if (token != null) {
-        AnilistApiService.setToken(token);
+        AnilistQueryService.setToken(token);
         setState(() => _isLoggedIn = true);
       }
     } catch (e) {
@@ -157,12 +164,12 @@ class _AppShellState extends State<AppShell> {
       appBar: AniStreamNavBar(
         searchQuery: _searchQuery,
         isLoggedIn: _isLoggedIn,
-        isScrolled: _isScrolled, // ── NEW: Tells NavBar to apply frosting ──
+        isScrolled: _isScrolled,
         onHome: _goHome,
-        onSearch: _handleSearch,
-        onScheduled: () => {
-          _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
-        },
+        onSearch: _handleTextChange,
+        onSubmitted: _handleSubmit,
+        onSelectAnime: _handleSelectAnime, 
+        onScheduled: () => _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
         onWatchlist: () => _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
         onLogin: _handleLogin,
         onSettings: () => showSettingsMenu(context),

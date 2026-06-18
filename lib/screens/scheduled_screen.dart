@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../services/anilist_api.dart';
+import '../services/anilist_query_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/calendar/calendar_card.dart';
 
@@ -16,7 +16,7 @@ class ScheduledScreen extends StatefulWidget {
 }
 
 class _ScheduledScreenState extends State<ScheduledScreen> {
-  late final AnilistApiService _api;
+  late final AnilistQueryService _api;
   late Future<List<Anime>> _animeFuture;
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
@@ -36,7 +36,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   @override
   void initState() {
     super.initState();
-    _api = AnilistApiService();
+    _api = AnilistQueryService();
     _animeFuture = _api.getCurrentlyAiring();
 
     // Tick every minute so countdown strings stay accurate.

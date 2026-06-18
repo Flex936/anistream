@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../services/anilist_query_service.dart';
 import '../../theme/app_palette.dart';
 import './navbar/nav_action_buttons.dart';
 import './navbar/nav_logo.dart';
@@ -11,8 +12,6 @@ import './navbar/search_input.dart';
 class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
   final String searchQuery;
   final bool isLoggedIn;
-  
-  // ── NEW: Tells the navbar if the user has started scrolling ──
   final bool isScrolled; 
   
   final ValueChanged<String>? onSearch;
@@ -21,18 +20,22 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
   final VoidCallback? onSettings;
   final VoidCallback? onWatchlist;
   final VoidCallback? onScheduled;
+  final ValueChanged<Anime>? onSelectAnime;
+  final ValueChanged<String>? onSubmitted;
 
   const AniStreamNavBar({
     super.key,
     this.searchQuery = '',
     this.isLoggedIn = false,
-    this.isScrolled = false, // Defaults to false
+    this.isScrolled = false,
     this.onSearch,
     this.onHome,
     this.onLogin,
     this.onSettings,
     this.onWatchlist,
     this.onScheduled,
+    this.onSelectAnime,
+    this.onSubmitted,
   });
 
   @override
@@ -105,7 +108,6 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 600; 
 
-    // ── THE MAGIC: Smooth interpolation of the blur effect ──
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0.0, end: widget.isScrolled ? 16.0 : 0.0),
       duration: const Duration(milliseconds: 250),
@@ -119,19 +121,15 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
               height: widget.preferredSize.height,
               padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
               decoration: BoxDecoration(
-                // Seamless transition from totally invisible to frosted glass
                 color: widget.isScrolled
                     ? AppPalette.base.withValues(alpha: 0.75) 
                     : AppPalette.transparent,
-                // Border completely removed for seamless integration
               ),
               child: child,
             ),
           ),
         );
       },
-      // Passing the Row as a 'child' prevents it from rebuilding 60 times a second 
-      // during the fade animation. Massive performance boost!
       child: Row(
         children: [
           if (!isCompact) ...[
@@ -146,6 +144,8 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
               child: SearchInput(
                 controller: _searchController,
                 onChanged: widget.onSearch,
+                onSubmitted: widget.onSubmitted,
+                onSelectAnime: widget.onSelectAnime,
               ),
             ),
           ),

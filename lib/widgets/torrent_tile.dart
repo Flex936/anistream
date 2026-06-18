@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../services/torrent_scraper.dart';
+import '../services/torrent_scraper_service.dart';
 import '../theme/app_palette.dart';
 
 class TorrentTile extends StatefulWidget {

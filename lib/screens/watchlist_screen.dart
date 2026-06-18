@@ -5,7 +5,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../services/anilist_api.dart';
+import '../services/anilist_query_service.dart';
 import '../theme/app_palette.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -22,7 +22,7 @@ class WatchlistScreen extends StatefulWidget {
 }
 
 class _WatchlistScreenState extends State<WatchlistScreen> {
-  final _api = AnilistApiService();
+  final _api = AnilistQueryService();
 
   bool            _loading = true;
   String?         _error;
