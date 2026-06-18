@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Data models
@@ -326,7 +327,6 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
 
   Future<List<Anime>> searchAnime(
     String query, {
-    bool filterEcchi = true,
     int? minScore,
     String? status,
     int? year,
@@ -349,14 +349,17 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
           }
         }
       }''';
-
+    
+    // Wire up the NSFW filter dynamically from user settings
+    final prefs = await SharedPreferences.getInstance();
+    final filterEcchi = prefs.getBool('filter_ecchi') ?? true;
     final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
-
+    
     final variables = <String, dynamic>{
       'search': query,
       'bannedGenres': bannedGenres,
     };
-
+    
     if (minScore != null && minScore > 0) variables['minScore'] = minScore;
     if (status != null && status != 'ANY') variables['status'] = status;
     if (year != null) variables['seasonYear'] = year;

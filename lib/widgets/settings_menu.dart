@@ -1,33 +1,30 @@
-import 'package:file_picker/file_picker.dart';
+import 'dart:io' show Platform;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../theme/app_palette.dart';
 import '../services/settings_service.dart';
-import 'settings/settings_tabs.dart';
+import './settings/settings_components.dart';
 
 Future<void> showSettingsMenu(BuildContext context) {
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Settings',
-    // ── FIXED: AppPalette.black ──
-    barrierColor: AppPalette.black.withValues(alpha: 0.60),
-    transitionDuration: const Duration(milliseconds: 200),
+    // ── Transparent, dark barrier so you can still see the UI behind it ──
+    barrierColor: AppPalette.black.withValues(alpha: 0.40),
+    transitionDuration: const Duration(milliseconds: 300),
     transitionBuilder: (context, animation, _, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.95, end: 1.0).animate(curved),
-          child: child,
-        ),
+      // ── Smooth slide in from the right edge ──
+      return SlideTransition(
+        position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+            .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+        child: child,
       );
     },
     pageBuilder: (_, _, _) => const SettingsMenu(),
   );
 }
-
-enum SettingsTab { general, playback, upscale }
 
 class SettingsMenu extends StatefulWidget {
   const SettingsMenu({super.key});
@@ -39,17 +36,13 @@ class SettingsMenu extends StatefulWidget {
 class _SettingsMenuState extends State<SettingsMenu> {
   final _service = SettingsService();
 
-  SettingsTab _activeTab = SettingsTab.general;
   bool _loading = true;
   bool _saving = false;
 
   late bool _filterEcchi;
-  late String _downloadFolder;
-  late String _encoderId;
-  late bool _enableAV1;
-  late bool _enableOpus;
-  late String _upscaleMethod;
-  late AppUpscaleResolution _upscaleResolution;
+  late String _hardwareDecoding;
+
+  bool get _isDesktop => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
   @override
   void initState() {
@@ -62,12 +55,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     if (!mounted) return;
     setState(() {
       _filterEcchi = s.filterEcchi;
-      _downloadFolder = s.downloadFolder;
-      _encoderId = s.encoderId;
-      _enableAV1 = s.enableAV1;
-      _enableOpus = s.enableOpus;
-      _upscaleMethod = s.upscaleMethod;
-      _upscaleResolution = s.upscaleResolution;
+      _hardwareDecoding = s.hardwareDecoding;
       _loading = false;
     });
   }
@@ -78,22 +66,14 @@ class _SettingsMenuState extends State<SettingsMenu> {
       await _service.save(
         AppSettings(
           filterEcchi: _filterEcchi,
-          downloadFolder: _downloadFolder,
-          encoderId: _encoderId,
-          enableAV1: _enableAV1,
-          enableOpus: _enableOpus,
-          upscaleMethod: _upscaleMethod,
-          upscaleResolution: _upscaleResolution,
+          hardwareDecoding: _hardwareDecoding,
         ),
       );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed: $e'),
-            backgroundColor: AppPalette.statusCancelled,
-          ),
+          SnackBar(content: Text('Failed to save settings.'), backgroundColor: AppPalette.statusCancelled),
         );
       }
     } finally {
@@ -101,224 +81,139 @@ class _SettingsMenuState extends State<SettingsMenu> {
     }
   }
 
-  Future<void> _pickDownloadFolder() async {
-    String? path = await FilePicker.getDirectoryPath();
-    if (path != null && mounted) {
-      setState(() => _downloadFolder = path);
-    }
-  }
-
-  Widget _buildTabContent() => switch (_activeTab) {
-    SettingsTab.general => GeneralTab(
-      key: const ValueKey(SettingsTab.general),
-      filterEcchi: _filterEcchi,
-      downloadFolder: _downloadFolder,
-      onFilterEcchiChanged: (v) => setState(() => _filterEcchi = v),
-      onPickDownloadFolder: _pickDownloadFolder,
-    ),
-    SettingsTab.playback => const PlaybackTab(
-      key: ValueKey(SettingsTab.playback),
-    ),
-    SettingsTab.upscale => const UpscaleTab(key: ValueKey(SettingsTab.upscale)),
-  };
-
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppPalette.transparent,
-      insetPadding: const EdgeInsets.all(16),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 768, maxHeight: 600),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppPalette.surface,
-              border: Border.all(color: AppPalette.border),
-            ),
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppPalette.primary,
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Material(
+        color: Colors.transparent,
+        child: SizedBox(
+          width: isMobile ? MediaQuery.of(context).size.width : 450,
+          height: double.infinity,
+          child: ClipRRect(
+            borderRadius: isMobile 
+                ? BorderRadius.zero 
+                : const BorderRadius.only(topLeft: Radius.circular(24), bottomLeft: Radius.circular(24)),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppPalette.base.withValues(alpha: 0.80),
+                  border: isMobile ? null : Border(left: BorderSide(color: AppPalette.border.withValues(alpha: 0.5))),
+                  boxShadow: [BoxShadow(color: AppPalette.black.withValues(alpha: 0.5), blurRadius: 40)],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ── HEADER ──
+                    Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Settings', style: TextStyle(color: AppPalette.textMain, fontSize: 26, fontWeight: FontWeight.bold)),
+                          _CloseButton(onPressed: () => Navigator.of(context).pop()),
+                        ],
                       ),
                     ),
-                  )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _SettingsSidebar(
-                        activeTab: _activeTab,
-                        onTabSelected: (t) => setState(() => _activeTab = t),
-                      ),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
+
+                    // ── CONTENT ──
+                    Expanded(
+                      child: _loading
+                          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(AppPalette.primary)))
+                          : ListView(
+                              padding: const EdgeInsets.symmetric(horizontal: 32),
                               children: [
-                                Expanded(
-                                  child: SingleChildScrollView(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      32,
-                                      32,
-                                      32,
-                                      16,
-                                    ),
-                                    child: AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 200,
+                                const SectionLabel(label: 'Content Preferences'),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Filter Ecchi / NSFW', style: TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w600)),
+                                          SizedBox(height: 4),
+                                          Text('Automatically hide borderline adult content from search results.', style: TextStyle(color: AppPalette.textMuted, fontSize: 12, height: 1.4)),
+                                        ],
                                       ),
-                                      switchInCurve: Curves.easeOut,
-                                      switchOutCurve: Curves.easeIn,
-                                      child: _buildTabContent(),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    ToggleSwitch(value: _filterEcchi, onChanged: (v) => setState(() => _filterEcchi = v)),
+                                  ],
+                                ),
+                                
+                                if (_isDesktop) ...[
+                                  const SizedBox(height: 32),
+                                  const Divider(color: AppPalette.border),
+                                  const SizedBox(height: 32),
+                                  
+                                  const SectionLabel(label: 'Playback Engine'),
+                                  const SizedBox(height: 16),
+                                  const Text('Hardware Decoding', style: TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 4),
+                                  const Text('Use your GPU to decode video streams for vastly improved performance and lower battery usage.', style: TextStyle(color: AppPalette.textMuted, fontSize: 12, height: 1.4)),
+                                  const SizedBox(height: 16),
+                                  
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: AppPalette.overlay,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: AppPalette.border),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                        value: _hardwareDecoding,
+                                        dropdownColor: AppPalette.overlay,
+                                        icon: const Icon(Icons.expand_more_rounded, color: AppPalette.textMuted),
+                                        isExpanded: true,
+                                        style: const TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w500),
+                                        items: const [
+                                          DropdownMenuItem(value: 'auto', child: Text('Auto (Safe Default)')),
+                                          DropdownMenuItem(value: 'cuda-copy', child: Text('NVIDIA (CUDA)')),
+                                          DropdownMenuItem(value: 'd3d11va-copy', child: Text('Windows Native (D3D11VA)')),
+                                          DropdownMenuItem(value: 'videotoolbox-copy', child: Text('Apple Silicon (VideoToolbox)')),
+                                          DropdownMenuItem(value: 'none', child: Text('Software Only (CPU)')),
+                                        ],
+                                        onChanged: (val) {
+                                          if (val != null) setState(() => _hardwareDecoding = val);
+                                        },
+                                      ),
                                     ),
                                   ),
-                                ),
-                                _SettingsFooter(
-                                  saving: _saving,
-                                  onSave: _handleSave,
-                                ),
+                                ],
                               ],
                             ),
-                            Positioned(
-                              top: 12,
-                              right: 12,
-                              child: _CloseButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                              ),
-                            ),
-                          ],
-                        ),
+                    ),
+
+                    // ── FOOTER ──
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppPalette.base.withValues(alpha: 0.5),
+                        border: const Border(top: BorderSide(color: AppPalette.border)),
                       ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsSidebar extends StatelessWidget {
-  final SettingsTab activeTab;
-  final ValueChanged<SettingsTab> onTabSelected;
-
-  const _SettingsSidebar({
-    required this.activeTab,
-    required this.onTabSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        color: AppPalette.base,
-        border: Border(right: BorderSide(color: AppPalette.border)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              'Settings',
-              style: TextStyle(
-                color: AppPalette.textMain,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _SideNavButton(
-            icon: Icons.monitor_outlined,
-            label: 'General',
-            active: activeTab == SettingsTab.general,
-            onPressed: () => onTabSelected(SettingsTab.general),
-          ),
-          const SizedBox(height: 4),
-          _SideNavButton(
-            icon: Icons.movie_filter_outlined,
-            label: 'Playback',
-            active: activeTab == SettingsTab.playback,
-            onPressed: () => onTabSelected(SettingsTab.playback),
-          ),
-          const SizedBox(height: 4),
-          _SideNavButton(
-            icon: Icons.auto_awesome_outlined,
-            label: 'Upscale',
-            active: activeTab == SettingsTab.upscale,
-            onPressed: () => onTabSelected(SettingsTab.upscale),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SideNavButton extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onPressed;
-
-  const _SideNavButton({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onPressed,
-  });
-
-  @override
-  State<_SideNavButton> createState() => _SideNavButtonState();
-}
-
-class _SideNavButtonState extends State<_SideNavButton> {
-  bool _hovered = false;
-
-  Color get _background => widget.active
-      ? AppPalette.primary.withValues(alpha: 0.15)
-      : _hovered
-      ? AppPalette.surface
-      // ── FIXED: AppPalette.transparent ──
-      : AppPalette.transparent;
-
-  Color get _foreground => widget.active
-      ? AppPalette.primary
-      : _hovered
-      ? AppPalette.textMain
-      : AppPalette.textMuted;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: _background,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Icon(widget.icon, color: _foreground, size: 18),
-              const SizedBox(width: 12),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  color: _foreground,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                      child: FilledButton(
+                        onPressed: _saving ? null : _handleSave,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppPalette.primary,
+                          foregroundColor: AppPalette.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _saving
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppPalette.white)))
+                            : const Text('Save Changes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -348,65 +243,10 @@ class _CloseButtonState extends State<_CloseButton> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: _hovered
-                ? AppPalette.statusCancelled.withValues(alpha: 0.12)
-                // ── FIXED: AppPalette.transparent ──
-                : AppPalette.transparent,
+            color: _hovered ? AppPalette.statusCancelled.withValues(alpha: 0.12) : AppPalette.transparent,
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            Icons.close_rounded,
-            size: 20,
-            color: _hovered ? AppPalette.statusCancelled : AppPalette.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsFooter extends StatelessWidget {
-  final bool saving;
-  final VoidCallback onSave;
-
-  const _SettingsFooter({required this.saving, required this.onSave});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-      decoration: const BoxDecoration(
-        color: AppPalette.base,
-        border: Border(top: BorderSide(color: AppPalette.border)),
-      ),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: FilledButton(
-          onPressed: saving ? null : onSave,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppPalette.primary,
-            // ── FIXED: AppPalette.white ──
-            foregroundColor: AppPalette.white,
-            disabledBackgroundColor: AppPalette.primary.withValues(alpha: 0.50),
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          child: saving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    // ── FIXED: AppPalette.white ──
-                    valueColor: AlwaysStoppedAnimation(AppPalette.white),
-                  ),
-                )
-              : const Text(
-                  'Save Changes',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
+          child: Icon(Icons.close_rounded, size: 24, color: _hovered ? AppPalette.statusCancelled : AppPalette.textMuted),
         ),
       ),
     );

@@ -1,23 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_palette.dart';
 
-class TabHeading extends StatelessWidget {
-  final String title;
-  const TabHeading({super.key, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: AppPalette.textMain,
-        fontSize: 22,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
-}
-
 class SectionLabel extends StatelessWidget {
   final String label;
   const SectionLabel({super.key, required this.label});
@@ -31,64 +14,6 @@ class SectionLabel extends StatelessWidget {
         fontSize: 10,
         fontWeight: FontWeight.w600,
         letterSpacing: 1.1,
-      ),
-    );
-  }
-}
-
-class FolderInput extends StatefulWidget {
-  final String path;
-  final VoidCallback onTap;
-
-  const FolderInput({super.key, required this.path, required this.onTap});
-
-  @override
-  State<FolderInput> createState() => _FolderInputState();
-}
-
-class _FolderInputState extends State<FolderInput> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final isEmpty = widget.path.isEmpty;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppPalette.base,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              width: 2,
-              color: _hovered ? AppPalette.primary : AppPalette.border,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.folder_open_outlined,
-                size: 18,
-                color: _hovered ? AppPalette.primary : AppPalette.textMuted,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  isEmpty ? 'Click to select a folder…' : widget.path,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isEmpty ? AppPalette.textMuted : AppPalette.textMain,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

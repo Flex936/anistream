@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
@@ -46,24 +47,37 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     // libass: true enables high-quality "burned-in" style subtitle rendering
     _player = Player(configuration: const PlayerConfiguration(libass: true));
-
-    final platform = _player.platform;
-    if (platform is NativePlayer) {
-      if (Platform.isLinux || Platform.isWindows) {
-        platform.setProperty('hwdec', 'cuda-copy'); // NVIDIA Desktop
-      } else if (Platform.isAndroid) {
-        platform.setProperty('hwdec', 'mediacodec-copy');
-      } else if (Platform.isIOS) {
-        platform.setProperty('hwdec', 'videotoolbox-copy');
-      }
-    }
-
     _videoController = VideoController(_player);
     _torrentController = StreamingController();
     _torrentController.addListener(_onTorrentStateChanged);
-    _torrentController.initialize(widget.torrent.magnetLink);
 
+    // ── FIXED: Delegate to an async function so we can grab the user's settings ──
+    _initPlayerAndStream();
     _startHideControlsTimer();
+  }
+
+  Future<void> _initPlayerAndStream() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hwdec = prefs.getString('hwdec_preference') ?? 'auto';
+    
+    final platform = _player.platform;
+    if (platform is NativePlayer) {
+      if (hwdec == 'auto') {
+        // Automatic safe defaults based on OS
+        if (Platform.isLinux || Platform.isWindows) {
+          platform.setProperty('hwdec', 'auto');
+        } else if (Platform.isAndroid) {
+          platform.setProperty('hwdec', 'mediacodec-copy');
+        } else if (Platform.isIOS || Platform.isMacOS) {
+          platform.setProperty('hwdec', 'videotoolbox-copy');
+        }
+      } else if (hwdec != 'none') {
+        // Apply user's explicit manual override
+        platform.setProperty('hwdec', hwdec);
+      }
+    }
+
+    _torrentController.initialize(widget.torrent.magnetLink);
   }
 
   void _onTorrentStateChanged() {
