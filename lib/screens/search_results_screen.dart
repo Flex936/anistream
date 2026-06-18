@@ -6,7 +6,7 @@ import '../widgets/anime_card.dart';
 
 class SearchResultsScreen extends StatefulWidget {
   final String query;
-  // ── NEW: forwarded from AppShell so card taps stay inside the shell.
+  // Forwarded from AppShell so card taps stay inside the shell.
   final ValueChanged<Anime>? onSelectAnime;
 
   const SearchResultsScreen({
@@ -61,110 +61,125 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(32, 32, 32, 16),
-          child: Row(
-            children: [
-              Text(
-                'Results for "${widget.query}"',
-                style: const TextStyle(
-                  color: AppPalette.textMain,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.4,
+    // ── FIXED: SingleChildScrollView allows the whole page to slide under the NavBar ──
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── FIXED: Pushes the content safely below the 72px NavBar ──
+          const SizedBox(height: 96),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
+            child: Row(
+              children: [
+                Text(
+                  'Results for "${widget.query}"',
+                  style: const TextStyle(
+                    color: AppPalette.textMain,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.4,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              if (_searchFuture != null)
-                FutureBuilder(
-                  future: _searchFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppPalette.primary,
-                          ),
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-            ],
-          ),
-        ),
-
-        Expanded(
-          child: _searchFuture == null
-              ? const SizedBox.shrink()
-              : FutureBuilder<List<Anime>>(
-                  future: _searchFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppPalette.primary,
-                          ),
-                        ),
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text(
-                          'Search failed: ${snapshot.error}',
-                          style: const TextStyle(
-                            color: AppPalette.statusCancelled,
-                          ),
-                        ),
-                      );
-                    }
-
-                    final results = snapshot.data ?? [];
-                    if (results.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'No anime found.',
-                          style: TextStyle(
-                            color: AppPalette.textMuted,
-                            fontSize: 15,
-                          ),
-                        ),
-                      );
-                    }
-
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        final cols = _animeGridColumns(constraints.maxWidth);
-                        return GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(32, 8, 32, 32),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: cols,
-                                crossAxisSpacing: 20,
-                                mainAxisSpacing: 24,
-                                childAspectRatio: 0.55,
-                              ),
-                          itemCount: results.length,
-                          // ── CHANGED: onSelect wired up so taps route through AppShell.
-                          itemBuilder: (_, i) => AnimeCard(
-                            anime: results[i],
-                            onSelect: widget.onSelectAnime,
+                const Spacer(),
+                if (_searchFuture != null)
+                  FutureBuilder(
+                    future: _searchFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppPalette.primary,
+                            ),
                           ),
                         );
-                      },
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+              ],
+            ),
+          ),
+
+          if (_searchFuture == null)
+            const SizedBox.shrink()
+          else
+            FutureBuilder<List<Anime>>(
+              future: _searchFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppPalette.primary,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: Center(
+                      child: Text(
+                        'Search failed: ${snapshot.error}',
+                        style: const TextStyle(
+                          color: AppPalette.statusCancelled,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                final results = snapshot.data ?? [];
+                if (results.isEmpty) {
+                  return SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: const Center(
+                      child: Text(
+                        'No anime found.',
+                        style: TextStyle(
+                          color: AppPalette.textMuted,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cols = _animeGridColumns(constraints.maxWidth);
+                    return GridView.builder(
+                      // ── FIXED: Required for a GridView inside a SingleChildScrollView ──
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(32, 8, 32, 48),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: cols,
+                        crossAxisSpacing: 20,
+                        mainAxisSpacing: 24,
+                        childAspectRatio: 0.55,
+                      ),
+                      itemCount: results.length,
+                      itemBuilder: (_, i) => AnimeCard(
+                        anime: results[i],
+                        onSelect: widget.onSelectAnime,
+                      ),
                     );
                   },
-                ),
-        ),
-      ],
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 }

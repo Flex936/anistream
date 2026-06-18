@@ -8,18 +8,14 @@ class TheaterControls extends StatefulWidget {
   final Player player;
   final VoidCallback onInteract;
   final VoidCallback onToggleSettings;
-  final VoidCallback onToggleFullscreen;
   final bool isSettingsOpen;
-  final bool isFullscreen;
 
   const TheaterControls({
     super.key,
     required this.player,
     required this.onInteract,
     required this.onToggleSettings,
-    required this.onToggleFullscreen,
     required this.isSettingsOpen,
-    required this.isFullscreen,
   });
 
   @override
@@ -149,11 +145,6 @@ class _TheaterControlsState extends State<TheaterControls> {
             IconButton(
               icon: Icon(Icons.settings_rounded, color: widget.isSettingsOpen ? AppPalette.primary : AppPalette.white, size: 26),
               onPressed: widget.onToggleSettings,
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(widget.isFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded, color: AppPalette.white, size: 28),
-              onPressed: widget.onToggleFullscreen,
             ),
           ],
         ),

@@ -1,12 +1,3 @@
-// lib/screens/scheduled_screen.dart
-//
-// Flutter port of ScheduledView.svelte + CalendarCard.svelte.
-//
-// The whole screen scrolls vertically (like the browser page in Svelte).
-// Each day column grows to its natural height — no per-column scroll.
-// A horizontal SingleChildScrollView kicks in only when the window is
-// narrower than 7 × minColumnWidth (same as Svelte's overflow-x-auto).
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -117,29 +108,53 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
       builder: (context, snapshot) {
         // ── Loading ──────────────────────────────────────────────────────────
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                const SizedBox(height: 96),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.5,
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
+                    ),
+                  ),
+                ),
+              ],
             ),
           );
         }
 
         // ── Error ────────────────────────────────────────────────────────────
         if (snapshot.hasError) {
-          return _ErrorPane(error: snapshot.error, onRetry: _reload);
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                const SizedBox(height: 96),
+                SizedBox(
+                  height: MediaQuery.of(context).size.height * 0.5,
+                  child: _ErrorPane(error: snapshot.error, onRetry: _reload),
+                ),
+              ],
+            ),
+          );
         }
 
         // ── Data — screen scrolls vertically as a whole ──────────────────────
         final calendar = _buildCalendar(snapshot.data ?? []);
 
+        // ── SingleChildScrollView wrapper ──
         return SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Spacer to clear the NavBar ──
+              const SizedBox(height: 96),
+
               // Header
               const Padding(
-                padding: EdgeInsets.fromLTRB(32, 32, 32, 24),
+                padding: EdgeInsets.fromLTRB(32, 0, 32, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

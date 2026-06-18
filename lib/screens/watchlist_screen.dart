@@ -1,7 +1,3 @@
-// lib/screens/watchlist_screen.dart
-//
-// Watchlist screen — translates WatchlistView.svelte into Flutter.
-//
 // Displays the authenticated user's CURRENT ("Watching") and PLANNING lists
 // fetched from AniList via [AnilistApiService.getUserWatchlist].
 // Tapping a card calls [onSelectAnime], routing through AppShell so the
@@ -70,64 +66,75 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Header + tabs ──────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(32, 32, 32, 0),
-          child: Row(
-            children: [
-              const Text(
-                'My Library',
-                style: TextStyle(
-                  color: AppPalette.textMain,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const Spacer(),
-              // Tab pill — mirrors the bg-surface/rounded-xl tab switcher
-              // in WatchlistView.svelte.
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppPalette.border),
-                ),
-                child: Row(
-                  children: [
-                    _TabButton(
-                      icon:   Icons.play_arrow_rounded,
-                      label:  'Watching',
-                      active: _activeStatus == 'CURRENT',
-                      onTap:  () => setState(() => _activeStatus = 'CURRENT'),
-                    ),
-                    _TabButton(
-                      icon:   Icons.calendar_today_outlined,
-                      label:  'Planning',
-                      active: _activeStatus == 'PLANNING',
-                      onTap:  () => setState(() => _activeStatus = 'PLANNING'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
+    // SingleChildScrollView allows the whole page to slide under the NavBar ──
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Pushes the content safely below the 72px NavBar ──
+          const SizedBox(height: 96),
 
-        // ── Body ───────────────────────────────────────────────────────────
-        Expanded(
-          child: _loading
-              ? const _LoadingPane()
-              : _error != null
-                  ? _ErrorPane(message: _error!, onRetry: _fetchWatchlist)
-                  : _buildGrid(),
-        ),
-      ],
+          // ── Header + tabs ──────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 0, 32, 0),
+            child: Row(
+              children: [
+                const Text(
+                  'My Library',
+                  style: TextStyle(
+                    color: AppPalette.textMain,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const Spacer(),
+                // Tab pill — mirrors the bg-surface/rounded-xl tab switcher
+                // in WatchlistView.svelte.
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppPalette.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppPalette.border),
+                  ),
+                  child: Row(
+                    children: [
+                      _TabButton(
+                        icon:   Icons.play_arrow_rounded,
+                        label:  'Watching',
+                        active: _activeStatus == 'CURRENT',
+                        onTap:  () => setState(() => _activeStatus = 'CURRENT'),
+                      ),
+                      _TabButton(
+                        icon:   Icons.calendar_today_outlined,
+                        label:  'Planning',
+                        active: _activeStatus == 'PLANNING',
+                        onTap:  () => setState(() => _activeStatus = 'PLANNING'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Body ───────────────────────────────────────────────────────────
+          if (_loading)
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: const _LoadingPane(),
+            )
+          else if (_error != null)
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: _ErrorPane(message: _error!, onRetry: _fetchWatchlist),
+            )
+          else
+            _buildGrid(),
+        ],
+      ),
     );
   }
 
@@ -135,10 +142,13 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     final entries = _activeEntries;
 
     if (entries.isEmpty) {
-      return _EmptyPane(
-        message: _activeStatus == 'CURRENT'
-            ? "You're not watching anything yet."
-            : "Your planning list is empty.",
+      return SizedBox(
+        height: MediaQuery.of(context).size.height * 0.5,
+        child: _EmptyPane(
+          message: _activeStatus == 'CURRENT'
+              ? "You're not watching anything yet."
+              : "Your planning list is empty.",
+        ),
       );
     }
 
@@ -146,7 +156,10 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       builder: (context, constraints) {
         final cols = _columns(constraints.maxWidth);
         return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+          // ── FIXED: Required for a GridView inside a SingleChildScrollView ──
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount:  cols,
             crossAxisSpacing: 20,
@@ -436,7 +449,7 @@ class _PosterImage extends StatelessWidget {
             ],
           );
         },
-        errorBuilder: (_, __, ___) => const ColoredBox(
+        errorBuilder: (_, _, _) => const ColoredBox(
           color: AppPalette.surface,
           child: Center(
             child: Icon(

@@ -11,6 +11,7 @@ import '../theme/app_palette.dart';
 import '../services/torrent_scraper.dart';
 import '../services/streaming_controller.dart';
 import '../widgets/theater/theater_components.dart';
+import '../widgets/theater/theater_controls.dart';
 import '../widgets/theater/theater_settings.dart';
 
 class TheaterScreen extends StatefulWidget {
@@ -152,9 +153,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
       child: Scaffold(
         backgroundColor: AppPalette.black,
         body: MouseRegion(
-          cursor: _showControls
-              ? SystemMouseCursors.basic
-              : SystemMouseCursors.none,
+          cursor: _showControls ? SystemMouseCursors.basic : SystemMouseCursors.none,
+          // Wakes up UI when mouse moves on desktop
           onHover: (_) => _startHideControlsTimer(),
           child: GestureDetector(
             onTap: () {
@@ -163,6 +163,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
               } else {
                 _player.playOrPause();
               }
+              // Wakes up UI when screen is tapped on mobile
               _startHideControlsTimer();
             },
             child: Stack(
@@ -201,12 +202,24 @@ class _TheaterScreenState extends State<TheaterScreen> {
                             ),
                           ),
                           Positioned(
-                            top: 40,
-                            left: 24,
-                            right: 24,
-                            child: TheaterTopBar(
-                              episode: widget.episode,
-                              onBack: () => Navigator.pop(context),
+                            top: 40, left: 24, right: 24,
+                            // Gesture blocker to prevent pausing when clicking back
+                            child: GestureDetector(
+                              onTap: () {}, 
+                              child: TheaterTopBar(episode: widget.episode, onBack: () => Navigator.pop(context)),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 24, left: 32, right: 32,
+                            // Gesture blocker to prevent pausing when using sliders
+                            child: GestureDetector(
+                              onTap: () {},
+                              child: TheaterControls(
+                                player: _player,
+                                isSettingsOpen: _isSettingsOpen,
+                                onInteract: _startHideControlsTimer,
+                                onToggleSettings: () => setState(() => _isSettingsOpen = !_isSettingsOpen),
+                              ),
                             ),
                           ),
                         ],

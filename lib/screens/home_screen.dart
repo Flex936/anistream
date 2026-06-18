@@ -63,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
+            const SizedBox(height: 72),
             
             _AnimeCarousel(
               title: 'Trending Now',

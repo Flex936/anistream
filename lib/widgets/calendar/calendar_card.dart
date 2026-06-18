@@ -234,7 +234,7 @@ class _CoverImage extends StatelessWidget {
             ],
           );
         },
-        errorBuilder: (_, __, ___) => const ColoredBox(
+        errorBuilder: (_, _, _) => const ColoredBox(
           color: AppPalette.surface,
           child: Center(
             child: Icon(

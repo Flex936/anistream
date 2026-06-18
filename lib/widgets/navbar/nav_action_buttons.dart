@@ -30,12 +30,16 @@ class _NavIconButtonState extends State<NavIconButton> {
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: widget.onPressed,
-          child: Padding(
-            padding: const EdgeInsets.all(6),
+          child: Container(
+            // Minimum comfortable touch target for mobile
+            width: 44,
+            height: 44,
+            color: AppPalette.transparent, // Ensures the entire box is clickable
+            alignment: Alignment.center,
             child: Icon(
               widget.icon,
               color: _hovered ? AppPalette.primary : AppPalette.textMuted,
-              size: 20,
+              size: 22, // Slightly larger icon
             ),
           ),
         ),
@@ -74,12 +78,15 @@ class _UserButtonState extends State<UserButton> {
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: widget.onPressed,
-          child: Padding(
-            padding: const EdgeInsets.all(6),
+          child: Container(
+            width: 44,
+            height: 44,
+            color: AppPalette.transparent,
+            alignment: Alignment.center,
             child: Icon(
               Icons.person_outline_rounded,
               color: _iconColor,
-              size: 20,
+              size: 22,
             ),
           ),
         ),
@@ -119,14 +126,17 @@ class _WindowButtonState extends State<WindowButton> {
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: widget.onPressed,
-          child: Padding(
-            padding: const EdgeInsets.all(6),
+          child: Container(
+            width: 44,
+            height: 44,
+            color: AppPalette.transparent,
+            alignment: Alignment.center,
             child: Icon(
               widget.icon,
               color: _hovered
                   ? (widget.hoverColor ?? AppPalette.textMain)
                   : AppPalette.textMuted,
-              size: 20,
+              size: 20, // Keep window controls slightly smaller and sharper
             ),
           ),
         ),

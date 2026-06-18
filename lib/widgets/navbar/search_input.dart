@@ -14,7 +14,7 @@ class SearchInput extends StatelessWidget {
       onChanged: onChanged,
       style: const TextStyle(color: AppPalette.textMain, fontSize: 14),
       decoration: InputDecoration(
-        hintText: 'Search for anime by title...',
+        hintText: 'Search for anime...',
         hintStyle: const TextStyle(color: AppPalette.textMuted, fontSize: 14),
         prefixIcon: const Padding(
           padding: EdgeInsets.only(left: 14, right: 10),
@@ -26,7 +26,8 @@ class SearchInput extends StatelessWidget {
         ),
         prefixIconConstraints: const BoxConstraints(minWidth: 0),
         filled: true,
-        fillColor: AppPalette.surface,
+        // ── Translucent Glass Fill ──
+        fillColor: AppPalette.white.withValues(alpha: 0.05),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -34,11 +35,11 @@ class SearchInput extends StatelessWidget {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),
-          borderSide: const BorderSide(color: AppPalette.border),
+          borderSide: BorderSide(color: AppPalette.white.withValues(alpha: 0.1)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),
-          borderSide: const BorderSide(color: AppPalette.border),
+          borderSide: BorderSide(color: AppPalette.white.withValues(alpha: 0.1)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),

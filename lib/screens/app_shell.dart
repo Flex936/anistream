@@ -1,5 +1,3 @@
-// lib/screens/app_shell.dart
-//
 // Root application shell for AniStream.
 // Owns the persistent NavBar and switches the body between screens without
 // creating new Navigator routes — so the NavBar is always visible.
@@ -32,48 +30,43 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   final _auth = AnilistAuthService();
-  // The screen currently filling the Scaffold body.
   late Widget _currentView;
-
-  // The screen we came from — used by _handleBack to go one level up.
-  // null when we are already at the root (HomeScreen).
   Widget? _previousView;
 
   bool _isLoggedIn = false;
   bool _loginBusy = false;
   String _searchQuery = '';
   Timer? _searchDebounce;
+  
+  // ── NEW: Tracks if the current screen is scrolled down ──
+  bool _isScrolled = false;
 
   @override
   void initState() {
     super.initState();
-    // Build the initial view with the select callback already wired in.
     _currentView = HomeScreen(onSelectAnime: _handleSelectAnime);
     _restoreSession();
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
-  /// Pushes [view] onto the one-level history stack and displays it.
   void _navigateTo(Widget view) {
     setState(() {
       _previousView = _currentView;
       _currentView = view;
+      _isScrolled = false; // Reset glassmorphism when changing screens
     });
   }
 
-  /// Called when an AnimeCard is tapped anywhere in the app.
-  /// Keeps navigation inside the shell so the NavBar stays visible.
   void _handleSelectAnime(Anime anime) {
     _navigateTo(AnimeDetailsScreen(anime: anime, onBack: _handleBack));
   }
 
-  /// Called by the "Back" button inside AnimeDetailsScreen.
   void _handleBack() {
     setState(() {
-      _currentView =
-          _previousView ?? HomeScreen(onSelectAnime: _handleSelectAnime);
+      _currentView = _previousView ?? HomeScreen(onSelectAnime: _handleSelectAnime);
       _previousView = null;
+      _isScrolled = false; // Reset glassmorphism when going back
     });
   }
 
@@ -81,11 +74,7 @@ class _AppShellState extends State<AppShell> {
     setState(() => _searchQuery = query);
     if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
     if (query.trim().isEmpty) {
-      // Clear → return home
-      setState(() {
-        _currentView = HomeScreen(onSelectAnime: _handleSelectAnime);
-        _previousView = null;
-      });
+      _goHome();
       return;
     }
     _searchDebounce = Timer(const Duration(milliseconds: 500), () {
@@ -100,12 +89,12 @@ class _AppShellState extends State<AppShell> {
       _searchQuery = '';
       _currentView = HomeScreen(onSelectAnime: _handleSelectAnime);
       _previousView = null;
+      _isScrolled = false; // Reset glassmorphism going home
     });
   }
 
   @override
   void dispose() {
-    // FIX: Always cancel timers to prevent memory leaks
     _searchDebounce?.cancel();
     super.dispose();
   }
@@ -122,28 +111,17 @@ class _AppShellState extends State<AppShell> {
   //  Auth
   // ════════════════════════════════════════════════════════════════════════
 
-  /// Toggles login / logout.
-  ///
-  /// Login:  opens a browser window (AniList OAuth), waits for the token to
-  ///         be captured by [AnilistAuthService], then updates API + UI state.
-  ///
-  /// Logout: clears the stored token, wipes the API auth state, and navigates
-  ///         away from the watchlist if it is the current view.
   Future<void> _handleLogin() async {
-    if (_loginBusy) return; // ignore double-taps while browser is open
+    if (_loginBusy) return; 
 
     if (_isLoggedIn) {
-      // ── Logout ──────────────────────────────────────────────────────────
       await _auth.logout();
       AnilistApiService.clearToken();
       setState(() => _isLoggedIn = false);
-
-      // If the user was on the watchlist, take them home.
       if (_currentView is WatchlistScreen) _goHome();
       return;
     }
 
-    // ── Login ──────────────────────────────────────────────────────────────
     setState(() => _loginBusy = true);
     try {
       final token = await _auth.login();
@@ -173,26 +151,40 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppPalette.base,
+      // ── CRITICAL: Allows the content to scroll *underneath* the NavBar ──
+      extendBodyBehindAppBar: true, 
+      
       appBar: AniStreamNavBar(
         searchQuery: _searchQuery,
         isLoggedIn: _isLoggedIn,
-        onHome: () {
-          setState(() => _searchQuery = '');
-          setState(() {
-            _currentView = HomeScreen(onSelectAnime: _handleSelectAnime);
-            _previousView = null;
-          });
-        },
+        isScrolled: _isScrolled, // ── NEW: Tells NavBar to apply frosting ──
+        onHome: _goHome,
         onSearch: _handleSearch,
         onScheduled: () => {
           _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
         },
-        onWatchlist: () =>
-            _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
+        onWatchlist: () => _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
         onLogin: _handleLogin,
         onSettings: () => showSettingsMenu(context),
       ),
-      body: _currentView,
+      
+      // ── NEW: Magically intercepts scroll data from any screen loaded inside it ──
+      body: NotificationListener<ScrollNotification>(
+        onNotification: (ScrollNotification notification) {
+          // Only trigger on the main vertical scroll axis
+          if (notification.depth == 0) {
+            final isScrolled = notification.metrics.pixels > 20;
+            if (isScrolled != _isScrolled) {
+              // We use postFrameCallback to avoid updating state while Flutter is in the middle of drawing
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _isScrolled = isScrolled);
+              });
+            }
+          }
+          return false; // Return false so the scroll list still works normally
+        },
+        child: _currentView,
+      ),
     );
   }
 }
