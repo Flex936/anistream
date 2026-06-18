@@ -117,7 +117,9 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                   child: const Center(
                     child: CircularProgressIndicator(
                       strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppPalette.primary,
+                      ),
                     ),
                   ),
                 ),
@@ -198,7 +200,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
         const bPad = 24.0;
         final available = constraints.maxWidth - 2 * hPad;
         final naturalWidth = (available - 6 * gap) / 7;
-        final colWidth = naturalWidth.clamp(148.0, 220.0);
+        final colWidth = naturalWidth.clamp(148.0, double.infinity);
 
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,

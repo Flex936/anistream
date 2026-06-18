@@ -79,7 +79,9 @@ class Anime {
 
     return Anime(
       id: (json['id'] as num).toInt(),
-      title: rawTitle != null ? AnimeTitle.fromJson(rawTitle) : const AnimeTitle(),
+      title: rawTitle != null
+          ? AnimeTitle.fromJson(rawTitle)
+          : const AnimeTitle(),
       coverImage: rawCover != null ? AnimeCoverImage.fromJson(rawCover) : null,
       bannerImage: json['bannerImage'] as String?,
       description: json['description'] as String?,
@@ -132,11 +134,11 @@ class AnilistQueryService {
   static const String _endpoint = 'https://graphql.anilist.co';
 
   static String? _token;
-  static int? _viewerId; 
+  static int? _viewerId;
 
   static void setToken(String token) {
     _token = token;
-    _viewerId = null; 
+    _viewerId = null;
   }
 
   static void clearToken() {
@@ -148,7 +150,8 @@ class AnilistQueryService {
 
   final http.Client _httpClient;
 
-  AnilistQueryService({http.Client? client}) : _httpClient = client ?? http.Client();
+  AnilistQueryService({http.Client? client})
+    : _httpClient = client ?? http.Client();
 
   Map<String, String> get _headers => {
     'Content-Type': 'application/json',
@@ -217,7 +220,7 @@ query ($userId: Int) {
 query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason, $currentYear: Int) {
   Page(page: $page, perPage: $perPage) {
     media(type: ANIME, season: $currentSeason, seasonYear: $currentYear, sort: TRENDING_DESC, countryOfOrigin: "JP", isAdult: false, format_not_in: [SPECIAL, OVA, ONA, MOVIE]) {
-      id title { romaji english } coverImage { large } episodes status nextAiringEpisode { episode airingAt }
+      id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status nextAiringEpisode { episode airingAt }
     }
   }
 }''';
@@ -230,7 +233,10 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
     return 'WINTER';
   }
 
-  Future<List<Anime>> _execute(String query, Map<String, dynamic> variables) async {
+  Future<List<Anime>> _execute(
+    String query,
+    Map<String, dynamic> variables,
+  ) async {
     final response = await _httpClient.post(
       Uri.parse(_endpoint),
       headers: _headers,
@@ -244,16 +250,25 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
     final pageData = data?['Page'] as Map<String, dynamic>?;
     final mediaList = pageData?['media'] as List<dynamic>? ?? const [];
 
-    return mediaList.map((raw) => Anime.fromJson(raw as Map<String, dynamic>)).toList();
+    return mediaList
+        .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
+        .toList();
   }
 
   void _assertResponse(http.Response response) {
-    if (response.statusCode != 200) throw AnilistException('AniList returned HTTP ${response.statusCode}', statusCode: response.statusCode);
+    if (response.statusCode != 200) {
+      throw AnilistException(
+        'AniList returned HTTP ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
+    }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded.containsKey('errors')) {
       final errors = decoded['errors'] as List<dynamic>;
-      final errorMessage = errors.isNotEmpty ? errors[0]['message'] : 'Unknown GraphQL Error';
+      final errorMessage = errors.isNotEmpty
+          ? errors[0]['message']
+          : 'Unknown GraphQL Error';
       throw AnilistException('GraphQL Error: $errorMessage');
     }
   }
@@ -263,7 +278,12 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
   }
 
   Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) {
-    return _execute(_seasonPopularQuery, {'page': page, 'perPage': perPage, 'season': _currentSeason, 'seasonYear': DateTime.now().year});
+    return _execute(_seasonPopularQuery, {
+      'page': page,
+      'perPage': perPage,
+      'season': _currentSeason,
+      'seasonYear': DateTime.now().year,
+    });
   }
 
   Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) {
@@ -273,21 +293,35 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
   Future<List<MediaList>> getUserWatchlist() async {
     if (!isLoggedIn) throw const AnilistException('Not logged in');
     final viewerId = await _resolveViewerId();
-    if (viewerId == null) throw const AnilistException('Could not resolve viewer ID');
+    if (viewerId == null) {
+      throw const AnilistException('Could not resolve viewer ID');
+    }
 
     final response = await _httpClient.post(
       Uri.parse(_endpoint),
       headers: _headers,
-      body: jsonEncode({'query': _userWatchList, 'variables': {'userId': viewerId}}),
+      body: jsonEncode({
+        'query': _userWatchList,
+        'variables': {'userId': viewerId},
+      }),
     );
     _assertResponse(response);
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final lists = decoded['data']?['MediaListCollection']?['lists'] as List<dynamic>? ?? const [];
-    return lists.map((r) => MediaList.fromJson(r as Map<String, dynamic>)).toList();
+    final lists =
+        decoded['data']?['MediaListCollection']?['lists'] as List<dynamic>? ??
+        const [];
+    return lists
+        .map((r) => MediaList.fromJson(r as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) {
-    return _execute(_currentlyAiringQuery, {'page': page, 'perPage': perPage, 'currentSeason': _currentSeason, 'currentYear': DateTime.now().year});
+    return _execute(_currentlyAiringQuery, {
+      'page': page,
+      'perPage': perPage,
+      'currentSeason': _currentSeason,
+      'currentYear': DateTime.now().year,
+    });
   }
 
   Future<List<Anime>> searchAnime(
@@ -315,14 +349,14 @@ query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason,
           }
         }
       }''';
-    
+
     final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
-    
+
     final variables = <String, dynamic>{
       'search': query,
       'bannedGenres': bannedGenres,
     };
-    
+
     if (minScore != null && minScore > 0) variables['minScore'] = minScore;
     if (status != null && status != 'ANY') variables['status'] = status;
     if (year != null) variables['seasonYear'] = year;
