@@ -15,6 +15,8 @@ import '../widgets/settings_menu.dart';
 import 'anime_details_screen.dart';
 import 'home_screen.dart';
 import 'search_results_screen.dart';
+import '../services/anilist_auth_service.dart';
+import 'watchlist_screen.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  AppShell
@@ -28,6 +30,7 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
+  final _auth = AnilistAuthService();
   // The screen currently filling the Scaffold body.
   late Widget _currentView;
 
@@ -36,6 +39,7 @@ class _AppShellState extends State<AppShell> {
   Widget? _previousView;
 
   bool _isLoggedIn = false;
+  bool _loginBusy = false;
   String _searchQuery = '';
   Timer? _searchDebounce;
 
@@ -44,6 +48,7 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     // Build the initial view with the select callback already wired in.
     _currentView = HomeScreen(onSelectAnime: _handleSelectAnime);
+    _restoreSession();
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────
@@ -89,6 +94,14 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  void _goHome() {
+    setState(() {
+      _searchQuery = '';
+      _currentView = HomeScreen(onSelectAnime: _handleSelectAnime);
+      _previousView = null;
+    });
+  }
+
   @override
   void dispose() {
     // FIX: Always cancel timers to prevent memory leaks
@@ -96,9 +109,61 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
-  void _handleLogin() {
-    // TODO: Trigger AniList OAuth flow; set _isLoggedIn = true on success.
-    setState(() => _isLoggedIn = !_isLoggedIn);
+  Future<void> _restoreSession() async {
+    final token = await _auth.getStoredToken();
+    if (token != null && mounted) {
+      AnilistApiService.setToken(token);
+      setState(() => _isLoggedIn = true);
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  Auth
+  // ════════════════════════════════════════════════════════════════════════
+
+  /// Toggles login / logout.
+  ///
+  /// Login:  opens a browser window (AniList OAuth), waits for the token to
+  ///         be captured by [AnilistAuthService], then updates API + UI state.
+  ///
+  /// Logout: clears the stored token, wipes the API auth state, and navigates
+  ///         away from the watchlist if it is the current view.
+  Future<void> _handleLogin() async {
+    if (_loginBusy) return; // ignore double-taps while browser is open
+
+    if (_isLoggedIn) {
+      // ── Logout ──────────────────────────────────────────────────────────
+      await _auth.logout();
+      AnilistApiService.clearToken();
+      setState(() => _isLoggedIn = false);
+
+      // If the user was on the watchlist, take them home.
+      if (_currentView is WatchlistScreen) _goHome();
+      return;
+    }
+
+    // ── Login ──────────────────────────────────────────────────────────────
+    setState(() => _loginBusy = true);
+    try {
+      final token = await _auth.login();
+      if (!mounted) return;
+
+      if (token != null) {
+        AnilistApiService.setToken(token);
+        setState(() => _isLoggedIn = true);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: AppPalette.statusCancelled,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loginBusy = false);
+    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -121,9 +186,8 @@ class _AppShellState extends State<AppShell> {
         onScheduled: () {
           /* TODO: _navigateTo(const ScheduleScreen()) */
         },
-        onWatchlist: () {
-          /* TODO: _navigateTo(const WatchlistScreen()) */
-        },
+        onWatchlist: () =>
+            _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
         onLogin: _handleLogin,
         onSettings: () => showSettingsMenu(context),
       ),
