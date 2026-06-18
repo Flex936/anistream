@@ -44,10 +44,18 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   void initState() {
     super.initState();
-
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final physicalSize = view.physicalSize;
     // libass: true enables high-quality "burned-in" style subtitle rendering
+
     _player = Player(configuration: const PlayerConfiguration(libass: true));
-    _videoController = VideoController(_player);
+    _videoController = VideoController(
+      _player,
+      configuration: VideoControllerConfiguration(
+        width: physicalSize.width.toInt(),
+        height: physicalSize.height.toInt(),
+      ),
+    );
     _torrentController = StreamingController();
     _torrentController.addListener(_onTorrentStateChanged);
 
@@ -59,9 +67,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _initPlayerAndStream() async {
     final prefs = await SharedPreferences.getInstance();
     final hwdec = prefs.getString('hwdec_preference') ?? 'auto';
-    
+
     final platform = _player.platform;
     if (platform is NativePlayer) {
+      await platform.setProperty('scale', 'ewa_lanczossharp');
+
+      await platform.setProperty('cscale', 'ewa_lanczossharp');
       if (hwdec == 'auto') {
         // Automatic safe defaults based on OS
         if (Platform.isLinux || Platform.isWindows) {
@@ -145,16 +156,20 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _focusNode.dispose();
     _hideControlsTimer?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
+
     Future.microtask(() async {
+      _player.stop();
+      await _player.dispose();
+
+      _torrentController.dispose();
+
       if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
         if (await windowManager.isFullScreen()) {
           await windowManager.setFullScreen(false);
         }
       }
-      _torrentController.dispose();
-      _player.stop();
-      _player.dispose();
     });
+
     super.dispose();
   }
 
@@ -167,7 +182,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
       child: Scaffold(
         backgroundColor: AppPalette.black,
         body: MouseRegion(
-          cursor: _showControls ? SystemMouseCursors.basic : SystemMouseCursors.none,
+          cursor: _showControls
+              ? SystemMouseCursors.basic
+              : SystemMouseCursors.none,
           // Wakes up UI when mouse moves on desktop
           onHover: (_) => _startHideControlsTimer(),
           child: GestureDetector(
@@ -216,15 +233,22 @@ class _TheaterScreenState extends State<TheaterScreen> {
                             ),
                           ),
                           Positioned(
-                            top: 40, left: 24, right: 24,
+                            top: 40,
+                            left: 24,
+                            right: 24,
                             // Gesture blocker to prevent pausing when clicking back
                             child: GestureDetector(
-                              onTap: () {}, 
-                              child: TheaterTopBar(episode: widget.episode, onBack: () => Navigator.pop(context)),
+                              onTap: () {},
+                              child: TheaterTopBar(
+                                episode: widget.episode,
+                                onBack: () => Navigator.pop(context),
+                              ),
                             ),
                           ),
                           Positioned(
-                            bottom: 24, left: 32, right: 32,
+                            bottom: 24,
+                            left: 32,
+                            right: 32,
                             // Gesture blocker to prevent pausing when using sliders
                             child: GestureDetector(
                               onTap: () {},
@@ -232,7 +256,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                 player: _player,
                                 isSettingsOpen: _isSettingsOpen,
                                 onInteract: _startHideControlsTimer,
-                                onToggleSettings: () => setState(() => _isSettingsOpen = !_isSettingsOpen),
+                                onToggleSettings: () => setState(
+                                  () => _isSettingsOpen = !_isSettingsOpen,
+                                ),
                               ),
                             ),
                           ),
