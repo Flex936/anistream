@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../theme/app_palette.dart';
@@ -35,7 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // ── FIXED: Individual loading functions to prevent single rows from wiping out the whole screen ──
   void _loadTrending() {
     setState(() {
       _trendingFuture = _api.getTrendingAnime(perPage: 15);
@@ -63,7 +63,8 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 72),
+            // ── FIXED: Increased spacer to 96 to safely clear the glass NavBar ──
+            const SizedBox(height: 96),
             
             _AnimeCarousel(
               title: 'Trending Now',
@@ -93,10 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Anime Carousel (Horizontal List)
+//  Anime Carousel (Horizontal List with Desktop Navigation)
 // ════════════════════════════════════════════════════════════════════════════
 
-class _AnimeCarousel extends StatelessWidget {
+class _AnimeCarousel extends StatefulWidget {
   final String title;
   final Future<List<Anime>> future;
   final ValueChanged<Anime>? onSelectAnime;
@@ -110,14 +111,72 @@ class _AnimeCarousel extends StatelessWidget {
   });
 
   @override
+  State<_AnimeCarousel> createState() => _AnimeCarouselState();
+}
+
+class _AnimeCarouselState extends State<_AnimeCarousel> {
+  final ScrollController _scrollController = ScrollController();
+  bool _isHovered = false;
+  bool _canScrollLeft = false;
+  bool _canScrollRight = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_checkScrollLimits);
+    // Give it a short delay to measure constraints after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkScrollLimits());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_checkScrollLimits);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _checkScrollLimits() {
+    if (!_scrollController.hasClients) return;
+    
+    final canLeft = _scrollController.offset > 0;
+    final canRight = _scrollController.offset < _scrollController.position.maxScrollExtent;
+
+    if (canLeft != _canScrollLeft || canRight != _canScrollRight) {
+      setState(() {
+        _canScrollLeft = canLeft;
+        _canScrollRight = canRight;
+      });
+    }
+  }
+
+  void _scroll(double directionMultiplier) {
+    if (!_scrollController.hasClients) return;
+    
+    // Scroll by roughly 3 cards at a time (170px + 20px padding * 3)
+    final double scrollAmount = 570.0 * directionMultiplier;
+    final double targetPosition = (_scrollController.offset + scrollAmount)
+        .clamp(0.0, _scrollController.position.maxScrollExtent);
+
+    _scrollController.animateTo(
+      targetPosition,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // ── FIXED: Mobile Responsiveness Check ──
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final hPad = isMobile ? 16.0 : 32.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(32, 24, 32, 16),
+          padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 16),
           child: Text(
-            title,
+            widget.title,
             style: const TextStyle(
               color: AppPalette.textMain,
               fontSize: 22,
@@ -129,7 +188,7 @@ class _AnimeCarousel extends StatelessWidget {
         SizedBox(
           height: 330,
           child: FutureBuilder<List<Anime>>(
-            future: future,
+            future: widget.future,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const Center(
@@ -141,11 +200,9 @@ class _AnimeCarousel extends StatelessWidget {
               }
               
               if (snapshot.hasError) {
-                // Helpful trace to identify formatting issues if they happen on AniList's end
-                debugPrint('[HomeScreen] Carousel Error inside "$title": ${snapshot.error}');
                 return Center(
                   child: OutlinedButton.icon(
-                    onPressed: onRetry,
+                    onPressed: widget.onRetry,
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Retry'),
                     style: OutlinedButton.styleFrom(
@@ -163,26 +220,126 @@ class _AnimeCarousel extends StatelessWidget {
                 );
               }
 
-              return ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                // FIXED: Resolved unnecessary underscores linting rule
-                separatorBuilder: (context, index) => const SizedBox(width: 20),
-                itemBuilder: (context, i) {
-                  return SizedBox(
-                    width: 170,
-                    child: AnimeCard(
-                      anime: items[i],
-                      onSelect: onSelectAnime,
+              return MouseRegion(
+                onEnter: (_) => setState(() => _isHovered = true),
+                onExit: (_) => setState(() => _isHovered = false),
+                child: Stack(
+                  children: [
+                    // ── FIXED: Allow mouse dragging on desktop ──
+                    ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(context).copyWith(
+                        dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+                      ),
+                      child: ListView.separated(
+                        controller: _scrollController,
+                        padding: EdgeInsets.symmetric(horizontal: hPad),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: items.length,
+                        separatorBuilder: (context, index) => const SizedBox(width: 20),
+                        itemBuilder: (context, i) {
+                          return SizedBox(
+                            width: 170,
+                            child: AnimeCard(
+                              anime: items[i],
+                              onSelect: widget.onSelectAnime,
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  );
-                },
+
+                    // ── LEFT NAVIGATION ARROW (Desktop only) ──
+                    if (!isMobile && _isHovered && _canScrollLeft)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: _NavArrow(
+                          icon: Icons.chevron_left_rounded,
+                          alignment: Alignment.centerLeft,
+                          gradientColors: [
+                            AppPalette.base.withValues(alpha: 0.9),
+                            AppPalette.base.withValues(alpha: 0.0)
+                          ],
+                          onTap: () => _scroll(-1.0),
+                        ),
+                      ),
+
+                    // ── RIGHT NAVIGATION ARROW (Desktop only) ──
+                    if (!isMobile && _isHovered && _canScrollRight)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: _NavArrow(
+                          icon: Icons.chevron_right_rounded,
+                          alignment: Alignment.centerRight,
+                          gradientColors: [
+                            AppPalette.base.withValues(alpha: 0.0),
+                            AppPalette.base.withValues(alpha: 0.9)
+                          ],
+                          onTap: () => _scroll(1.0),
+                        ),
+                      ),
+                  ],
+                ),
               );
             },
           ),
         ),
       ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  _NavArrow (Netflix-style scroll button)
+// ════════════════════════════════════════════════════════════════════════════
+
+class _NavArrow extends StatelessWidget {
+  final IconData icon;
+  final Alignment alignment;
+  final List<Color> gradientColors;
+  final VoidCallback onTap;
+
+  const _NavArrow({
+    required this.icon,
+    required this.alignment,
+    required this.gradientColors,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 80,
+        alignment: alignment,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppPalette.black.withValues(alpha: 0.4),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
+              ),
+              child: Icon(icon, color: AppPalette.white, size: 28),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
