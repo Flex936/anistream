@@ -44,18 +44,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   void initState() {
     super.initState();
-    final view = WidgetsBinding.instance.platformDispatcher.views.first;
-    final physicalSize = view.physicalSize;
     // libass: true enables high-quality "burned-in" style subtitle rendering
-
     _player = Player(configuration: const PlayerConfiguration(libass: true));
-    _videoController = VideoController(
-      _player,
-      configuration: VideoControllerConfiguration(
-        width: physicalSize.width.toInt(),
-        height: physicalSize.height.toInt(),
-      ),
-    );
+    _videoController = VideoController(_player);
     _torrentController = StreamingController();
     _torrentController.addListener(_onTorrentStateChanged);
 
@@ -70,9 +61,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
-      await platform.setProperty('scale', 'ewa_lanczossharp');
-
-      await platform.setProperty('cscale', 'ewa_lanczossharp');
       if (hwdec == 'auto') {
         // Automatic safe defaults based on OS
         if (Platform.isLinux || Platform.isWindows) {
