@@ -24,10 +24,10 @@ class AnimeDetailsScreen extends StatefulWidget {
 class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   final TorrentScraperService _scraper = TorrentScraperService();
   final Map<int, Future<List<Torrent>>> _torrentFutures = {};
-  
+
   int _expandedEpisode = -1;
   bool _autoPlayRecommended = false;
-  
+
   bool _isAutoPlaying = false;
   int _autoPlayTargetEpisode = -1;
 
@@ -40,16 +40,17 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   }
 
   int get _episodeCount {
-    if (widget.anime.status == 'RELEASING' && widget.anime.nextAiringEpisode != null) {
+    if (widget.anime.status == 'RELEASING' &&
+        widget.anime.nextAiringEpisode != null) {
       return widget.anime.nextAiringEpisode!.episode - 1;
     }
     return widget.anime.episodes ?? 12;
   }
 
   Future<List<Torrent>> _futureFor(int ep) => _torrentFutures.putIfAbsent(
-        ep,
-        () => _scraper.fetchTorrents(widget.anime.title, ep),
-      );
+    ep,
+    () => _scraper.fetchTorrents(widget.anime, ep),
+  );
 
   void _toggleEpisode(int ep) async {
     if (_isAutoPlaying) return;
@@ -62,13 +63,13 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     setState(() {
       _isAutoPlaying = true;
       _autoPlayTargetEpisode = ep;
-      _expandedEpisode = -1; 
+      _expandedEpisode = -1;
     });
 
     try {
       final torrents = await _futureFor(ep);
       if (!mounted) return;
-      
+
       if (torrents.isNotEmpty) {
         Navigator.push(
           context,
@@ -112,19 +113,33 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                     children: [
                       const Text(
                         'Episodes',
-                        style: TextStyle(color: AppPalette.textMain, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+                        style: TextStyle(
+                          color: AppPalette.textMain,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppPalette.primary.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppPalette.primary.withValues(alpha: 0.25)),
+                          border: Border.all(
+                            color: AppPalette.primary.withValues(alpha: 0.25),
+                          ),
                         ),
                         child: Text(
                           '$_episodeCount',
-                          style: const TextStyle(color: AppPalette.primary, fontSize: 13, fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                            color: AppPalette.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
@@ -135,21 +150,25 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
               SliverSafeArea(
                 top: false,
                 sliver: SliverPadding(
-                  padding: EdgeInsets.fromLTRB(isMobile ? 12 : 20, 0, isMobile ? 12 : 20, 64),
+                  padding: EdgeInsets.fromLTRB(
+                    isMobile ? 12 : 20,
+                    0,
+                    isMobile ? 12 : 20,
+                    64,
+                  ),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final ep = index + 1;
-                        return EpisodeTile(
-                          key: ValueKey(ep),
-                          episodeNumber: ep,
-                          isExpanded: _expandedEpisode == ep,
-                          torrentFuture: _expandedEpisode == ep ? _futureFor(ep) : null,
-                          onToggle: () => _toggleEpisode(ep),
-                        );
-                      },
-                      childCount: _episodeCount,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final ep = index + 1;
+                      return EpisodeTile(
+                        key: ValueKey(ep),
+                        episodeNumber: ep,
+                        isExpanded: _expandedEpisode == ep,
+                        torrentFuture: _expandedEpisode == ep
+                            ? _futureFor(ep)
+                            : null,
+                        onToggle: () => _toggleEpisode(ep),
+                      );
+                    }, childCount: _episodeCount),
                   ),
                 ),
               ),
@@ -174,13 +193,19 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppPalette.primary,
+                                ),
                                 strokeWidth: 3,
                               ),
                               const SizedBox(height: 24),
                               Text(
                                 'Finding best source for Episode $_autoPlayTargetEpisode...',
-                                style: const TextStyle(color: AppPalette.textMain, fontSize: 16, fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  color: AppPalette.textMain,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),

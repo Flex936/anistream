@@ -4,32 +4,46 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 
-import '../anilist/models/anime.dart'; 
+import '../anilist/models/anime.dart';
 import 'models/torrent.dart';
 
 abstract final class _Regex {
   static final whitespace = RegExp(r'\s+');
-  static final punct = RegExp(r"[:!?',\-.]"); 
-  static final season = RegExp(r'(?:season\s*(\d+)|\bs(\d+)\b|(\d+)(?:st|nd|rd|th)\s+season|(?:part|cour)\s*(\d+))', caseSensitive: false);
+  static final punct = RegExp(r"[:!?',\-.]");
+  static final season = RegExp(
+    r'(?:season\s*(\d+)|\bs(\d+)\b|(\d+)(?:st|nd|rd|th)\s+season|(?:part|cour)\s*(\d+))',
+    caseSensitive: false,
+  );
   static final ep1 = RegExp(r'(?:e|ep|episode)\s*(\d+)', caseSensitive: false);
   static final ep2 = RegExp(r'\s+-\s+(\d+)(?:v\d)?\s+');
   static final ep3 = RegExp(r'\s+(0\d+)\s+');
   static final batch = RegExp(r'\d{2,}\s*[-~]\s*\d{2,}');
+  static final batchRange = RegExp(r'(\d{2,3})\s*[-~]\s*(\d{2,3})');
   static final group = RegExp(r'^\[(.*?)\]');
-  static final resolution = RegExp(r'(1080p|720p|480p|2160p|4K)', caseSensitive: false);
+  static final resolution = RegExp(
+    r'(1080p|720p|480p|2160p|4K)',
+    caseSensitive: false,
+  );
 }
 
 class TorrentScraperService {
   final http.Client _client;
 
-  TorrentScraperService({http.Client? client}) : _client = client ?? http.Client();
+  TorrentScraperService({http.Client? client})
+    : _client = client ?? http.Client();
 
-  Future<List<Torrent>> fetchTorrents(AnimeTitle title, int episodeNumber) async {
+  Future<List<Torrent>> fetchTorrents(Anime anime, int episodeNumber) async {
+    final title = anime.title;
     final epStr = episodeNumber.toString().padLeft(2, '0');
+    final isFinished = anime.status?.toUpperCase() == 'FINISHED';
     List<Torrent> results = [];
 
-    Future<void> trySearch(String titleText, bool isMovie) async {
-      if (results.isNotEmpty) return; 
+    Future<void> trySearch(
+      String titleText, {
+      required bool isMovie,
+      required bool batchMode,
+    }) async {
+      if (results.isNotEmpty) return;
 
       final safeTitle = titleText
           .replaceAll(_Regex.season, '')
@@ -37,11 +51,19 @@ class TorrentScraperService {
           .replaceAll(_Regex.whitespace, ' ')
           .trim();
 
+      String buildQuery(String t) {
+        if (isMovie) return t;
+        if (batchMode) return t; // no episode number — we want the whole batch
+        return '$t $epStr';
+      }
+
       results = await _searchAndScore(
-        searchQuery: isMovie ? safeTitle : '$safeTitle $epStr',
+        searchQuery: buildQuery(safeTitle),
         animeTitle: titleText,
         episodeNumber: episodeNumber,
+        totalEpisodes: anime.episodes,
         isMovieFallback: isMovie,
+        batchMode: batchMode,
       );
 
       if (results.isEmpty) {
@@ -50,25 +72,57 @@ class TorrentScraperService {
           final shortTitle = words.take(4).join(' ');
           log("[Scraper] Truncated fallback query: '$shortTitle'");
           results = await _searchAndScore(
-            searchQuery: isMovie ? shortTitle : '$shortTitle $epStr',
+            searchQuery: buildQuery(shortTitle),
             animeTitle: titleText,
             episodeNumber: episodeNumber,
+            totalEpisodes: anime.episodes,
             isMovieFallback: isMovie,
+            batchMode: batchMode,
           );
         }
       }
     }
-    
-    if (title.romaji != null) await trySearch(title.romaji!, false);
-    if (title.english != null) await trySearch(title.english!, false);
-    
+
+    // 1. Anime is finished -> a complete batch is likely available and is
+    //    almost always preferable (one healthy torrent vs. hunting down a
+    //    single old episode with few/no seeders). Try that first.
+    if (isFinished) {
+      if (title.romaji != null) {
+        await trySearch(title.romaji!, isMovie: false, batchMode: true);
+      }
+      if (title.english != null) {
+        await trySearch(title.english!, isMovie: false, batchMode: true);
+      }
+      if (results.isNotEmpty) {
+        log(
+          "[Scraper] Found batch release for ${title.display}, skipping per-episode search.",
+        );
+        return results;
+      }
+    }
+
+    // 2. No batch found (or still airing) -> fall back to the regular
+    //    per-episode search.
+    if (title.romaji != null) {
+      await trySearch(title.romaji!, isMovie: false, batchMode: false);
+    }
+    if (title.english != null) {
+      await trySearch(title.english!, isMovie: false, batchMode: false);
+    }
+
     if (episodeNumber == 1) {
-      if (title.romaji != null) await trySearch(title.romaji!, true);
-      if (title.english != null) await trySearch(title.english!, true);
+      if (title.romaji != null) {
+        await trySearch(title.romaji!, isMovie: true, batchMode: false);
+      }
+      if (title.english != null) {
+        await trySearch(title.english!, isMovie: true, batchMode: false);
+      }
     }
 
     if (results.isEmpty) {
-      throw Exception('No seeded torrents found for ${title.display} Episode $epStr');
+      throw Exception(
+        'No seeded torrents found for ${title.display} Episode $epStr',
+      );
     }
 
     return results;
@@ -78,14 +132,21 @@ class TorrentScraperService {
     required String searchQuery,
     required String animeTitle,
     required int episodeNumber,
+    int? totalEpisodes,
     required bool isMovieFallback,
+    required bool batchMode,
   }) async {
-    final feedUrl = Uri.parse('https://nyaa.si/?page=rss&q=${Uri.encodeComponent(searchQuery)}&c=1_2&f=0');
-    log("[Scraper] Nyaa query: $searchQuery");
+    final feedUrl = Uri.parse(
+      'https://nyaa.si/?page=rss&q=${Uri.encodeComponent(searchQuery)}&c=1_2&f=0'
+      '${batchMode ? '&s=seeders&o=desc' : ''}',
+    );
+    log("[Scraper] Nyaa query (batch=$batchMode): $searchQuery");
 
     http.Response response;
     try {
-      response = await _client.get(feedUrl).timeout(const Duration(seconds: 15));
+      response = await _client
+          .get(feedUrl)
+          .timeout(const Duration(seconds: 15));
     } on SocketException {
       throw Exception('Network error while searching Nyaa.si.');
     } on TimeoutException {
@@ -108,7 +169,11 @@ class TorrentScraperService {
     final targetSeason = _extractSeason(titleLow);
     final epStr = episodeNumber.toString().padLeft(2, '0');
 
-    final isMovieQuery = isMovieFallback || titleLow.contains('movie') || titleLow.contains('film') || titleLow.contains('gekijouban');
+    final isMovieQuery =
+        isMovieFallback ||
+        titleLow.contains('movie') ||
+        titleLow.contains('film') ||
+        titleLow.contains('gekijouban');
     final List<Torrent> validTorrents = [];
 
     for (final item in items) {
@@ -118,8 +183,10 @@ class TorrentScraperService {
         episodeNumber: episodeNumber,
         epStr: epStr,
         targetSeason: targetSeason,
+        totalEpisodes: totalEpisodes,
         isMovieFallback: isMovieFallback,
         isMovieQuery: isMovieQuery,
+        batchMode: batchMode,
       );
       if (torrent != null) validTorrents.add(torrent);
     }
@@ -134,8 +201,10 @@ class TorrentScraperService {
     required int episodeNumber,
     required String epStr,
     required int targetSeason,
+    int? totalEpisodes,
     required bool isMovieFallback,
     required bool isMovieQuery,
+    required bool batchMode,
   }) {
     double score = 100.0;
 
@@ -144,13 +213,25 @@ class TorrentScraperService {
     final ql = animeTitle.toLowerCase();
 
     final infoHash = item.findElements('nyaa:infoHash').firstOrNull?.innerText;
-    final size = item.findElements('nyaa:size').firstOrNull?.innerText ?? 'Unknown';
-    final seedersStr = item.findElements('nyaa:seeders').firstOrNull?.innerText ?? '0';
+    final size =
+        item.findElements('nyaa:size').firstOrNull?.innerText ?? 'Unknown';
+    final seedersStr =
+        item.findElements('nyaa:seeders').firstOrNull?.innerText ?? '0';
 
     if (infoHash == null || infoHash.isEmpty) return null;
 
     final seedCount = int.tryParse(seedersStr) ?? 0;
     if (seedCount == 0) return null;
+
+    final isBatch = _isBatchRelease(tl);
+
+    if (batchMode) {
+      // This pass only cares about genuine batch/complete-series releases.
+      if (!isBatch) return null;
+    } else if (isBatch) {
+      // Regular per-episode pass: a batch is noise here, push it way down.
+      score -= 150;
+    }
 
     if (_extractSeason(tl) == targetSeason) {
       score += 100;
@@ -166,11 +247,31 @@ class TorrentScraperService {
       score -= 100;
     }
 
-    final torrentEp = _extractEpisode(tl);
-    if (!isMovieFallback) {
-      if (torrentEp != -1 && torrentEp != episodeNumber) return null;
+    if (!batchMode) {
+      final torrentEp = _extractEpisode(tl);
+      if (!isMovieFallback) {
+        if (torrentEp != -1 && torrentEp != episodeNumber) return null;
+      } else {
+        if (torrentEp != -1 && torrentEp != 1) return null;
+      }
     } else {
-      if (torrentEp != -1 && torrentEp != 1) return null;
+      // Make sure this batch actually contains the episode being requested.
+      // A "01-12" batch is useless if we're after episode 20.
+      final range = _extractBatchRange(tl);
+      if (range != null) {
+        if (episodeNumber < range.start || episodeNumber > range.end) {
+          return null;
+        }
+        score += 60;
+        if (totalEpisodes != null &&
+            range.start <= 1 &&
+            range.end >= totalEpisodes) {
+          score +=
+              20; // Bonus: this is the full series, not just one cour/part.
+        }
+      }
+      // If no numeric range was found (e.g. just "[Batch]"/"Complete"), we
+      // trust the textual tag as-is.
     }
 
     for (final tag in ['ova', 'ona', 'oad', 'special']) {
@@ -179,15 +280,21 @@ class TorrentScraperService {
 
     if (!isMovieQuery && tl.contains('movie')) {
       score -= 100;
-    } else if (isMovieQuery && (tl.contains('movie') || tl.contains('gekijouban') || tl.contains('film'))) {
+    } else if (isMovieQuery &&
+        (tl.contains('movie') ||
+            tl.contains('gekijouban') ||
+            tl.contains('film'))) {
       score += 50;
     }
 
-    if (tl.contains('[batch]') || tl.contains('(batch)') || _Regex.batch.hasMatch(tl)) score -= 150;
-    if (!isMovieFallback && (tl.contains('- $epStr') || tl.contains(' $epStr '))) score += 20;
+    if (!batchMode && (tl.contains('- $epStr') || tl.contains(' $epStr ')))
+      score += 20;
 
-    if (tl.contains('subsplease') || tl.contains('erai-raws') || tl.contains('horriblesubs')) score += 30;
-    
+    if (tl.contains('subsplease') ||
+        tl.contains('erai-raws') ||
+        tl.contains('horriblesubs'))
+      score += 30;
+
     if (tl.contains('1080p')) {
       score += 20;
     } else if (tl.contains('720p')) {
@@ -196,9 +303,13 @@ class TorrentScraperService {
 
     if (tl.contains('av1')) {
       score += 30;
-    } else if (tl.contains('hevc') || tl.contains('x265') || tl.contains('h.265')) {
+    } else if (tl.contains('hevc') ||
+        tl.contains('x265') ||
+        tl.contains('h.265')) {
       score += 20;
-    } else if (tl.contains('avc') || tl.contains('x264') || tl.contains('h.264')) {
+    } else if (tl.contains('avc') ||
+        tl.contains('x264') ||
+        tl.contains('h.264')) {
       score += 5;
     }
 
@@ -213,8 +324,11 @@ class TorrentScraperService {
     score += seedCount * 0.1;
 
     final groupMatch = _Regex.group.firstMatch(rawTitle);
-    final groupName = groupMatch != null ? '[${groupMatch.group(1)}]' : 'Unknown';
-    final resolution = _Regex.resolution.firstMatch(rawTitle)?.group(1) ?? 'Unknown';
+    final groupName = groupMatch != null
+        ? '[${groupMatch.group(1)}]'
+        : 'Unknown';
+    final resolution =
+        _Regex.resolution.firstMatch(rawTitle)?.group(1) ?? 'Unknown';
 
     return Torrent(
       id: infoHash,
@@ -225,7 +339,24 @@ class TorrentScraperService {
       seeders: seedCount,
       magnetLink: _buildMagnet(infoHash, rawTitle),
       score: score,
+      isBatch: isBatch,
     );
+  }
+
+  bool _isBatchRelease(String tl) {
+    return tl.contains('batch') ||
+        tl.contains('complete series') ||
+        tl.contains('complete season') ||
+        _Regex.batch.hasMatch(tl);
+  }
+
+  ({int start, int end})? _extractBatchRange(String tl) {
+    final m = _Regex.batchRange.firstMatch(tl);
+    if (m == null) return null;
+    final start = int.tryParse(m.group(1)!);
+    final end = int.tryParse(m.group(2)!);
+    if (start == null || end == null || start > end) return null;
+    return (start: start, end: end);
   }
 
   int _extractSeason(String title) {
@@ -241,7 +372,8 @@ class TorrentScraperService {
   int _extractEpisode(String title) {
     for (final re in [_Regex.ep1, _Regex.ep2, _Regex.ep3]) {
       final m = re.firstMatch(title);
-      if (m != null && m.groupCount >= 1) return int.tryParse(m.group(1)!) ?? -1;
+      if (m != null && m.groupCount >= 1)
+        return int.tryParse(m.group(1)!) ?? -1;
     }
     return -1;
   }
