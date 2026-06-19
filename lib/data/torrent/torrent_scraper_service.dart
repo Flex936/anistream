@@ -36,15 +36,15 @@ class TorrentScraperService {
     final title = anime.title;
     final epStr = episodeNumber.toString().padLeft(2, '0');
     final isFinished = anime.status?.toUpperCase() == 'FINISHED';
-    List<Torrent> results = [];
 
-    Future<void> trySearch(
+    List<Torrent> batchResults = [];
+    List<Torrent> episodeResults = [];
+
+    Future<List<Torrent>> trySearch(
       String titleText, {
       required bool isMovie,
       required bool batchMode,
     }) async {
-      if (results.isNotEmpty) return;
-
       final safeTitle = titleText
           .replaceAll(_Regex.season, '')
           .replaceAll(_Regex.punct, ' ')
@@ -57,7 +57,7 @@ class TorrentScraperService {
         return '$t $epStr';
       }
 
-      results = await _searchAndScore(
+      var found = await _searchAndScore(
         searchQuery: buildQuery(safeTitle),
         animeTitle: titleText,
         episodeNumber: episodeNumber,
@@ -66,12 +66,12 @@ class TorrentScraperService {
         batchMode: batchMode,
       );
 
-      if (results.isEmpty) {
+      if (found.isEmpty) {
         final words = safeTitle.split(' ');
         if (words.length > 4) {
           final shortTitle = words.take(4).join(' ');
           log("[Scraper] Truncated fallback query: '$shortTitle'");
-          results = await _searchAndScore(
+          found = await _searchAndScore(
             searchQuery: buildQuery(shortTitle),
             animeTitle: titleText,
             episodeNumber: episodeNumber,
@@ -81,51 +81,84 @@ class TorrentScraperService {
           );
         }
       }
+      return found;
     }
 
-    // 1. Anime is finished -> a complete batch is likely available and is
-    //    almost always preferable (one healthy torrent vs. hunting down a
-    //    single old episode with few/no seeders). Try that first.
+    // 1. Anime is finished -> look for a same-season batch release. Batches
+    //    are strictly season-matched (see _scoreItem), so a Season 1 batch
+    //    will never be returned here when we're actually after Season 2.
     if (isFinished) {
       if (title.romaji != null) {
-        await trySearch(title.romaji!, isMovie: false, batchMode: true);
-      }
-      if (title.english != null) {
-        await trySearch(title.english!, isMovie: false, batchMode: true);
-      }
-      if (results.isNotEmpty) {
-        log(
-          "[Scraper] Found batch release for ${title.display}, skipping per-episode search.",
+        batchResults = await trySearch(
+          title.romaji!,
+          isMovie: false,
+          batchMode: true,
         );
-        return results;
+      }
+      if (batchResults.isEmpty && title.english != null) {
+        batchResults = await trySearch(
+          title.english!,
+          isMovie: false,
+          batchMode: true,
+        );
+      }
+      if (batchResults.isNotEmpty) {
+        log("[Scraper] Found batch release for ${title.display}.");
       }
     }
 
-    // 2. No batch found (or still airing) -> fall back to the regular
-    //    per-episode search.
+    // 2. Always also search for individual episodes. This covers shows that
+    //    are still airing, AND the edge case where a finished show simply has
+    //    no batch yet for its current season — we still want to show
+    //    whatever single-episode torrents exist instead of coming back empty.
     if (title.romaji != null) {
-      await trySearch(title.romaji!, isMovie: false, batchMode: false);
+      episodeResults = await trySearch(
+        title.romaji!,
+        isMovie: false,
+        batchMode: false,
+      );
     }
-    if (title.english != null) {
-      await trySearch(title.english!, isMovie: false, batchMode: false);
+    if (episodeResults.isEmpty && title.english != null) {
+      episodeResults = await trySearch(
+        title.english!,
+        isMovie: false,
+        batchMode: false,
+      );
     }
 
-    if (episodeNumber == 1) {
+    if (episodeNumber == 1 && episodeResults.isEmpty) {
       if (title.romaji != null) {
-        await trySearch(title.romaji!, isMovie: true, batchMode: false);
+        episodeResults = await trySearch(
+          title.romaji!,
+          isMovie: true,
+          batchMode: false,
+        );
       }
-      if (title.english != null) {
-        await trySearch(title.english!, isMovie: true, batchMode: false);
+      if (episodeResults.isEmpty && title.english != null) {
+        episodeResults = await trySearch(
+          title.english!,
+          isMovie: true,
+          batchMode: false,
+        );
       }
     }
 
-    if (results.isEmpty) {
+    // Merge, de-duping by infoHash in case the same release shows up in both
+    // passes (batch copy wins, since it carries the richer isBatch metadata).
+    final seenIds = <String>{};
+    final combined = <Torrent>[];
+    for (final t in [...batchResults, ...episodeResults]) {
+      if (seenIds.add(t.id)) combined.add(t);
+    }
+    combined.sort((a, b) => b.score.compareTo(a.score));
+
+    if (combined.isEmpty) {
       throw Exception(
         'No seeded torrents found for ${title.display} Episode $epStr',
       );
     }
 
-    return results;
+    return combined;
   }
 
   Future<List<Torrent>> _searchAndScore({
@@ -233,7 +266,12 @@ class TorrentScraperService {
       score -= 150;
     }
 
-    if (_extractSeason(tl) == targetSeason) {
+    if (batchMode) {
+      // Strict here: a Season 1 batch must never stand in for Season 2 just
+      // because it's the only batch we found.
+      if (_extractSeason(tl) != targetSeason) return null;
+      score += 100;
+    } else if (_extractSeason(tl) == targetSeason) {
       score += 100;
     } else {
       score -= 100;
@@ -287,15 +325,13 @@ class TorrentScraperService {
       score += 50;
     }
 
-    if (!batchMode && (tl.contains('- $epStr') || tl.contains(' $epStr '))) {
+    if (!batchMode && (tl.contains('- $epStr') || tl.contains(' $epStr ')))
       score += 20;
-    }
 
     if (tl.contains('subsplease') ||
         tl.contains('erai-raws') ||
-        tl.contains('horriblesubs')) {
+        tl.contains('horriblesubs'))
       score += 30;
-    }
 
     if (tl.contains('1080p')) {
       score += 20;
