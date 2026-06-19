@@ -27,7 +27,8 @@ class _AnimeCardState extends State<AnimeCard> {
     _ => AppPalette.statusDefault,
   };
 
-  String _formatStatus(String? status) => (status ?? 'UNKNOWN').replaceAll('_', ' ');
+  String _formatStatus(String? status) =>
+      (status ?? 'UNKNOWN').replaceAll('_', ' ');
 
   @override
   Widget build(BuildContext context) {
@@ -45,16 +46,33 @@ class _AnimeCardState extends State<AnimeCard> {
                 if (widget.onSelect != null) {
                   widget.onSelect!(anime);
                 } else {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => AnimeDetailsScreen(anime: anime)));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AnimeDetailsScreen(anime: anime),
+                    ),
+                  );
                 }
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150), 
+                duration: const Duration(milliseconds: 150),
                 curve: Curves.easeOut,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _hovered ? AppPalette.primary.withValues(alpha: 0.55) : AppPalette.border),
-                  boxShadow: _hovered ? [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.18), blurRadius: 24, spreadRadius: 2)] : const [],
+                  border: Border.all(
+                    color: _hovered
+                        ? AppPalette.primary.withValues(alpha: 0.55)
+                        : AppPalette.border,
+                  ),
+                  boxShadow: _hovered
+                      ? [
+                          BoxShadow(
+                            color: AppPalette.primary.withValues(alpha: 0.18),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                          ),
+                        ]
+                      : const [],
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(11),
@@ -62,10 +80,19 @@ class _AnimeCardState extends State<AnimeCard> {
                     fit: StackFit.expand,
                     children: [
                       AppNetworkImage(url: anime.coverImage?.extraLarge),
-                      Positioned(left: 0, right: 0, bottom: 0, child: _PosterGradient(score: anime.averageScore)),
                       Positioned(
-                        top: 8, left: 8,
-                        child: _StatusBadge(label: _formatStatus(anime.status), color: _statusColor(anime.status)),
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _PosterGradient(score: anime.averageScore),
+                      ),
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: _StatusBadge(
+                          label: _formatStatus(anime.status),
+                          color: _statusColor(anime.status),
+                        ),
                       ),
                       _HoverOverlay(visible: _hovered),
                     ],
@@ -85,10 +112,17 @@ class _AnimeCardState extends State<AnimeCard> {
             fontWeight: FontWeight.w500,
             height: 1.35,
           ),
-          child: Text(anime.title.display, maxLines: 1, overflow: TextOverflow.ellipsis),
+          child: Text(
+            anime.title.display,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         const SizedBox(height: 4),
-        Text('${anime.episodes ?? '?'} Episodes', style: const TextStyle(color: AppPalette.textMuted, fontSize: 11)),
+        Text(
+          '${anime.nextAiringEpisode != null ? anime.nextAiringEpisode!.episode : anime.episodes ?? '?'} Episodes',
+          style: const TextStyle(color: AppPalette.textMuted, fontSize: 11),
+        ),
       ],
     );
   }
@@ -123,7 +157,14 @@ class _PosterGradient extends StatelessWidget {
         children: [
           const Icon(Icons.star_rounded, color: AppPalette.accent, size: 14),
           const SizedBox(width: 3),
-          Text((score! / 10).toStringAsFixed(1), style: const TextStyle(color: AppPalette.accent, fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(
+            (score! / 10).toStringAsFixed(1),
+            style: const TextStyle(
+              color: AppPalette.accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -150,7 +191,12 @@ class _StatusBadge extends StatelessWidget {
           ),
           child: Text(
             label,
-            style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.6),
+            style: TextStyle(
+              color: color,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+            ),
           ),
         ),
       ),
@@ -173,16 +219,26 @@ class _HoverOverlay extends StatelessWidget {
           child: Center(
             child: AnimatedSlide(
               offset: visible ? Offset.zero : const Offset(0.0, 0.12),
-              duration: const Duration(milliseconds: 200), 
+              duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
               child: Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
                   color: AppPalette.primary,
                   shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.55), blurRadius: 22, spreadRadius: 2)],
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppPalette.primary.withValues(alpha: 0.55),
+                      blurRadius: 22,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
-                child: const Icon(Icons.play_arrow_rounded, color: AppPalette.white, size: 30),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  color: AppPalette.white,
+                  size: 30,
+                ),
               ),
             ),
           ),
