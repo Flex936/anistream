@@ -287,13 +287,15 @@ class TorrentScraperService {
       score += 50;
     }
 
-    if (!batchMode && (tl.contains('- $epStr') || tl.contains(' $epStr ')))
+    if (!batchMode && (tl.contains('- $epStr') || tl.contains(' $epStr '))) {
       score += 20;
+    }
 
     if (tl.contains('subsplease') ||
         tl.contains('erai-raws') ||
-        tl.contains('horriblesubs'))
+        tl.contains('horriblesubs')) {
       score += 30;
+    }
 
     if (tl.contains('1080p')) {
       score += 20;
@@ -372,8 +374,9 @@ class TorrentScraperService {
   int _extractEpisode(String title) {
     for (final re in [_Regex.ep1, _Regex.ep2, _Regex.ep3]) {
       final m = re.firstMatch(title);
-      if (m != null && m.groupCount >= 1)
+      if (m != null && m.groupCount >= 1) {
         return int.tryParse(m.group(1)!) ?? -1;
+      }
     }
     return -1;
   }

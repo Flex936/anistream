@@ -117,7 +117,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
           child: child,
         );
       },
-      pageBuilder: (_, __, ___) => _MobileMenu(
+      pageBuilder: (_, _, _) => _MobileMenu(
         isLoggedIn: widget.isLoggedIn,
         onScheduled: widget.onScheduled,
         onWatchlist: widget.onWatchlist,
