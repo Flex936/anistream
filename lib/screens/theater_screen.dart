@@ -14,6 +14,7 @@ import '../services/streaming_controller_service.dart';
 import '../widgets/theater/theater_components.dart';
 import '../widgets/theater/theater_controls.dart';
 import '../widgets/theater/theater_settings.dart';
+import '../widgets/theater/theater_batch_picker.dart';
 
 class TheaterScreen extends StatefulWidget {
   final int episode;
@@ -40,11 +41,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _isSettingsOpen = false;
   bool _isFullscreen = false;
   Timer? _hideControlsTimer;
+  bool _isClosing = false;
 
   @override
   void initState() {
     super.initState();
     // libass: true enables high-quality "burned-in" style subtitle rendering
+
     _player = Player(configuration: const PlayerConfiguration(libass: true));
     _videoController = VideoController(_player);
     _torrentController = StreamingController();
@@ -61,10 +64,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
+      await platform.setProperty('msg-level', 'all=v');
+      await platform.setProperty('log-file', 'D:/anistream_mpv_debug.log');
       if (hwdec == 'auto') {
         // Automatic safe defaults based on OS
         if (Platform.isLinux || Platform.isWindows) {
-          platform.setProperty('hwdec', 'auto');
+          platform.setProperty('hwdec', 'auto-safe');
+          windowManager.setFullScreen(true);
         } else if (Platform.isAndroid) {
           platform.setProperty('hwdec', 'mediacodec-copy');
         } else if (Platform.isIOS || Platform.isMacOS) {
@@ -76,7 +82,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
       }
     }
 
-    _torrentController.initialize(widget.torrent.magnetLink);
+    _torrentController.initialize(
+      widget.torrent.magnetLink,
+      episodeNumber: widget.episode,
+    );
   }
 
   void _onTorrentStateChanged() {
@@ -139,25 +148,54 @@ class _TheaterScreenState extends State<TheaterScreen> {
     setState(() {});
   }
 
+  Future<void> _exitTheater() async {
+    if (_isClosing) return;
+    _isClosing = true;
+
+    if (mounted) {
+      setState(() => _videoInitialized = false); // stop painting the texture
+      await WidgetsBinding.instance.endOfFrame; // let that frame actually land
+    }
+
+    _hideControlsTimer?.cancel();
+    _torrentController.removeListener(_onTorrentStateChanged);
+
+    await _player.pause();
+    await _player.stop();
+    await _player.dispose(); // safe now — nothing is reading the texture
+    _torrentController.dispose();
+
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      if (await windowManager.isFullScreen()) {
+        await windowManager.setFullScreen(false);
+      }
+    }
+
+    if (mounted) Navigator.pop(context);
+  }
+
+  // ── dispose() becomes a fallback only, for paths that don't go through
+  // _exitTheater (hot reload, forced pop, etc.). Guarded so it never
+  // double-tears-down resources _exitTheater already cleaned up. ──
   @override
   void dispose() {
     _focusNode.dispose();
     _hideControlsTimer?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
 
-    Future.microtask(() async {
-      _player.stop();
-      await _player.dispose();
-
-      _torrentController.dispose();
-
-      if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-        if (await windowManager.isFullScreen()) {
-          await windowManager.setFullScreen(false);
+    if (!_isClosing) {
+      _isClosing = true;
+      Future.microtask(() async {
+        await _player.stop();
+        await _player.dispose();
+        _torrentController.dispose();
+        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+          if (await windowManager.isFullScreen()) {
+            await windowManager.setFullScreen(false);
+          }
         }
-      }
-    });
-
+      });
+    }
     super.dispose();
   }
 
@@ -230,7 +268,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                 onTap: () {},
                                 child: TheaterTopBar(
                                   episode: widget.episode,
-                                  onBack: () => Navigator.pop(context),
+                                  onBack: _exitTheater,
                                 ),
                               ),
                             ),
@@ -270,6 +308,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
                     duration: const Duration(milliseconds: 600),
                     child: _torrentController.isReadyToPlay
                         ? const SizedBox.shrink()
+                        : _torrentController.needsManualSelection
+                        ? BatchEpisodePickerOverlay(
+                            files: _torrentController.batchFiles,
+                            requestedEpisode: widget.episode,
+                            onSelect: _torrentController.selectBatchFile,
+                          )
                         : TheaterLoadingOverlay(
                             episode: widget.episode,
                             torrent: widget.torrent,
