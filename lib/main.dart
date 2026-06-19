@@ -4,20 +4,22 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../theme/app_palette.dart';
-import 'screens/app_shell.dart';
+import 'app.dart';
 
 void main() async {
+  // 1. Initialize Flutter Engine
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 2. Initialize Video Player Engine
   MediaKit.ensureInitialized();
+  
+  // 3. Initialize Native Desktop Window
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
+    
     WindowOptions windowOptions = const WindowOptions(
       title: 'AniStream',
-      minimumSize: Size(
-        1000,
-        700,
-      ), // Prevents the UI from crushing on tiny screens
+      minimumSize: Size(1000, 700), // Prevents the UI from crushing on tiny screens
       center: true,
       titleBarStyle: TitleBarStyle.hidden,
     );
@@ -29,26 +31,6 @@ void main() async {
     });
   }
 
+  // 4. Boot App
   runApp(const AniStreamApp());
-}
-
-class AniStreamApp extends StatelessWidget {
-  const AniStreamApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'AniStream',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: AppPalette.base,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppPalette.primary,
-          brightness: Brightness.dark,
-        ),
-      ),
-      home: const AppShell(),
-    );
-  }
 }
