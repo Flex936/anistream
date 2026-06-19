@@ -29,7 +29,6 @@ class _CalendarCardState extends State<CalendarCard> {
     final epLabel = nextEp.episode > 0 ? 'Ep ${nextEp.episode}' : 'Ep ${anime.episodes ?? "?"}';
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Column(

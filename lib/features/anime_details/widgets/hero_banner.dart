@@ -37,6 +37,13 @@ class HeroBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    return isMobile ? _buildMobileLayout() : _buildDesktopLayout();
+  }
+
+  // ── 1. Desktop Layout (Classic Stacked Banner) ──
+  Widget _buildDesktopLayout() {
     final bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
     final posterUrl = anime.coverImage?.extraLarge;
 
@@ -76,69 +83,9 @@ class HeroBanner extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                if (posterUrl != null)
-                  Container(
-                    width: 220,
-                    height: 330,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppPalette.black.withValues(alpha: 0.6),
-                          blurRadius: 40,
-                          offset: const Offset(0, 20),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: AppNetworkImage(url: posterUrl),
-                    ),
-                  ),
+                if (posterUrl != null) _PosterImage(url: posterUrl),
                 const SizedBox(width: 48),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        anime.title.display,
-                        style: const TextStyle(
-                          color: AppPalette.textMain,
-                          fontSize: 48,
-                          fontWeight: FontWeight.w800,
-                          height: 1.1,
-                          letterSpacing: -1.0,
-                        ),
-                      ),
-                      if (anime.title.english != null && anime.title.english != anime.title.romaji) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          anime.title.english!,
-                          style: const TextStyle(color: AppPalette.textMuted, fontSize: 18, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          _MetaChip(label: _formatStatus(anime.status), color: _statusColor(anime.status)),
-                          if (anime.episodes != null) _MetaChip(label: '${anime.episodes} Episodes', color: AppPalette.textLight),
-                          if (anime.averageScore != null)
-                            _MetaChip(label: '★ ${(anime.averageScore! / 10).toStringAsFixed(1)} Score', color: AppPalette.accent),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        _stripHtml(anime.description),
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppPalette.textMuted, fontSize: 15, height: 1.6),
-                      ),
-                    ],
-                  ),
-                ),
+                Expanded(child: _AnimeTextInfo(anime: anime, isMobile: false)),
               ],
             ),
           ),
@@ -146,9 +93,156 @@ class HeroBanner extends StatelessWidget {
       ),
     );
   }
+
+  // ── 2. Mobile Layout (Safe Column Layout) ──
+  Widget _buildMobileLayout() {
+    final bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
+    final posterUrl = anime.coverImage?.extraLarge;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Top section with Banner Background and Back Button
+        SizedBox(
+          height: 250,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (bannerUrl != null) 
+                AppNetworkImage(url: bannerUrl)
+              else 
+                const ColoredBox(color: AppPalette.surface),
+              
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      AppPalette.base.withValues(alpha: 0.3),
+                      AppPalette.base.withValues(alpha: 0.9),
+                      AppPalette.base,
+                    ],
+                  ),
+                ),
+              ),
+              
+              SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 24, left: 16),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: _FloatingNavBar(onBack: onBack),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Bottom section with Poster and Text
+        Transform.translate(
+          offset: const Offset(0, -80), // Pulls the content up over the banner gradient
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (posterUrl != null) _PosterImage(url: posterUrl),
+                const SizedBox(height: 32),
+                _AnimeTextInfo(anime: anime, isMobile: true),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-// ── Sub-components ──
+class _PosterImage extends StatelessWidget {
+  final String url;
+  const _PosterImage({required this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 220,
+      height: 330,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppPalette.black.withValues(alpha: 0.6),
+            blurRadius: 40,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: AppNetworkImage(url: url),
+      ),
+    );
+  }
+}
+
+class _AnimeTextInfo extends StatelessWidget {
+  final Anime anime;
+  final bool isMobile;
+  const _AnimeTextInfo({required this.anime, required this.isMobile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          anime.title.display,
+          textAlign: isMobile ? TextAlign.center : TextAlign.left,
+          style: TextStyle(
+            color: AppPalette.textMain,
+            fontSize: isMobile ? 32 : 48,
+            fontWeight: FontWeight.w800,
+            height: 1.1,
+            letterSpacing: -1.0,
+          ),
+        ),
+        if (anime.title.english != null && anime.title.english != anime.title.romaji) ...[
+          const SizedBox(height: 8),
+          Text(
+            anime.title.english!,
+            textAlign: isMobile ? TextAlign.center : TextAlign.left,
+            style: const TextStyle(color: AppPalette.textMuted, fontSize: 16, fontWeight: FontWeight.w500),
+          ),
+        ],
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
+          children: [
+            _MetaChip(label: _formatStatus(anime.status), color: _statusColor(anime.status)),
+            if (anime.episodes != null) _MetaChip(label: '${anime.episodes} Episodes', color: AppPalette.textLight),
+            if (anime.averageScore != null)
+              _MetaChip(label: '★ ${(anime.averageScore! / 10).toStringAsFixed(1)} Score', color: AppPalette.accent),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Text(
+          _stripHtml(anime.description),
+          maxLines: isMobile ? 5 : 4,
+          textAlign: isMobile ? TextAlign.center : TextAlign.left,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppPalette.textMuted, fontSize: 14, height: 1.6),
+        ),
+      ],
+    );
+  }
+}
 
 class _FloatingNavBar extends StatefulWidget {
   final VoidCallback? onBack;
@@ -183,7 +277,7 @@ class _FloatingNavBarState extends State<_FloatingNavBar> {
               curve: Curves.easeOutCubic,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: _hovered ? AppPalette.white.withValues(alpha: 0.15) : AppPalette.black.withValues(alpha: 0.3),
+                color: _hovered ? AppPalette.white.withValues(alpha: 0.15) : AppPalette.black.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(30),
                 border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
               ),

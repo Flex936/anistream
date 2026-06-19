@@ -28,7 +28,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   int _expandedEpisode = -1;
   bool _autoPlayRecommended = false;
   
-  // ── Locking states to prevent double-click crashes ──
   bool _isAutoPlaying = false;
   int _autoPlayTargetEpisode = -1;
 
@@ -71,8 +70,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (!mounted) return;
       
       if (torrents.isNotEmpty) {
-        // FIXED: Do not 'await' the push. This allows the finally block to execute 
-        // instantly, tearing down the loading overlay while the player slides in.
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -96,6 +93,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final hPad = isMobile ? 24.0 : 48.0;
+
     return Scaffold(
       backgroundColor: AppPalette.base,
       body: Stack(
@@ -106,7 +106,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                 child: HeroBanner(anime: widget.anime, onBack: widget.onBack),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(48, 16, 48, 16),
+                padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 16),
                 sliver: SliverToBoxAdapter(
                   child: Row(
                     children: [
@@ -131,28 +131,31 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                   ),
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 64),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final ep = index + 1;
-                      return EpisodeTile(
-                        key: ValueKey(ep),
-                        episodeNumber: ep,
-                        isExpanded: _expandedEpisode == ep,
-                        torrentFuture: _expandedEpisode == ep ? _futureFor(ep) : null,
-                        onToggle: () => _toggleEpisode(ep),
-                      );
-                    },
-                    childCount: _episodeCount,
+              // ── FIXED: Added SafeArea wrapper for the bottom list to avoid the home bar ──
+              SliverSafeArea(
+                top: false,
+                sliver: SliverPadding(
+                  padding: EdgeInsets.fromLTRB(isMobile ? 12 : 20, 0, isMobile ? 12 : 20, 64),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final ep = index + 1;
+                        return EpisodeTile(
+                          key: ValueKey(ep),
+                          episodeNumber: ep,
+                          isExpanded: _expandedEpisode == ep,
+                          torrentFuture: _expandedEpisode == ep ? _futureFor(ep) : null,
+                          onToggle: () => _toggleEpisode(ep),
+                        );
+                      },
+                      childCount: _episodeCount,
+                    ),
                   ),
                 ),
               ),
             ],
           ),
 
-          // ── Auto-Play Loading Overlay ──
           if (_isAutoPlaying)
             Positioned.fill(
               child: TweenAnimationBuilder<double>(

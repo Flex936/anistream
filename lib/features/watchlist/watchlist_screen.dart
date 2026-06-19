@@ -102,7 +102,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // 1. Dynamic Background Layer
         Positioned.fill(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 600),
@@ -124,12 +123,10 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                       ),
                     ],
                   )
-                // ── FIXED: Removed the Key. The type difference (SizedBox vs Stack) is enough for Flutter ──
                 : const SizedBox.shrink(),
           ),
         ),
 
-        // 2. The scrollable content
         Positioned.fill(
           child: SingleChildScrollView(
             child: Column(
@@ -146,60 +143,59 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                     runSpacing: 16,
                     children: [
                       const Text('My Library', style: TextStyle(color: AppPalette.textMain, fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.4)),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: AppPalette.surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppPalette.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    icon: Icon(Icons.grid_view_rounded, size: 20, color: !_isListView ? AppPalette.primary : AppPalette.textMuted),
-                                    onPressed: () => setState(() => _isListView = false),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.view_list_rounded, size: 20, color: _isListView ? AppPalette.primary : AppPalette.textMuted),
-                                    onPressed: () => setState(() => _isListView = true),
-                                  ),
-                                ],
-                              ),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppPalette.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppPalette.border),
                             ),
-                            const SizedBox(width: 16),
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: AppPalette.surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppPalette.border),
-                              ),
-                              child: Row(
-                                children: [
-                                  _TabButton(
-                                    icon: Icons.play_arrow_rounded, label: 'Watching',
-                                    active: _activeStatus == 'CURRENT',
-                                    onTap: () => setState(() => _activeStatus = 'CURRENT'),
-                                  ),
-                                  _TabButton(
-                                    icon: Icons.calendar_today_outlined, label: 'Planning',
-                                    active: _activeStatus == 'PLANNING',
-                                    onTap: () => setState(() => _activeStatus = 'PLANNING'),
-                                  ),
-                                  _TabButton(
-                                    icon: Icons.check_circle_outline_rounded, label: 'Watched',
-                                    active: _activeStatus == 'COMPLETED',
-                                    onTap: () => setState(() => _activeStatus = 'COMPLETED'),
-                                  ),
-                                ],
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.grid_view_rounded, size: 20, color: !_isListView ? AppPalette.primary : AppPalette.textMuted),
+                                  onPressed: () => setState(() => _isListView = false),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.view_list_rounded, size: 20, color: _isListView ? AppPalette.primary : AppPalette.textMuted),
+                                  onPressed: () => setState(() => _isListView = true),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppPalette.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppPalette.border),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _TabButton(
+                                  icon: Icons.play_arrow_rounded, label: 'Watching',
+                                  active: _activeStatus == 'CURRENT',
+                                  onTap: () => setState(() => _activeStatus = 'CURRENT'),
+                                ),
+                                _TabButton(
+                                  icon: Icons.calendar_today_outlined, label: 'Planning',
+                                  active: _activeStatus == 'PLANNING',
+                                  onTap: () => setState(() => _activeStatus = 'PLANNING'),
+                                ),
+                                _TabButton(
+                                  icon: Icons.check_circle_outline_rounded, label: 'Watched',
+                                  active: _activeStatus == 'COMPLETED',
+                                  onTap: () => setState(() => _activeStatus = 'COMPLETED'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -253,6 +249,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             } else {
               return WatchlistCard(
                 entry: entry,
+                listStatus: _activeStatus,
                 showProgress: false, 
                 onTap: () => widget.onSelectAnime?.call(entry.media),
                 onHover: (hovered) => _handleHover(hoverImage, hovered),
@@ -283,33 +280,68 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
 // ── Private sub-widgets for Screen ──
 
-class _TabButton extends StatelessWidget {
+// ── FIXED: Converted to StatefulWidget for rich hover interactions ──
+class _TabButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final bool active;
   final VoidCallback onTap;
 
-  const _TabButton({required this.icon, required this.label, required this.active, required this.onTap});
+  const _TabButton({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  State<_TabButton> createState() => _TabButtonState();
+}
+
+class _TabButtonState extends State<_TabButton> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? AppPalette.primary : AppPalette.transparent,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: active ? [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 2))] : const [],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 15, color: active ? AppPalette.white : AppPalette.textMuted),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(color: active ? AppPalette.white : AppPalette.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
-          ],
+    final bgColor = widget.active
+        ? AppPalette.primary
+        : (_hovered ? AppPalette.white.withValues(alpha: 0.08) : AppPalette.transparent);
+
+    final contentColor = widget.active
+        ? AppPalette.white
+        : (_hovered ? AppPalette.textMain : AppPalette.textMuted);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: widget.active
+                ? [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 2))]
+                : const [],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, size: 15, color: contentColor),
+              const SizedBox(width: 6),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  color: contentColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

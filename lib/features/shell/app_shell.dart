@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-import '../../data/anilist/models/anime.dart';
+import '../../data/anilist/models/anime.dart'; 
 import '../../data/anilist/anilist_query_service.dart';
 import '../../core/theme/app_palette.dart';
 import 'widgets/navbar.dart';
@@ -140,19 +140,24 @@ class _AppShellState extends State<AppShell> {
         onLogin: _handleLogin,
         onSettings: () => showSettingsMenu(context),
       ),
-      body: NotificationListener<ScrollNotification>(
-        onNotification: (ScrollNotification notification) {
-          if (notification.depth == 0) {
-            final isScrolled = notification.metrics.pixels > 20;
-            if (isScrolled != _isScrolled) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _isScrolled = isScrolled);
-              });
+      // ── GestureDetector to dismiss mobile keyboard on tap ──
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (ScrollNotification notification) {
+            if (notification.depth == 0) {
+              final isScrolled = notification.metrics.pixels > 20;
+              if (isScrolled != _isScrolled) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _isScrolled = isScrolled);
+                });
+              }
             }
-          }
-          return false; 
-        },
-        child: _currentView,
+            return false; 
+          },
+          child: _currentView,
+        ),
       ),
     );
   }

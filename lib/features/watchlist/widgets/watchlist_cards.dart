@@ -51,7 +51,6 @@ class _HeroCardState extends State<HeroCard> {
     }
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
       onEnter: (_) { setState(() => _hovered = true); widget.onHover(true); },
       onExit: (_) { setState(() => _hovered = false); widget.onHover(false); },
       child: GestureDetector(
@@ -95,7 +94,7 @@ class _HeroCardState extends State<HeroCard> {
                     children: [
                       Text(media.title.display, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppPalette.white, fontSize: 14, fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
-                      Text('Continue Episode ${progress + 1}', style: const TextStyle(color: AppPalette.textLight, fontSize: 12)),
+                      Text('Next: Episode ${progress + 1}', style: const TextStyle(color: AppPalette.textLight, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -150,7 +149,6 @@ class _ListCardState extends State<ListCard> {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
       onEnter: (_) { setState(() => _hovered = true); widget.onHover(true); },
       onExit: (_) { setState(() => _hovered = false); widget.onHover(false); },
       child: GestureDetector(
@@ -229,11 +227,19 @@ class _ListCardState extends State<ListCard> {
 
 class WatchlistCard extends StatefulWidget {
   final MediaListEntry entry;
+  final String listStatus; // ── FIXED: Added this parameter ──
   final bool showProgress;
   final VoidCallback onTap;
   final ValueChanged<bool> onHover;
 
-  const WatchlistCard({super.key, required this.entry, required this.showProgress, required this.onTap, required this.onHover});
+  const WatchlistCard({
+    super.key, 
+    required this.entry, 
+    required this.listStatus, 
+    required this.showProgress, 
+    required this.onTap, 
+    required this.onHover,
+  });
 
   @override
   State<WatchlistCard> createState() => _WatchlistCardState();
@@ -241,6 +247,13 @@ class WatchlistCard extends StatefulWidget {
 
 class _WatchlistCardState extends State<WatchlistCard> {
   bool _hovered = false;
+
+  // ── FIXED: Now uses the passed-in listStatus ──
+  String get _overlayLabel {
+    if (widget.listStatus == 'COMPLETED') return 'Watch Again';
+    if (widget.listStatus == 'PLANNING') return 'Start Watching';
+    return 'View Details';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +273,6 @@ class _WatchlistCardState extends State<WatchlistCard> {
       children: [
         Expanded(
           child: MouseRegion(
-            cursor: SystemMouseCursors.click,
             onEnter: (_) { setState(() => _hovered = true); widget.onHover(true); },
             onExit: (_) { setState(() => _hovered = false); widget.onHover(false); },
             child: GestureDetector(
@@ -306,7 +318,7 @@ class _WatchlistCardState extends State<WatchlistCard> {
                           ),
                         ),
 
-                      _PlayOverlay(visible: _hovered, episode: progress + 1),
+                      _PlayOverlay(visible: _hovered, label: _overlayLabel),
 
                       if (widget.showProgress)
                         Positioned(
@@ -391,9 +403,9 @@ class _PosterImage extends StatelessWidget {
 
 class _PlayOverlay extends StatelessWidget {
   final bool visible;
-  final int episode;
+  final String label;
 
-  const _PlayOverlay({required this.visible, required this.episode});
+  const _PlayOverlay({required this.visible, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -411,7 +423,7 @@ class _PlayOverlay extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
                 decoration: BoxDecoration(color: AppPalette.primary, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.55), blurRadius: 18)]),
-                child: Text('Play EP $episode', style: const TextStyle(color: AppPalette.white, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
+                child: Text(label, style: const TextStyle(color: AppPalette.white, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.2)),
               ),
             ),
           ),

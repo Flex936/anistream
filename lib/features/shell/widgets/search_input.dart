@@ -9,6 +9,7 @@ import '../../../shared/widgets/app_network_image.dart';
 
 class SearchInput extends StatefulWidget {
   final TextEditingController controller;
+  final bool autoFocus; // ── FIXED: Added autoFocus for Mobile Search Mode ──
   final ValueChanged<String>? onChanged;
   final ValueChanged<Anime>? onSelectAnime;
   final ValueChanged<String>? onSubmitted;
@@ -16,6 +17,7 @@ class SearchInput extends StatefulWidget {
   const SearchInput({
     super.key,
     required this.controller,
+    this.autoFocus = false,
     this.onChanged,
     this.onSelectAnime,
     this.onSubmitted,
@@ -108,6 +110,7 @@ class _SearchInputState extends State<SearchInput> {
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final renderBox = context.findRenderObject() as RenderBox?;
+        // We use the exact width of the input field so it scales perfectly on mobile
         final width = renderBox?.size.width ?? 300.0;
 
         return Positioned(
@@ -238,6 +241,7 @@ class _SearchInputState extends State<SearchInput> {
       child: TextField(
         controller: widget.controller,
         focusNode: _focusNode,
+        autofocus: widget.autoFocus,
         onChanged: _onTextChanged,
         onSubmitted: widget.onSubmitted,
         style: const TextStyle(color: AppPalette.textMain, fontSize: 14),
@@ -249,6 +253,20 @@ class _SearchInputState extends State<SearchInput> {
             child: Icon(Icons.search_rounded, color: AppPalette.textMuted, size: 20),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
+          // ── FIXED: Added Clear (X) suffix button ──
+          suffixIcon: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: widget.controller,
+            builder: (context, value, child) {
+              if (value.text.isEmpty) return const SizedBox.shrink();
+              return IconButton(
+                icon: const Icon(Icons.cancel_rounded, color: AppPalette.textMuted, size: 18),
+                onPressed: () {
+                  widget.controller.clear();
+                  _onTextChanged('');
+                },
+              );
+            },
+          ),
           filled: true,
           fillColor: AppPalette.white.withValues(alpha: 0.05),
           isDense: true,

@@ -28,6 +28,9 @@ class _EpisodeTileState extends State<EpisodeTile> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final hPad = isMobile ? 16.0 : 28.0; // Shrink padding for phones
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -40,7 +43,7 @@ class _EpisodeTileState extends State<EpisodeTile> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 15),
+              padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 15),
               decoration: BoxDecoration(
                 color: widget.isExpanded
                     ? AppPalette.primary.withValues(alpha: 0.06)
@@ -57,12 +60,12 @@ class _EpisodeTileState extends State<EpisodeTile> {
               child: Row(
                 children: [
                   SizedBox(
-                    width: 34,
+                    width: isMobile ? 26 : 34,
                     child: Text(
                       widget.episodeNumber.toString().padLeft(2, '0'),
                       style: TextStyle(
                         color: widget.isExpanded ? AppPalette.primary : AppPalette.textMuted.withValues(alpha: 0.35),
-                        fontSize: 20,
+                        fontSize: isMobile ? 16 : 20,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -94,12 +97,11 @@ class _EpisodeTileState extends State<EpisodeTile> {
           ),
         ),
 
-        // ── Animated torrent list ──
         AnimatedSize(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
-          child: widget.isExpanded ? _buildTorrentContent() : const SizedBox.shrink(),
+          child: widget.isExpanded ? _buildTorrentContent(hPad) : const SizedBox.shrink(),
         ),
 
         const Divider(height: 1, thickness: 1, color: AppPalette.border),
@@ -107,12 +109,12 @@ class _EpisodeTileState extends State<EpisodeTile> {
     );
   }
 
-  Widget _buildTorrentContent() {
+  Widget _buildTorrentContent(double hPad) {
     final future = widget.torrentFuture;
     if (future == null) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 0, 28, 16),
+      padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 16),
       child: FutureBuilder<List<Torrent>>(
         future: future,
         builder: (context, snapshot) {
