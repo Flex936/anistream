@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'core/theme/app_palette.dart';
 import 'core/router/app_router.dart';
@@ -9,6 +10,13 @@ class AniStreamApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      shortcuts: {
+        ...WidgetsApp.defaultShortcuts,
+        const SingleActivator(LogicalKeyboardKey.select):
+            const ActivateIntent(),
+        const SingleActivator(LogicalKeyboardKey.gameButtonA):
+            const ActivateIntent(),
+      },
       title: 'AniStream',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

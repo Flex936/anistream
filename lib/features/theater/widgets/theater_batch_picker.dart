@@ -29,7 +29,9 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return FocusScope(
+      autofocus: true,
+      child: Container(
       color: AppPalette.black.withValues(alpha: 0.85),
       child: Center(
         child: Container(
@@ -79,6 +81,10 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                     final isSuggested = requestedEpisode != null && f.guessedEpisode == requestedEpisode;
 
                     return ListTile(
+                      autofocus: i == 0,
+                      focusColor: AppPalette.white.withValues(alpha: 0.1),
+                      hoverColor: AppPalette.white.withValues(alpha: 0.1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       leading: CircleAvatar(
                         radius: 16,
                         backgroundColor: isSuggested ? AppPalette.primary.withValues(alpha: 0.2) : AppPalette.white.withValues(alpha: 0.08),
@@ -120,6 +126,7 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

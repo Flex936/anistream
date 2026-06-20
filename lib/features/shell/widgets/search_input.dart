@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/anime.dart';
@@ -49,6 +50,31 @@ class _SearchInputState extends State<SearchInput> {
   @override
   void initState() {
     super.initState();
+    _focusNode.onKeyEvent = (node, event) {
+      if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        node.focusInDirection(TraversalDirection.up);
+        return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        node.focusInDirection(TraversalDirection.down);
+        return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+        final offset = widget.controller.selection.baseOffset;
+        if (offset == widget.controller.text.length || offset == -1) {
+          node.focusInDirection(TraversalDirection.right);
+          return KeyEventResult.handled;
+        }
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+        final offset = widget.controller.selection.baseOffset;
+        if (offset <= 0) {
+          node.focusInDirection(TraversalDirection.left);
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.ignored;
+    };
+
     _focusNode.addListener(() {
       if (_focusNode.hasFocus && widget.controller.text.isNotEmpty) {
         _showOverlay();

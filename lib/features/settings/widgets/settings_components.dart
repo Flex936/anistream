@@ -26,44 +26,65 @@ class SectionLabel extends StatelessWidget {
 class ToggleSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
+  final bool autofocus;
 
-  const ToggleSwitch({super.key, required this.value, required this.onChanged});
+  const ToggleSwitch({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.autofocus = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onChanged(!value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        width: 44,
-        height: 24,
-        decoration: BoxDecoration(
-          color: value ? AppPalette.primary : AppPalette.white.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: value ? AppPalette.primary : AppPalette.white.withValues(alpha: 0.05),
-          ),
+    return FocusableActionDetector(
+      autofocus: autofocus,
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            onChanged(!value);
+            return null;
+          },
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(2),
-          child: AnimatedAlign(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: AppPalette.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppPalette.black.withValues(alpha: 0.2),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  )
-                ],
+      },
+      child: GestureDetector(
+        onTap: () => onChanged(!value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          width: 44,
+          height: 24,
+          decoration: BoxDecoration(
+            color: value
+                ? AppPalette.primary
+                : AppPalette.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: value
+                  ? AppPalette.primary
+                  : AppPalette.white.withValues(alpha: 0.05),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: AppPalette.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppPalette.black.withValues(alpha: 0.2),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -78,6 +99,7 @@ class SettingRowTile extends StatefulWidget {
   final String subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
+  final bool autofocus;
 
   const SettingRowTile({
     super.key,
@@ -85,6 +107,7 @@ class SettingRowTile extends StatefulWidget {
     required this.subtitle,
     required this.value,
     required this.onChanged,
+    this.autofocus = false,
   });
 
   @override
@@ -107,7 +130,9 @@ class _SettingRowTileState extends State<SettingRowTile> {
           curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: _hovered ? AppPalette.white.withValues(alpha: 0.06) : AppPalette.transparent,
+            color: _hovered
+                ? AppPalette.white.withValues(alpha: 0.06)
+                : AppPalette.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -120,7 +145,9 @@ class _SettingRowTileState extends State<SettingRowTile> {
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 150),
                       style: TextStyle(
-                        color: _hovered ? AppPalette.white : AppPalette.textMain,
+                        color: _hovered
+                            ? AppPalette.white
+                            : AppPalette.textMain,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -142,6 +169,7 @@ class _SettingRowTileState extends State<SettingRowTile> {
               ToggleSwitch(
                 value: widget.value,
                 onChanged: widget.onChanged,
+                autofocus: widget.autofocus,
               ),
             ],
           ),
@@ -162,7 +190,7 @@ class AppleSnackBar {
   }) {
     // Clear existing so we don't queue up a dozen toasts if the user clicks rapidly
     ScaffoldMessenger.of(context).clearSnackBars();
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: Colors.transparent,
@@ -177,17 +205,23 @@ class AppleSnackBar {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: AppPalette.surface.withValues(alpha: 0.75),
                   borderRadius: BorderRadius.circular(50),
-                  border: Border.all(color: AppPalette.white.withValues(alpha: 0.15), width: 1),
+                  border: Border.all(
+                    color: AppPalette.white.withValues(alpha: 0.15),
+                    width: 1,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: AppPalette.black.withValues(alpha: 0.25),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
-                    )
+                    ),
                   ],
                 ),
                 child: Row(

@@ -11,6 +11,7 @@ class AnimeCarousel extends StatefulWidget {
   final Future<List<Anime>> future;
   final ValueChanged<Anime>? onSelectAnime;
   final VoidCallback onRetry;
+  final bool autofocusFirst;
 
   const AnimeCarousel({
     super.key,
@@ -18,6 +19,7 @@ class AnimeCarousel extends StatefulWidget {
     required this.future,
     this.onSelectAnime,
     required this.onRetry,
+    this.autofocusFirst = false,
   });
 
   @override
@@ -46,9 +48,10 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
 
   void _checkScrollLimits() {
     if (!_scrollController.hasClients) return;
-    
+
     final canLeft = _scrollController.offset > 0;
-    final canRight = _scrollController.offset < _scrollController.position.maxScrollExtent;
+    final canRight =
+        _scrollController.offset < _scrollController.position.maxScrollExtent;
 
     if (canLeft != _canScrollLeft || canRight != _canScrollRight) {
       setState(() {
@@ -60,7 +63,7 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
 
   void _scroll(double directionMultiplier) {
     if (!_scrollController.hasClients) return;
-    
+
     final double scrollAmount = 570.0 * directionMultiplier;
     final double targetPosition = (_scrollController.offset + scrollAmount)
         .clamp(0.0, _scrollController.position.maxScrollExtent);
@@ -84,7 +87,12 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
           padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 16),
           child: Text(
             widget.title,
-            style: const TextStyle(color: AppPalette.textMain, fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: -0.4),
+            style: const TextStyle(
+              color: AppPalette.textMain,
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.4,
+            ),
           ),
         ),
         SizedBox(
@@ -94,26 +102,46 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return const Center(
-                  child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary), strokeWidth: 2.5),
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppPalette.primary,
+                    ),
+                    strokeWidth: 2.5,
+                  ),
                 );
               }
-              
+
               if (snapshot.hasError) {
                 final err = snapshot.error;
-                final msg = err is AnilistException ? err.message : 'Could not load anime.';
+                final msg = err is AnilistException
+                    ? err.message
+                    : 'Could not load anime.';
                 return Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.wifi_off_rounded, color: AppPalette.textMuted, size: 32),
+                      const Icon(
+                        Icons.wifi_off_rounded,
+                        color: AppPalette.textMuted,
+                        size: 32,
+                      ),
                       const SizedBox(height: 12),
-                      Text(msg, style: const TextStyle(color: AppPalette.textMuted, fontSize: 13)),
+                      Text(
+                        msg,
+                        style: const TextStyle(
+                          color: AppPalette.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       OutlinedButton.icon(
                         onPressed: widget.onRetry,
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: const Text('Try Again'),
-                        style: OutlinedButton.styleFrom(foregroundColor: AppPalette.primary, side: const BorderSide(color: AppPalette.primary)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppPalette.primary,
+                          side: const BorderSide(color: AppPalette.primary),
+                        ),
                       ),
                     ],
                   ),
@@ -123,18 +151,24 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
               final items = snapshot.data ?? [];
               if (items.isEmpty) {
                 return const Center(
-                  child: Text('No anime found.', style: TextStyle(color: AppPalette.textMuted)),
+                  child: Text(
+                    'No anime found.',
+                    style: TextStyle(color: AppPalette.textMuted),
+                  ),
                 );
               }
 
-              return MouseRegion(
-                onEnter: (_) => setState(() => _isHovered = true),
-                onExit: (_) => setState(() => _isHovered = false),
+              return FocusableActionDetector(
+                onShowHoverHighlight: (v) => setState(() => _isHovered = v),
+                onShowFocusHighlight: (v) => setState(() => _isHovered = v),
                 child: Stack(
                   children: [
                     ScrollConfiguration(
                       behavior: ScrollConfiguration.of(context).copyWith(
-                        dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+                        dragDevices: {
+                          PointerDeviceKind.touch,
+                          PointerDeviceKind.mouse,
+                        },
                       ),
                       child: ListView.separated(
                         controller: _scrollController,
@@ -145,7 +179,22 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                         itemBuilder: (context, i) {
                           return SizedBox(
                             width: 170,
-                            child: AnimeCard(anime: items[i], onSelect: widget.onSelectAnime),
+                            child: Focus(
+                              autofocus: widget.autofocusFirst && i == 0,
+                              onFocusChange: (f) {
+                                if (f) {
+                                  Scrollable.ensureVisible(
+                                    context,
+                                    alignment: 0.5,
+                                    duration: const Duration(milliseconds: 250),
+                                  );
+                                }
+                              },
+                              child: AnimeCard(
+                                anime: items[i],
+                                onSelect: widget.onSelectAnime,
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -153,22 +202,32 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
 
                     if (!isMobile && _isHovered && _canScrollLeft)
                       Positioned(
-                        left: 0, top: 0, bottom: 0,
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
                         child: _NavArrow(
                           icon: Icons.chevron_left_rounded,
                           alignment: Alignment.centerLeft,
-                          gradientColors: [AppPalette.base.withValues(alpha: 0.9), AppPalette.base.withValues(alpha: 0.0)],
+                          gradientColors: [
+                            AppPalette.base.withValues(alpha: 0.9),
+                            AppPalette.base.withValues(alpha: 0.0),
+                          ],
                           onTap: () => _scroll(-1.0),
                         ),
                       ),
 
                     if (!isMobile && _isHovered && _canScrollRight)
                       Positioned(
-                        right: 0, top: 0, bottom: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
                         child: _NavArrow(
                           icon: Icons.chevron_right_rounded,
                           alignment: Alignment.centerRight,
-                          gradientColors: [AppPalette.base.withValues(alpha: 0.0), AppPalette.base.withValues(alpha: 0.9)],
+                          gradientColors: [
+                            AppPalette.base.withValues(alpha: 0.0),
+                            AppPalette.base.withValues(alpha: 0.9),
+                          ],
                           onTap: () => _scroll(1.0),
                         ),
                       ),
@@ -205,7 +264,11 @@ class _NavArrow extends StatelessWidget {
         alignment: alignment,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: gradientColors, begin: Alignment.centerLeft, end: Alignment.centerRight),
+          gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
@@ -216,7 +279,9 @@ class _NavArrow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppPalette.black.withValues(alpha: 0.4),
                 shape: BoxShape.circle,
-                border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
+                border: Border.all(
+                  color: AppPalette.white.withValues(alpha: 0.1),
+                ),
               ),
               child: Icon(icon, color: AppPalette.white, size: 28),
             ),

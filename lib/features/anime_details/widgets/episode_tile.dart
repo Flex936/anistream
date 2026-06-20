@@ -34,9 +34,18 @@ class _EpisodeTileState extends State<EpisodeTile> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        MouseRegion(
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
+        FocusableActionDetector(
+          autofocus: widget.episodeNumber == 1,
+          onShowHoverHighlight: (v) => setState(() => _hovered = v),
+          onShowFocusHighlight: (v) => setState(() => _hovered = v),
+          actions: {
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                widget.onToggle();
+                return null;
+              },
+            ),
+          },
           child: GestureDetector(
             onTap: widget.onToggle,
             behavior: HitTestBehavior.opaque,
@@ -48,11 +57,13 @@ class _EpisodeTileState extends State<EpisodeTile> {
                 color: widget.isExpanded
                     ? AppPalette.primary.withValues(alpha: 0.06)
                     : _hovered
-                        ? AppPalette.white.withValues(alpha: 0.025)
-                        : AppPalette.transparent,
+                    ? AppPalette.white.withValues(alpha: 0.025)
+                    : AppPalette.transparent,
                 border: Border(
                   left: BorderSide(
-                    color: widget.isExpanded ? AppPalette.primary : AppPalette.transparent,
+                    color: widget.isExpanded
+                        ? AppPalette.primary
+                        : AppPalette.transparent,
                     width: 3,
                   ),
                 ),
@@ -64,7 +75,9 @@ class _EpisodeTileState extends State<EpisodeTile> {
                     child: Text(
                       widget.episodeNumber.toString().padLeft(2, '0'),
                       style: TextStyle(
-                        color: widget.isExpanded ? AppPalette.primary : AppPalette.textMuted.withValues(alpha: 0.35),
+                        color: widget.isExpanded
+                            ? AppPalette.primary
+                            : AppPalette.textMuted.withValues(alpha: 0.35),
                         fontSize: isMobile ? 16 : 20,
                         fontWeight: FontWeight.w800,
                       ),
@@ -75,9 +88,13 @@ class _EpisodeTileState extends State<EpisodeTile> {
                     child: Text(
                       'Episode ${widget.episodeNumber}',
                       style: TextStyle(
-                        color: widget.isExpanded ? AppPalette.textMain : AppPalette.textMuted,
+                        color: widget.isExpanded
+                            ? AppPalette.textMain
+                            : AppPalette.textMuted,
                         fontSize: 14,
-                        fontWeight: widget.isExpanded ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: widget.isExpanded
+                            ? FontWeight.w600
+                            : FontWeight.w400,
                       ),
                     ),
                   ),
@@ -88,7 +105,9 @@ class _EpisodeTileState extends State<EpisodeTile> {
                     child: Icon(
                       Icons.keyboard_arrow_down_rounded,
                       size: 22,
-                      color: widget.isExpanded ? AppPalette.primary : AppPalette.textMuted,
+                      color: widget.isExpanded
+                          ? AppPalette.primary
+                          : AppPalette.textMuted,
                     ),
                   ),
                 ],
@@ -101,7 +120,9 @@ class _EpisodeTileState extends State<EpisodeTile> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
-          child: widget.isExpanded ? _buildTorrentContent(hPad) : const SizedBox.shrink(),
+          child: widget.isExpanded
+              ? _buildTorrentContent(hPad)
+              : const SizedBox.shrink(),
         ),
 
         const Divider(height: 1, thickness: 1, color: AppPalette.border),
@@ -127,10 +148,18 @@ class _EpisodeTileState extends State<EpisodeTile> {
                   SizedBox(
                     width: 22,
                     height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary)),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppPalette.primary,
+                      ),
+                    ),
                   ),
                   SizedBox(height: 14),
-                  Text('Searching for releases…', style: TextStyle(color: AppPalette.textMuted, fontSize: 12)),
+                  Text(
+                    'Searching for releases…',
+                    style: TextStyle(color: AppPalette.textMuted, fontSize: 12),
+                  ),
                 ],
               ),
             );
@@ -141,12 +170,19 @@ class _EpisodeTileState extends State<EpisodeTile> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, color: AppPalette.statusCancelled, size: 16),
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: AppPalette.statusCancelled,
+                    size: 16,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Failed to load releases: ${snapshot.error}',
-                      style: const TextStyle(color: AppPalette.statusCancelled, fontSize: 12),
+                      style: const TextStyle(
+                        color: AppPalette.statusCancelled,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -158,7 +194,10 @@ class _EpisodeTileState extends State<EpisodeTile> {
           if (torrents.isEmpty) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text('No releases found for this episode.', style: TextStyle(color: AppPalette.textMuted, fontSize: 13)),
+              child: Text(
+                'No releases found for this episode.',
+                style: TextStyle(color: AppPalette.textMuted, fontSize: 13),
+              ),
             );
           }
 
@@ -175,7 +214,10 @@ class _EpisodeTileState extends State<EpisodeTile> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => TheaterScreen(episode: widget.episodeNumber, torrent: torrents[i]),
+                        builder: (_) => TheaterScreen(
+                          episode: widget.episodeNumber,
+                          torrent: torrents[i],
+                        ),
                       ),
                     );
                   },

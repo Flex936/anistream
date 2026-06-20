@@ -20,6 +20,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   late Future<List<Anime>> _animeFuture;
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
+  final ScrollController _scrollController = ScrollController();
 
   static const List<String> _days = [
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -40,6 +41,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   void dispose() {
     _clockTimer?.cancel();
     _api.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -81,6 +83,12 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
     return 'Airing now / Aired';
   }
 
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Anime>>(
@@ -119,6 +127,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
         final calendar = _buildCalendar(snapshot.data ?? []);
 
         return SingleChildScrollView(
+          controller: _scrollController,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -170,6 +179,8 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                   formatLocalTime: _formatLocalTime,
                   getTimeRemaining: _getTimeRemaining,
                   onSelectAnime: widget.onSelectAnime,
+                  isFirstGlobal: i == _days.indexWhere((d) => calendar[d]!.isNotEmpty),
+                  onFocusFirstItem: _scrollToTop,
                 ),
               );
             }),
@@ -188,6 +199,8 @@ class _DayColumn extends StatelessWidget {
   final String Function(int) formatLocalTime;
   final String Function(int) getTimeRemaining;
   final ValueChanged<Anime>? onSelectAnime;
+  final bool isFirstGlobal;
+  final VoidCallback? onFocusFirstItem;
 
   const _DayColumn({
     required this.day,
@@ -197,6 +210,8 @@ class _DayColumn extends StatelessWidget {
     required this.formatLocalTime,
     required this.getTimeRemaining,
     this.onSelectAnime,
+    this.isFirstGlobal = false,
+    this.onFocusFirstItem,
   });
 
   @override
@@ -242,12 +257,22 @@ class _DayColumn extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (int i = 0; i < items.length; i++) ...[
-                    GestureDetector(
-                      onTap: () => onSelectAnime?.call(items[i]),
-                      child: CalendarCard(
-                        anime: items[i],
-                        formatLocalTime: formatLocalTime,
-                        getTimeRemaining: getTimeRemaining,
+                    Focus(
+                      canRequestFocus: false,
+                      skipTraversal: true,
+                      onFocusChange: (focused) {
+                        if (focused && isFirstGlobal && i == 0) {
+                          onFocusFirstItem?.call();
+                        }
+                      },
+                      child: GestureDetector(
+                        onTap: () => onSelectAnime?.call(items[i]),
+                        child: CalendarCard(
+                          anime: items[i],
+                          autofocus: isFirstGlobal && i == 0,
+                          formatLocalTime: formatLocalTime,
+                          getTimeRemaining: getTimeRemaining,
+                        ),
                       ),
                     ),
                     if (i < items.length - 1) const SizedBox(height: 12),

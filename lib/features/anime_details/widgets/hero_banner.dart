@@ -16,12 +16,12 @@ String _stripHtml(String? html) {
 }
 
 Color _statusColor(String? s) => switch (s) {
-      'RELEASING' => AppPalette.statusReleasing,
-      'FINISHED' => AppPalette.statusFinished,
-      'CANCELLED' => AppPalette.statusCancelled,
-      'HIATUS' => AppPalette.statusHiatus,
-      _ => AppPalette.statusDefault,
-    };
+  'RELEASING' => AppPalette.statusReleasing,
+  'FINISHED' => AppPalette.statusFinished,
+  'CANCELLED' => AppPalette.statusCancelled,
+  'HIATUS' => AppPalette.statusHiatus,
+  _ => AppPalette.statusDefault,
+};
 
 String _formatStatus(String? s) => (s ?? 'UNKNOWN').replaceAll('_', ' ');
 
@@ -70,11 +70,7 @@ class HeroBanner extends StatelessWidget {
             ),
           ),
 
-          Positioned(
-            top: 96,
-            left: 48,
-            child: _FloatingNavBar(onBack: onBack),
-          ),
+          Positioned(top: 96, left: 48, child: _FloatingNavBar(onBack: onBack)),
 
           Positioned(
             bottom: 24,
@@ -109,11 +105,11 @@ class HeroBanner extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (bannerUrl != null) 
+              if (bannerUrl != null)
                 AppNetworkImage(url: bannerUrl)
-              else 
+              else
                 const ColoredBox(color: AppPalette.surface),
-              
+
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -127,7 +123,7 @@ class HeroBanner extends StatelessWidget {
                   ),
                 ),
               ),
-              
+
               SafeArea(
                 bottom: false,
                 child: Padding(
@@ -144,7 +140,10 @@ class HeroBanner extends StatelessWidget {
 
         // Bottom section with Poster and Text
         Transform.translate(
-          offset: const Offset(0, -80), // Pulls the content up over the banner gradient
+          offset: const Offset(
+            0,
+            -80,
+          ), // Pulls the content up over the banner gradient
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
@@ -197,7 +196,9 @@ class _AnimeTextInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: isMobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      crossAxisAlignment: isMobile
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
@@ -211,12 +212,17 @@ class _AnimeTextInfo extends StatelessWidget {
             letterSpacing: -1.0,
           ),
         ),
-        if (anime.title.english != null && anime.title.english != anime.title.romaji) ...[
+        if (anime.title.english != null &&
+            anime.title.english != anime.title.romaji) ...[
           const SizedBox(height: 8),
           Text(
             anime.title.english!,
             textAlign: isMobile ? TextAlign.center : TextAlign.left,
-            style: const TextStyle(color: AppPalette.textMuted, fontSize: 16, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              color: AppPalette.textMuted,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
         const SizedBox(height: 24),
@@ -225,10 +231,21 @@ class _AnimeTextInfo extends StatelessWidget {
           runSpacing: 8,
           alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
           children: [
-            _MetaChip(label: _formatStatus(anime.status), color: _statusColor(anime.status)),
-            if (anime.episodes != null) _MetaChip(label: '${anime.episodes} Episodes', color: AppPalette.textLight),
+            _MetaChip(
+              label: _formatStatus(anime.status),
+              color: _statusColor(anime.status),
+            ),
+            if (anime.episodes != null)
+              _MetaChip(
+                label: '${anime.episodes} Episodes',
+                color: AppPalette.textLight,
+              ),
             if (anime.averageScore != null)
-              _MetaChip(label: '★ ${(anime.averageScore! / 10).toStringAsFixed(1)} Score', color: AppPalette.accent),
+              _MetaChip(
+                label:
+                    '★ ${(anime.averageScore! / 10).toStringAsFixed(1)} Score',
+                color: AppPalette.accent,
+              ),
           ],
         ),
         const SizedBox(height: 24),
@@ -237,7 +254,11 @@ class _AnimeTextInfo extends StatelessWidget {
           maxLines: isMobile ? 5 : 4,
           textAlign: isMobile ? TextAlign.center : TextAlign.left,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: AppPalette.textMuted, fontSize: 14, height: 1.6),
+          style: const TextStyle(
+            color: AppPalette.textMuted,
+            fontSize: 14,
+            height: 1.6,
+          ),
         ),
       ],
     );
@@ -257,9 +278,21 @@ class _FloatingNavBarState extends State<_FloatingNavBar> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+    return FocusableActionDetector(
+      onShowHoverHighlight: (hovered) => setState(() => _hovered = hovered),
+      onShowFocusHighlight: (focused) => setState(() => _hovered = focused),
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            if (widget.onBack != null) {
+              widget.onBack!();
+            } else {
+              Navigator.maybePop(context);
+            }
+            return null;
+          },
+        ),
+      },
       child: GestureDetector(
         onTap: () {
           if (widget.onBack != null) {
@@ -277,9 +310,13 @@ class _FloatingNavBarState extends State<_FloatingNavBar> {
               curve: Curves.easeOutCubic,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: _hovered ? AppPalette.white.withValues(alpha: 0.15) : AppPalette.black.withValues(alpha: 0.4),
+                color: _hovered
+                    ? AppPalette.white.withValues(alpha: 0.15)
+                    : AppPalette.black.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
+                border: Border.all(
+                  color: AppPalette.white.withValues(alpha: 0.1),
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -288,10 +325,21 @@ class _FloatingNavBarState extends State<_FloatingNavBar> {
                     offset: _hovered ? const Offset(-0.15, 0) : Offset.zero,
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOutCubic,
-                    child: const Icon(Icons.arrow_back_rounded, size: 18, color: AppPalette.textMain),
+                    child: const Icon(
+                      Icons.arrow_back_rounded,
+                      size: 18,
+                      color: AppPalette.textMain,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  const Text('Back', style: TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w600)),
+                  const Text(
+                    'Back',
+                    style: TextStyle(
+                      color: AppPalette.textMain,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -318,7 +366,11 @@ class _MetaChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

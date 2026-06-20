@@ -18,6 +18,7 @@ class WatchlistScreen extends StatefulWidget {
 
 class _WatchlistScreenState extends State<WatchlistScreen> {
   final AnilistQueryService _api = AnilistQueryService();
+  final ScrollController _scrollController = ScrollController();
 
   bool _loading = true;
   String? _error;
@@ -36,7 +37,14 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   @override
   void dispose() {
     _api.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    }
   }
 
   Future<void> _fetchWatchlist() async {
@@ -129,6 +137,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
         Positioned.fill(
           child: SingleChildScrollView(
+            controller: _scrollController,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -241,18 +250,30 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             final hoverImage = entry.media.bannerImage ?? entry.media.coverImage?.display;
 
             if (isWatching) {
-              return HeroCard(
-                entry: entry,
-                onTap: () => widget.onSelectAnime?.call(entry.media),
-                onHover: (hovered) => _handleHover(hoverImage, hovered),
+              return Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onFocusChange: (f) { if (f && i == 0) _scrollToTop(); },
+                child: HeroCard(
+                  entry: entry,
+                  autofocus: i == 0,
+                  onTap: () => widget.onSelectAnime?.call(entry.media),
+                  onHover: (hovered) => _handleHover(hoverImage, hovered),
+                ),
               );
             } else {
-              return WatchlistCard(
-                entry: entry,
-                listStatus: _activeStatus,
-                showProgress: false, 
-                onTap: () => widget.onSelectAnime?.call(entry.media),
-                onHover: (hovered) => _handleHover(hoverImage, hovered),
+              return Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onFocusChange: (f) { if (f && i == 0) _scrollToTop(); },
+                child: WatchlistCard(
+                  entry: entry,
+                  autofocus: i == 0,
+                  listStatus: _activeStatus,
+                  showProgress: false, 
+                  onTap: () => widget.onSelectAnime?.call(entry.media),
+                  onHover: (hovered) => _handleHover(hoverImage, hovered),
+                ),
               );
             }
           },
@@ -268,11 +289,17 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
       itemCount: _activeEntries.length,
       separatorBuilder: (_, _) => const SizedBox(height: 16),
-      itemBuilder: (_, i) => ListCard(
-        entry: _activeEntries[i],
-        showProgress: _activeStatus == 'CURRENT',
-        onTap: () => widget.onSelectAnime?.call(_activeEntries[i].media),
-        onHover: (hovered) => _handleHover(_activeEntries[i].media.bannerImage ?? _activeEntries[i].media.coverImage?.display, hovered),
+      itemBuilder: (_, i) => Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onFocusChange: (f) { if (f && i == 0) _scrollToTop(); },
+        child: ListCard(
+          entry: _activeEntries[i],
+          autofocus: i == 0,
+          showProgress: _activeStatus == 'CURRENT',
+          onTap: () => widget.onSelectAnime?.call(_activeEntries[i].media),
+          onHover: (hovered) => _handleHover(_activeEntries[i].media.bannerImage ?? _activeEntries[i].media.coverImage?.display, hovered),
+        ),
       ),
     );
   }
@@ -311,9 +338,17 @@ class _TabButtonState extends State<_TabButton> {
         ? AppPalette.white
         : (_hovered ? AppPalette.textMain : AppPalette.textMuted);
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+    return FocusableActionDetector(
+      onShowHoverHighlight: (v) => setState(() => _hovered = v),
+      onShowFocusHighlight: (v) => setState(() => _hovered = v),
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap();
+            return null;
+          },
+        ),
+      },
       child: GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,

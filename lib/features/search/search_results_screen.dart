@@ -26,12 +26,12 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
   int _minScore = 0;
   String _selectedStatus = 'ANY';
-  late double _selectedYear; 
+  late double _selectedYear;
 
   @override
   void initState() {
     super.initState();
-    _selectedYear = DateTime.now().year.toDouble() + 1; 
+    _selectedYear = DateTime.now().year.toDouble() + 1;
     _api = AnilistQueryService();
     _executeSearch();
   }
@@ -55,13 +55,15 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       setState(() => _searchFuture = null);
       return;
     }
-    
+
     setState(() {
       _searchFuture = _api.searchAnime(
         widget.query,
         minScore: _minScore > 0 ? _minScore : null,
         status: _selectedStatus == 'ANY' ? null : _selectedStatus,
-        year: _selectedYear > DateTime.now().year ? null : _selectedYear.toInt(),
+        year: _selectedYear > DateTime.now().year
+            ? null
+            : _selectedYear.toInt(),
       );
     });
   }
@@ -105,7 +107,12 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         transitionBuilder: (context, animation, _, child) {
           return SlideTransition(
             position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-                .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                .animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
             child: child,
           );
         },
@@ -129,7 +136,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 96), 
+          const SizedBox(height: 96),
 
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
@@ -137,22 +144,36 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               children: [
                 Text(
                   'Results for "${widget.query}"',
-                  style: const TextStyle(color: AppPalette.textMain, fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.4),
+                  style: const TextStyle(
+                    color: AppPalette.textMain,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.4,
+                  ),
                 ),
                 const SizedBox(width: 16),
-                
+
                 if (_searchFuture != null)
                   FutureBuilder(
                     future: _searchFuture,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation(AppPalette.primary)));
+                        return const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation(
+                              AppPalette.primary,
+                            ),
+                          ),
+                        );
                       }
                       return const SizedBox.shrink();
                     },
                   ),
                 const Spacer(),
-                
+
                 OutlinedButton.icon(
                   onPressed: _openFilterDrawer,
                   icon: const Icon(Icons.tune_rounded, size: 18),
@@ -160,7 +181,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppPalette.textMain,
                     side: const BorderSide(color: AppPalette.border),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                 ),
               ],
@@ -172,20 +195,39 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               future: _searchFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return SizedBox(height: MediaQuery.of(context).size.height * 0.5, child: const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(AppPalette.primary))));
+                  return SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation(AppPalette.primary),
+                      ),
+                    ),
+                  );
                 }
                 if (snapshot.hasError) {
                   final err = snapshot.error;
-                  final msg = err is AnilistException ? err.message : 'An unexpected error occurred.';
+                  final msg = err is AnilistException
+                      ? err.message
+                      : 'An unexpected error occurred.';
                   return SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.5, 
+                    height: MediaQuery.of(context).size.height * 0.5,
                     child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.error_outline_rounded, color: AppPalette.statusCancelled, size: 48),
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            color: AppPalette.statusCancelled,
+                            size: 48,
+                          ),
                           const SizedBox(height: 16),
-                          Text(msg, style: const TextStyle(color: AppPalette.textMuted, fontSize: 15)),
+                          Text(
+                            msg,
+                            style: const TextStyle(
+                              color: AppPalette.textMuted,
+                              fontSize: 15,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -195,14 +237,24 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                 final results = snapshot.data ?? [];
                 if (results.isEmpty) {
                   return SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.5, 
+                    height: MediaQuery.of(context).size.height * 0.5,
                     child: const Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.search_off_rounded, color: AppPalette.textMuted, size: 48),
+                          Icon(
+                            Icons.search_off_rounded,
+                            color: AppPalette.textMuted,
+                            size: 48,
+                          ),
                           SizedBox(height: 16),
-                          Text('No anime found. Try adjusting your filters.', style: TextStyle(color: AppPalette.textMuted, fontSize: 15)),
+                          Text(
+                            'No anime found. Try adjusting your filters.',
+                            style: TextStyle(
+                              color: AppPalette.textMuted,
+                              fontSize: 15,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -223,7 +275,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                         childAspectRatio: 0.55,
                       ),
                       itemCount: results.length,
-                      itemBuilder: (_, i) => AnimeCard(anime: results[i], onSelect: widget.onSelectAnime),
+                      itemBuilder: (_, i) => AnimeCard(
+                        anime: results[i],
+                        onSelect: widget.onSelectAnime,
+                        autofocus: i == 0,
+                      ),
                     );
                   },
                 );

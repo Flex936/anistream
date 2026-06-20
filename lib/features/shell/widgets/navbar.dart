@@ -10,8 +10,8 @@ import 'search_input.dart';
 class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
   final String searchQuery;
   final bool isLoggedIn;
-  final bool isScrolled; 
-  
+  final bool isScrolled;
+
   final ValueChanged<String>? onSearch;
   final VoidCallback? onHome;
   final VoidCallback? onLogin;
@@ -45,18 +45,19 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
 
 class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
   late final TextEditingController _searchController;
-  bool _isMaximised = true; 
-  
+  bool _isMaximised = true;
+
   // ── Mobile Search State ──
   bool _mobileSearchActive = false;
 
-  bool get _isDesktop => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  bool get _isDesktop =>
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: widget.searchQuery);
-    
+
     if (_isDesktop) {
       windowManager.addListener(this);
       _syncMaximisedState();
@@ -66,7 +67,8 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
   @override
   void didUpdateWidget(AniStreamNavBar old) {
     super.didUpdateWidget(old);
-    if (old.searchQuery != widget.searchQuery && _searchController.text != widget.searchQuery) {
+    if (old.searchQuery != widget.searchQuery &&
+        _searchController.text != widget.searchQuery) {
       _searchController.text = widget.searchQuery;
     }
   }
@@ -92,7 +94,9 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
 
   Future<void> _handleMaximise() async {
     if (!_isDesktop) return;
-    _isMaximised ? await windowManager.unmaximize() : await windowManager.maximize();
+    _isMaximised
+        ? await windowManager.unmaximize()
+        : await windowManager.maximize();
   }
 
   void _closeMobileSearch() {
@@ -113,7 +117,9 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
       transitionBuilder: (context, animation, _, child) {
         return SlideTransition(
           position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-              .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+              .animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
           child: child,
         );
       },
@@ -129,7 +135,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = MediaQuery.of(context).size.width < 600; 
+    final isCompact = MediaQuery.of(context).size.width < 600;
 
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0.0, end: widget.isScrolled ? 16.0 : 0.0),
@@ -144,10 +150,14 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
               height: widget.preferredSize.height,
               padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
               decoration: BoxDecoration(
-                color: widget.isScrolled ? AppPalette.base.withValues(alpha: 0.75) : AppPalette.transparent,
+                color: widget.isScrolled
+                    ? AppPalette.base.withValues(alpha: 0.75)
+                    : AppPalette.transparent,
                 border: Border(
                   bottom: BorderSide(
-                    color: AppPalette.white.withValues(alpha: widget.isScrolled ? 0.05 : 0.0),
+                    color: AppPalette.white.withValues(
+                      alpha: widget.isScrolled ? 0.05 : 0.0,
+                    ),
                     width: 1,
                   ),
                 ),
@@ -174,7 +184,11 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
       key: const ValueKey('mobile_search'),
       children: [
         IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppPalette.textMain, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: AppPalette.textMain,
+            size: 20,
+          ),
           onPressed: _closeMobileSearch,
         ),
         const SizedBox(width: 8),
@@ -221,9 +235,11 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
           ),
 
         if (_isDesktop)
-          const Expanded(child: DragToMoveArea(child: SizedBox(height: double.infinity)))
-        else 
-          const Spacer(), 
+          const Expanded(
+            child: DragToMoveArea(child: SizedBox(height: double.infinity)),
+          )
+        else
+          const Spacer(),
 
         // ── FIXED: Clean Mobile Icons ──
         if (isCompact)
@@ -231,13 +247,13 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
             mainAxisSize: MainAxisSize.min,
             children: [
               _NavIconButton(
-                icon: Icons.search_rounded, 
-                tooltip: 'Search', 
+                icon: Icons.search_rounded,
+                tooltip: 'Search',
                 onPressed: () => setState(() => _mobileSearchActive = true),
               ),
               _NavIconButton(
-                icon: Icons.menu_rounded, 
-                tooltip: 'Menu', 
+                icon: Icons.menu_rounded,
+                tooltip: 'Menu',
                 onPressed: _showMobileMenu, // Triggers hamburger menu
               ),
             ],
@@ -247,20 +263,39 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _NavIconButton(icon: Icons.calendar_month_outlined, tooltip: 'Schedule', onPressed: widget.onScheduled),
+              _NavIconButton(
+                icon: Icons.calendar_month_outlined,
+                tooltip: 'Schedule',
+                onPressed: widget.onScheduled,
+              ),
               if (widget.isLoggedIn) ...[
                 const SizedBox(width: 2),
-                _NavIconButton(icon: Icons.video_library_outlined, tooltip: 'My Watchlist', onPressed: widget.onWatchlist),
+                _NavIconButton(
+                  icon: Icons.video_library_outlined,
+                  tooltip: 'My Watchlist',
+                  onPressed: widget.onWatchlist,
+                ),
               ],
-              
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Container(width: 1, height: 18, color: AppPalette.white.withValues(alpha: 0.1)),
+                child: Container(
+                  width: 1,
+                  height: 18,
+                  color: AppPalette.white.withValues(alpha: 0.1),
+                ),
               ),
-              
-              _UserButton(isLoggedIn: widget.isLoggedIn, onPressed: widget.onLogin),
+
+              _UserButton(
+                isLoggedIn: widget.isLoggedIn,
+                onPressed: widget.onLogin,
+              ),
               const SizedBox(width: 2),
-              _NavIconButton(icon: Icons.settings_outlined, tooltip: 'Settings', onPressed: widget.onSettings),
+              _NavIconButton(
+                icon: Icons.settings_outlined,
+                tooltip: 'Settings',
+                onPressed: widget.onSettings,
+              ),
             ],
           ),
 
@@ -268,16 +303,31 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
         if (_isDesktop) ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Container(width: 1, height: 18, color: AppPalette.white.withValues(alpha: 0.1)),
+            child: Container(
+              width: 1,
+              height: 18,
+              color: AppPalette.white.withValues(alpha: 0.1),
+            ),
           ),
-          _WindowButton(icon: Icons.remove_rounded, tooltip: 'Minimise', onPressed: () => windowManager.minimize()),
           _WindowButton(
-            icon: _isMaximised ? Icons.filter_none_rounded : Icons.crop_square_rounded,
+            icon: Icons.remove_rounded,
+            tooltip: 'Minimise',
+            onPressed: () => windowManager.minimize(),
+          ),
+          _WindowButton(
+            icon: _isMaximised
+                ? Icons.filter_none_rounded
+                : Icons.crop_square_rounded,
             tooltip: _isMaximised ? 'Restore' : 'Maximise',
             hoverColor: AppPalette.accent,
             onPressed: _handleMaximise,
           ),
-          _WindowButton(icon: Icons.close_rounded, tooltip: 'Quit', hoverColor: AppPalette.statusCancelled, onPressed: () => windowManager.close()),
+          _WindowButton(
+            icon: Icons.close_rounded,
+            tooltip: 'Quit',
+            hoverColor: AppPalette.statusCancelled,
+            onPressed: () => windowManager.close(),
+          ),
         ],
       ],
     );
@@ -315,17 +365,25 @@ class _MobileMenu extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.85, // Takes up 85% of mobile screen
+          width:
+              MediaQuery.of(context).size.width *
+              0.85, // Takes up 85% of mobile screen
           height: double.infinity,
           child: ClipRRect(
-            borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), bottomLeft: Radius.circular(24)),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              bottomLeft: Radius.circular(24),
+            ),
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
               child: Container(
                 decoration: BoxDecoration(
                   color: AppPalette.base.withValues(alpha: 0.65),
                   border: Border(
-                    left: BorderSide(color: AppPalette.white.withValues(alpha: 0.1), width: 1),
+                    left: BorderSide(
+                      color: AppPalette.white.withValues(alpha: 0.1),
+                      width: 1,
+                    ),
                   ),
                 ),
                 child: SafeArea(
@@ -338,41 +396,61 @@ class _MobileMenu extends StatelessWidget {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Menu', style: TextStyle(color: AppPalette.textMain, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                            const Text(
+                              'Menu',
+                              style: TextStyle(
+                                color: AppPalette.textMain,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
                             IconButton(
-                              icon: const Icon(Icons.close_rounded, color: AppPalette.textMuted),
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: AppPalette.textMuted,
+                              ),
                               onPressed: () => Navigator.of(context).pop(),
                             ),
                           ],
                         ),
                       ),
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       // Navigation Links
                       _MobileMenuTile(
                         icon: Icons.calendar_month_outlined,
                         title: 'Schedule',
                         onTap: () => _handleTap(context, onScheduled),
                       ),
-                      
+
                       if (isLoggedIn)
                         _MobileMenuTile(
                           icon: Icons.video_library_outlined,
                           title: 'My Watchlist',
                           onTap: () => _handleTap(context, onWatchlist),
                         ),
-                        
+
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                        child: Divider(color: AppPalette.white.withValues(alpha: 0.1)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 16,
+                        ),
+                        child: Divider(
+                          color: AppPalette.white.withValues(alpha: 0.1),
+                        ),
                       ),
 
                       // Account & App Settings
                       _MobileMenuTile(
                         icon: Icons.person_outline_rounded,
-                        title: isLoggedIn ? 'Log out of AniList' : 'Log in to AniList',
-                        iconColor: isLoggedIn ? AppPalette.statusCancelled : AppPalette.statusReleasing,
+                        title: isLoggedIn
+                            ? 'Log out of AniList'
+                            : 'Log in to AniList',
+                        iconColor: isLoggedIn
+                            ? AppPalette.statusCancelled
+                            : AppPalette.statusReleasing,
                         onTap: () => _handleTap(context, onLogin),
                       ),
 
@@ -399,7 +477,12 @@ class _MobileMenuTile extends StatefulWidget {
   final Color? iconColor;
   final VoidCallback onTap;
 
-  const _MobileMenuTile({required this.icon, required this.title, this.iconColor, required this.onTap});
+  const _MobileMenuTile({
+    required this.icon,
+    required this.title,
+    this.iconColor,
+    required this.onTap,
+  });
 
   @override
   State<_MobileMenuTile> createState() => _MobileMenuTileState();
@@ -418,19 +501,33 @@ class _MobileMenuTileState extends State<_MobileMenuTile> {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),
-        color: _isDown ? AppPalette.white.withValues(alpha: 0.1) : AppPalette.transparent,
+        color: _isDown
+            ? AppPalette.white.withValues(alpha: 0.1)
+            : AppPalette.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
         child: Row(
           children: [
-            Icon(widget.icon, size: 24, color: widget.iconColor ?? AppPalette.textMuted),
+            Icon(
+              widget.icon,
+              size: 24,
+              color: widget.iconColor ?? AppPalette.textMuted,
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
                 widget.title,
-                style: const TextStyle(color: AppPalette.textMain, fontSize: 16, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  color: AppPalette.textMain,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, size: 20, color: AppPalette.border),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: AppPalette.border,
+            ),
           ],
         ),
       ),
@@ -453,15 +550,24 @@ class _NavLogoState extends State<_NavLogo> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+    return FocusableActionDetector(
+      onShowHoverHighlight: (v) => setState(() => _hovered = v),
+      onShowFocusHighlight: (v) =>
+          setState(() => _hovered = v), // remote highlight = same look as hover
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap?.call();
+            return null;
+          },
+        ),
+      },
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 150),
           style: TextStyle(
-            color: _hovered ? AppPalette.white : AppPalette.textMain,
+            color: _hovered ? AppPalette.primary : AppPalette.textMain,
             fontSize: 20,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.5,
@@ -481,7 +587,11 @@ class _NavIconButton extends StatefulWidget {
   final String tooltip;
   final VoidCallback? onPressed;
 
-  const _NavIconButton({required this.icon, required this.tooltip, this.onPressed});
+  const _NavIconButton({
+    required this.icon,
+    required this.tooltip,
+    this.onPressed,
+  });
 
   @override
   State<_NavIconButton> createState() => _NavIconButtonState();
@@ -495,20 +605,30 @@ class _NavIconButtonState extends State<_NavIconButton> {
     return Tooltip(
       message: widget.tooltip,
       waitDuration: const Duration(milliseconds: 600),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+      child: FocusableActionDetector(
+        onShowHoverHighlight: (v) => setState(() => _hovered = v),
+        onShowFocusHighlight: (v) => setState(
+          () => _hovered = v,
+        ), // remote highlight = same look as hover
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onPressed?.call();
+              return null;
+            },
+          ),
+        },
         child: GestureDetector(
           onTap: widget.onPressed,
           child: Container(
             width: 44,
             height: 44,
-            color: AppPalette.transparent, 
+            color: AppPalette.transparent,
             alignment: Alignment.center,
             child: Icon(
               widget.icon,
               color: _hovered ? AppPalette.primary : AppPalette.textMuted,
-              size: 22, 
+              size: 22,
             ),
           ),
         ),
@@ -542,9 +662,19 @@ class _UserButtonState extends State<_UserButton> {
     return Tooltip(
       message: widget.isLoggedIn ? 'Log out of AniList' : 'Log in to AniList',
       waitDuration: const Duration(milliseconds: 600),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+      child: FocusableActionDetector(
+        onShowHoverHighlight: (v) => setState(() => _hovered = v),
+        onShowFocusHighlight: (v) => setState(
+          () => _hovered = v,
+        ), // remote highlight = same look as hover
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onPressed?.call();
+              return null;
+            },
+          ),
+        },
         child: GestureDetector(
           onTap: widget.onPressed,
           child: Container(
@@ -570,7 +700,12 @@ class _WindowButton extends StatefulWidget {
   final Color? hoverColor;
   final VoidCallback? onPressed;
 
-  const _WindowButton({required this.icon, required this.tooltip, this.hoverColor, this.onPressed});
+  const _WindowButton({
+    required this.icon,
+    required this.tooltip,
+    this.hoverColor,
+    this.onPressed,
+  });
 
   @override
   State<_WindowButton> createState() => _WindowButtonState();
@@ -584,9 +719,19 @@ class _WindowButtonState extends State<_WindowButton> {
     return Tooltip(
       message: widget.tooltip,
       waitDuration: const Duration(milliseconds: 600),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+      child: FocusableActionDetector(
+        onShowHoverHighlight: (v) => setState(() => _hovered = v),
+        onShowFocusHighlight: (v) => setState(
+          () => _hovered = v,
+        ), // remote highlight = same look as hover
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onPressed?.call();
+              return null;
+            },
+          ),
+        },
         child: GestureDetector(
           onTap: widget.onPressed,
           child: Container(
@@ -596,8 +741,10 @@ class _WindowButtonState extends State<_WindowButton> {
             alignment: Alignment.center,
             child: Icon(
               widget.icon,
-              color: _hovered ? (widget.hoverColor ?? AppPalette.textMain) : AppPalette.textMuted,
-              size: 20, 
+              color: _hovered
+                  ? (widget.hoverColor ?? AppPalette.textMain)
+                  : AppPalette.textMuted,
+              size: 20,
             ),
           ),
         ),

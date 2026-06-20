@@ -151,6 +151,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                   subtitle: 'Automatically hide borderline adult content from search results.',
                                   value: _filterEcchi,
                                   onChanged: (v) => setState(() => _filterEcchi = v),
+                                  autofocus: true,
                                 ),
                                 
                                 const SizedBox(height: 24),

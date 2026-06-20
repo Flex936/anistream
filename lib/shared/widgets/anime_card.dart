@@ -9,8 +9,14 @@ import 'app_network_image.dart';
 class AnimeCard extends StatefulWidget {
   final Anime anime;
   final ValueChanged<Anime>? onSelect;
+  final bool autofocus;
 
-  const AnimeCard({super.key, required this.anime, this.onSelect});
+  const AnimeCard({
+    super.key,
+    required this.anime,
+    this.onSelect,
+    this.autofocus = false,
+  });
 
   @override
   State<AnimeCard> createState() => _AnimeCardState();
@@ -38,9 +44,27 @@ class _AnimeCardState extends State<AnimeCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: MouseRegion(
-            onEnter: (_) => setState(() => _hovered = true),
-            onExit: (_) => setState(() => _hovered = false),
+          child: FocusableActionDetector(
+            autofocus: widget.autofocus,
+            onShowHoverHighlight: (v) => setState(() => _hovered = v),
+            onShowFocusHighlight: (v) => setState(() => _hovered = v),
+            actions: {
+              ActivateIntent: CallbackAction<ActivateIntent>(
+                onInvoke: (_) {
+                  if (widget.onSelect != null) {
+                    widget.onSelect!(anime);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AnimeDetailsScreen(anime: anime),
+                      ),
+                    );
+                  }
+                  return null;
+                },
+              ),
+            },
             child: GestureDetector(
               onTap: () {
                 if (widget.onSelect != null) {

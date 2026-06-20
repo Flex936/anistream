@@ -70,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
               future: _trendingFuture,
               onSelectAnime: widget.onSelectAnime,
               onRetry: _loadTrending,
+              autofocusFirst: true,
             ),
             
             AnimeCarousel(

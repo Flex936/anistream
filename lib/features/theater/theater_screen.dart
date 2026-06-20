@@ -98,7 +98,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
 
-    if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyK) {
+    if (key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.keyK ||
+        key == LogicalKeyboardKey.select) {
       _player.playOrPause();
     } else if (key == LogicalKeyboardKey.arrowLeft ||
         key == LogicalKeyboardKey.keyJ) {
@@ -115,12 +117,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
       _player.setVolume((_player.state.volume - 5).clamp(0, 100));
     } else if (key == LogicalKeyboardKey.keyF) {
       _toggleFullscreen();
-    } else if (key == LogicalKeyboardKey.escape) {
+    } else if (key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.goBack) {
       if (_isSettingsOpen) {
         setState(() => _isSettingsOpen = false);
       } else if (_isFullscreen) {
         _toggleFullscreen();
       }
+    } else if (key == LogicalKeyboardKey.contextMenu) {
+      setState(() => _isSettingsOpen = !_isSettingsOpen);
     }
 
     _startHideControlsTimer();

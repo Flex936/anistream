@@ -50,7 +50,9 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
+    return FocusScope(
+      autofocus: true,
+      child: ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
@@ -71,6 +73,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
             },
           ),
         ),
+        ),
       ),
     );
   }
@@ -79,7 +82,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _Tile(icon: Icons.subtitles_outlined, title: 'Subtitles', sub: _getSubtitleName(_activeSubtitle), onTap: () => setState(() => _currentPage = _MenuPage.subtitles)),
+        _Tile(icon: Icons.subtitles_outlined, title: 'Subtitles', sub: _getSubtitleName(_activeSubtitle), onTap: () => setState(() => _currentPage = _MenuPage.subtitles), autofocus: true),
         _Tile(icon: Icons.audiotrack_outlined, title: 'Audio', sub: _getAudioName(_activeAudio), onTap: () => setState(() => _currentPage = _MenuPage.audio)),
       ],
     );
@@ -89,7 +92,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _Back(onTap: () => setState(() => _currentPage = _MenuPage.main)),
+        _Back(onTap: () => setState(() => _currentPage = _MenuPage.main), autofocus: true),
         const Divider(color: AppPalette.border, height: 1),
         Flexible(
           child: ListView.builder(
@@ -113,7 +116,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _Back(onTap: () => setState(() => _currentPage = _MenuPage.main)),
+        _Back(onTap: () => setState(() => _currentPage = _MenuPage.main), autofocus: true),
         const Divider(color: AppPalette.border, height: 1),
         Flexible(
           child: ListView.builder(
@@ -135,11 +138,15 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
 }
 
 class _Tile extends StatelessWidget {
-  final IconData icon; final String title; final String sub; final VoidCallback onTap;
-  const _Tile({required this.icon, required this.title, required this.sub, required this.onTap});
+  final IconData icon; final String title; final String sub; final VoidCallback onTap; final bool autofocus;
+  const _Tile({required this.icon, required this.title, required this.sub, required this.onTap, this.autofocus = false});
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      autofocus: autofocus,
+      focusColor: AppPalette.white.withValues(alpha: 0.1),
+      hoverColor: AppPalette.white.withValues(alpha: 0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: Icon(icon, color: AppPalette.white, size: 20),
       title: Text(title, style: const TextStyle(color: AppPalette.textMain, fontSize: 14)),
       trailing: Text(sub, style: const TextStyle(color: AppPalette.textMuted, fontSize: 12)),
@@ -149,11 +156,15 @@ class _Tile extends StatelessWidget {
 }
 
 class _Back extends StatelessWidget {
-  final VoidCallback onTap;
-  const _Back({required this.onTap});
+  final VoidCallback onTap; final bool autofocus;
+  const _Back({required this.onTap, this.autofocus = false});
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      autofocus: autofocus,
+      focusColor: AppPalette.white.withValues(alpha: 0.1),
+      hoverColor: AppPalette.white.withValues(alpha: 0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: const Icon(Icons.arrow_back, color: AppPalette.textMuted, size: 18),
       title: const Text('Back', style: TextStyle(color: AppPalette.textMuted, fontSize: 14)),
       onTap: onTap,
@@ -167,6 +178,9 @@ class _TrackTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      focusColor: AppPalette.white.withValues(alpha: 0.1),
+      hoverColor: AppPalette.white.withValues(alpha: 0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       title: Text(title, style: TextStyle(color: selected ? AppPalette.primary : AppPalette.textMain, fontSize: 14)),
       trailing: selected ? const Icon(Icons.check, color: AppPalette.primary, size: 18) : null,
       onTap: onTap,
