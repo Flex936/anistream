@@ -41,10 +41,18 @@ class _TheaterControlsState extends State<TheaterControls> {
     _duration = widget.player.state.duration;
     _volume = widget.player.state.volume;
 
-    _playingSub = widget.player.stream.playing.listen((v) { if (mounted) setState(() => _isPlaying = v); });
-    _positionSub = widget.player.stream.position.listen((v) { if (mounted) setState(() => _position = v); });
-    _durationSub = widget.player.stream.duration.listen((v) { if (mounted) setState(() => _duration = v); });
-    _volumeSub = widget.player.stream.volume.listen((v) { if (mounted) setState(() => _volume = v); });
+    _playingSub = widget.player.stream.playing.listen((v) {
+      if (mounted) setState(() => _isPlaying = v);
+    });
+    _positionSub = widget.player.stream.position.listen((v) {
+      if (mounted) setState(() => _position = v);
+    });
+    _durationSub = widget.player.stream.duration.listen((v) {
+      if (mounted) setState(() => _duration = v);
+    });
+    _volumeSub = widget.player.stream.volume.listen((v) {
+      if (mounted) setState(() => _volume = v);
+    });
   }
 
   @override
@@ -71,8 +79,13 @@ class _TheaterControlsState extends State<TheaterControls> {
   @override
   Widget build(BuildContext context) {
     // Prevent assertion errors when player initializes with 0 duration
-    final maxDuration = _duration.inMilliseconds > 0 ? _duration.inMilliseconds.toDouble() : 1.0;
-    final currentPos = _position.inMilliseconds.toDouble().clamp(0.0, maxDuration);
+    final maxDuration = _duration.inMilliseconds > 0
+        ? _duration.inMilliseconds.toDouble()
+        : 1.0;
+    final currentPos = _position.inMilliseconds.toDouble().clamp(
+      0.0,
+      maxDuration,
+    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -103,7 +116,11 @@ class _TheaterControlsState extends State<TheaterControls> {
         Row(
           children: [
             IconButton(
-              icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, color: AppPalette.white, size: 34),
+              icon: Icon(
+                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: AppPalette.white,
+                size: 34,
+              ),
               onPressed: () {
                 _isPlaying ? widget.player.pause() : widget.player.play();
                 widget.onInteract();
@@ -112,11 +129,21 @@ class _TheaterControlsState extends State<TheaterControls> {
             const SizedBox(width: 16),
             Text(
               '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
-              style: const TextStyle(color: AppPalette.textMain, fontSize: 15, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: AppPalette.textMain,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const Spacer(),
             IconButton(
-              icon: Icon(_volume == 0 ? Icons.volume_off_rounded : Icons.volume_up_rounded, color: AppPalette.white, size: 24),
+              icon: Icon(
+                _volume == 0
+                    ? Icons.volume_off_rounded
+                    : Icons.volume_up_rounded,
+                color: AppPalette.white,
+                size: 24,
+              ),
               onPressed: () {
                 widget.player.setVolume(_volume == 0 ? 100.0 : 0.0);
                 widget.onInteract();
@@ -130,8 +157,12 @@ class _TheaterControlsState extends State<TheaterControls> {
                   inactiveTrackColor: AppPalette.white.withValues(alpha: 0.3),
                   thumbColor: AppPalette.white,
                   trackHeight: 4,
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 7,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 14,
+                  ),
                 ),
                 child: Slider(
                   min: 0,
@@ -146,7 +177,13 @@ class _TheaterControlsState extends State<TheaterControls> {
             ),
             const SizedBox(width: 8),
             IconButton(
-              icon: Icon(Icons.settings_rounded, color: widget.isSettingsOpen ? AppPalette.primary : AppPalette.white, size: 26),
+              icon: Icon(
+                Icons.settings_rounded,
+                color: widget.isSettingsOpen
+                    ? AppPalette.primary
+                    : AppPalette.white,
+                size: 26,
+              ),
               onPressed: widget.onToggleSettings,
             ),
           ],

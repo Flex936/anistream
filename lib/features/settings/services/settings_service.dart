@@ -12,10 +12,10 @@ class AppSettings {
   });
 
   factory AppSettings.defaults() => const AppSettings(
-        filterEcchi: true,
-        hardwareDecoding: 'auto',
-        autoPlayRecommended: false,
-      );
+    filterEcchi: true,
+    hardwareDecoding: 'auto',
+    autoPlayRecommended: false,
+  );
 }
 
 class SettingsService {

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../theater/theater_screen.dart';
+import '../../../data/anilist/models/anime.dart';
 import '../../../data/torrent/models/torrent.dart';
 import '../../../core/theme/app_palette.dart';
 import 'torrent_tile.dart';
 
 class EpisodeTile extends StatefulWidget {
+  final Anime anime;
   final int episodeNumber;
   final bool isExpanded;
   final Future<List<Torrent>>? torrentFuture;
@@ -13,6 +15,7 @@ class EpisodeTile extends StatefulWidget {
 
   const EpisodeTile({
     super.key,
+    required this.anime,
     required this.episodeNumber,
     required this.isExpanded,
     this.torrentFuture,
@@ -215,6 +218,7 @@ class _EpisodeTileState extends State<EpisodeTile> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => TheaterScreen(
+                          anime: widget.anime,
                           episode: widget.episodeNumber,
                           torrent: torrents[i],
                         ),

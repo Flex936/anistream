@@ -50,12 +50,20 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.video_library_outlined, color: AppPalette.primary, size: 22),
+                    const Icon(
+                      Icons.video_library_outlined,
+                      color: AppPalette.primary,
+                      size: 22,
+                    ),
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Text(
                         'This is a batch torrent',
-                        style: TextStyle(color: AppPalette.textMain, fontSize: 16, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          color: AppPalette.textMain,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
@@ -67,7 +75,10 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                   requestedEpisode != null
                       ? "We couldn't confidently match Episode $requestedEpisode inside it — pick the right file below."
                       : 'Multiple episodes were found inside this torrent — pick one to start streaming.',
-                  style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
+                  style: const TextStyle(
+                    color: AppPalette.textMuted,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               const Divider(color: AppPalette.border, height: 1),
@@ -78,7 +89,9 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                   itemCount: files.length,
                   itemBuilder: (context, i) {
                     final f = files[i];
-                    final isSuggested = requestedEpisode != null && f.guessedEpisode == requestedEpisode;
+                    final isSuggested =
+                        requestedEpisode != null &&
+                        f.guessedEpisode == requestedEpisode;
 
                     return ListTile(
                       autofocus: i == 0,
@@ -87,35 +100,61 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       leading: CircleAvatar(
                         radius: 16,
-                        backgroundColor: isSuggested ? AppPalette.primary.withValues(alpha: 0.2) : AppPalette.white.withValues(alpha: 0.08),
+                        backgroundColor: isSuggested
+                            ? AppPalette.primary.withValues(alpha: 0.2)
+                            : AppPalette.white.withValues(alpha: 0.08),
                         child: Text(
                           f.guessedEpisode?.toString() ?? '?',
                           style: TextStyle(
-                            color: isSuggested ? AppPalette.primary : AppPalette.textMuted,
+                            color: isSuggested
+                                ? AppPalette.primary
+                                : AppPalette.textMuted,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                       title: Text(
-                        f.guessedEpisode != null ? 'Episode ${f.guessedEpisode}' : f.name,
+                        f.guessedEpisode != null
+                            ? 'Episode ${f.guessedEpisode}'
+                            : f.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          color: AppPalette.textMain,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       subtitle: Text(
                         f.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: AppPalette.textMuted, fontSize: 11),
+                        style: const TextStyle(
+                          color: AppPalette.textMuted,
+                          fontSize: 11,
+                        ),
                       ),
                       trailing: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           if (isSuggested)
-                            const Text('Suggested', style: TextStyle(color: AppPalette.primary, fontSize: 10, fontWeight: FontWeight.w700)),
-                          Text(_formatSize(f.size), style: const TextStyle(color: AppPalette.textMuted, fontSize: 11)),
+                            const Text(
+                              'Suggested',
+                              style: TextStyle(
+                                color: AppPalette.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          Text(
+                            _formatSize(f.size),
+                            style: const TextStyle(
+                              color: AppPalette.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
                         ],
                       ),
                       onTap: () => onSelect(f.index),

@@ -15,7 +15,7 @@ abstract final class AppRouter {
         );
 
       // Add future routes here (e.g., '/login', '/onboarding')
-      
+
       default:
         // Fallback route for safety
         return MaterialPageRoute(
@@ -24,7 +24,10 @@ abstract final class AppRouter {
             body: Center(
               child: Text(
                 'Route not found!',
-                style: TextStyle(color: AppPalette.statusCancelled, fontSize: 18),
+                style: TextStyle(
+                  color: AppPalette.statusCancelled,
+                  fontSize: 18,
+                ),
               ),
             ),
           ),

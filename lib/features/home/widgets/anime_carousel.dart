@@ -179,17 +179,9 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                         itemBuilder: (context, i) {
                           return SizedBox(
                             width: 170,
+                            // ── FIXED: Removed the aggressive ensureVisible callback ──
                             child: Focus(
                               autofocus: widget.autofocusFirst && i == 0,
-                              onFocusChange: (f) {
-                                if (f) {
-                                  Scrollable.ensureVisible(
-                                    context,
-                                    alignment: 0.5,
-                                    duration: const Duration(milliseconds: 250),
-                                  );
-                                }
-                              },
                               child: AnimeCard(
                                 anime: items[i],
                                 onSelect: widget.onSelectAnime,

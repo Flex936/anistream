@@ -23,8 +23,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   bool _loading = true;
   String? _error;
   List<MediaList> _lists = [];
-  String _activeStatus = 'CURRENT'; 
-  
+  String _activeStatus = 'CURRENT';
+
   bool _isListView = false;
   String? _hoveredBanner;
 
@@ -43,17 +43,34 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
   void _scrollToTop() {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      _scrollController.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     }
   }
 
   Future<void> _fetchWatchlist() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final lists = await _api.getUserWatchlist();
-      if (mounted) setState(() { _lists = lists; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _lists = lists;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -89,20 +106,20 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget _buildEmptyState() {
     return switch (_activeStatus) {
       'CURRENT' => const _EmptyPane(
-          icon: Icons.play_circle_outline_rounded, 
-          title: 'No Active Shows', 
-          subtitle: 'Start watching something to see it here.',
-        ),
+        icon: Icons.play_circle_outline_rounded,
+        title: 'No Active Shows',
+        subtitle: 'Start watching something to see it here.',
+      ),
       'PLANNING' => const _EmptyPane(
-          icon: Icons.bookmark_outline_rounded, 
-          title: 'Empty Planner', 
-          subtitle: 'Queue up some anime for later.',
-        ),
+        icon: Icons.bookmark_outline_rounded,
+        title: 'Empty Planner',
+        subtitle: 'Queue up some anime for later.',
+      ),
       _ => const _EmptyPane(
-          icon: Icons.check_circle_outline_rounded, 
-          title: 'Nothing Completed', 
-          subtitle: 'Finish a series to add it to your collection.',
-        ),
+        icon: Icons.check_circle_outline_rounded,
+        title: 'Nothing Completed',
+        subtitle: 'Finish a series to add it to your collection.',
+      ),
     };
   }
 
@@ -121,13 +138,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                     fit: StackFit.expand,
                     children: [
                       Image.network(
-                        _hoveredBanner!, 
+                        _hoveredBanner!,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const ColoredBox(color: AppPalette.base),
+                        errorBuilder: (context, error, stackTrace) =>
+                            const ColoredBox(color: AppPalette.base),
                       ),
                       BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-                        child: Container(color: AppPalette.base.withValues(alpha: 0.85)),
+                        child: Container(
+                          color: AppPalette.base.withValues(alpha: 0.85),
+                        ),
                       ),
                     ],
                   )
@@ -148,10 +168,18 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                   child: Wrap(
                     alignment: WrapAlignment.start,
                     crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 32, 
+                    spacing: 32,
                     runSpacing: 16,
                     children: [
-                      const Text('My Library', style: TextStyle(color: AppPalette.textMain, fontSize: 24, fontWeight: FontWeight.w600, letterSpacing: -0.4)),
+                      const Text(
+                        'My Library',
+                        style: TextStyle(
+                          color: AppPalette.textMain,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.4,
+                        ),
+                      ),
                       Wrap(
                         spacing: 16,
                         runSpacing: 16,
@@ -166,12 +194,26 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: Icon(Icons.grid_view_rounded, size: 20, color: !_isListView ? AppPalette.primary : AppPalette.textMuted),
-                                  onPressed: () => setState(() => _isListView = false),
+                                  icon: Icon(
+                                    Icons.grid_view_rounded,
+                                    size: 20,
+                                    color: !_isListView
+                                        ? AppPalette.primary
+                                        : AppPalette.textMuted,
+                                  ),
+                                  onPressed: () =>
+                                      setState(() => _isListView = false),
                                 ),
                                 IconButton(
-                                  icon: Icon(Icons.view_list_rounded, size: 20, color: _isListView ? AppPalette.primary : AppPalette.textMuted),
-                                  onPressed: () => setState(() => _isListView = true),
+                                  icon: Icon(
+                                    Icons.view_list_rounded,
+                                    size: 20,
+                                    color: _isListView
+                                        ? AppPalette.primary
+                                        : AppPalette.textMuted,
+                                  ),
+                                  onPressed: () =>
+                                      setState(() => _isListView = true),
                                 ),
                               ],
                             ),
@@ -187,19 +229,27 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 _TabButton(
-                                  icon: Icons.play_arrow_rounded, label: 'Watching',
+                                  icon: Icons.play_arrow_rounded,
+                                  label: 'Watching',
                                   active: _activeStatus == 'CURRENT',
-                                  onTap: () => setState(() => _activeStatus = 'CURRENT'),
+                                  onTap: () =>
+                                      setState(() => _activeStatus = 'CURRENT'),
                                 ),
                                 _TabButton(
-                                  icon: Icons.calendar_today_outlined, label: 'Planning',
+                                  icon: Icons.calendar_today_outlined,
+                                  label: 'Planning',
                                   active: _activeStatus == 'PLANNING',
-                                  onTap: () => setState(() => _activeStatus = 'PLANNING'),
+                                  onTap: () => setState(
+                                    () => _activeStatus = 'PLANNING',
+                                  ),
                                 ),
                                 _TabButton(
-                                  icon: Icons.check_circle_outline_rounded, label: 'Watched',
+                                  icon: Icons.check_circle_outline_rounded,
+                                  label: 'Watched',
                                   active: _activeStatus == 'COMPLETED',
-                                  onTap: () => setState(() => _activeStatus = 'COMPLETED'),
+                                  onTap: () => setState(
+                                    () => _activeStatus = 'COMPLETED',
+                                  ),
                                 ),
                               ],
                             ),
@@ -211,11 +261,23 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 ),
 
                 if (_loading)
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.5, child: const _LoadingPane())
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: const _LoadingPane(),
+                  )
                 else if (_error != null)
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.5, child: _ErrorPane(message: _error!, onRetry: _fetchWatchlist))
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: _ErrorPane(
+                      message: _error!,
+                      onRetry: _fetchWatchlist,
+                    ),
+                  )
                 else if (_activeEntries.isEmpty)
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.5, child: _buildEmptyState())
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: _buildEmptyState(),
+                  )
                 else
                   _isListView ? _buildListLayout() : _buildGridLayout(),
               ],
@@ -231,7 +293,9 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cols = isWatching ? _landscapeColumns(constraints.maxWidth) : _verticalColumns(constraints.maxWidth);
+        final cols = isWatching
+            ? _landscapeColumns(constraints.maxWidth)
+            : _verticalColumns(constraints.maxWidth);
         final aspectRatio = isWatching ? 1.77 : 0.52;
 
         return GridView.builder(
@@ -247,13 +311,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
           itemCount: _activeEntries.length,
           itemBuilder: (_, i) {
             final entry = _activeEntries[i];
-            final hoverImage = entry.media.bannerImage ?? entry.media.coverImage?.display;
+            final hoverImage =
+                entry.media.bannerImage ?? entry.media.coverImage?.display;
 
             if (isWatching) {
               return Focus(
                 canRequestFocus: false,
                 skipTraversal: true,
-                onFocusChange: (f) { if (f && i == 0) _scrollToTop(); },
+                onFocusChange: (f) {
+                  if (f && i == 0) _scrollToTop();
+                },
                 child: HeroCard(
                   entry: entry,
                   autofocus: i == 0,
@@ -265,12 +332,14 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               return Focus(
                 canRequestFocus: false,
                 skipTraversal: true,
-                onFocusChange: (f) { if (f && i == 0) _scrollToTop(); },
+                onFocusChange: (f) {
+                  if (f && i == 0) _scrollToTop();
+                },
                 child: WatchlistCard(
                   entry: entry,
                   autofocus: i == 0,
                   listStatus: _activeStatus,
-                  showProgress: false, 
+                  showProgress: false,
                   onTap: () => widget.onSelectAnime?.call(entry.media),
                   onHover: (hovered) => _handleHover(hoverImage, hovered),
                 ),
@@ -292,13 +361,19 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       itemBuilder: (_, i) => Focus(
         canRequestFocus: false,
         skipTraversal: true,
-        onFocusChange: (f) { if (f && i == 0) _scrollToTop(); },
+        onFocusChange: (f) {
+          if (f && i == 0) _scrollToTop();
+        },
         child: ListCard(
           entry: _activeEntries[i],
           autofocus: i == 0,
           showProgress: _activeStatus == 'CURRENT',
           onTap: () => widget.onSelectAnime?.call(_activeEntries[i].media),
-          onHover: (hovered) => _handleHover(_activeEntries[i].media.bannerImage ?? _activeEntries[i].media.coverImage?.display, hovered),
+          onHover: (hovered) => _handleHover(
+            _activeEntries[i].media.bannerImage ??
+                _activeEntries[i].media.coverImage?.display,
+            hovered,
+          ),
         ),
       ),
     );
@@ -307,7 +382,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
 // ── Private sub-widgets for Screen ──
 
-// ── FIXED: Converted to StatefulWidget for rich hover interactions ──
 class _TabButton extends StatefulWidget {
   final IconData icon;
   final String label;
@@ -332,7 +406,9 @@ class _TabButtonState extends State<_TabButton> {
   Widget build(BuildContext context) {
     final bgColor = widget.active
         ? AppPalette.primary
-        : (_hovered ? AppPalette.white.withValues(alpha: 0.08) : AppPalette.transparent);
+        : (_hovered
+              ? AppPalette.white.withValues(alpha: 0.08)
+              : AppPalette.transparent);
 
     final contentColor = widget.active
         ? AppPalette.white
@@ -359,7 +435,13 @@ class _TabButtonState extends State<_TabButton> {
             color: bgColor,
             borderRadius: BorderRadius.circular(8),
             boxShadow: widget.active
-                ? [BoxShadow(color: AppPalette.primary.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 2))]
+                ? [
+                    BoxShadow(
+                      color: AppPalette.primary.withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
                 : const [],
           ),
           child: Row(
@@ -386,7 +468,12 @@ class _TabButtonState extends State<_TabButton> {
 class _LoadingPane extends StatelessWidget {
   const _LoadingPane();
   @override
-  Widget build(BuildContext context) => const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary), strokeWidth: 2.5));
+  Widget build(BuildContext context) => const Center(
+    child: CircularProgressIndicator(
+      valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
+      strokeWidth: 2.5,
+    ),
+  );
 }
 
 class _EmptyPane extends StatelessWidget {
@@ -394,7 +481,11 @@ class _EmptyPane extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _EmptyPane({required this.icon, required this.title, required this.subtitle});
+  const _EmptyPane({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -403,15 +494,32 @@ class _EmptyPane extends StatelessWidget {
         width: double.infinity,
         margin: const EdgeInsets.fromLTRB(32, 0, 32, 32),
         padding: const EdgeInsets.symmetric(vertical: 48),
-        decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppPalette.border, style: BorderStyle.solid)),
+        decoration: BoxDecoration(
+          color: AppPalette.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppPalette.border,
+            style: BorderStyle.solid,
+          ),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: AppPalette.textMuted, size: 48),
             const SizedBox(height: 16),
-            Text(title, style: const TextStyle(color: AppPalette.textMain, fontSize: 16, fontWeight: FontWeight.w600)),
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppPalette.textMain,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(subtitle, style: const TextStyle(color: AppPalette.textMuted, fontSize: 13)),
+            Text(
+              subtitle,
+              style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
+            ),
           ],
         ),
       ),
@@ -430,20 +538,38 @@ class _ErrorPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off_rounded, color: AppPalette.textMuted, size: 52),
+          const Icon(
+            Icons.wifi_off_rounded,
+            color: AppPalette.textMuted,
+            size: 52,
+          ),
           const SizedBox(height: 16),
-          const Text('Could not load watchlist', style: TextStyle(color: AppPalette.textMain, fontSize: 17, fontWeight: FontWeight.w600)),
+          const Text(
+            'Could not load watchlist',
+            style: TextStyle(
+              color: AppPalette.textMain,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(message, textAlign: TextAlign.center, style: const TextStyle(color: AppPalette.textMuted, fontSize: 13)),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
+            ),
           ),
           const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh_rounded),
             label: const Text('Try again'),
-            style: OutlinedButton.styleFrom(foregroundColor: AppPalette.primary, side: const BorderSide(color: AppPalette.primary)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppPalette.primary,
+              side: const BorderSide(color: AppPalette.primary),
+            ),
           ),
         ],
       ),

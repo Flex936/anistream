@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-import '../../data/anilist/models/anime.dart'; 
+import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../core/theme/app_palette.dart';
 import 'widgets/navbar.dart';
@@ -28,7 +28,7 @@ class _AppShellState extends State<AppShell> {
   bool _isLoggedIn = false;
   bool _loginBusy = false;
   String _searchQuery = '';
-  
+
   bool _isScrolled = false;
 
   @override
@@ -42,7 +42,7 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _previousView = _currentView;
       _currentView = view;
-      _isScrolled = false; 
+      _isScrolled = false;
     });
   }
 
@@ -52,9 +52,10 @@ class _AppShellState extends State<AppShell> {
 
   void _handleBack() {
     setState(() {
-      _currentView = _previousView ?? HomeScreen(onSelectAnime: _handleSelectAnime);
+      _currentView =
+          _previousView ?? HomeScreen(onSelectAnime: _handleSelectAnime);
       _previousView = null;
-      _isScrolled = false; 
+      _isScrolled = false;
     });
   }
 
@@ -68,7 +69,9 @@ class _AppShellState extends State<AppShell> {
       _goHome();
       return;
     }
-    _navigateTo(SearchResultsScreen(query: query, onSelectAnime: _handleSelectAnime));
+    _navigateTo(
+      SearchResultsScreen(query: query, onSelectAnime: _handleSelectAnime),
+    );
   }
 
   void _goHome() {
@@ -89,7 +92,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _handleLogin() async {
-    if (_loginBusy) return; 
+    if (_loginBusy) return;
 
     if (_isLoggedIn) {
       await _auth.logout();
@@ -126,7 +129,7 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppPalette.base,
-      extendBodyBehindAppBar: true, 
+      extendBodyBehindAppBar: true,
       appBar: AniStreamNavBar(
         searchQuery: _searchQuery,
         isLoggedIn: _isLoggedIn,
@@ -134,9 +137,11 @@ class _AppShellState extends State<AppShell> {
         onHome: _goHome,
         onSearch: _handleTextChange,
         onSubmitted: _handleSubmit,
-        onSelectAnime: _handleSelectAnime, 
-        onScheduled: () => _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
-        onWatchlist: () => _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
+        onSelectAnime: _handleSelectAnime,
+        onScheduled: () =>
+            _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
+        onWatchlist: () =>
+            _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
         onLogin: _handleLogin,
         onSettings: () => showSettingsMenu(context),
       ),
@@ -154,7 +159,7 @@ class _AppShellState extends State<AppShell> {
                 });
               }
             }
-            return false; 
+            return false;
           },
           child: _currentView,
         ),

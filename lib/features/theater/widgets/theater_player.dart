@@ -7,7 +7,11 @@ class FrostedIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
 
-  const FrostedIconButton({super.key, required this.icon, required this.onPressed});
+  const FrostedIconButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +67,11 @@ class TheaterLoadingOverlay extends StatelessWidget {
   final int episode;
   final StreamingController controller;
 
-  const TheaterLoadingOverlay({super.key, required this.episode, required this.controller});
+  const TheaterLoadingOverlay({
+    super.key,
+    required this.episode,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -74,20 +82,32 @@ class TheaterLoadingOverlay extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(
-              width: 48, height: 48,
+              width: 48,
+              height: 48,
               child: CircularProgressIndicator(
                 strokeWidth: 3,
                 valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
               ),
             ),
             const SizedBox(height: 32),
-            Text('Episode $episode', style: const TextStyle(color: AppPalette.white, fontSize: 18, fontWeight: FontWeight.w600)),
+            Text(
+              'Episode $episode',
+              style: const TextStyle(
+                color: AppPalette.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 32),
             Text(
-              controller.hasError ? controller.statusText : controller.statusText, 
+              controller.hasError
+                  ? controller.statusText
+                  : controller.statusText,
               style: TextStyle(
-                color: controller.hasError ? AppPalette.statusCancelled : AppPalette.primary, 
-                fontSize: 14, 
+                color: controller.hasError
+                    ? AppPalette.statusCancelled
+                    : AppPalette.primary,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.center,

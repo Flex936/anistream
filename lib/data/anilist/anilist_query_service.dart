@@ -35,24 +35,27 @@ class AnilistQueryService {
 
   final http.Client _httpClient;
 
-  AnilistQueryService({http.Client? client}) : _httpClient = client ?? http.Client();
+  AnilistQueryService({http.Client? client})
+    : _httpClient = client ?? http.Client();
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (_token != null) 'Authorization': 'Bearer $_token',
-      };
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    if (_token != null) 'Authorization': 'Bearer $_token',
+  };
 
   Future<int?> _resolveViewerId() async {
     if (_viewerId != null) return _viewerId;
     if (!isLoggedIn) return null;
 
     try {
-      final resp = await _httpClient.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({'query': 'query { Viewer { id } }'}),
-      ).timeout(const Duration(seconds: 10));
+      final resp = await _httpClient
+          .post(
+            Uri.parse(_endpoint),
+            headers: _headers,
+            body: jsonEncode({'query': 'query { Viewer { id } }'}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (resp.statusCode != 200) return null;
 
@@ -72,36 +75,53 @@ class AnilistQueryService {
     return 'WINTER';
   }
 
-  Future<List<Anime>> _execute(String query, Map<String, dynamic> variables) async {
+  Future<List<Anime>> _execute(
+    String query,
+    Map<String, dynamic> variables,
+  ) async {
     try {
-      final response = await _httpClient.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({'query': query, 'variables': variables}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _httpClient
+          .post(
+            Uri.parse(_endpoint),
+            headers: _headers,
+            body: jsonEncode({'query': query, 'variables': variables}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       _assertResponse(response);
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final mediaList = decoded['data']?['Page']?['media'] as List<dynamic>? ?? const [];
+      final mediaList =
+          decoded['data']?['Page']?['media'] as List<dynamic>? ?? const [];
 
-      return mediaList.map((raw) => Anime.fromJson(raw as Map<String, dynamic>)).toList();
+      return mediaList
+          .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
+          .toList();
     } on SocketException {
-      throw const AnilistException('No internet connection. Please check your network.');
+      throw const AnilistException(
+        'No internet connection. Please check your network.',
+      );
     } on TimeoutException {
-      throw const AnilistException('Connection timed out. AniList might be down.');
+      throw const AnilistException(
+        'Connection timed out. AniList might be down.',
+      );
     }
   }
 
   void _assertResponse(http.Response response) {
     if (response.statusCode != 200) {
-      throw AnilistException('AniList returned HTTP ${response.statusCode}', statusCode: response.statusCode);
+      throw AnilistException(
+        'AniList returned HTTP ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded.containsKey('errors')) {
       final errors = decoded['errors'] as List<dynamic>;
-      final errorMessage = errors.isNotEmpty ? errors[0]['message'] : 'Unknown GraphQL Error';
+      final errorMessage = errors.isNotEmpty
+          ? errors[0]['message']
+          : 'Unknown GraphQL Error';
       throw AnilistException('GraphQL Error: $errorMessage');
     }
   }
@@ -120,33 +140,48 @@ class AnilistQueryService {
   }
 
   Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) {
-    return _execute(_Queries.allTimePopular, {'page': page, 'perPage': perPage});
+    return _execute(_Queries.allTimePopular, {
+      'page': page,
+      'perPage': perPage,
+    });
   }
 
   Future<List<MediaList>> getUserWatchlist() async {
     if (!isLoggedIn) throw const AnilistException('Not logged in');
     final viewerId = await _resolveViewerId();
-    if (viewerId == null) throw const AnilistException('Could not resolve viewer ID');
+    if (viewerId == null) {
+      throw const AnilistException('Could not resolve viewer ID');
+    }
 
     try {
-      final response = await _httpClient.post(
-        Uri.parse(_endpoint),
-        headers: _headers,
-        body: jsonEncode({
-          'query': _Queries.userWatchlist,
-          'variables': {'userId': viewerId},
-        }),
-      ).timeout(const Duration(seconds: 15));
+      final response = await _httpClient
+          .post(
+            Uri.parse(_endpoint),
+            headers: _headers,
+            body: jsonEncode({
+              'query': _Queries.userWatchlist,
+              'variables': {'userId': viewerId},
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       _assertResponse(response);
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final lists = decoded['data']?['MediaListCollection']?['lists'] as List<dynamic>? ?? const [];
-      
-      return lists.map((r) => MediaList.fromJson(r as Map<String, dynamic>)).toList();
+      final lists =
+          decoded['data']?['MediaListCollection']?['lists'] as List<dynamic>? ??
+          const [];
+
+      return lists
+          .map((r) => MediaList.fromJson(r as Map<String, dynamic>))
+          .toList();
     } on SocketException {
-      throw const AnilistException('No internet connection. Please check your network.');
+      throw const AnilistException(
+        'No internet connection. Please check your network.',
+      );
     } on TimeoutException {
-      throw const AnilistException('Connection timed out. AniList might be down.');
+      throw const AnilistException(
+        'Connection timed out. AniList might be down.',
+      );
     }
   }
 

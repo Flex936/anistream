@@ -18,9 +18,9 @@ class AnimeTitle {
   const AnimeTitle({this.romaji, this.english});
 
   factory AnimeTitle.fromJson(Map<String, dynamic> json) => AnimeTitle(
-        romaji: json['romaji'] as String?,
-        english: json['english'] as String?,
-      );
+    romaji: json['romaji'] as String?,
+    english: json['english'] as String?,
+  );
 
   String get display => romaji ?? english ?? 'Unknown Title';
 }
@@ -72,15 +72,21 @@ class Anime {
 
     return Anime(
       id: (json['id'] as num).toInt(),
-      title: rawTitle != null ? AnimeTitle.fromJson(rawTitle) : const AnimeTitle(),
+      title: rawTitle != null
+          ? AnimeTitle.fromJson(rawTitle)
+          : const AnimeTitle(),
       coverImage: rawCover != null ? AnimeCoverImage.fromJson(rawCover) : null,
       bannerImage: json['bannerImage'] as String?,
       description: json['description'] as String?,
       episodes: (json['episodes'] as num?)?.toInt(),
       status: json['status'] as String?,
       averageScore: (json['averageScore'] as num?)?.toInt(),
-      genres: (json['genres'] as List<dynamic>?)?.map((e) => e.toString()).toList(),
-      nextAiringEpisode: rawNextEp != null ? NextAiringEpisode.fromJson(rawNextEp) : null,
+      genres: (json['genres'] as List<dynamic>?)
+          ?.map((e) => e.toString())
+          .toList(),
+      nextAiringEpisode: rawNextEp != null
+          ? NextAiringEpisode.fromJson(rawNextEp)
+          : null,
     );
   }
 }
