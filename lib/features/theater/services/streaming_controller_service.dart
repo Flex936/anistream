@@ -48,18 +48,21 @@ class StreamingController extends ChangeNotifier {
       await LibtorrentFlutter.init();
       final engine = LibtorrentFlutter.instance;
 
-      _torrentId = engine.addMagnet(magnetUri);
-
       _torrentSub = engine.torrentUpdates.listen(
         (torrents) => _handleTorrentUpdate(engine, torrents),
         onError: (e) => _handleError('Engine sync failed: $e'),
       );
+
+      _torrentId = engine.addMagnet(magnetUri);
     } catch (e) {
       _handleError('Failed to initialize engine: $e');
     }
   }
 
-  void _handleTorrentUpdate(LibtorrentFlutter engine, Map<int, TorrentInfo> torrents) {
+  void _handleTorrentUpdate(
+    LibtorrentFlutter engine,
+    Map<int, TorrentInfo> torrents,
+  ) {
     if (_torrentId == null || !torrents.containsKey(_torrentId)) return;
     final t = torrents[_torrentId]!;
 
@@ -90,17 +93,27 @@ class StreamingController extends ChangeNotifier {
       }
 
       // ── Batch torrent: multiple episodes packed into one torrent ──
-      _batchFiles = videoFiles.map((f) => BatchFileOption(
-        index: f.index,
-        name: f.name,
-        size: f.size,
-        guessedEpisode: _guessEpisodeNumber(f.name),
-      )).toList()..sort((a, b) => a.index.compareTo(b.index));
+      _batchFiles =
+          videoFiles
+              .map(
+                (f) => BatchFileOption(
+                  index: f.index,
+                  name: f.name,
+                  size: f.size,
+                  guessedEpisode: _guessEpisodeNumber(f.name),
+                ),
+              )
+              .toList()
+            ..sort((a, b) => a.index.compareTo(b.index));
 
       if (_requestedEpisode != null) {
-        final matches = _batchFiles.where((f) => f.guessedEpisode == _requestedEpisode).toList();
+        final matches = _batchFiles
+            .where((f) => f.guessedEpisode == _requestedEpisode)
+            .toList();
         if (matches.length == 1) {
-          _updateStatus('Found Episode $_requestedEpisode in batch, starting...');
+          _updateStatus(
+            'Found Episode $_requestedEpisode in batch, starting...',
+          );
           _beginStream(engine, fileIndex: matches.first.index);
           return;
         }
@@ -127,7 +140,7 @@ class StreamingController extends ChangeNotifier {
       final streamInfo = fileIndex == null
           ? engine.startStream(_torrentId!)
           : engine.startStream(_torrentId!, fileIndex: fileIndex);
-      
+
       _streamUrl = streamInfo.url;
       _isReadyToPlay = true;
       _updateStatus('Starting playback engine...');
@@ -149,10 +162,10 @@ class StreamingController extends ChangeNotifier {
     const resolutionNumbers = {480, 720, 1080, 2160};
 
     final patterns = <RegExp>[
-      RegExp(r's\d{1,2}e(\d{1,3})'), 
-      RegExp(r'(?:^|[\[\s_.-])ep?(?:isode)?\s*\.?\s*(\d{1,3})(?=[\]\s_.-]|$)'), 
-      RegExp(r'-\s*(\d{1,3})(?=\(|\[|v\d|\.|\s|$)'), 
-      RegExp(r'(?:^|[\s_.])(\d{1,3})(?=[\s_.]|$)'), 
+      RegExp(r's\d{1,2}e(\d{1,3})'),
+      RegExp(r'(?:^|[\[\s_.-])ep?(?:isode)?\s*\.?\s*(\d{1,3})(?=[\]\s_.-]|$)'),
+      RegExp(r'-\s*(\d{1,3})(?=\(|\[|v\d|\.|\s|$)'),
+      RegExp(r'(?:^|[\s_.])(\d{1,3})(?=[\s_.]|$)'),
     ];
 
     for (final pattern in patterns) {

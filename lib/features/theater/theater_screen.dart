@@ -63,7 +63,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     if (platform is NativePlayer) {
       // Optional debug logging, uncomment if needed:
       // await platform.setProperty('msg-level', 'all=v');
-      
+
       if (hwdec == 'auto') {
         if (Platform.isLinux || Platform.isWindows) {
           platform.setProperty('hwdec', 'auto-safe');
@@ -100,10 +100,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.keyK) {
       _player.playOrPause();
-    } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyJ) {
+    } else if (key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.keyJ) {
       final target = _player.state.position - const Duration(seconds: 10);
       _player.seek(target.isNegative ? Duration.zero : target);
-    } else if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyL) {
+    } else if (key == LogicalKeyboardKey.arrowRight ||
+        key == LogicalKeyboardKey.keyL) {
       final target = _player.state.position + const Duration(seconds: 10);
       final duration = _player.state.duration;
       _player.seek(target > duration ? duration : target);
@@ -120,7 +122,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
         _toggleFullscreen();
       }
     }
-    
+
     _startHideControlsTimer();
     return KeyEventResult.handled;
   }
@@ -129,7 +131,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _hideControlsTimer?.cancel();
     if (!mounted) return;
     setState(() => _showControls = true);
-    
+
     _hideControlsTimer = Timer(const Duration(seconds: 3), () {
       if (mounted && _player.state.playing && !_isSettingsOpen) {
         setState(() => _showControls = false);
@@ -148,8 +150,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _isClosing = true;
 
     if (mounted) {
-      setState(() => _videoInitialized = false); 
-      await WidgetsBinding.instance.endOfFrame; 
+      setState(() => _videoInitialized = false);
+      await WidgetsBinding.instance.endOfFrame;
     }
 
     _hideControlsTimer?.cancel();
@@ -157,7 +159,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     await _player.pause();
     await _player.stop();
-    await _player.dispose(); 
+    await _player.dispose();
     _torrentController.dispose();
 
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
@@ -182,9 +184,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
         await _player.dispose();
         _torrentController.dispose();
         if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-          if (await windowManager.isFullScreen()) {
-            await windowManager.setFullScreen(false);
-          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) windowManager.setFullScreen(true);
+          });
         }
       });
     }
@@ -201,7 +203,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
         backgroundColor: AppPalette.black,
         body: ExcludeSemantics(
           child: MouseRegion(
-            cursor: _showControls ? SystemMouseCursors.basic : SystemMouseCursors.none,
+            cursor: _showControls
+                ? SystemMouseCursors.basic
+                : SystemMouseCursors.none,
             onHover: (_) => _startHideControlsTimer(),
             child: GestureDetector(
               onTap: () {
@@ -215,8 +219,19 @@ class _TheaterScreenState extends State<TheaterScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (_videoInitialized)
-                    Video(controller: _videoController, controls: NoVideoControls),
+                  Opacity(
+                    opacity: _videoInitialized ? 1.0 : 0.0,
+                    child: Video(
+                      controller: _videoController,
+                      controls: NoVideoControls,
+                    ),
+                  ),
+                  // Always mounted, even while loading — gives media_kit_video time to
+                  // set up its texture/surface well before playback actually starts.
+                  Video(
+                    controller: _videoController,
+                    controls: NoVideoControls,
+                  ),
 
                   if (_videoInitialized)
                     AnimatedOpacity(
@@ -227,33 +242,30 @@ class _TheaterScreenState extends State<TheaterScreen> {
                         child: Stack(
                           children: [
                             Positioned(
-                              bottom: 0, left: 0, right: 0, height: 200,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
-                                    colors: [AppPalette.black.withValues(alpha: 0.9), AppPalette.transparent],
-                                  ),
+                              top: 40,
+                              left: 24,
+                              right: 24,
+                              child: GestureDetector(
+                                onTap: () {},
+                                child: TheaterTopBar(
+                                  episode: widget.episode,
+                                  onBack: _exitTheater,
                                 ),
                               ),
                             ),
                             Positioned(
-                              top: 40, left: 24, right: 24,
-                              child: GestureDetector(
-                                onTap: () {}, 
-                                child: TheaterTopBar(episode: widget.episode, onBack: _exitTheater),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 24, left: 32, right: 32,
+                              bottom: 24,
+                              left: 32,
+                              right: 32,
                               child: GestureDetector(
                                 onTap: () {},
                                 child: TheaterControls(
                                   player: _player,
                                   isSettingsOpen: _isSettingsOpen,
                                   onInteract: _startHideControlsTimer,
-                                  onToggleSettings: () => setState(() => _isSettingsOpen = !_isSettingsOpen),
+                                  onToggleSettings: () => setState(
+                                    () => _isSettingsOpen = !_isSettingsOpen,
+                                  ),
                                 ),
                               ),
                             ),
@@ -264,7 +276,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
                   if (_isSettingsOpen)
                     Positioned(
-                      bottom: 110, right: 32,
+                      bottom: 110,
+                      right: 32,
                       child: TheaterSettingsMenu(
                         player: _player,
                         onClose: () => setState(() => _isSettingsOpen = false),
