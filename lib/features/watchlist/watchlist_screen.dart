@@ -21,7 +21,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   final AnilistQueryService _api = AnilistQueryService();
   final ScrollController _scrollController = ScrollController();
 
-  // ── Segmented Pagination State ──
   final Map<String, List<MediaListEntry>> _entries = {
     'CURRENT': [],
     'PLANNING': [],
@@ -46,7 +45,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _fetchTab(_activeStatus); // Only fetch the active tab initially
+    _fetchTab(_activeStatus);
   }
 
   @override
@@ -97,12 +96,18 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       final result = await _api.getUserWatchlist(
         status: status,
         page: _pages[status]!,
-        perPage: 36, // Multiple of 2,3,4,6 for clean grids
+        perPage: 36,
       );
 
       if (mounted) {
+        // ── Local Deduplication ──
+        final existingIds = _entries[status]!.map((e) => e.media.id).toSet();
+        final newUniqueEntries = result.entries
+            .where((e) => !existingIds.contains(e.media.id))
+            .toList();
+
         setState(() {
-          _entries[status]!.addAll(result.entries);
+          _entries[status]!.addAll(newUniqueEntries);
           _hasNext[status] = result.hasNextPage;
           _pages[status] = _pages[status]! + 1;
           _initialLoading = false;
@@ -179,6 +184,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+        // Background banner (no changes needed)
         Positioned.fill(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 600),
@@ -207,15 +213,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
           ),
         ),
 
+        // ── Total Sliver Implementation ──
         Positioned.fill(
-          child: SingleChildScrollView(
+          child: CustomScrollView(
             controller: _scrollController,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 96),
+            slivers: [
+              const SliverToBoxAdapter(child: SizedBox(height: 96)),
 
-                Padding(
+              // Title and Tabs
+              SliverToBoxAdapter(
+                child: Padding(
                   padding: const EdgeInsets.fromLTRB(32, 0, 32, 24),
                   child: Wrap(
                     alignment: WrapAlignment.start,
@@ -306,31 +313,40 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                     ],
                   ),
                 ),
+              ),
 
-                if (_initialLoading)
-                  SizedBox(
+              // Content States
+              if (_initialLoading)
+                SliverToBoxAdapter(
+                  child: SizedBox(
                     height: MediaQuery.of(context).size.height * 0.5,
                     child: const _LoadingPane(),
-                  )
-                else if (_error != null)
-                  SizedBox(
+                  ),
+                )
+              else if (_error != null)
+                SliverToBoxAdapter(
+                  child: SizedBox(
                     height: MediaQuery.of(context).size.height * 0.5,
                     child: _ErrorPane(
                       message: _error!,
                       onRetry: () => _fetchTab(_activeStatus, refresh: true),
                     ),
-                  )
-                else if (_activeEntries.isEmpty)
-                  SizedBox(
+                  ),
+                )
+              else if (_activeEntries.isEmpty)
+                SliverToBoxAdapter(
+                  child: SizedBox(
                     height: MediaQuery.of(context).size.height * 0.5,
                     child: _buildEmptyState(),
-                  )
-                else
-                  _isListView ? _buildListLayout() : _buildGridLayout(),
+                  ),
+                )
+              else
+                _isListView ? _buildListLayout() : _buildGridLayout(),
 
-                // ── Infinite Scroll Loading Indicator ──
-                if (_fetchingNext)
-                  const Padding(
+              // Loading Indicator at the bottom
+              if (_fetchingNext)
+                const SliverToBoxAdapter(
+                  child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 32),
                     child: Center(
                       child: CircularProgressIndicator(
@@ -341,10 +357,10 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                       ),
                     ),
                   ),
+                ),
 
-                const SizedBox(height: 48), // Bottom padding
-              ],
-            ),
+              const SliverToBoxAdapter(child: SizedBox(height: 48)),
+            ],
           ),
         ),
       ],
@@ -354,90 +370,93 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget _buildGridLayout() {
     final isWatching = _activeStatus == 'CURRENT';
 
-    return LayoutBuilder(
+    return SliverLayoutBuilder(
       builder: (context, constraints) {
         final cols = isWatching
-            ? _landscapeColumns(constraints.maxWidth)
-            : _verticalColumns(constraints.maxWidth);
+            ? _landscapeColumns(constraints.crossAxisExtent)
+            : _verticalColumns(constraints.crossAxisExtent);
         final aspectRatio = isWatching ? 1.77 : 0.52;
 
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+        return SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            crossAxisSpacing: 20,
-            mainAxisSpacing: 24,
-            childAspectRatio: aspectRatio,
-          ),
-          itemCount: _activeEntries.length,
-          itemBuilder: (_, i) {
-            final entry = _activeEntries[i];
-            final hoverImage =
-                entry.media.bannerImage ?? entry.media.coverImage?.display;
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: cols,
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 24,
+              childAspectRatio: aspectRatio,
+            ),
+            delegate: SliverChildBuilderDelegate((context, i) {
+              final entry = _activeEntries[i];
+              final hoverImage =
+                  entry.media.bannerImage ?? entry.media.coverImage?.display;
 
-            if (isWatching) {
-              return Focus(
-                canRequestFocus: false,
-                skipTraversal: true,
-                onFocusChange: (f) {
-                  if (f && i < cols) _scrollToTop();
-                },
-                child: HeroCard(
-                  entry: entry,
-                  autofocus: i == 0,
-                  onTap: () => widget.onSelectAnime?.call(entry.media),
-                  onHover: (hovered) => _handleHover(hoverImage, hovered),
-                ),
-              );
-            } else {
-              return Focus(
-                canRequestFocus: false,
-                skipTraversal: true,
-                onFocusChange: (f) {
-                  if (f && i < cols || i == 0) _scrollToTop();
-                },
-                child: WatchlistCard(
-                  entry: entry,
-                  autofocus: i == 0,
-                  listStatus: _activeStatus,
-                  showProgress: false,
-                  onTap: () => widget.onSelectAnime?.call(entry.media),
-                  onHover: (hovered) => _handleHover(hoverImage, hovered),
-                ),
-              );
-            }
-          },
+              if (isWatching) {
+                return Focus(
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  onFocusChange: (f) {
+                    if (f && i < cols) _scrollToTop();
+                  },
+                  child: HeroCard(
+                    entry: entry,
+                    autofocus: i == 0,
+                    onTap: () => widget.onSelectAnime?.call(entry.media),
+                    onHover: (hovered) => _handleHover(hoverImage, hovered),
+                  ),
+                );
+              } else {
+                return Focus(
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  onFocusChange: (f) {
+                    if (f && i < cols || i == 0) _scrollToTop();
+                  },
+                  child: WatchlistCard(
+                    entry: entry,
+                    autofocus: i == 0,
+                    listStatus: _activeStatus,
+                    showProgress: false,
+                    onTap: () => widget.onSelectAnime?.call(entry.media),
+                    onHover: (hovered) => _handleHover(hoverImage, hovered),
+                  ),
+                );
+              }
+            }, childCount: _activeEntries.length),
+          ),
         );
       },
     );
   }
 
   Widget _buildListLayout() {
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
-      itemCount: _activeEntries.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 16),
-      itemBuilder: (_, i) => Focus(
-        canRequestFocus: false,
-        skipTraversal: true,
-        onFocusChange: (f) {
-          if (f && i == 0) _scrollToTop();
-        },
-        child: ListCard(
-          entry: _activeEntries[i],
-          autofocus: i == 0,
-          showProgress: _activeStatus == 'CURRENT',
-          onTap: () => widget.onSelectAnime?.call(_activeEntries[i].media),
-          onHover: (hovered) => _handleHover(
-            _activeEntries[i].media.bannerImage ??
-                _activeEntries[i].media.coverImage?.display,
-            hovered,
-          ),
-        ),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate((context, i) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Focus(
+              canRequestFocus: false,
+              skipTraversal: true,
+              onFocusChange: (f) {
+                if (f && i == 0) _scrollToTop();
+              },
+              child: ListCard(
+                entry: _activeEntries[i],
+                autofocus: i == 0,
+                showProgress: _activeStatus == 'CURRENT',
+                onTap: () =>
+                    widget.onSelectAnime?.call(_activeEntries[i].media),
+                onHover: (hovered) => _handleHover(
+                  _activeEntries[i].media.bannerImage ??
+                      _activeEntries[i].media.coverImage?.display,
+                  hovered,
+                ),
+              ),
+            ),
+          );
+        }, childCount: _activeEntries.length),
       ),
     );
   }

@@ -226,7 +226,6 @@ class AnilistQueryService {
     return _execute(_Queries.search, variables);
   }
 
-  // ── Lightweight fetch just for episode progress ──
   Future<int?> getMediaProgress(int mediaId) async {
     if (!isLoggedIn) return null;
     try {
@@ -289,7 +288,7 @@ abstract final class _Queries {
     query (\$userId: Int, \$status: MediaListStatus, \$page: Int, \$perPage: Int) {
       Page(page: \$page, perPage: \$perPage) {
         pageInfo { hasNextPage }
-        mediaList(userId: \$userId, type: ANIME, status: \$status, sort: UPDATED_TIME_DESC) {
+        mediaList(userId: \$userId, type: ANIME, status: \$status, sort: [MEDIA_TITLE_ROMAJI, MEDIA_ID_DESC]) {
           progress
           media { ${_Fragments.mediaCore} genres }
         }
