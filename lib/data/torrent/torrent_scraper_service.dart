@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
 
@@ -24,6 +25,62 @@ abstract final class _Regex {
     r'(1080p|720p|480p|2160p|4K)',
     caseSensitive: false,
   );
+}
+
+class _FeedParseRequest {
+  final String xmlBody;
+  final String animeTitle;
+  final int episodeNumber;
+  final int? totalEpisodes;
+  final bool isMovieFallback;
+  final bool batchMode;
+
+  const _FeedParseRequest({
+    required this.xmlBody,
+    required this.animeTitle,
+    required this.episodeNumber,
+    this.totalEpisodes,
+    required this.isMovieFallback,
+    required this.batchMode,
+  });
+}
+
+// ── FIXED: Moved off UI thread ──
+List<Torrent> _parseAndScoreFeed(_FeedParseRequest req) {
+  late XmlDocument document;
+  try {
+    document = XmlDocument.parse(req.xmlBody);
+  } catch (e) {
+    throw Exception('Failed to parse Nyaa RSS feed: invalid XML.');
+  }
+
+  final items = document.findAllElements('item');
+  final titleLow = req.animeTitle.toLowerCase();
+  final targetSeason = TorrentScraperService._extractSeason(titleLow);
+  final epStr = req.episodeNumber.toString().padLeft(2, '0');
+
+  final isMovieQuery =
+      req.isMovieFallback ||
+      titleLow.contains('movie') ||
+      titleLow.contains('film') ||
+      titleLow.contains('gekijouban');
+  final List<Torrent> validTorrents = [];
+
+  for (final item in items) {
+    final torrent = TorrentScraperService._scoreItem(
+      item: item,
+      animeTitle: req.animeTitle,
+      episodeNumber: req.episodeNumber,
+      epStr: epStr,
+      targetSeason: targetSeason,
+      totalEpisodes: req.totalEpisodes,
+      isMovieFallback: req.isMovieFallback,
+      isMovieQuery: isMovieQuery,
+      batchMode: req.batchMode,
+    );
+    if (torrent != null) validTorrents.add(torrent);
+  }
+  return validTorrents;
 }
 
 class TorrentScraperService {
@@ -50,12 +107,7 @@ class TorrentScraperService {
           .replaceAll(_Regex.punct, ' ')
           .replaceAll(_Regex.whitespace, ' ')
           .trim();
-
-      String buildQuery(String t) {
-        if (isMovie) return t;
-        if (batchMode) return t; // no episode number — we want the whole batch
-        return '$t $epStr';
-      }
+      String buildQuery(String t) => isMovie || batchMode ? t : '$t $epStr';
 
       var found = await _searchAndScore(
         searchQuery: buildQuery(safeTitle),
@@ -84,9 +136,6 @@ class TorrentScraperService {
       return found;
     }
 
-    // 1. Anime is finished -> look for a same-season batch release. Batches
-    //    are strictly season-matched (see _scoreItem), so a Season 1 batch
-    //    will never be returned here when we're actually after Season 2.
     if (isFinished) {
       if (title.romaji != null) {
         batchResults = await trySearch(
@@ -102,15 +151,8 @@ class TorrentScraperService {
           batchMode: true,
         );
       }
-      if (batchResults.isNotEmpty) {
-        log("[Scraper] Found batch release for ${title.display}.");
-      }
     }
 
-    // 2. Always also search for individual episodes. This covers shows that
-    //    are still airing, AND the edge case where a finished show simply has
-    //    no batch yet for its current season — we still want to show
-    //    whatever single-episode torrents exist instead of coming back empty.
     if (title.romaji != null) {
       episodeResults = await trySearch(
         title.romaji!,
@@ -125,7 +167,6 @@ class TorrentScraperService {
         batchMode: false,
       );
     }
-
     if (episodeNumber == 1 && episodeResults.isEmpty) {
       if (title.romaji != null) {
         episodeResults = await trySearch(
@@ -143,8 +184,6 @@ class TorrentScraperService {
       }
     }
 
-    // Merge, de-duping by infoHash in case the same release shows up in both
-    // passes (batch copy wins, since it carries the richer isBatch metadata).
     final seenIds = <String>{};
     final combined = <Torrent>[];
     for (final t in [...batchResults, ...episodeResults]) {
@@ -157,7 +196,6 @@ class TorrentScraperService {
         'No seeded torrents found for ${title.display} Episode $epStr',
       );
     }
-
     return combined;
   }
 
@@ -170,10 +208,8 @@ class TorrentScraperService {
     required bool batchMode,
   }) async {
     final feedUrl = Uri.parse(
-      'https://nyaa.si/?page=rss&q=${Uri.encodeComponent(searchQuery)}&c=1_2&f=0'
-      '${batchMode ? '&s=seeders&o=desc' : ''}',
+      'https://nyaa.si/?page=rss&q=${Uri.encodeComponent(searchQuery)}&c=1_2&f=0${batchMode ? '&s=seeders&o=desc' : ''}',
     );
-    log("[Scraper] Nyaa query (batch=$batchMode): $searchQuery");
 
     http.Response response;
     try {
@@ -190,45 +226,23 @@ class TorrentScraperService {
       throw Exception('Nyaa returned HTTP ${response.statusCode}');
     }
 
-    late XmlDocument document;
-    try {
-      document = XmlDocument.parse(response.body);
-    } catch (e) {
-      throw Exception('Failed to parse Nyaa RSS feed: invalid XML.');
-    }
-
-    final items = document.findAllElements('item');
-    final titleLow = animeTitle.toLowerCase();
-    final targetSeason = _extractSeason(titleLow);
-    final epStr = episodeNumber.toString().padLeft(2, '0');
-
-    final isMovieQuery =
-        isMovieFallback ||
-        titleLow.contains('movie') ||
-        titleLow.contains('film') ||
-        titleLow.contains('gekijouban');
-    final List<Torrent> validTorrents = [];
-
-    for (final item in items) {
-      final torrent = _scoreItem(
-        item: item,
+    final validTorrents = await compute(
+      _parseAndScoreFeed,
+      _FeedParseRequest(
+        xmlBody: response.body,
         animeTitle: animeTitle,
         episodeNumber: episodeNumber,
-        epStr: epStr,
-        targetSeason: targetSeason,
         totalEpisodes: totalEpisodes,
         isMovieFallback: isMovieFallback,
-        isMovieQuery: isMovieQuery,
         batchMode: batchMode,
-      );
-      if (torrent != null) validTorrents.add(torrent);
-    }
+      ),
+    );
 
     validTorrents.sort((a, b) => b.score.compareTo(a.score));
     return validTorrents;
   }
 
-  Torrent? _scoreItem({
+  static Torrent? _scoreItem({
     required XmlElement item,
     required String animeTitle,
     required int episodeNumber,
@@ -240,11 +254,9 @@ class TorrentScraperService {
     required bool batchMode,
   }) {
     double score = 100.0;
-
     final rawTitle = item.findElements('title').firstOrNull?.innerText ?? '';
     final tl = rawTitle.toLowerCase();
     final ql = animeTitle.toLowerCase();
-
     final infoHash = item.findElements('nyaa:infoHash').firstOrNull?.innerText;
     final size =
         item.findElements('nyaa:size').firstOrNull?.innerText ?? 'Unknown';
@@ -252,23 +264,18 @@ class TorrentScraperService {
         item.findElements('nyaa:seeders').firstOrNull?.innerText ?? '0';
 
     if (infoHash == null || infoHash.isEmpty) return null;
-
     final seedCount = int.tryParse(seedersStr) ?? 0;
     if (seedCount == 0) return null;
 
     final isBatch = _isBatchRelease(tl);
 
     if (batchMode) {
-      // This pass only cares about genuine batch/complete-series releases.
       if (!isBatch) return null;
     } else if (isBatch) {
-      // Regular per-episode pass: a batch is noise here, push it way down.
       score -= 150;
     }
 
     if (batchMode) {
-      // Strict here: a Season 1 batch must never stand in for Season 2 just
-      // because it's the only batch we found.
       if (_extractSeason(tl) != targetSeason) return null;
       score += 100;
     } else if (_extractSeason(tl) == targetSeason) {
@@ -293,8 +300,6 @@ class TorrentScraperService {
         if (torrentEp != -1 && torrentEp != 1) return null;
       }
     } else {
-      // Make sure this batch actually contains the episode being requested.
-      // A "01-12" batch is useless if we're after episode 20.
       final range = _extractBatchRange(tl);
       if (range != null) {
         if (episodeNumber < range.start || episodeNumber > range.end) {
@@ -304,12 +309,9 @@ class TorrentScraperService {
         if (totalEpisodes != null &&
             range.start <= 1 &&
             range.end >= totalEpisodes) {
-          score +=
-              20; // Bonus: this is the full series, not just one cour/part.
+          score += 20;
         }
       }
-      // If no numeric range was found (e.g. just "[Batch]"/"Complete"), we
-      // trust the textual tag as-is.
     }
 
     for (final tag in ['ova', 'ona', 'oad', 'special']) {
@@ -328,7 +330,6 @@ class TorrentScraperService {
     if (!batchMode && (tl.contains('- $epStr') || tl.contains(' $epStr '))) {
       score += 20;
     }
-
     if (tl.contains('subsplease') ||
         tl.contains('erai-raws') ||
         tl.contains('horriblesubs')) {
@@ -361,6 +362,7 @@ class TorrentScraperService {
     } else if (tl.contains('webrip')) {
       score += 5;
     }
+
     score += seedCount * 0.1;
 
     final groupMatch = _Regex.group.firstMatch(rawTitle);
@@ -383,14 +385,13 @@ class TorrentScraperService {
     );
   }
 
-  bool _isBatchRelease(String tl) {
-    return tl.contains('batch') ||
-        tl.contains('complete series') ||
-        tl.contains('complete season') ||
-        _Regex.batch.hasMatch(tl);
-  }
+  static bool _isBatchRelease(String tl) =>
+      tl.contains('batch') ||
+      tl.contains('complete series') ||
+      tl.contains('complete season') ||
+      _Regex.batch.hasMatch(tl);
 
-  ({int start, int end})? _extractBatchRange(String tl) {
+  static ({int start, int end})? _extractBatchRange(String tl) {
     final m = _Regex.batchRange.firstMatch(tl);
     if (m == null) return null;
     final start = int.tryParse(m.group(1)!);
@@ -399,7 +400,7 @@ class TorrentScraperService {
     return (start: start, end: end);
   }
 
-  int _extractSeason(String title) {
+  static int _extractSeason(String title) {
     final m = _Regex.season.firstMatch(title);
     if (m != null) {
       for (int i = 1; i <= m.groupCount; i++) {
@@ -409,7 +410,7 @@ class TorrentScraperService {
     return 1;
   }
 
-  int _extractEpisode(String title) {
+  static int _extractEpisode(String title) {
     for (final re in [_Regex.ep1, _Regex.ep2, _Regex.ep3]) {
       final m = re.firstMatch(title);
       if (m != null && m.groupCount >= 1) {
@@ -419,7 +420,7 @@ class TorrentScraperService {
     return -1;
   }
 
-  String _buildMagnet(String infoHash, String title) {
+  static String _buildMagnet(String infoHash, String title) {
     var link = 'magnet:?xt=urn:btih:$infoHash&dn=${Uri.encodeComponent(title)}';
     const trackers = [
       "http://nyaa.tracker.wf:7777/announce",

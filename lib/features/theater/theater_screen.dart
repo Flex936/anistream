@@ -9,11 +9,12 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../core/theme/app_palette.dart';
+import '../../core/settings/settings_service.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/anilist/models/anime.dart';
-import 'services/streaming_controller_service.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
-import '../settings/widgets/settings_components.dart';
+import '../../shared/widgets/toast.dart';
+import 'services/streaming_controller_service.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_settings.dart';
@@ -60,7 +61,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _torrentController = StreamingController();
     _torrentController.addListener(_onTorrentStateChanged);
 
-    // Initialize the background tracker
     _tracker = AnilistTrackerService(
       onSuccess: () {
         if (mounted) {
@@ -80,7 +80,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   Future<void> _initPlayerAndStream() async {
     final prefs = await SharedPreferences.getInstance();
-    final hwdec = prefs.getString('hwdec_preference') ?? 'auto';
+    if (!mounted) return;
+
+    // ── FIXED: Core Settings Service Reference ──
+    final hwdec = prefs.getString(SettingsService.kHwDec) ?? 'auto';
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
@@ -103,26 +106,24 @@ class _TheaterScreenState extends State<TheaterScreen> {
       episodeNumber: widget.episode,
     );
 
-    // Give the tracker context of what media we are watching
     await _tracker.init(
       mediaId: widget.anime.id,
       episode: widget.episode,
       totalEpisodes: widget.anime.episodes,
     );
+    if (!mounted) return;
 
-    // Listen to the playback progress completely independently of the UI
     _posSub = _player.stream.position.listen((pos) {
       _tracker.updateProgress(pos, _player.state.duration);
     });
   }
 
+  // ── FIXED: Removed the else branch calling setState(() {}) ──
   void _onTorrentStateChanged() {
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
       _player.open(Media(_torrentController.streamUrl!));
       _player.play();
-    } else {
-      setState(() {});
     }
   }
 
@@ -191,31 +192,29 @@ class _TheaterScreenState extends State<TheaterScreen> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _exitTheater() async {
-    if (_isClosing) return;
-    _isClosing = true;
-
-    if (mounted) {
-      setState(() => _videoInitialized = false);
-      await WidgetsBinding.instance.endOfFrame;
-    }
-
-    _hideControlsTimer?.cancel();
-    _posSub?.cancel();
-    _torrentController.removeListener(_onTorrentStateChanged);
-
-    await _player.pause();
+  Future<void> _disposePlaybackResources() async {
     await _player.stop();
     await _player.dispose();
     _torrentController.dispose();
-    _tracker.dispose();
-
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       if (await windowManager.isFullScreen()) {
         await windowManager.setFullScreen(false);
       }
     }
+  }
 
+  Future<void> _exitTheater() async {
+    if (_isClosing) return;
+    _isClosing = true;
+    if (mounted) {
+      setState(() => _videoInitialized = false);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    _hideControlsTimer?.cancel();
+    _posSub?.cancel();
+    _torrentController.removeListener(_onTorrentStateChanged);
+    _tracker.dispose();
+    await _disposePlaybackResources();
     if (mounted) Navigator.pop(context);
   }
 
@@ -226,19 +225,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
-
     if (!_isClosing) {
       _isClosing = true;
-      Future.microtask(() async {
-        await _player.stop();
-        await _player.dispose();
-        _torrentController.dispose();
-        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) windowManager.setFullScreen(true);
-          });
-        }
-      });
+      Future.microtask(_disposePlaybackResources);
     }
     super.dispose();
   }
@@ -269,16 +258,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Opacity(
+                  AnimatedOpacity(
                     opacity: _videoInitialized ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 300),
                     child: Video(
                       controller: _videoController,
                       controls: NoVideoControls,
                     ),
-                  ),
-                  Video(
-                    controller: _videoController,
-                    controls: NoVideoControls,
                   ),
 
                   if (_videoInitialized)
@@ -332,20 +318,26 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       ),
                     ),
 
+                  // ── FIXED: Scoped ListenableBuilder ──
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 600),
-                    child: _torrentController.isReadyToPlay
-                        ? const SizedBox.shrink()
-                        : _torrentController.needsManualSelection
-                        ? BatchEpisodePickerOverlay(
-                            files: _torrentController.batchFiles,
-                            requestedEpisode: widget.episode,
-                            onSelect: _torrentController.selectBatchFile,
-                          )
-                        : TheaterLoadingOverlay(
-                            episode: widget.episode,
-                            controller: _torrentController,
-                          ),
+                    child: ListenableBuilder(
+                      listenable: _torrentController,
+                      builder: (context, _) {
+                        return _torrentController.isReadyToPlay
+                            ? const SizedBox.shrink()
+                            : _torrentController.needsManualSelection
+                            ? BatchEpisodePickerOverlay(
+                                files: _torrentController.batchFiles,
+                                requestedEpisode: widget.episode,
+                                onSelect: _torrentController.selectBatchFile,
+                              )
+                            : TheaterLoadingOverlay(
+                                episode: widget.episode,
+                                controller: _torrentController,
+                              );
+                      },
+                    ),
                   ),
                 ],
               ),

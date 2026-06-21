@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
-import '../settings/services/settings_service.dart';
+import '../../core/settings/settings_service.dart';
 import '../../core/theme/app_palette.dart';
 import '../theater/theater_screen.dart';
 
@@ -85,7 +85,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         setState(() => _expandedEpisode = ep);
       }
     } catch (_) {
-      setState(() => _expandedEpisode = ep);
+      if (mounted) {
+        setState(() => _expandedEpisode = ep);
+      }
     } finally {
       if (mounted) {
         setState(() {

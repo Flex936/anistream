@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/app_network_image.dart';
+import '../../../shared/widgets/hover_focus_builder.dart';
+import '../../../shared/utils/anime_status_style.dart';
 
 // ── Private Formatting Helpers ──
 String _stripHtml(String? html) {
@@ -14,16 +16,6 @@ String _stripHtml(String? html) {
       .replaceAll(RegExp(r'\n{3,}'), '\n\n')
       .trim();
 }
-
-Color _statusColor(String? s) => switch (s) {
-  'RELEASING' => AppPalette.statusReleasing,
-  'FINISHED' => AppPalette.statusFinished,
-  'CANCELLED' => AppPalette.statusCancelled,
-  'HIATUS' => AppPalette.statusHiatus,
-  _ => AppPalette.statusDefault,
-};
-
-String _formatStatus(String? s) => (s ?? 'UNKNOWN').replaceAll('_', ' ');
 
 // ════════════════════════════════════════════════════════════════════════════
 //  HeroBanner
@@ -232,8 +224,8 @@ class _AnimeTextInfo extends StatelessWidget {
           alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
           children: [
             _MetaChip(
-              label: _formatStatus(anime.status),
-              color: _statusColor(anime.status),
+              label: anime.status?.statusLabel ?? 'UNKNOWN',
+              color: anime.status?.statusColor ?? AppPalette.statusDefault,
             ),
             if (anime.episodes != null)
               _MetaChip(
@@ -265,83 +257,60 @@ class _AnimeTextInfo extends StatelessWidget {
   }
 }
 
-class _FloatingNavBar extends StatefulWidget {
+class _FloatingNavBar extends StatelessWidget {
   final VoidCallback? onBack;
   const _FloatingNavBar({this.onBack});
 
   @override
-  State<_FloatingNavBar> createState() => _FloatingNavBarState();
-}
-
-class _FloatingNavBarState extends State<_FloatingNavBar> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    return FocusableActionDetector(
-      onShowHoverHighlight: (hovered) => setState(() => _hovered = hovered),
-      onShowFocusHighlight: (focused) => setState(() => _hovered = focused),
-      actions: {
-        ActivateIntent: CallbackAction<ActivateIntent>(
-          onInvoke: (_) {
-            if (widget.onBack != null) {
-              widget.onBack!();
-            } else {
-              Navigator.maybePop(context);
-            }
-            return null;
-          },
-        ),
+    return HoverFocusBuilder(
+      onTap: () {
+        if (onBack != null) {
+          onBack!();
+        } else {
+          Navigator.maybePop(context);
+        }
       },
-      child: GestureDetector(
-        onTap: () {
-          if (widget.onBack != null) {
-            widget.onBack!();
-          } else {
-            Navigator.maybePop(context);
-          }
-        },
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: _hovered
-                    ? AppPalette.white.withValues(alpha: 0.15)
-                    : AppPalette.black.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(
-                  color: AppPalette.white.withValues(alpha: 0.1),
+      builder: (context, hovered) => ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: hovered
+                  ? AppPalette.white.withValues(alpha: 0.15)
+                  : AppPalette.black.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: AppPalette.white.withValues(alpha: 0.1),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedSlide(
+                  offset: hovered ? const Offset(-0.15, 0) : Offset.zero,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  child: const Icon(
+                    Icons.arrow_back_rounded,
+                    size: 18,
+                    color: AppPalette.textMain,
+                  ),
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedSlide(
-                    offset: _hovered ? const Offset(-0.15, 0) : Offset.zero,
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    child: const Icon(
-                      Icons.arrow_back_rounded,
-                      size: 18,
-                      color: AppPalette.textMain,
-                    ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Back',
+                  style: TextStyle(
+                    color: AppPalette.textMain,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Back',
-                    style: TextStyle(
-                      color: AppPalette.textMain,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

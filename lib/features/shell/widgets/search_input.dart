@@ -7,10 +7,11 @@ import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/app_network_image.dart';
+import '../../../shared/utils/anime_status_style.dart';
 
 class SearchInput extends StatefulWidget {
   final TextEditingController controller;
-  final bool autoFocus; // ── FIXED: Added autoFocus for Mobile Search Mode ──
+  final bool autoFocus;
   final ValueChanged<String>? onChanged;
   final ValueChanged<Anime>? onSelectAnime;
   final ValueChanged<String>? onSubmitted;
@@ -39,19 +40,13 @@ class _SearchInputState extends State<SearchInput> {
   bool _isLoading = false;
   List<Anime> _instantMatches = [];
 
-  Color _statusColor(String? s) => switch (s) {
-    'RELEASING' => AppPalette.statusReleasing,
-    'FINISHED' => AppPalette.statusFinished,
-    'CANCELLED' => AppPalette.statusCancelled,
-    'HIATUS' => AppPalette.statusHiatus,
-    _ => AppPalette.statusDefault,
-  };
-
   @override
   void initState() {
     super.initState();
     _focusNode.onKeyEvent = (node, event) {
-      if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+      if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+        return KeyEventResult.ignored;
+      }
 
       if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
         node.focusInDirection(TraversalDirection.up);
@@ -89,6 +84,7 @@ class _SearchInputState extends State<SearchInput> {
     _focusNode.dispose();
     _debounce?.cancel();
     _hideOverlay();
+    _api.dispose();
     super.dispose();
   }
 
@@ -232,7 +228,7 @@ class _SearchInputState extends State<SearchInput> {
                                     ' ',
                                   ),
                                   style: TextStyle(
-                                    color: _statusColor(anime.status),
+                                    color: anime.status?.statusColor,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 12,
                                   ),

@@ -100,9 +100,7 @@ class TheaterLoadingOverlay extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             Text(
-              controller.hasError
-                  ? controller.statusText
-                  : controller.statusText,
+              controller.statusText,
               style: TextStyle(
                 color: controller.hasError
                     ? AppPalette.statusCancelled

@@ -25,9 +25,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _api = AnilistQueryService();
-    _loadTrending();
-    _loadSeasonPopular();
-    _loadAllTimePopular();
+    _trendingFuture = _api.getTrendingAnime(perPage: 15);
+    _seasonPopularFuture = _api.getPopularThisSeason(perPage: 15);
+    _allTimePopularFuture = _api.getAllTimePopular(perPage: 15);
   }
 
   @override

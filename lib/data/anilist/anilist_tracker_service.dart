@@ -1,14 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-
-import 'anilist_auth_service.dart';
+import 'anilist_query_service.dart';
 
 class AnilistTrackerService {
-  final AnilistAuthService _auth = AnilistAuthService();
+  final AnilistQueryService _api = AnilistQueryService();
   bool _isLoggedIn = false;
-  String? _token;
 
   int? _mediaId;
   int? _currentEpisode;
@@ -27,8 +24,7 @@ class AnilistTrackerService {
     int? totalEpisodes,
   }) async {
     try {
-      _token = await _auth.getStoredToken();
-      if (_token == null || _token!.isEmpty) {
+      if (!AnilistQueryService.isLoggedIn) {
         _isLoggedIn = false;
         return;
       }
@@ -48,31 +44,17 @@ class AnilistTrackerService {
 
   Future<void> _fetchCurrentStatus() async {
     try {
-      final response = await http.post(
-        Uri.parse('https://graphql.anilist.co'),
-        headers: {
-          'Authorization': 'Bearer $_token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'query': '''
-            query (\$mediaId: Int) {
-              Media(id: \$mediaId) {
-                mediaListEntry {
-                  status
-                  progress
-                }
-              }
-            }
-          ''',
-          'variables': {'mediaId': _mediaId},
-        }),
+      final response = await _api.executeRaw(
+        '''
+        query (\$mediaId: Int) {
+          Media(id: \$mediaId) { mediaListEntry { status progress } }
+        }
+      ''',
+        {'mediaId': _mediaId},
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // Correctly fetch the authenticated user's specific list entry
         final listData = data['data']?['Media']?['mediaListEntry'];
 
         if (listData != null) {
@@ -83,18 +65,9 @@ class AnilistTrackerService {
           _progress = 0;
         }
 
-        // Safeguard: Track if the episode we are watching is > the saved progress
-        // OR if the status is currently PLANNING (so we can promote it to CURRENT)
         if (_currentEpisode != null) {
           if (_currentEpisode! > _progress || _status == 'PLANNING') {
             _isEligible = true;
-            debugPrint(
-              '[AnilistTracker] Eligible to track. Current progress: $_progress. Watching: $_currentEpisode. Status: $_status',
-            );
-          } else {
-            debugPrint(
-              '[AnilistTracker] Ineligible. Already watched episode $_currentEpisode or further.',
-            );
           }
         }
       }
@@ -104,21 +77,21 @@ class AnilistTrackerService {
   }
 
   void updateProgress(Duration position, Duration duration) {
-    if (!_isLoggedIn || !_isEligible || _hasTracked) return;
-    if (duration.inMilliseconds == 0) return;
+    if (!_isLoggedIn ||
+        !_isEligible ||
+        _hasTracked ||
+        duration.inMilliseconds == 0) {
+      return;
+    }
 
     final percent = position.inMilliseconds / duration.inMilliseconds;
 
-    // Start tracking if at >= 90%
     if (percent >= 0.90) {
       if (_delayTimer == null || !_delayTimer!.isActive) {
-        debugPrint('[AnilistTracker] Reached 90%. Starting 5s timer...');
         _delayTimer = Timer(const Duration(seconds: 5), _commitToAnilist);
       }
     } else {
-      // Safeguard: If the user seeks back before 5 seconds, cancel the timer
       if (_delayTimer != null && _delayTimer!.isActive) {
-        debugPrint('[AnilistTracker] User seeked back. Canceling track timer.');
         _delayTimer!.cancel();
       }
     }
@@ -126,20 +99,15 @@ class AnilistTrackerService {
 
   Future<void> _commitToAnilist() async {
     if (_hasTracked) return;
-    _hasTracked = true; // Block multiple fires instantly
+    _hasTracked = true;
 
     String newStatus = _status ?? 'CURRENT';
-
-    // Prevent downgrading progress if we are just promoting a PLANNING anime to CURRENT
     final int trackProgress =
         (_currentEpisode != null && _currentEpisode! > _progress)
         ? _currentEpisode!
         : _progress;
 
-    // Status Logic Routing
-    if (_status == 'PLANNING') {
-      newStatus = 'CURRENT';
-    }
+    if (_status == 'PLANNING') newStatus = 'CURRENT';
     if (_totalEpisodes != null &&
         _totalEpisodes! > 0 &&
         trackProgress == _totalEpisodes) {
@@ -147,43 +115,21 @@ class AnilistTrackerService {
     }
 
     try {
-      debugPrint(
-        '[AnilistTracker] Committing to AniList: EP $trackProgress, Status: $newStatus',
-      );
-      final response = await http.post(
-        Uri.parse('https://graphql.anilist.co'),
-        headers: {
-          'Authorization': 'Bearer $_token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'query': '''
-            mutation (\$mediaId: Int, \$progress: Int, \$status: MediaListStatus) {
-              SaveMediaListEntry (mediaId: \$mediaId, progress: \$progress, status: \$status) {
-                id
-              }
-            }
-          ''',
-          'variables': {
-            'mediaId': _mediaId,
-            'progress': trackProgress,
-            'status': newStatus,
-          },
-        }),
+      final response = await _api.executeRaw(
+        '''
+        mutation (\$mediaId: Int, \$progress: Int, \$status: MediaListStatus) {
+          SaveMediaListEntry (mediaId: \$mediaId, progress: \$progress, status: \$status) { id }
+        }
+      ''',
+        {'mediaId': _mediaId, 'progress': trackProgress, 'status': newStatus},
       );
 
       if (response.statusCode == 200) {
-        debugPrint('[AnilistTracker] Successfully saved to AniList!');
         onSuccess?.call();
       } else {
-        debugPrint(
-          '[AnilistTracker] Save failed with code ${response.statusCode}: ${response.body}',
-        );
-        _hasTracked = false; // Allow retry on transient network errors
+        _hasTracked = false;
       }
     } catch (e) {
-      debugPrint('[AnilistTracker] Commit error: $e');
       _hasTracked = false;
     }
   }

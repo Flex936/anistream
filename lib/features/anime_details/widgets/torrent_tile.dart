@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../data/torrent/models/torrent.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/widgets/hover_focus_builder.dart';
 
-class TorrentTile extends StatefulWidget {
+class TorrentTile extends StatelessWidget {
   final Torrent torrent;
   final bool isRecommended;
   final VoidCallback onStream;
@@ -15,13 +16,6 @@ class TorrentTile extends StatefulWidget {
     required this.onStream,
   });
 
-  @override
-  State<TorrentTile> createState() => _TorrentTileState();
-}
-
-class _TorrentTileState extends State<TorrentTile> {
-  bool _hovered = false;
-
   Color _seederColor(int n) {
     if (n > 100) return AppPalette.statusReleasing;
     if (n > 20) return AppPalette.accent;
@@ -30,41 +24,28 @@ class _TorrentTileState extends State<TorrentTile> {
 
   @override
   Widget build(BuildContext context) {
-    final t = widget.torrent;
     final isMobile = MediaQuery.of(context).size.width < 600;
 
-    return FocusableActionDetector(
-      onShowHoverHighlight: (v) => setState(() => _hovered = v),
-      onShowFocusHighlight: (v) => setState(() => _hovered = v),
-      actions: {
-        ActivateIntent: CallbackAction<ActivateIntent>(
-          onInvoke: (_) {
-            widget.onStream();
-            return null;
-          },
-        ),
-      },
-      child: AnimatedContainer(
+    return HoverFocusBuilder(
+      onTap: onStream,
+      builder: (context, hovered) => AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOutCubic,
-        // The recommended box now encompasses the entire tile
         decoration: BoxDecoration(
-          color: _hovered
+          color: hovered
               ? AppPalette.primary.withValues(alpha: 0.09)
-              : widget.isRecommended
+              : isRecommended
               ? AppPalette.primary.withValues(alpha: 0.06)
               : AppPalette.overlay,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: _hovered
+            color: hovered
                 ? AppPalette.primary.withValues(alpha: 0.40)
-                : widget.isRecommended
-                ? AppPalette.primary.withValues(
-                    alpha: 0.4,
-                  ) // Glows more when recommended
+                : isRecommended
+                ? AppPalette.primary.withValues(alpha: 0.4)
                 : AppPalette.border,
           ),
-          boxShadow: widget.isRecommended
+          boxShadow: isRecommended
               ? [
                   BoxShadow(
                     color: AppPalette.primary.withValues(alpha: 0.08),
@@ -79,8 +60,7 @@ class _TorrentTileState extends State<TorrentTile> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Recommended Header Bar ──
-              if (widget.isRecommended)
+              if (isRecommended)
                 Container(
                   color: AppPalette.primary.withValues(alpha: 0.15),
                   padding: const EdgeInsets.symmetric(
@@ -107,8 +87,6 @@ class _TorrentTileState extends State<TorrentTile> {
                     ],
                   ),
                 ),
-
-              // ── Main Content ──
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -122,7 +100,7 @@ class _TorrentTileState extends State<TorrentTile> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            t.title,
+                            torrent.title,
                             style: const TextStyle(
                               color: AppPalette.textMain,
                               fontSize: 13,
@@ -136,10 +114,10 @@ class _TorrentTileState extends State<TorrentTile> {
                             spacing: 10,
                             runSpacing: 8,
                             children: [
-                              if (t.releaseGroup != 'Unknown')
-                                _Pill(t.releaseGroup),
-                              if (t.resolution != 'Unknown')
-                                _Pill(t.resolution),
+                              if (torrent.releaseGroup != 'Unknown')
+                                _Pill(torrent.releaseGroup),
+                              if (torrent.resolution != 'Unknown')
+                                _Pill(torrent.resolution),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -150,7 +128,7 @@ class _TorrentTileState extends State<TorrentTile> {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    t.size,
+                                    torrent.size,
                                     style: const TextStyle(
                                       color: AppPalette.textMuted,
                                       fontSize: 12,
@@ -159,9 +137,9 @@ class _TorrentTileState extends State<TorrentTile> {
                                 ],
                               ),
                               Text(
-                                '▲ ${t.seeders} Seeders',
+                                '▲ ${torrent.seeders} Seeders',
                                 style: TextStyle(
-                                  color: _seederColor(t.seeders),
+                                  color: _seederColor(torrent.seeders),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -172,36 +150,31 @@ class _TorrentTileState extends State<TorrentTile> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    GestureDetector(
-                      onTap: widget.onStream,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        curve: Curves.easeOutCubic,
-                        width: isMobile ? 36 : 42,
-                        height: isMobile ? 36 : 42,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _hovered
-                              ? AppPalette.primary
-                              : AppPalette.primary.withValues(alpha: 0.10),
-                          boxShadow: _hovered
-                              ? [
-                                  BoxShadow(
-                                    color: AppPalette.primary.withValues(
-                                      alpha: 0.40,
-                                    ),
-                                    blurRadius: 14,
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOutCubic,
+                      width: isMobile ? 36 : 42,
+                      height: isMobile ? 36 : 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: hovered
+                            ? AppPalette.primary
+                            : AppPalette.primary.withValues(alpha: 0.10),
+                        boxShadow: hovered
+                            ? [
+                                BoxShadow(
+                                  color: AppPalette.primary.withValues(
+                                    alpha: 0.40,
                                   ),
-                                ]
-                              : const [],
-                        ),
-                        child: Icon(
-                          Icons.play_arrow_rounded,
-                          size: 22,
-                          color: _hovered
-                              ? AppPalette.white
-                              : AppPalette.primary,
-                        ),
+                                  blurRadius: 14,
+                                ),
+                              ]
+                            : const [],
+                      ),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        size: 22,
+                        color: hovered ? AppPalette.white : AppPalette.primary,
                       ),
                     ),
                   ],

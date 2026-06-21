@@ -1,12 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+import '../utils/anime_status_style.dart';
 import '../../features/anime_details/anime_details_screen.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
 import 'app_network_image.dart';
+import 'hover_focus_builder.dart';
 
-class AnimeCard extends StatefulWidget {
+class AnimeCard extends StatelessWidget {
   final Anime anime;
   final ValueChanged<Anime>? onSelect;
   final bool autofocus;
@@ -19,136 +21,86 @@ class AnimeCard extends StatefulWidget {
   });
 
   @override
-  State<AnimeCard> createState() => _AnimeCardState();
-}
-
-class _AnimeCardState extends State<AnimeCard> {
-  bool _hovered = false;
-
-  Color _statusColor(String? status) => switch (status) {
-    'RELEASING' => AppPalette.statusReleasing,
-    'FINISHED' => AppPalette.statusFinished,
-    'CANCELLED' => AppPalette.statusCancelled,
-    'HIATUS' => AppPalette.statusHiatus,
-    _ => AppPalette.statusDefault,
-  };
-
-  String _formatStatus(String? status) =>
-      (status ?? 'UNKNOWN').replaceAll('_', ' ');
-
-  @override
   Widget build(BuildContext context) {
-    final anime = widget.anime;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: FocusableActionDetector(
-            autofocus: widget.autofocus,
-            onShowHoverHighlight: (v) => setState(() => _hovered = v),
-            onShowFocusHighlight: (v) {
-              setState(() => _hovered = v);
-              if (v) {
-                Scrollable.ensureVisible(
+          child: HoverFocusBuilder(
+            autofocus: autofocus,
+            onTap: () {
+              if (onSelect != null) {
+                onSelect!(anime);
+              } else {
+                Navigator.push(
                   context,
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOut,
+                  MaterialPageRoute(
+                    builder: (_) => AnimeDetailsScreen(anime: anime),
+                  ),
                 );
               }
             },
-            actions: {
-              ActivateIntent: CallbackAction<ActivateIntent>(
-                onInvoke: (_) {
-                  if (widget.onSelect != null) {
-                    widget.onSelect!(anime);
-                  } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AnimeDetailsScreen(anime: anime),
-                      ),
-                    );
-                  }
-                  return null;
-                },
-              ),
-            },
-            child: GestureDetector(
-              onTap: () {
-                if (widget.onSelect != null) {
-                  widget.onSelect!(anime);
-                } else {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AnimeDetailsScreen(anime: anime),
-                    ),
-                  );
-                }
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOut,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _hovered
-                        ? AppPalette.primary.withValues(alpha: 0.55)
-                        : AppPalette.border,
-                  ),
-                  boxShadow: _hovered
-                      ? [
-                          BoxShadow(
-                            color: AppPalette.primary.withValues(alpha: 0.18),
-                            blurRadius: 24,
-                            spreadRadius: 2,
-                          ),
-                        ]
-                      : const [],
+            builder: (context, hovered) => AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: hovered
+                      ? AppPalette.primary.withValues(alpha: 0.55)
+                      : AppPalette.border,
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      AppNetworkImage(url: anime.coverImage?.extraLarge),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: _PosterGradient(score: anime.averageScore),
-                      ),
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: _StatusBadge(
-                          label: _formatStatus(anime.status),
-                          color: _statusColor(anime.status),
+                boxShadow: hovered
+                    ? [
+                        BoxShadow(
+                          color: AppPalette.primary.withValues(alpha: 0.18),
+                          blurRadius: 24,
+                          spreadRadius: 2,
                         ),
+                      ]
+                    : const [],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(11),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AppNetworkImage(url: anime.coverImage?.extraLarge),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: _PosterGradient(score: anime.averageScore),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: _StatusBadge(
+                        label: anime.status?.statusLabel ?? 'UNKNOWN',
+                        color:
+                            anime.status?.statusColor ??
+                            AppPalette.statusDefault,
                       ),
-                      _HoverOverlay(visible: _hovered),
-                    ],
-                  ),
+                    ),
+                    _HoverOverlay(visible: hovered),
+                  ],
                 ),
               ),
             ),
           ),
         ),
-
         const SizedBox(height: 10),
-        AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 150),
-          style: TextStyle(
-            color: _hovered ? AppPalette.primary : AppPalette.textMain,
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            height: 1.35,
-          ),
-          child: Text(
+        HoverFocusBuilder(
+          builder: (context, _) => Text(
             anime.title.display,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppPalette.textMain,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              height: 1.35,
+            ),
           ),
         ),
         const SizedBox(height: 4),
@@ -170,7 +122,6 @@ class _PosterGradient extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (score == null) return const SizedBox.shrink();
-
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 48, 10, 10),
       decoration: BoxDecoration(

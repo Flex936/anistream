@@ -22,46 +22,44 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   final _auth = AnilistAuthService();
-  late Widget _currentView;
-  Widget? _previousView;
+
+  late final List<Widget> _history;
 
   bool _isLoggedIn = false;
   bool _loginBusy = false;
   String _searchQuery = '';
-
   bool _isScrolled = false;
 
   @override
   void initState() {
     super.initState();
-    _currentView = HomeScreen(onSelectAnime: _handleSelectAnime);
+    _history = [HomeScreen(onSelectAnime: _handleSelectAnime)];
     _restoreSession();
   }
 
+  Widget get _currentView => _history.last;
+
   void _navigateTo(Widget view) {
     setState(() {
-      _previousView = _currentView;
-      _currentView = view;
+      _history.add(view);
       _isScrolled = false;
     });
+  }
+
+  bool _goBack() {
+    if (_history.length <= 1) return false;
+    setState(() {
+      _history.removeLast();
+      _isScrolled = false;
+    });
+    return true;
   }
 
   void _handleSelectAnime(Anime anime) {
-    _navigateTo(AnimeDetailsScreen(anime: anime, onBack: _handleBack));
+    _navigateTo(AnimeDetailsScreen(anime: anime, onBack: _goBack));
   }
 
-  void _handleBack() {
-    setState(() {
-      _currentView =
-          _previousView ?? HomeScreen(onSelectAnime: _handleSelectAnime);
-      _previousView = null;
-      _isScrolled = false;
-    });
-  }
-
-  void _handleTextChange(String query) {
-    setState(() => _searchQuery = query);
-  }
+  void _handleTextChange(String query) => setState(() => _searchQuery = query);
 
   void _handleSubmit(String query) {
     FocusScope.of(context).unfocus();
@@ -77,8 +75,8 @@ class _AppShellState extends State<AppShell> {
   void _goHome() {
     setState(() {
       _searchQuery = '';
-      _currentView = HomeScreen(onSelectAnime: _handleSelectAnime);
-      _previousView = null;
+      _history.clear();
+      _history.add(HomeScreen(onSelectAnime: _handleSelectAnime));
       _isScrolled = false;
     });
   }
@@ -106,7 +104,6 @@ class _AppShellState extends State<AppShell> {
     try {
       final token = await _auth.login();
       if (!mounted) return;
-
       if (token != null) {
         AnilistQueryService.setToken(token);
         setState(() => _isLoggedIn = true);
@@ -117,7 +114,6 @@ class _AppShellState extends State<AppShell> {
         SnackBar(
           content: Text(e.toString()),
           backgroundColor: AppPalette.statusCancelled,
-          behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
@@ -127,31 +123,30 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppPalette.base,
-      extendBodyBehindAppBar: true,
-      appBar: AniStreamNavBar(
-        searchQuery: _searchQuery,
-        isLoggedIn: _isLoggedIn,
-        isScrolled: _isScrolled,
-        onHome: _goHome,
-        onSearch: _handleTextChange,
-        onSubmitted: _handleSubmit,
-        onSelectAnime: _handleSelectAnime,
-        onScheduled: () =>
-            _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
-        onWatchlist: () =>
-            _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
-        onLogin: _handleLogin,
-        onSettings: () => showSettingsMenu(context),
-      ),
-      body: PopScope(
-        canPop: _previousView == null && _currentView is HomeScreen,
-        onPopInvokedWithResult: (didPop, _) {
-          if (didPop) return;
-          _previousView != null ? _handleBack() : _goHome();
-        },
-        child: GestureDetector(
+    return PopScope(
+      canPop: _history.length <= 1,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goBack();
+      },
+      child: Scaffold(
+        backgroundColor: AppPalette.base,
+        extendBodyBehindAppBar: true,
+        appBar: AniStreamNavBar(
+          searchQuery: _searchQuery,
+          isLoggedIn: _isLoggedIn,
+          isScrolled: _isScrolled,
+          onHome: _goHome,
+          onSearch: _handleTextChange,
+          onSubmitted: _handleSubmit,
+          onSelectAnime: _handleSelectAnime,
+          onScheduled: () =>
+              _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
+          onWatchlist: () =>
+              _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
+          onLogin: _handleLogin,
+          onSettings: () => showSettingsMenu(context),
+        ),
+        body: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
           behavior: HitTestBehavior.opaque,
           child: NotificationListener<ScrollNotification>(

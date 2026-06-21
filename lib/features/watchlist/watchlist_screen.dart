@@ -5,6 +5,7 @@ import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/media_list.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
+import '../../shared/widgets/hover_focus_builder.dart';
 import 'widgets/watchlist_cards.dart';
 
 class WatchlistScreen extends StatefulWidget {
@@ -382,7 +383,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
 // ── Private sub-widgets for Screen ──
 
-class _TabButton extends StatefulWidget {
+class _TabButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool active;
@@ -396,45 +397,26 @@ class _TabButton extends StatefulWidget {
   });
 
   @override
-  State<_TabButton> createState() => _TabButtonState();
-}
-
-class _TabButtonState extends State<_TabButton> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    final bgColor = widget.active
-        ? AppPalette.primary
-        : (_hovered
-              ? AppPalette.white.withValues(alpha: 0.08)
-              : AppPalette.transparent);
+    return HoverFocusBuilder(
+      onTap: onTap,
+      builder: (context, hovered) {
+        final bgColor = active
+            ? AppPalette.primary
+            : (hovered
+                  ? AppPalette.white.withValues(alpha: 0.08)
+                  : AppPalette.transparent);
+        final contentColor = active
+            ? AppPalette.white
+            : (hovered ? AppPalette.textMain : AppPalette.textMuted);
 
-    final contentColor = widget.active
-        ? AppPalette.white
-        : (_hovered ? AppPalette.textMain : AppPalette.textMuted);
-
-    return FocusableActionDetector(
-      onShowHoverHighlight: (v) => setState(() => _hovered = v),
-      onShowFocusHighlight: (v) => setState(() => _hovered = v),
-      actions: {
-        ActivateIntent: CallbackAction<ActivateIntent>(
-          onInvoke: (_) {
-            widget.onTap();
-            return null;
-          },
-        ),
-      },
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
+        return AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(8),
-            boxShadow: widget.active
+            boxShadow: active
                 ? [
                     BoxShadow(
                       color: AppPalette.primary.withValues(alpha: 0.35),
@@ -447,10 +429,10 @@ class _TabButtonState extends State<_TabButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.icon, size: 15, color: contentColor),
+              Icon(icon, size: 15, color: contentColor),
               const SizedBox(width: 6),
               Text(
-                widget.label,
+                label,
                 style: TextStyle(
                   color: contentColor,
                   fontSize: 13,
@@ -459,8 +441,8 @@ class _TabButtonState extends State<_TabButton> {
               ),
             ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

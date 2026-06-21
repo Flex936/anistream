@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/settings/settings_service.dart';
 import 'models/anime.dart';
 import 'models/media_list.dart';
 
@@ -75,19 +76,26 @@ class AnilistQueryService {
     return 'WINTER';
   }
 
+  // Exposed for the TrackerService to reuse the HTTP plumbing
+  Future<http.Response> executeRaw(
+    String query,
+    Map<String, dynamic> variables,
+  ) async {
+    return await _httpClient
+        .post(
+          Uri.parse(_endpoint),
+          headers: _headers,
+          body: jsonEncode({'query': query, 'variables': variables}),
+        )
+        .timeout(const Duration(seconds: 15));
+  }
+
   Future<List<Anime>> _execute(
     String query,
     Map<String, dynamic> variables,
   ) async {
     try {
-      final response = await _httpClient
-          .post(
-            Uri.parse(_endpoint),
-            headers: _headers,
-            body: jsonEncode({'query': query, 'variables': variables}),
-          )
-          .timeout(const Duration(seconds: 15));
-
+      final response = await executeRaw(query, variables);
       _assertResponse(response);
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
@@ -154,17 +162,9 @@ class AnilistQueryService {
     }
 
     try {
-      final response = await _httpClient
-          .post(
-            Uri.parse(_endpoint),
-            headers: _headers,
-            body: jsonEncode({
-              'query': _Queries.userWatchlist,
-              'variables': {'userId': viewerId},
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
-
+      final response = await executeRaw(_Queries.userWatchlist, {
+        'userId': viewerId,
+      });
       _assertResponse(response);
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
       final lists =
@@ -201,7 +201,7 @@ class AnilistQueryService {
     int? year,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final filterEcchi = prefs.getBool('filter_ecchi') ?? true;
+    final filterEcchi = prefs.getBool(SettingsService.kFilterEcchi) ?? true;
     final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
 
     final variables = <String, dynamic>{
@@ -219,21 +219,43 @@ class AnilistQueryService {
   void dispose() => _httpClient.close();
 }
 
-// ── Segregated GraphQL Strings ──
+abstract final class _Fragments {
+  static const String mediaCore = r'''
+    id
+    title { romaji english }
+    coverImage { extraLarge large }
+    bannerImage
+    description
+    episodes
+    status
+    averageScore
+    nextAiringEpisode { episode airingAt }
+  ''';
+}
+
 abstract final class _Queries {
-  static const String trending = r'''
-    query GetTrendingAnime($page: Int, $perPage: Int) {
-      Page(page: $page, perPage: $perPage) { media(sort: TRENDING_DESC, type: ANIME, isAdult: false, status_not: NOT_YET_RELEASED) { id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status averageScore nextAiringEpisode { episode airingAt } } }
+  static const String trending =
+      '''
+    query GetTrendingAnime(\$page: Int, \$perPage: Int) {
+      Page(page: \$page, perPage: \$perPage) { media(sort: TRENDING_DESC, type: ANIME, isAdult: false, status_not: NOT_YET_RELEASED) { ${_Fragments.mediaCore} } }
     }''';
 
-  static const String seasonPopular = r'''
-    query GetSeasonPopular($page: Int, $perPage: Int, $season: MediaSeason, $seasonYear: Int) {
-      Page(page: $page, perPage: $perPage) { media(season: $season, seasonYear: $seasonYear, sort: POPULARITY_DESC, type: ANIME, isAdult: false) { id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status averageScore nextAiringEpisode { episode airingAt } } }
+  static const String seasonPopular =
+      '''
+    query GetSeasonPopular(\$page: Int, \$perPage: Int, \$season: MediaSeason, \$seasonYear: Int) {
+      Page(page: \$page, perPage: \$perPage) { media(season: \$season, seasonYear: \$seasonYear, sort: POPULARITY_DESC, type: ANIME, isAdult: false) { ${_Fragments.mediaCore} } }
     }''';
 
-  static const String allTimePopular = r'''
-    query GetAllTimePopular($page: Int, $perPage: Int) {
-      Page(page: $page, perPage: $perPage) { media(sort: POPULARITY_DESC, type: ANIME, isAdult: false) { id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status averageScore nextAiringEpisode { episode airingAt } } }
+  static const String allTimePopular =
+      '''
+    query GetAllTimePopular(\$page: Int, \$perPage: Int) {
+      Page(page: \$page, perPage: \$perPage) { media(sort: POPULARITY_DESC, type: ANIME, isAdult: false) { ${_Fragments.mediaCore} } }
+    }''';
+
+  static const String search =
+      '''
+    query (\$search: String, \$bannedGenres: [String], \$minScore: Int, \$status: MediaStatus, \$seasonYear: Int) {
+      Page(page: 1, perPage: 15) { media(search: \$search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: \$bannedGenres, status_not: NOT_YET_RELEASED, averageScore_greater: \$minScore, status: \$status, seasonYear: \$seasonYear) { ${_Fragments.mediaCore} } }
     }''';
 
   static const String userWatchlist = r'''
@@ -244,10 +266,5 @@ abstract final class _Queries {
   static const String currentlyAiring = r'''
     query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason, $currentYear: Int) {
       Page(page: $page, perPage: $perPage) { media(type: ANIME, season: $currentSeason, seasonYear: $currentYear, sort: TRENDING_DESC, countryOfOrigin: "JP", isAdult: false, format_not_in: [SPECIAL, OVA, ONA, MOVIE]) { id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status nextAiringEpisode { episode airingAt } } }
-    }''';
-
-  static const String search = r'''
-    query ($search: String, $bannedGenres: [String], $minScore: Int, $status: MediaStatus, $seasonYear: Int) {
-      Page(page: 1, perPage: 15) { media(search: $search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: $bannedGenres, status_not: NOT_YET_RELEASED, averageScore_greater: $minScore, status: $status, seasonYear: $seasonYear) { id title { romaji english } coverImage { extraLarge large } bannerImage description episodes status averageScore nextAiringEpisode { episode airingAt } } }
     }''';
 }

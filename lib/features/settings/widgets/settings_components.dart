@@ -1,91 +1,92 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/widgets/hover_focus_builder.dart';
 
-class SectionLabel extends StatelessWidget {
+class SettingsSection extends StatelessWidget {
   final String label;
-  const SectionLabel({super.key, required this.label});
+  final List<Widget> children;
+  final bool showDividerAbove;
+
+  const SettingsSection({
+    super.key,
+    required this.label,
+    required this.children,
+    this.showDividerAbove = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: Text(
-        label.toUpperCase(),
-        style: const TextStyle(
-          color: AppPalette.textMuted,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.2,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showDividerAbove) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Divider(color: AppPalette.white.withValues(alpha: 0.1)),
+          ),
+          const SizedBox(height: 24),
+        ],
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: AppPalette.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
         ),
-      ),
+        const SizedBox(height: 8),
+        ...children,
+        const SizedBox(height: 24),
+      ],
     );
   }
 }
 
 class ToggleSwitch extends StatelessWidget {
   final bool value;
-  final ValueChanged<bool> onChanged;
-  final bool autofocus;
-
-  const ToggleSwitch({
-    super.key,
-    required this.value,
-    required this.onChanged,
-    this.autofocus = false,
-  });
+  const ToggleSwitch({super.key, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    return FocusableActionDetector(
-      autofocus: autofocus,
-      actions: {
-        ActivateIntent: CallbackAction<ActivateIntent>(
-          onInvoke: (_) {
-            onChanged(!value);
-            return null;
-          },
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      width: 44,
+      height: 24,
+      decoration: BoxDecoration(
+        color: value
+            ? AppPalette.primary
+            : AppPalette.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: value
+              ? AppPalette.primary
+              : AppPalette.white.withValues(alpha: 0.05),
         ),
-      },
-      child: GestureDetector(
-        onTap: () => onChanged(!value),
-        child: AnimatedContainer(
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: AnimatedAlign(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
-          width: 44,
-          height: 24,
-          decoration: BoxDecoration(
-            color: value
-                ? AppPalette.primary
-                : AppPalette.white.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: value
-                  ? AppPalette.primary
-                  : AppPalette.white.withValues(alpha: 0.05),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(2),
-            child: AnimatedAlign(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: AppPalette.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppPalette.black.withValues(alpha: 0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: AppPalette.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppPalette.black.withValues(alpha: 0.2),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -94,7 +95,7 @@ class ToggleSwitch extends StatelessWidget {
   }
 }
 
-class SettingRowTile extends StatefulWidget {
+class SettingRowTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
@@ -111,274 +112,149 @@ class SettingRowTile extends StatefulWidget {
   });
 
   @override
-  State<SettingRowTile> createState() => _SettingRowTileState();
-}
-
-class _SettingRowTileState extends State<SettingRowTile> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    return FocusableActionDetector(
-      onShowHoverHighlight: (v) => setState(() => _hovered = v),
-      onShowFocusHighlight: (v) => setState(() => _hovered = v),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => widget.onChanged(!widget.value),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: _hovered
-                ? AppPalette.white.withValues(alpha: 0.06)
-                : AppPalette.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 150),
-                      style: TextStyle(
-                        color: _hovered
-                            ? AppPalette.white
-                            : AppPalette.textMain,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      child: Text(widget.title),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      widget.subtitle,
-                      style: const TextStyle(
-                        color: AppPalette.textMuted,
-                        fontSize: 12,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              ToggleSwitch(value: widget.value, onChanged: widget.onChanged),
-            ],
-          ),
+    return HoverFocusBuilder(
+      autofocus: autofocus,
+      onTap: () => onChanged(!value),
+      builder: (context, hovered) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: hovered
+              ? AppPalette.white.withValues(alpha: 0.06)
+              : AppPalette.transparent,
+          borderRadius: BorderRadius.circular(12),
         ),
-      ),
-    );
-  }
-}
-
-// ── Apple-Style Premium Glass Toast (Bottom) ──
-
-class AppleSnackBar {
-  static void show({
-    required BuildContext context,
-    required String message,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        padding: EdgeInsets.zero,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(bottom: 40, left: 16, right: 16),
-        content: Align(
-          alignment: Alignment.bottomCenter,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(50),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: AppPalette.surface.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(50),
-                  border: Border.all(
-                    color: AppPalette.white.withValues(alpha: 0.15),
-                    width: 1,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 150),
+                    style: TextStyle(
+                      color: hovered ? AppPalette.white : AppPalette.textMain,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    child: Text(title),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppPalette.black.withValues(alpha: 0.25),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppPalette.textMuted,
+                      fontSize: 12,
+                      height: 1.4,
                     ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, color: iconColor, size: 20),
-                    const SizedBox(width: 10),
-                    Text(
-                      message,
-                      style: const TextStyle(
-                        color: AppPalette.textMain,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ),
+            const SizedBox(width: 16),
+            ToggleSwitch(value: value),
+          ],
         ),
       ),
     );
   }
 }
 
-// ── Apple-Style Premium Glass Toast (Top Overlay for Theater) ──
+class SettingsDropdown extends StatelessWidget {
+  final String value;
+  final ValueChanged<String?> onChanged;
 
-class AppleTopSnackBar {
-  static void show({
-    required BuildContext context,
-    required String message,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-
-    entry = OverlayEntry(
-      builder: (context) => _TopToastWidget(
-        message: message,
-        icon: icon,
-        iconColor: iconColor,
-        onDismiss: () {
-          if (entry.mounted) entry.remove();
-        },
-      ),
-    );
-
-    overlay.insert(entry);
-  }
-}
-
-class _TopToastWidget extends StatefulWidget {
-  final String message;
-  final IconData icon;
-  final Color iconColor;
-  final VoidCallback onDismiss;
-
-  const _TopToastWidget({
-    required this.message,
-    required this.icon,
-    required this.iconColor,
-    required this.onDismiss,
+  const SettingsDropdown({
+    super.key,
+    required this.value,
+    required this.onChanged,
   });
 
   @override
-  State<_TopToastWidget> createState() => _TopToastWidgetState();
+  Widget build(BuildContext context) {
+    return HoverFocusBuilder(
+      builder: (context, hovered) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: hovered
+              ? AppPalette.white.withValues(alpha: 0.1)
+              : AppPalette.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: hovered
+                ? AppPalette.white.withValues(alpha: 0.2)
+                : AppPalette.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            dropdownColor: AppPalette.surface,
+            icon: const Icon(
+              Icons.expand_more_rounded,
+              color: AppPalette.textMuted,
+            ),
+            isExpanded: true,
+            style: const TextStyle(
+              color: AppPalette.textMain,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: 'auto',
+                child: Text('Auto (Safe Default)'),
+              ),
+              DropdownMenuItem(
+                value: 'cuda-copy',
+                child: Text('NVIDIA (CUDA)'),
+              ),
+              DropdownMenuItem(
+                value: 'd3d11va-copy',
+                child: Text('Windows Native (D3D11VA)'),
+              ),
+              DropdownMenuItem(
+                value: 'videotoolbox-copy',
+                child: Text('Apple Silicon (VideoToolbox)'),
+              ),
+              DropdownMenuItem(
+                value: 'none',
+                child: Text('Software Only (CPU)'),
+              ),
+            ],
+            onChanged: onChanged,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _TopToastWidgetState extends State<_TopToastWidget>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<Offset> _offsetAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _offsetAnimation = Tween<Offset>(
-      begin: const Offset(0, -1.5),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
-
-    _controller.forward();
-
-    Future.delayed(const Duration(seconds: 4), () async {
-      if (mounted) {
-        await _controller.reverse();
-        widget.onDismiss();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class SettingsCloseButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const SettingsCloseButton({super.key, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 24, // Respects safe area
-      left: 16,
-      right: 16,
-      child: SafeArea(
-        child: Material(
-          color: Colors.transparent,
-          child: SlideTransition(
-            position: _offsetAnimation,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(50),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppPalette.surface.withValues(alpha: 0.75),
-                      borderRadius: BorderRadius.circular(50),
-                      border: Border.all(
-                        color: AppPalette.white.withValues(alpha: 0.15),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppPalette.black.withValues(alpha: 0.25),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(widget.icon, color: widget.iconColor, size: 20),
-                        const SizedBox(width: 10),
-                        Text(
-                          widget.message,
-                          style: const TextStyle(
-                            color: AppPalette.textMain,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+    return HoverFocusBuilder(
+      onTap: onPressed,
+      builder: (context, hovered) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: hovered
+              ? AppPalette.white.withValues(alpha: 0.1)
+              : AppPalette.transparent,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.close_rounded,
+          size: 22,
+          color: hovered ? AppPalette.white : AppPalette.textMuted,
         ),
       ),
     );

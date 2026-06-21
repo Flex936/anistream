@@ -4,9 +4,10 @@ import '../../theater/theater_screen.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../data/torrent/models/torrent.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/widgets/hover_focus_builder.dart';
 import 'torrent_tile.dart';
 
-class EpisodeTile extends StatefulWidget {
+class EpisodeTile extends StatelessWidget {
   final Anime anime;
   final int episodeNumber;
   final bool isExpanded;
@@ -23,118 +24,96 @@ class EpisodeTile extends StatefulWidget {
   });
 
   @override
-  State<EpisodeTile> createState() => _EpisodeTileState();
-}
-
-class _EpisodeTileState extends State<EpisodeTile> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final hPad = isMobile ? 16.0 : 28.0; // Shrink padding for phones
+    final hPad = isMobile ? 16.0 : 28.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        FocusableActionDetector(
-          autofocus: widget.episodeNumber == 1,
-          onShowHoverHighlight: (v) => setState(() => _hovered = v),
-          onShowFocusHighlight: (v) => setState(() => _hovered = v),
-          actions: {
-            ActivateIntent: CallbackAction<ActivateIntent>(
-              onInvoke: (_) {
-                widget.onToggle();
-                return null;
-              },
-            ),
-          },
-          child: GestureDetector(
-            onTap: widget.onToggle,
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 15),
-              decoration: BoxDecoration(
-                color: widget.isExpanded
-                    ? AppPalette.primary.withValues(alpha: 0.06)
-                    : _hovered
-                    ? AppPalette.white.withValues(alpha: 0.025)
-                    : AppPalette.transparent,
-                border: Border(
-                  left: BorderSide(
-                    color: widget.isExpanded
-                        ? AppPalette.primary
-                        : AppPalette.transparent,
-                    width: 3,
-                  ),
+        HoverFocusBuilder(
+          autofocus: episodeNumber == 1,
+          onTap: onToggle,
+          builder: (context, hovered) => AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 15),
+            decoration: BoxDecoration(
+              color: isExpanded
+                  ? AppPalette.primary.withValues(alpha: 0.06)
+                  : hovered
+                  ? AppPalette.white.withValues(alpha: 0.025)
+                  : AppPalette.transparent,
+              border: Border(
+                left: BorderSide(
+                  color: isExpanded
+                      ? AppPalette.primary
+                      : AppPalette.transparent,
+                  width: 3,
                 ),
               ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: isMobile ? 26 : 34,
-                    child: Text(
-                      widget.episodeNumber.toString().padLeft(2, '0'),
-                      style: TextStyle(
-                        color: widget.isExpanded
-                            ? AppPalette.primary
-                            : AppPalette.textMuted.withValues(alpha: 0.35),
-                        fontSize: isMobile ? 16 : 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'Episode ${widget.episodeNumber}',
-                      style: TextStyle(
-                        color: widget.isExpanded
-                            ? AppPalette.textMain
-                            : AppPalette.textMuted,
-                        fontSize: 14,
-                        fontWeight: widget.isExpanded
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      ),
-                    ),
-                  ),
-                  AnimatedRotation(
-                    turns: widget.isExpanded ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 22,
-                      color: widget.isExpanded
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: isMobile ? 26 : 34,
+                  child: Text(
+                    episodeNumber.toString().padLeft(2, '0'),
+                    style: TextStyle(
+                      color: isExpanded
                           ? AppPalette.primary
-                          : AppPalette.textMuted,
+                          : AppPalette.textMuted.withValues(alpha: 0.35),
+                      fontSize: isMobile ? 16 : 20,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Episode $episodeNumber',
+                    style: TextStyle(
+                      color: isExpanded
+                          ? AppPalette.textMain
+                          : AppPalette.textMuted,
+                      fontSize: 14,
+                      fontWeight: isExpanded
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                    ),
+                  ),
+                ),
+                AnimatedRotation(
+                  turns: isExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 22,
+                    color: isExpanded
+                        ? AppPalette.primary
+                        : AppPalette.textMuted,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-
         AnimatedSize(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
-          child: widget.isExpanded
-              ? _buildTorrentContent(hPad)
+          child: isExpanded
+              ? _buildTorrentContent(context, hPad)
               : const SizedBox.shrink(),
         ),
-
         const Divider(height: 1, thickness: 1, color: AppPalette.border),
       ],
     );
   }
 
-  Widget _buildTorrentContent(double hPad) {
-    final future = widget.torrentFuture;
+  Widget _buildTorrentContent(BuildContext context, double hPad) {
+    final future = torrentFuture;
     if (future == null) return const SizedBox.shrink();
 
     return Padding(
@@ -218,8 +197,8 @@ class _EpisodeTileState extends State<EpisodeTile> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => TheaterScreen(
-                          anime: widget.anime,
-                          episode: widget.episodeNumber,
+                          anime: anime,
+                          episode: episodeNumber,
                           torrent: torrents[i],
                         ),
                       ),
