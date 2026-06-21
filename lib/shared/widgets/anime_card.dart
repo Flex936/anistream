@@ -47,7 +47,16 @@ class _AnimeCardState extends State<AnimeCard> {
           child: FocusableActionDetector(
             autofocus: widget.autofocus,
             onShowHoverHighlight: (v) => setState(() => _hovered = v),
-            onShowFocusHighlight: (v) => setState(() => _hovered = v),
+            onShowFocusHighlight: (v) {
+              setState(() => _hovered = v);
+              if (v) {
+                Scrollable.ensureVisible(
+                  context,
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOut,
+                );
+              }
+            },
             actions: {
               ActivateIntent: CallbackAction<ActivateIntent>(
                 onInvoke: (_) {

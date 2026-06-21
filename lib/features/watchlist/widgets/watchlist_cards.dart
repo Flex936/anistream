@@ -59,14 +59,8 @@ class _HeroCardState extends State<HeroCard> {
 
     return FocusableActionDetector(
       autofocus: widget.autofocus,
-      onShowHoverHighlight: (v) {
-        setState(() => _hovered = v);
-        widget.onHover(v);
-      },
-      onShowFocusHighlight: (v) {
-        setState(() => _hovered = v);
-        widget.onHover(v);
-      },
+      onShowHoverHighlight: (v) => setState(() => _hovered = v),
+      onShowFocusHighlight: (v) => setState(() => _hovered = v),
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) {
@@ -223,14 +217,8 @@ class _ListCardState extends State<ListCard> {
 
     return FocusableActionDetector(
       autofocus: widget.autofocus,
-      onShowHoverHighlight: (v) {
-        setState(() => _hovered = v);
-        widget.onHover(v);
-      },
-      onShowFocusHighlight: (v) {
-        setState(() => _hovered = v);
-        widget.onHover(v);
-      },
+      onShowHoverHighlight: (v) => setState(() => _hovered = v),
+      onShowFocusHighlight: (v) => setState(() => _hovered = v),
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) {

@@ -361,9 +361,9 @@ class _HoverableDropdownState extends State<_HoverableDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+    return FocusableActionDetector(
+      onShowHoverHighlight: (v) => setState(() => _hovered = v),
+      onShowFocusHighlight: (v) => setState(() => _hovered = v),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

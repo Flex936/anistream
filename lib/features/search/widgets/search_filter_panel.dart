@@ -90,6 +90,7 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                   children: ['ANY', 'RELEASING', 'FINISHED'].map((status) {
                     final isSelected = _selectedStatus == status;
                     return ChoiceChip(
+                      autofocus: true,
                       label: Text(status),
                       selected: isSelected,
                       onSelected: (selected) {

@@ -8,6 +8,7 @@ class CalendarCard extends StatefulWidget {
   final String Function(int timestamp) formatLocalTime;
   final String Function(int timestamp) getTimeRemaining;
   final bool autofocus;
+  final VoidCallback? onTap;
 
   const CalendarCard({
     super.key,
@@ -15,6 +16,7 @@ class CalendarCard extends StatefulWidget {
     required this.formatLocalTime,
     required this.getTimeRemaining,
     this.autofocus = false,
+    this.onTap,
   });
 
   @override
@@ -36,141 +38,153 @@ class _CalendarCardState extends State<CalendarCard> {
       autofocus: widget.autofocus,
       onShowHoverHighlight: (v) => setState(() => _hovered = v),
       onShowFocusHighlight: (v) => setState(() => _hovered = v),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AspectRatio(
-            aspectRatio: 2 / 3,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: _hovered
-                      ? AppPalette.primary.withValues(alpha: 0.50)
-                      : AppPalette.border,
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x4D000000),
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap?.call();
+            return null;
+          },
+        ),
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AspectRatio(
+              aspectRatio: 2 / 3,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _hovered
+                        ? AppPalette.primary.withValues(alpha: 0.50)
+                        : AppPalette.border,
                   ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(9),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _CoverImage(
-                      url: anime.coverImage?.large,
-                      hovered: _hovered,
-                    ),
-
-                    AnimatedOpacity(
-                      opacity: _hovered ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 250),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              AppPalette.black.withValues(alpha: 0.80),
-                              AppPalette.transparent,
-                            ],
-                          ),
-                        ),
-                        alignment: Alignment.bottomLeft,
-                        padding: const EdgeInsets.all(6),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppPalette.primary,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppPalette.primary.withValues(
-                                  alpha: 0.55,
-                                ),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            epLabel,
-                            style: const TextStyle(
-                              color: AppPalette.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppPalette.black.withValues(alpha: 0.72),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: AppPalette.statusReleasing.withValues(
-                              alpha: 0.30,
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          widget.formatLocalTime(nextEp.airingAt),
-                          style: const TextStyle(
-                            color: AppPalette.statusReleasing,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x4D000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
                     ),
                   ],
                 ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _CoverImage(
+                        url: anime.coverImage?.large,
+                        hovered: _hovered,
+                      ),
+
+                      AnimatedOpacity(
+                        opacity: _hovered ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 250),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [
+                                AppPalette.black.withValues(alpha: 0.80),
+                                AppPalette.transparent,
+                              ],
+                            ),
+                          ),
+                          alignment: Alignment.bottomLeft,
+                          padding: const EdgeInsets.all(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppPalette.primary,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppPalette.primary.withValues(
+                                    alpha: 0.55,
+                                  ),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              epLabel,
+                              style: const TextStyle(
+                                color: AppPalette.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppPalette.black.withValues(alpha: 0.72),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: AppPalette.statusReleasing.withValues(
+                                alpha: 0.30,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            widget.formatLocalTime(nextEp.airingAt),
+                            style: const TextStyle(
+                              color: AppPalette.statusReleasing,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 6),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 150),
-            style: TextStyle(
-              color: _hovered ? AppPalette.primary : AppPalette.textMain,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              height: 1.3,
+            const SizedBox(height: 6),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 150),
+              style: TextStyle(
+                color: _hovered ? AppPalette.primary : AppPalette.textMain,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+              ),
+              child: Text(
+                anime.title.romaji ?? anime.title.english ?? 'Unknown',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            child: Text(
-              anime.title.romaji ?? anime.title.english ?? 'Unknown',
+
+            const SizedBox(height: 2),
+            Text(
+              widget.getTimeRemaining(nextEp.airingAt),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppPalette.textMuted, fontSize: 9),
             ),
-          ),
-
-          const SizedBox(height: 2),
-          Text(
-            widget.getTimeRemaining(nextEp.airingAt),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppPalette.textMuted, fontSize: 9),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

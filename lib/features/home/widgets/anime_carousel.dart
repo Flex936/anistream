@@ -158,9 +158,9 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                 );
               }
 
-              return FocusableActionDetector(
-                onShowHoverHighlight: (v) => setState(() => _isHovered = v),
-                onShowFocusHighlight: (v) => setState(() => _isHovered = v),
+              return MouseRegion(
+                onEnter: (_) => setState(() => _isHovered = true),
+                onExit: (_) => setState(() => _isHovered = false),
                 child: Stack(
                   children: [
                     ScrollConfiguration(
@@ -179,13 +179,10 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                         itemBuilder: (context, i) {
                           return SizedBox(
                             width: 170,
-                            // ── FIXED: Removed the aggressive ensureVisible callback ──
-                            child: Focus(
+                            child: AnimeCard(
+                              anime: items[i],
+                              onSelect: widget.onSelectAnime,
                               autofocus: widget.autofocusFirst && i == 0,
-                              child: AnimeCard(
-                                anime: items[i],
-                                onSelect: widget.onSelectAnime,
-                              ),
                             ),
                           );
                         },

@@ -319,7 +319,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 canRequestFocus: false,
                 skipTraversal: true,
                 onFocusChange: (f) {
-                  if (f && i == 0) _scrollToTop();
+                  if (f && i < cols) _scrollToTop();
                 },
                 child: HeroCard(
                   entry: entry,
@@ -333,7 +333,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 canRequestFocus: false,
                 skipTraversal: true,
                 onFocusChange: (f) {
-                  if (f && i == 0) _scrollToTop();
+                  if (f && i < cols || i == 0) _scrollToTop();
                 },
                 child: WatchlistCard(
                   entry: entry,

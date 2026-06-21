@@ -97,7 +97,11 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
 
   void _scrollToTop() {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      _scrollController.animateTo(
+        0.0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -210,7 +214,8 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                   formatLocalTime: _formatLocalTime,
                   getTimeRemaining: _getTimeRemaining,
                   onSelectAnime: widget.onSelectAnime,
-                  isFirstGlobal: i == _days.indexWhere((d) => calendar[d]!.isNotEmpty),
+                  isFirstGlobal:
+                      i == _days.indexWhere((d) => calendar[d]!.isNotEmpty),
                   onFocusFirstItem: _scrollToTop,
                 ),
               );
@@ -325,18 +330,16 @@ class _DayColumn extends StatelessWidget {
                       canRequestFocus: false,
                       skipTraversal: true,
                       onFocusChange: (focused) {
-                        if (focused && isFirstGlobal && i == 0) {
+                        if (focused && i == 0) {
                           onFocusFirstItem?.call();
                         }
                       },
-                      child: GestureDetector(
+                      child: CalendarCard(
+                        anime: items[i],
+                        autofocus: isFirstGlobal && i == 0,
+                        formatLocalTime: formatLocalTime,
+                        getTimeRemaining: getTimeRemaining,
                         onTap: () => onSelectAnime?.call(items[i]),
-                        child: CalendarCard(
-                          anime: items[i],
-                          autofocus: isFirstGlobal && i == 0,
-                          formatLocalTime: formatLocalTime,
-                          getTimeRemaining: getTimeRemaining,
-                        ),
                       ),
                     ),
                     if (i < items.length - 1) const SizedBox(height: 12),

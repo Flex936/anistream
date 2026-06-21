@@ -129,7 +129,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
-
+    if (_isSettingsOpen || _torrentController.needsManualSelection) {
+      if (key == LogicalKeyboardKey.escape ||
+          key == LogicalKeyboardKey.goBack) {
+        setState(() => _isSettingsOpen = false);
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored; // let the menu handle its own nav/select
+    }
     if (key == LogicalKeyboardKey.space ||
         key == LogicalKeyboardKey.keyK ||
         key == LogicalKeyboardKey.select) {
@@ -155,6 +162,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
         setState(() => _isSettingsOpen = false);
       } else if (_isFullscreen) {
         _toggleFullscreen();
+      } else {
+        _exitTheater();
       }
     } else if (key == LogicalKeyboardKey.contextMenu) {
       setState(() => _isSettingsOpen = !_isSettingsOpen);

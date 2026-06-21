@@ -119,9 +119,9 @@ class _SettingRowTileState extends State<SettingRowTile> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+    return FocusableActionDetector(
+      onShowHoverHighlight: (v) => setState(() => _hovered = v),
+      onShowFocusHighlight: (v) => setState(() => _hovered = v),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => widget.onChanged(!widget.value),

@@ -145,23 +145,29 @@ class _AppShellState extends State<AppShell> {
         onLogin: _handleLogin,
         onSettings: () => showSettingsMenu(context),
       ),
-      // ── GestureDetector to dismiss mobile keyboard on tap ──
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        behavior: HitTestBehavior.opaque,
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (ScrollNotification notification) {
-            if (notification.depth == 0) {
-              final isScrolled = notification.metrics.pixels > 20;
-              if (isScrolled != _isScrolled) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) setState(() => _isScrolled = isScrolled);
-                });
+      body: PopScope(
+        canPop: _previousView == null && _currentView is HomeScreen,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          _previousView != null ? _handleBack() : _goHome();
+        },
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          behavior: HitTestBehavior.opaque,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (ScrollNotification notification) {
+              if (notification.depth == 0) {
+                final isScrolled = notification.metrics.pixels > 20;
+                if (isScrolled != _isScrolled) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) setState(() => _isScrolled = isScrolled);
+                  });
+                }
               }
-            }
-            return false;
-          },
-          child: _currentView,
+              return false;
+            },
+            child: _currentView,
+          ),
         ),
       ),
     );
