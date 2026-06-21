@@ -19,6 +19,7 @@ import 'widgets/theater_player.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_settings.dart';
 import 'widgets/theater_batch_picker.dart';
+import 'package:anistream/features/theater/services/theater_data.dart';
 
 class TheaterScreen extends StatefulWidget {
   final Anime anime;
@@ -50,6 +51,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _isFullscreen = false;
   Timer? _hideControlsTimer;
   bool _isClosing = false;
+  List<Chapter> _chapters = [];
 
   StreamSubscription? _posSub;
 
@@ -123,6 +125,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
       _player.open(Media(_torrentController.streamUrl!));
+      _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
+        _,
+      ) async {
+        final chapters = await loadChapters(_player);
+        if (mounted) setState(() => _chapters = chapters);
+      });
       _player.play();
     }
   }
@@ -300,6 +308,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                   onToggleSettings: () => setState(
                                     () => _isSettingsOpen = !_isSettingsOpen,
                                   ),
+                                  chapterMetadata: _chapters,
                                 ),
                               ),
                             ),

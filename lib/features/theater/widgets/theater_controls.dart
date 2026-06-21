@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:anistream/features/theater/services/theater_data.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
@@ -8,7 +9,9 @@ class TheaterControls extends StatefulWidget {
   final Player player;
   final VoidCallback onInteract;
   final VoidCallback onToggleSettings;
+
   final bool isSettingsOpen;
+  final List<Chapter> chapterMetadata;
 
   const TheaterControls({
     super.key,
@@ -16,10 +19,71 @@ class TheaterControls extends StatefulWidget {
     required this.onInteract,
     required this.onToggleSettings,
     required this.isSettingsOpen,
+    this.chapterMetadata = const [],
   });
 
   @override
   State<TheaterControls> createState() => _TheaterControlsState();
+}
+
+class ChapteredTrackShape extends RoundedRectSliderTrackShape {
+  final List<double> stops; // normalized 0.0–1.0, one per chapter start
+  const ChapteredTrackShape({required this.stops});
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 2,
+  }) {
+    super.paint(
+      context,
+      offset,
+      parentBox: parentBox,
+      sliderTheme: sliderTheme,
+      enableAnimation: enableAnimation,
+      textDirection: textDirection,
+      thumbCenter: thumbCenter,
+      isDiscrete: isDiscrete,
+      isEnabled: isEnabled,
+      additionalActiveTrackHeight: additionalActiveTrackHeight,
+    );
+
+    if (stops.isEmpty) return;
+
+    final trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+
+    final paint = Paint()..color = AppPalette.black.withValues(alpha: 0.55);
+    const markWidth = 2.5;
+
+    for (final stop in stops) {
+      if (stop <= 0.01 || stop >= 0.99) continue;
+      final dx = trackRect.left + stop * trackRect.width;
+      context.canvas.drawRect(
+        Rect.fromLTWH(
+          dx - markWidth / 2,
+          trackRect.top,
+          markWidth,
+          trackRect.height,
+        ),
+        paint,
+      );
+    }
+  }
 }
 
 class _TheaterControlsState extends State<TheaterControls> {
@@ -86,6 +150,9 @@ class _TheaterControlsState extends State<TheaterControls> {
       0.0,
       maxDuration,
     );
+    final chapterStops = widget.chapterMetadata
+        .map((c) => c.start.inMilliseconds / maxDuration)
+        .toList();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -95,6 +162,7 @@ class _TheaterControlsState extends State<TheaterControls> {
           height: 24,
           child: SliderTheme(
             data: SliderThemeData(
+              trackShape: ChapteredTrackShape(stops: chapterStops),
               activeTrackColor: AppPalette.primary,
               inactiveTrackColor: AppPalette.white.withValues(alpha: 0.2),
               thumbColor: AppPalette.primary,
