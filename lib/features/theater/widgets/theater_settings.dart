@@ -78,13 +78,17 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
                 color: AppPalette.white.withValues(alpha: 0.1),
               ),
             ),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: switch (_currentPage) {
-                _MenuPage.main => _buildMain(),
-                _MenuPage.subtitles => _buildSubtitles(),
-                _MenuPage.audio => _buildAudio(),
-              },
+            // ── Transparent Material catches the splash ripples ──
+            child: Material(
+              color: Colors.transparent,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: switch (_currentPage) {
+                  _MenuPage.main => _buildMain(),
+                  _MenuPage.subtitles => _buildSubtitles(),
+                  _MenuPage.audio => _buildAudio(),
+                },
+              ),
             ),
           ),
         ),
@@ -174,7 +178,6 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
   }
 }
 
-// ... existing code ...
 class _Tile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -193,6 +196,7 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      mouseCursor: SystemMouseCursors.basic,
       autofocus: autofocus,
       focusColor: AppPalette.white.withValues(alpha: 0.1),
       hoverColor: AppPalette.white.withValues(alpha: 0.1),
@@ -220,6 +224,7 @@ class _Back extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      mouseCursor: SystemMouseCursors.basic,
       autofocus: autofocus,
       focusColor: AppPalette.white.withValues(alpha: 0.1),
       hoverColor: AppPalette.white.withValues(alpha: 0.1),
@@ -250,6 +255,7 @@ class _TrackTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      mouseCursor: SystemMouseCursors.basic,
       focusColor: AppPalette.white.withValues(alpha: 0.1),
       hoverColor: AppPalette.white.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

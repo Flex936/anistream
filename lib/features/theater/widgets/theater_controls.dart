@@ -1,16 +1,18 @@
 import 'dart:async';
-import 'package:anistream/features/theater/services/theater_data.dart';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../../core/theme/app_palette.dart';
+import '../services/theater_data.dart';
 
 class TheaterControls extends StatefulWidget {
   final Player player;
   final VoidCallback onInteract;
   final VoidCallback onToggleSettings;
-
+  final VoidCallback onToggleFullscreen;
   final bool isSettingsOpen;
+  final bool isFullscreen;
   final List<Chapter> chapterMetadata;
 
   const TheaterControls({
@@ -18,7 +20,9 @@ class TheaterControls extends StatefulWidget {
     required this.player,
     required this.onInteract,
     required this.onToggleSettings,
+    required this.onToggleFullscreen,
     required this.isSettingsOpen,
+    required this.isFullscreen,
     this.chapterMetadata = const [],
   });
 
@@ -27,7 +31,7 @@ class TheaterControls extends StatefulWidget {
 }
 
 class ChapteredTrackShape extends RoundedRectSliderTrackShape {
-  final List<double> stops; // normalized 0.0–1.0, one per chapter start
+  final List<double> stops;
   const ChapteredTrackShape({required this.stops});
 
   @override
@@ -67,7 +71,8 @@ class ChapteredTrackShape extends RoundedRectSliderTrackShape {
       isDiscrete: isDiscrete,
     );
 
-    final paint = Paint()..color = AppPalette.black.withValues(alpha: 0.55);
+    // Cuts physical gaps using the base color
+    final paint = Paint()..color = AppPalette.base.withValues(alpha: 0.95);
     const markWidth = 2.5;
 
     for (final stop in stops) {
@@ -140,9 +145,19 @@ class _TheaterControlsState extends State<TheaterControls> {
     return '$minutes:$seconds';
   }
 
+  Chapter? get _activeSkipChapter {
+    for (final c in widget.chapterMetadata) {
+      if (c.isSkippable &&
+          _position >= c.start &&
+          _position < (c.end - const Duration(seconds: 1))) {
+        return c;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Prevent assertion errors when player initializes with 0 duration
     final maxDuration = _duration.inMilliseconds > 0
         ? _duration.inMilliseconds.toDouble()
         : 1.0;
@@ -153,110 +168,220 @@ class _TheaterControlsState extends State<TheaterControls> {
     final chapterStops = widget.chapterMetadata
         .map((c) => c.start.inMilliseconds / maxDuration)
         .toList();
+    final skipTarget = _activeSkipChapter;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: 24,
-          child: SliderTheme(
-            data: SliderThemeData(
-              trackShape: ChapteredTrackShape(stops: chapterStops),
-              activeTrackColor: AppPalette.primary,
-              inactiveTrackColor: AppPalette.white.withValues(alpha: 0.2),
-              thumbColor: AppPalette.primary,
-              trackHeight: 5,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
-            ),
-            child: Slider(
-              min: 0,
-              max: maxDuration,
-              value: currentPos,
-              onChangeStart: (_) => widget.onInteract(),
-              onChanged: _onSeek,
-              onChangeEnd: (_) => widget.onInteract(),
+    return ShaderMask(
+      // Apple-style Fading Frosted Glass
+      shaderCallback: (rect) => LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [AppPalette.transparent, AppPalette.black, AppPalette.black],
+        stops: const [0.0, 0.4, 1.0],
+      ).createShader(rect),
+      blendMode: BlendMode.dstIn,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(32, 64, 32, 32),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [
+                AppPalette.base.withValues(alpha: 0.95),
+                AppPalette.base.withValues(alpha: 0.4),
+                AppPalette.transparent,
+              ],
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            IconButton(
-              icon: Icon(
-                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                color: AppPalette.white,
-                size: 34,
-              ),
-              onPressed: () {
-                _isPlaying ? widget.player.pause() : widget.player.play();
-                widget.onInteract();
-              },
-            ),
-            const SizedBox(width: 16),
-            Text(
-              '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
-              style: const TextStyle(
-                color: AppPalette.textMain,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            IconButton(
-              icon: Icon(
-                _volume == 0
-                    ? Icons.volume_off_rounded
-                    : Icons.volume_up_rounded,
-                color: AppPalette.white,
-                size: 24,
-              ),
-              onPressed: () {
-                widget.player.setVolume(_volume == 0 ? 100.0 : 0.0);
-                widget.onInteract();
-              },
-            ),
-            SizedBox(
-              width: 120,
-              child: SliderTheme(
-                data: SliderThemeData(
-                  activeTrackColor: AppPalette.white,
-                  inactiveTrackColor: AppPalette.white.withValues(alpha: 0.3),
-                  thumbColor: AppPalette.white,
-                  trackHeight: 4,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 7,
-                  ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 14,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Skip Button Popup ──
+              Align(
+                alignment: Alignment.centerRight,
+                child: AnimatedOpacity(
+                  opacity: skipTarget != null ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: AnimatedSlide(
+                    offset: skipTarget != null
+                        ? Offset.zero
+                        : const Offset(0, 0.5),
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutBack,
+                    child: IgnorePointer(
+                      ignoring: skipTarget == null,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Material(
+                          color: AppPalette.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(20),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () {
+                              if (skipTarget != null) {
+                                widget.player.seek(skipTarget.end);
+                                widget.onInteract();
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    skipTarget?.skipLabel ?? 'Skip',
+                                    style: const TextStyle(
+                                      color: AppPalette.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.skip_next_rounded,
+                                    color: AppPalette.white,
+                                    size: 18,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                child: Slider(
-                  min: 0,
-                  max: 100,
-                  value: _volume.clamp(0.0, 100.0),
-                  onChanged: (v) {
-                    widget.player.setVolume(v);
-                    widget.onInteract();
-                  },
+              ),
+
+              // ── Seekbar ──
+              SizedBox(
+                height: 24,
+                child: SliderTheme(
+                  data: SliderThemeData(
+                    trackShape: ChapteredTrackShape(stops: chapterStops),
+                    activeTrackColor: AppPalette.primary,
+                    inactiveTrackColor: AppPalette.white.withValues(alpha: 0.2),
+                    thumbColor: AppPalette.primary,
+                    trackHeight: 5,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 8,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 16,
+                    ),
+                  ),
+                  child: Slider(
+                    min: 0,
+                    max: maxDuration,
+                    value: currentPos,
+                    onChangeStart: (_) => widget.onInteract(),
+                    onChanged: _onSeek,
+                    onChangeEnd: (_) => widget.onInteract(),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(
-                Icons.settings_rounded,
-                color: widget.isSettingsOpen
-                    ? AppPalette.primary
-                    : AppPalette.white,
-                size: 26,
+              const SizedBox(height: 12),
+
+              // ── Controls Row ──
+              Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _isPlaying
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      color: AppPalette.white,
+                      size: 34,
+                    ),
+                    onPressed: () {
+                      _isPlaying ? widget.player.pause() : widget.player.play();
+                      widget.onInteract();
+                    },
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+                    style: const TextStyle(
+                      color: AppPalette.textMain,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: Icon(
+                      _volume == 0
+                          ? Icons.volume_off_rounded
+                          : Icons.volume_up_rounded,
+                      color: AppPalette.white,
+                      size: 24,
+                    ),
+                    onPressed: () {
+                      widget.player.setVolume(_volume == 0 ? 100.0 : 0.0);
+                      widget.onInteract();
+                    },
+                  ),
+                  SizedBox(
+                    width: 120,
+                    child: SliderTheme(
+                      data: SliderThemeData(
+                        activeTrackColor: AppPalette.white,
+                        inactiveTrackColor: AppPalette.white.withValues(
+                          alpha: 0.3,
+                        ),
+                        thumbColor: AppPalette.white,
+                        trackHeight: 4,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 7,
+                        ),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 14,
+                        ),
+                      ),
+                      child: Slider(
+                        min: 0,
+                        max: 100,
+                        value: _volume.clamp(0.0, 100.0),
+                        onChanged: (v) {
+                          widget.player.setVolume(v);
+                          widget.onInteract();
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  IconButton(
+                    icon: Icon(
+                      Icons.settings_rounded,
+                      color: widget.isSettingsOpen
+                          ? AppPalette.primary
+                          : AppPalette.white,
+                      size: 26,
+                    ),
+                    onPressed: widget.onToggleSettings,
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      widget.isFullscreen
+                          ? Icons.fullscreen_exit_rounded
+                          : Icons.fullscreen_rounded,
+                      color: AppPalette.white,
+                      size: 28,
+                    ),
+                    onPressed: widget.onToggleFullscreen,
+                  ),
+                ],
               ),
-              onPressed: widget.onToggleSettings,
-            ),
-          ],
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }

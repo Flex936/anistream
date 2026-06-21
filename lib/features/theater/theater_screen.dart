@@ -15,11 +15,11 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
 import '../../shared/widgets/toast.dart';
 import 'services/streaming_controller_service.dart';
+import 'services/theater_data.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_settings.dart';
 import 'widgets/theater_batch_picker.dart';
-import 'package:anistream/features/theater/services/theater_data.dart';
 
 class TheaterScreen extends StatefulWidget {
   final Anime anime;
@@ -51,8 +51,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _isFullscreen = false;
   Timer? _hideControlsTimer;
   bool _isClosing = false;
-  List<Chapter> _chapters = [];
 
+  List<Chapter> _chapters = [];
   StreamSubscription? _posSub;
 
   @override
@@ -84,7 +84,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
 
-    // ── FIXED: Core Settings Service Reference ──
     final hwdec = prefs.getString(SettingsService.kHwDec) ?? 'auto';
 
     final platform = _player.platform;
@@ -120,17 +119,18 @@ class _TheaterScreenState extends State<TheaterScreen> {
     });
   }
 
-  // ── FIXED: Removed the else branch calling setState(() {}) ──
   void _onTorrentStateChanged() {
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
       _player.open(Media(_torrentController.streamUrl!));
+
       _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
         _,
       ) async {
-        final chapters = await loadChapters(_player);
-        if (mounted) setState(() => _chapters = chapters);
+        final resolvedChapters = await loadChapters(_player);
+        if (mounted) setState(() => _chapters = resolvedChapters);
       });
+
       _player.play();
     }
   }
@@ -138,27 +138,60 @@ class _TheaterScreenState extends State<TheaterScreen> {
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
+    final isShift =
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.shiftLeft,
+        ) ||
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.shiftRight,
+        );
+
     if (_isSettingsOpen || _torrentController.needsManualSelection) {
       if (key == LogicalKeyboardKey.escape ||
           key == LogicalKeyboardKey.goBack) {
         setState(() => _isSettingsOpen = false);
         return KeyEventResult.handled;
       }
-      return KeyEventResult.ignored; // let the menu handle its own nav/select
+      return KeyEventResult.ignored;
     }
+
     if (key == LogicalKeyboardKey.space ||
         key == LogicalKeyboardKey.keyK ||
         key == LogicalKeyboardKey.select) {
       _player.playOrPause();
     } else if (key == LogicalKeyboardKey.arrowLeft ||
         key == LogicalKeyboardKey.keyJ) {
-      final target = _player.state.position - const Duration(seconds: 10);
-      _player.seek(target.isNegative ? Duration.zero : target);
+      if (isShift && _chapters.isNotEmpty) {
+        final prevChap = _chapters.lastWhere(
+          (c) => c.start < _player.state.position - const Duration(seconds: 3),
+          orElse: () => const Chapter(
+            title: 'start',
+            start: Duration.zero,
+            end: Duration.zero,
+          ),
+        );
+        _player.seek(prevChap.start);
+      } else {
+        final target = _player.state.position - const Duration(seconds: 10);
+        _player.seek(target.isNegative ? Duration.zero : target);
+      }
     } else if (key == LogicalKeyboardKey.arrowRight ||
         key == LogicalKeyboardKey.keyL) {
-      final target = _player.state.position + const Duration(seconds: 10);
-      final duration = _player.state.duration;
-      _player.seek(target > duration ? duration : target);
+      if (isShift && _chapters.isNotEmpty) {
+        final nextChap = _chapters.firstWhere(
+          (c) => c.start > _player.state.position + const Duration(seconds: 1),
+          orElse: () => Chapter(
+            title: 'end',
+            start: _player.state.duration,
+            end: _player.state.duration,
+          ),
+        );
+        _player.seek(nextChap.start);
+      } else {
+        final target = _player.state.position + const Duration(seconds: 10);
+        final duration = _player.state.duration;
+        _player.seek(target > duration ? duration : target);
+      }
     } else if (key == LogicalKeyboardKey.arrowUp) {
       _player.setVolume((_player.state.volume + 5).clamp(0, 100));
     } else if (key == LogicalKeyboardKey.arrowDown) {
@@ -296,19 +329,21 @@ class _TheaterScreenState extends State<TheaterScreen> {
                               ),
                             ),
                             Positioned(
-                              bottom: 24,
-                              left: 32,
-                              right: 32,
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
                               child: GestureDetector(
                                 onTap: () {},
                                 child: TheaterControls(
                                   player: _player,
+                                  chapterMetadata: _chapters,
                                   isSettingsOpen: _isSettingsOpen,
+                                  isFullscreen: _isFullscreen,
+                                  onToggleFullscreen: _toggleFullscreen,
                                   onInteract: _startHideControlsTimer,
                                   onToggleSettings: () => setState(
                                     () => _isSettingsOpen = !_isSettingsOpen,
                                   ),
-                                  chapterMetadata: _chapters,
                                 ),
                               ),
                             ),
@@ -327,7 +362,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       ),
                     ),
 
-                  // ── FIXED: Scoped ListenableBuilder ──
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 600),
                     child: ListenableBuilder(
