@@ -153,7 +153,6 @@ class AnilistQueryService {
     });
   }
 
-  // ── Segmented, Paginated Fetching for Watchlist ──
   Future<({List<MediaListEntry> entries, bool hasNextPage})> getUserWatchlist({
     required String status,
     int page = 1,
@@ -227,6 +226,22 @@ class AnilistQueryService {
     return _execute(_Queries.search, variables);
   }
 
+  // ── Lightweight fetch just for episode progress ──
+  Future<int?> getMediaProgress(int mediaId) async {
+    if (!isLoggedIn) return null;
+    try {
+      final response = await executeRaw(
+        'query (\$id: Int) { Media(id: \$id) { mediaListEntry { progress } } }',
+        {'id': mediaId},
+      );
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body);
+      return data['data']?['Media']?['mediaListEntry']?['progress'] as int?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void dispose() => _httpClient.close();
 }
 
@@ -269,7 +284,6 @@ abstract final class _Queries {
       Page(page: 1, perPage: 15) { media(search: \$search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: \$bannedGenres, status_not: NOT_YET_RELEASED, averageScore_greater: \$minScore, status: \$status, seasonYear: \$seasonYear) { ${_Fragments.mediaCore} } }
     }''';
 
-  // ── FIXED: Segmented, Paginated Query ──
   static const String userWatchlistPaged =
       '''
     query (\$userId: Int, \$status: MediaListStatus, \$page: Int, \$perPage: Int) {

@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../data/anilist/models/anime.dart';
+import '../../data/anilist/anilist_query_service.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
 import '../../core/settings/settings_service.dart';
@@ -25,6 +26,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   final TorrentScraperService _scraper = TorrentScraperService();
   final Map<int, Future<List<Torrent>>> _torrentFutures = {};
 
+  // ── Progress State ──
+  int? _userProgress;
+
   int _expandedEpisode = -1;
   bool _autoPlayRecommended = false;
 
@@ -37,6 +41,17 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     SettingsService().load().then((s) {
       if (mounted) setState(() => _autoPlayRecommended = s.autoPlayRecommended);
     });
+
+    _fetchProgress();
+  }
+
+  Future<void> _fetchProgress() async {
+    final progress = await AnilistQueryService().getMediaProgress(
+      widget.anime.id,
+    );
+    if (!mounted || progress == null) return;
+
+    setState(() => _userProgress = progress);
   }
 
   int get _episodeCount {
@@ -71,6 +86,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (!mounted) return;
 
       if (torrents.isNotEmpty) {
+        // Re-fetch progress when returning from Theater in case they watched an episode
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -80,7 +96,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
               torrent: torrents.first,
             ),
           ),
-        );
+        ).then((_) => _fetchProgress());
       } else {
         setState(() => _expandedEpisode = ep);
       }
@@ -96,6 +112,12 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         });
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _scraper.dispose();
+    super.dispose();
   }
 
   @override
@@ -152,7 +174,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                   ),
                 ),
               ),
-              // ── FIXED: Added SafeArea wrapper for the bottom list to avoid the home bar ──
               SliverSafeArea(
                 top: false,
                 sliver: SliverPadding(
@@ -165,15 +186,25 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final ep = index + 1;
+                      // Only mark it as 'Up Next' if there actually is a next episode
+                      final isUpNext =
+                          _userProgress != null &&
+                          ep == (_userProgress! + 1) &&
+                          ep <= _episodeCount;
+
                       return EpisodeTile(
                         key: ValueKey(ep),
                         anime: widget.anime,
                         episodeNumber: ep,
                         isExpanded: _expandedEpisode == ep,
+                        userProgress: _userProgress,
+                        isUpNext: isUpNext,
                         torrentFuture: _expandedEpisode == ep
                             ? _futureFor(ep)
                             : null,
                         onToggle: () => _toggleEpisode(ep),
+                        // ── Pass the fetch logic down to update UI natively ──
+                        onReturnFromTheater: _fetchProgress,
                       );
                     }, childCount: _episodeCount),
                   ),

@@ -11,16 +11,25 @@ class EpisodeTile extends StatelessWidget {
   final Anime anime;
   final int episodeNumber;
   final bool isExpanded;
+
+  // ── Progress Styling Variables ──
+  final int? userProgress;
+  final bool isUpNext;
+
   final Future<List<Torrent>>? torrentFuture;
   final VoidCallback onToggle;
+  final VoidCallback? onReturnFromTheater;
 
   const EpisodeTile({
     super.key,
     required this.anime,
     required this.episodeNumber,
     required this.isExpanded,
+    this.userProgress,
+    this.isUpNext = false,
     this.torrentFuture,
     required this.onToggle,
+    this.onReturnFromTheater,
   });
 
   @override
@@ -28,11 +37,29 @@ class EpisodeTile extends StatelessWidget {
     final isMobile = MediaQuery.of(context).size.width < 600;
     final hPad = isMobile ? 16.0 : 28.0;
 
+    // ── GHOSTED LOGIC ──
+    final isWatched = userProgress != null && episodeNumber <= userProgress!;
+
+    // Base colors derived from state
+    final Color numColor = isExpanded
+        ? AppPalette.primary
+        : isUpNext
+        ? AppPalette.textMain
+        : isWatched
+        ? AppPalette.textMuted.withValues(alpha: 0.25)
+        : AppPalette.textMuted.withValues(alpha: 0.35);
+
+    final Color titleColor = isExpanded || isUpNext
+        ? AppPalette.textMain
+        : isWatched
+        ? AppPalette.textMuted.withValues(alpha: 0.5)
+        : AppPalette.textMuted;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         HoverFocusBuilder(
-          autofocus: episodeNumber == 1,
+          autofocus: isUpNext || (userProgress == null && episodeNumber == 1),
           onTap: onToggle,
           builder: (context, hovered) => AnimatedContainer(
             duration: const Duration(milliseconds: 150),
@@ -48,6 +75,8 @@ class EpisodeTile extends StatelessWidget {
                 left: BorderSide(
                   color: isExpanded
                       ? AppPalette.primary
+                      : isUpNext
+                      ? AppPalette.primary.withValues(alpha: 0.3)
                       : AppPalette.transparent,
                   width: 3,
                 ),
@@ -60,9 +89,7 @@ class EpisodeTile extends StatelessWidget {
                   child: Text(
                     episodeNumber.toString().padLeft(2, '0'),
                     style: TextStyle(
-                      color: isExpanded
-                          ? AppPalette.primary
-                          : AppPalette.textMuted.withValues(alpha: 0.35),
+                      color: numColor,
                       fontSize: isMobile ? 16 : 20,
                       fontWeight: FontWeight.w800,
                     ),
@@ -70,17 +97,49 @@ class EpisodeTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    'Episode $episodeNumber',
-                    style: TextStyle(
-                      color: isExpanded
-                          ? AppPalette.textMain
-                          : AppPalette.textMuted,
-                      fontSize: 14,
-                      fontWeight: isExpanded
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                    ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Episode $episodeNumber',
+                        style: TextStyle(
+                          color: titleColor,
+                          fontSize: 14,
+                          fontWeight: isExpanded || isUpNext
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                        ),
+                      ),
+                      if (isUpNext) ...[
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppPalette.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'UP NEXT',
+                            style: TextStyle(
+                              color: AppPalette.primary,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (isWatched) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.check_rounded,
+                          size: 14,
+                          color: AppPalette.textMuted.withValues(alpha: 0.5),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 AnimatedRotation(
@@ -92,7 +151,7 @@ class EpisodeTile extends StatelessWidget {
                     size: 22,
                     color: isExpanded
                         ? AppPalette.primary
-                        : AppPalette.textMuted,
+                        : AppPalette.textMuted.withValues(alpha: 0.5),
                   ),
                 ),
               ],
@@ -202,7 +261,7 @@ class EpisodeTile extends StatelessWidget {
                           torrent: torrents[i],
                         ),
                       ),
-                    );
+                    ).then((_) => onReturnFromTheater?.call());
                   },
                 ),
                 if (i < torrents.length - 1) const SizedBox(height: 8),

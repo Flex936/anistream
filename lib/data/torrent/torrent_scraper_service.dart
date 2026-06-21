@@ -45,7 +45,7 @@ class _FeedParseRequest {
   });
 }
 
-// ── FIXED: Moved off UI thread ──
+// ── Moved off UI thread ──
 List<Torrent> _parseAndScoreFeed(_FeedParseRequest req) {
   late XmlDocument document;
   try {
@@ -431,5 +431,10 @@ class TorrentScraperService {
       link += '&tr=${Uri.encodeComponent(tr)}';
     }
     return link;
+  }
+
+  // ── Added the dispose method to prevent the IDE Error ──
+  void dispose() {
+    _client.close();
   }
 }
