@@ -34,7 +34,12 @@ class HeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final media = entry.media;
     final progress = entry.progress;
-    final imgUrl = media.bannerImage ?? media.coverImage?.display;
+
+    // ── Image Optimization (Prefer Large > ExtraLarge) ──
+    final imgUrl =
+        media.bannerImage ??
+        media.coverImage?.large ??
+        media.coverImage?.extraLarge;
 
     double percent = 0.0;
     if (media.episodes != null && media.episodes! > 0) {
@@ -70,7 +75,11 @@ class HeroCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              AppNetworkImage(url: imgUrl, scale: hovered ? 1.05 : 1.0),
+              AppNetworkImage(
+                url: imgUrl,
+                scale: hovered ? 1.05 : 1.0,
+                cacheWidth: 600, // Landscape cards can use a bit more res
+              ),
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -209,8 +218,9 @@ class ListCard extends StatelessWidget {
               child: AspectRatio(
                 aspectRatio: 0.7,
                 child: AppNetworkImage(
-                  url: media.coverImage?.display,
+                  url: media.coverImage?.large ?? media.coverImage?.extraLarge,
                   scale: hovered ? 1.05 : 1.0,
+                  cacheWidth: 300, // Small image, hard limit physical decodes
                 ),
               ),
             ),
@@ -387,8 +397,11 @@ class WatchlistCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     AppNetworkImage(
-                      url: media.coverImage?.display,
+                      url:
+                          media.coverImage?.large ??
+                          media.coverImage?.extraLarge,
                       scale: hovered ? 1.05 : 1.0,
+                      cacheWidth: 450, // Ideal sweet spot for grids
                     ),
 
                     if (showProgress)

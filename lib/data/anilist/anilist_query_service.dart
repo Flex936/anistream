@@ -76,7 +76,6 @@ class AnilistQueryService {
     return 'WINTER';
   }
 
-  // Exposed for the TrackerService to reuse the HTTP plumbing
   Future<http.Response> executeRaw(
     String query,
     Map<String, dynamic> variables,
@@ -154,7 +153,12 @@ class AnilistQueryService {
     });
   }
 
-  Future<List<MediaList>> getUserWatchlist() async {
+  // ── Segmented, Paginated Fetching for Watchlist ──
+  Future<({List<MediaListEntry> entries, bool hasNextPage})> getUserWatchlist({
+    required String status,
+    int page = 1,
+    int perPage = 40,
+  }) async {
     if (!isLoggedIn) throw const AnilistException('Not logged in');
     final viewerId = await _resolveViewerId();
     if (viewerId == null) {
@@ -162,18 +166,25 @@ class AnilistQueryService {
     }
 
     try {
-      final response = await executeRaw(_Queries.userWatchlist, {
+      final response = await executeRaw(_Queries.userWatchlistPaged, {
         'userId': viewerId,
+        'status': status,
+        'page': page,
+        'perPage': perPage,
       });
       _assertResponse(response);
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final lists =
-          decoded['data']?['MediaListCollection']?['lists'] as List<dynamic>? ??
-          const [];
 
-      return lists
-          .map((r) => MediaList.fromJson(r as Map<String, dynamic>))
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final pageData = decoded['data']?['Page'];
+
+      final hasNextPage =
+          pageData?['pageInfo']?['hasNextPage'] as bool? ?? false;
+      final rawList = pageData?['mediaList'] as List<dynamic>? ?? const [];
+
+      final entries = rawList
+          .map((r) => MediaListEntry.fromJson(r as Map<String, dynamic>))
           .toList();
+      return (entries: entries, hasNextPage: hasNextPage);
     } on SocketException {
       throw const AnilistException(
         'No internet connection. Please check your network.',
@@ -258,9 +269,17 @@ abstract final class _Queries {
       Page(page: 1, perPage: 15) { media(search: \$search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: \$bannedGenres, status_not: NOT_YET_RELEASED, averageScore_greater: \$minScore, status: \$status, seasonYear: \$seasonYear) { ${_Fragments.mediaCore} } }
     }''';
 
-  static const String userWatchlist = r'''
-    query ($userId: Int) {
-      MediaListCollection(userId: $userId, type: ANIME, status_in: [CURRENT, PLANNING, COMPLETED]) { lists { name status entries { progress media { id title { romaji english } coverImage { extraLarge large } bannerImage genres averageScore episodes status description nextAiringEpisode { episode airingAt } } } } }
+  // ── FIXED: Segmented, Paginated Query ──
+  static const String userWatchlistPaged =
+      '''
+    query (\$userId: Int, \$status: MediaListStatus, \$page: Int, \$perPage: Int) {
+      Page(page: \$page, perPage: \$perPage) {
+        pageInfo { hasNextPage }
+        mediaList(userId: \$userId, type: ANIME, status: \$status, sort: UPDATED_TIME_DESC) {
+          progress
+          media { ${_Fragments.mediaCore} genres }
+        }
+      }
     }''';
 
   static const String currentlyAiring = r'''

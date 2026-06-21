@@ -21,9 +21,22 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   final AnilistQueryService _api = AnilistQueryService();
   final ScrollController _scrollController = ScrollController();
 
-  bool _loading = true;
+  // ── Segmented Pagination State ──
+  final Map<String, List<MediaListEntry>> _entries = {
+    'CURRENT': [],
+    'PLANNING': [],
+    'COMPLETED': [],
+  };
+  final Map<String, int> _pages = {'CURRENT': 1, 'PLANNING': 1, 'COMPLETED': 1};
+  final Map<String, bool> _hasNext = {
+    'CURRENT': true,
+    'PLANNING': true,
+    'COMPLETED': true,
+  };
+
+  bool _initialLoading = true;
+  bool _fetchingNext = false;
   String? _error;
-  List<MediaList> _lists = [];
   String _activeStatus = 'CURRENT';
 
   bool _isListView = false;
@@ -32,7 +45,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchWatchlist();
+    _scrollController.addListener(_onScroll);
+    _fetchTab(_activeStatus); // Only fetch the active tab initially
   }
 
   @override
@@ -40,6 +54,15 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     _api.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 500) {
+      if (!_initialLoading && !_fetchingNext && _hasNext[_activeStatus]!) {
+        _fetchTab(_activeStatus);
+      }
+    }
   }
 
   void _scrollToTop() {
@@ -52,33 +75,61 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     }
   }
 
-  Future<void> _fetchWatchlist() async {
+  Future<void> _fetchTab(String status, {bool refresh = false}) async {
+    if (refresh) {
+      _pages[status] = 1;
+      _hasNext[status] = true;
+      _entries[status] = [];
+    }
+
+    if (!_hasNext[status]!) return;
+
     setState(() {
-      _loading = true;
-      _error = null;
+      if (_entries[status]!.isEmpty) {
+        _initialLoading = true;
+        _error = null;
+      } else {
+        _fetchingNext = true;
+      }
     });
+
     try {
-      final lists = await _api.getUserWatchlist();
+      final result = await _api.getUserWatchlist(
+        status: status,
+        page: _pages[status]!,
+        perPage: 36, // Multiple of 2,3,4,6 for clean grids
+      );
+
       if (mounted) {
         setState(() {
-          _lists = lists;
-          _loading = false;
+          _entries[status]!.addAll(result.entries);
+          _hasNext[status] = result.hasNextPage;
+          _pages[status] = _pages[status]! + 1;
+          _initialLoading = false;
+          _fetchingNext = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _error = e.toString();
-          _loading = false;
+          _initialLoading = false;
+          _fetchingNext = false;
         });
       }
     }
   }
 
-  List<MediaListEntry> get _activeEntries => _lists
-      .where((l) => l.status == _activeStatus)
-      .expand((l) => l.entries)
-      .toList();
+  void _switchTab(String newStatus) {
+    if (_activeStatus == newStatus) return;
+    setState(() => _activeStatus = newStatus);
+
+    if (_entries[newStatus]!.isEmpty && _hasNext[newStatus]!) {
+      _fetchTab(newStatus);
+    }
+  }
+
+  List<MediaListEntry> get _activeEntries => _entries[_activeStatus] ?? [];
 
   int _verticalColumns(double width) {
     if (width < 600) return 2;
@@ -233,24 +284,19 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                   icon: Icons.play_arrow_rounded,
                                   label: 'Watching',
                                   active: _activeStatus == 'CURRENT',
-                                  onTap: () =>
-                                      setState(() => _activeStatus = 'CURRENT'),
+                                  onTap: () => _switchTab('CURRENT'),
                                 ),
                                 _TabButton(
                                   icon: Icons.calendar_today_outlined,
                                   label: 'Planning',
                                   active: _activeStatus == 'PLANNING',
-                                  onTap: () => setState(
-                                    () => _activeStatus = 'PLANNING',
-                                  ),
+                                  onTap: () => _switchTab('PLANNING'),
                                 ),
                                 _TabButton(
                                   icon: Icons.check_circle_outline_rounded,
                                   label: 'Watched',
                                   active: _activeStatus == 'COMPLETED',
-                                  onTap: () => setState(
-                                    () => _activeStatus = 'COMPLETED',
-                                  ),
+                                  onTap: () => _switchTab('COMPLETED'),
                                 ),
                               ],
                             ),
@@ -261,7 +307,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                   ),
                 ),
 
-                if (_loading)
+                if (_initialLoading)
                   SizedBox(
                     height: MediaQuery.of(context).size.height * 0.5,
                     child: const _LoadingPane(),
@@ -271,7 +317,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                     height: MediaQuery.of(context).size.height * 0.5,
                     child: _ErrorPane(
                       message: _error!,
-                      onRetry: _fetchWatchlist,
+                      onRetry: () => _fetchTab(_activeStatus, refresh: true),
                     ),
                   )
                 else if (_activeEntries.isEmpty)
@@ -281,6 +327,22 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                   )
                 else
                   _isListView ? _buildListLayout() : _buildGridLayout(),
+
+                // ── Infinite Scroll Loading Indicator ──
+                if (_fetchingNext)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppPalette.primary,
+                        ),
+                        strokeWidth: 2.5,
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 48), // Bottom padding
               ],
             ),
           ),
@@ -302,7 +364,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: cols,
             crossAxisSpacing: 20,
@@ -356,7 +418,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       itemCount: _activeEntries.length,
       separatorBuilder: (_, _) => const SizedBox(height: 16),
       itemBuilder: (_, i) => Focus(
