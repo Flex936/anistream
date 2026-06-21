@@ -23,7 +23,13 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   final ScrollController _scrollController = ScrollController();
 
   static const List<String> _days = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
   ];
 
   @override
@@ -51,10 +57,16 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
     final grid = {for (final day in _days) day: <Anime>[]};
 
     final active = anime.where((a) => a.nextAiringEpisode != null).toList()
-      ..sort((a, b) => a.nextAiringEpisode!.airingAt.compareTo(b.nextAiringEpisode!.airingAt));
+      ..sort(
+        (a, b) => a.nextAiringEpisode!.airingAt.compareTo(
+          b.nextAiringEpisode!.airingAt,
+        ),
+      );
 
     for (final item in active) {
-      final airDate = DateTime.fromMillisecondsSinceEpoch(item.nextAiringEpisode!.airingAt * 1000);
+      final airDate = DateTime.fromMillisecondsSinceEpoch(
+        item.nextAiringEpisode!.airingAt * 1000,
+      );
       final idx = airDate.weekday - 1;
       if (idx >= 0 && idx < _days.length) {
         grid[_days[idx]]!.add(item);
@@ -102,7 +114,12 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.5,
                   child: const Center(
-                    child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary)),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppPalette.primary,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -137,9 +154,23 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Weekly Anime Schedule', style: TextStyle(color: AppPalette.textMain, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+                    Text(
+                      'Weekly Anime Schedule',
+                      style: TextStyle(
+                        color: AppPalette.textMain,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
                     SizedBox(height: 4),
-                    Text('Times are automatically adjusted to your local timezone.', style: TextStyle(color: AppPalette.textMuted, fontSize: 13)),
+                    Text(
+                      'Times are automatically adjusted to your local timezone.',
+                      style: TextStyle(
+                        color: AppPalette.textMuted,
+                        fontSize: 13,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -152,7 +183,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   }
 
   Widget _buildGrid(Map<String, List<Anime>> calendar) {
-    final todayIndex = _now.weekday - 1; 
+    final todayIndex = _now.weekday - 1;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -221,22 +252,46 @@ class _DayColumn extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppPalette.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isToday ? AppPalette.primary.withValues(alpha: 0.40) : AppPalette.border),
+        border: Border.all(
+          color: isToday
+              ? AppPalette.primary.withValues(alpha: 0.40)
+              : AppPalette.border,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min, 
+        mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
             child: Row(
               children: [
-                Text(day, style: TextStyle(color: isToday ? AppPalette.primary : AppPalette.textMain, fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(
+                  day,
+                  style: TextStyle(
+                    color: isToday ? AppPalette.primary : AppPalette.textMain,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: AppPalette.overlay, borderRadius: BorderRadius.circular(10)),
-                  child: Text('${items.length}', style: const TextStyle(color: AppPalette.textMuted, fontSize: 9, fontWeight: FontWeight.w600)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppPalette.overlay,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${items.length}',
+                    style: const TextStyle(
+                      color: AppPalette.textMuted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -248,7 +303,16 @@ class _DayColumn extends StatelessWidget {
           if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(child: Text('No releases', style: TextStyle(color: AppPalette.textMuted, fontSize: 10, fontStyle: FontStyle.italic))),
+              child: Center(
+                child: Text(
+                  'No releases',
+                  style: TextStyle(
+                    color: AppPalette.textMuted,
+                    fontSize: 10,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
             )
           else
             Padding(
@@ -298,9 +362,20 @@ class _ErrorPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.wifi_off_rounded, color: AppPalette.textMuted, size: 52),
+          const Icon(
+            Icons.wifi_off_rounded,
+            color: AppPalette.textMuted,
+            size: 52,
+          ),
           const SizedBox(height: 16),
-          const Text('Could not load schedule', style: TextStyle(color: AppPalette.textMain, fontSize: 17, fontWeight: FontWeight.w600)),
+          const Text(
+            'Could not load schedule',
+            style: TextStyle(
+              color: AppPalette.textMain,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 48),
@@ -317,7 +392,10 @@ class _ErrorPane extends StatelessWidget {
             onPressed: onRetry,
             icon: const Icon(Icons.refresh_rounded),
             label: const Text('Try again'),
-            style: OutlinedButton.styleFrom(foregroundColor: AppPalette.primary, side: const BorderSide(color: AppPalette.primary)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppPalette.primary,
+              side: const BorderSide(color: AppPalette.primary),
+            ),
           ),
         ],
       ),

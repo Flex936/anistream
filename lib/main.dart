@@ -9,17 +9,20 @@ import 'app.dart';
 void main() async {
   // 1. Initialize Flutter Engine
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // 2. Initialize Video Player Engine
   MediaKit.ensureInitialized();
-  
+
   // 3. Initialize Native Desktop Window
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
-    
+
     WindowOptions windowOptions = const WindowOptions(
       title: 'AniStream',
-      minimumSize: Size(1000, 700), // Prevents the UI from crushing on tiny screens
+      minimumSize: Size(
+        1000,
+        700,
+      ), // Prevents the UI from crushing on tiny screens
       center: true,
       titleBarStyle: TitleBarStyle.hidden,
     );

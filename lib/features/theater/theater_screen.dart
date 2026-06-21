@@ -10,18 +10,23 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../core/theme/app_palette.dart';
 import '../../data/torrent/models/torrent.dart';
+import '../../data/anilist/models/anime.dart';
 import 'services/streaming_controller_service.dart';
+import '../../data/anilist/anilist_tracker_service.dart';
+import '../settings/widgets/settings_components.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_settings.dart';
 import 'widgets/theater_batch_picker.dart';
 
 class TheaterScreen extends StatefulWidget {
+  final Anime anime;
   final int episode;
   final Torrent torrent;
 
   const TheaterScreen({
     super.key,
+    required this.anime,
     required this.episode,
     required this.torrent,
   });
@@ -32,6 +37,8 @@ class TheaterScreen extends StatefulWidget {
 
 class _TheaterScreenState extends State<TheaterScreen> {
   late final StreamingController _torrentController;
+  late final AnilistTrackerService _tracker;
+
   late final Player _player;
   late final VideoController _videoController;
 
@@ -43,6 +50,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Timer? _hideControlsTimer;
   bool _isClosing = false;
 
+  StreamSubscription? _posSub;
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +59,20 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _videoController = VideoController(_player);
     _torrentController = StreamingController();
     _torrentController.addListener(_onTorrentStateChanged);
+
+    // Initialize the background tracker
+    _tracker = AnilistTrackerService(
+      onSuccess: () {
+        if (mounted) {
+          AppleTopSnackBar.show(
+            context: context,
+            message: 'Progress saved to AniList',
+            icon: Icons.check_circle_rounded,
+            iconColor: AppPalette.statusReleasing,
+          );
+        }
+      },
+    );
 
     _initPlayerAndStream();
     _startHideControlsTimer();
@@ -61,9 +84,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
-      // Optional debug logging, uncomment if needed:
-      // await platform.setProperty('msg-level', 'all=v');
-
       if (hwdec == 'auto') {
         if (Platform.isLinux || Platform.isWindows) {
           platform.setProperty('hwdec', 'auto-safe');
@@ -82,6 +102,18 @@ class _TheaterScreenState extends State<TheaterScreen> {
       widget.torrent.magnetLink,
       episodeNumber: widget.episode,
     );
+
+    // Give the tracker context of what media we are watching
+    await _tracker.init(
+      mediaId: widget.anime.id,
+      episode: widget.episode,
+      totalEpisodes: widget.anime.episodes,
+    );
+
+    // Listen to the playback progress completely independently of the UI
+    _posSub = _player.stream.position.listen((pos) {
+      _tracker.updateProgress(pos, _player.state.duration);
+    });
   }
 
   void _onTorrentStateChanged() {
@@ -160,12 +192,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
 
     _hideControlsTimer?.cancel();
+    _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
 
     await _player.pause();
     await _player.stop();
     await _player.dispose();
     _torrentController.dispose();
+    _tracker.dispose();
 
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       if (await windowManager.isFullScreen()) {
@@ -180,7 +214,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
   void dispose() {
     _focusNode.dispose();
     _hideControlsTimer?.cancel();
+    _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
+    _tracker.dispose();
 
     if (!_isClosing) {
       _isClosing = true;
@@ -231,8 +267,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       controls: NoVideoControls,
                     ),
                   ),
-                  // Always mounted, even while loading — gives media_kit_video time to
-                  // set up its texture/surface well before playback actually starts.
                   Video(
                     controller: _videoController,
                     controls: NoVideoControls,

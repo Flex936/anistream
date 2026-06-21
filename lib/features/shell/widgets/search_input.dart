@@ -35,17 +35,17 @@ class _SearchInputState extends State<SearchInput> {
 
   final AnilistQueryService _api = AnilistQueryService();
   Timer? _debounce;
-  
+
   bool _isLoading = false;
   List<Anime> _instantMatches = [];
 
   Color _statusColor(String? s) => switch (s) {
-        'RELEASING' => AppPalette.statusReleasing,
-        'FINISHED' => AppPalette.statusFinished,
-        'CANCELLED' => AppPalette.statusCancelled,
-        'HIATUS' => AppPalette.statusHiatus,
-        _ => AppPalette.statusDefault,
-      };
+    'RELEASING' => AppPalette.statusReleasing,
+    'FINISHED' => AppPalette.statusFinished,
+    'CANCELLED' => AppPalette.statusCancelled,
+    'HIATUS' => AppPalette.statusHiatus,
+    _ => AppPalette.statusDefault,
+  };
 
   @override
   void initState() {
@@ -144,7 +144,7 @@ class _SearchInputState extends State<SearchInput> {
           child: CompositedTransformFollower(
             link: _layerLink,
             showWhenUnlinked: false,
-            offset: const Offset(0, 48), 
+            offset: const Offset(0, 48),
             child: _buildDropdown(),
           ),
         );
@@ -164,8 +164,12 @@ class _SearchInputState extends State<SearchInput> {
         height: 60,
         child: const Center(
           child: SizedBox(
-            width: 20, height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppPalette.primary)),
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(AppPalette.primary),
+            ),
           ),
         ),
       );
@@ -187,16 +191,20 @@ class _SearchInputState extends State<SearchInput> {
               },
               hoverColor: AppPalette.white.withValues(alpha: 0.1),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: SizedBox(
-                        width: 32, height: 48,
-                        child: anime.coverImage?.display != null 
-                          ? AppNetworkImage(url: anime.coverImage!.display!) 
-                          : const ColoredBox(color: AppPalette.surface),
+                        width: 32,
+                        height: 48,
+                        child: anime.coverImage?.display != null
+                            ? AppNetworkImage(url: anime.coverImage!.display!)
+                            : const ColoredBox(color: AppPalette.surface),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -208,20 +216,41 @@ class _SearchInputState extends State<SearchInput> {
                             anime.title.display,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              color: AppPalette.textMain,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text.rich(
                             TextSpan(
                               children: [
                                 TextSpan(
-                                  text: (anime.status ?? 'UNKNOWN').replaceAll('_', ' '),
-                                  style: TextStyle(color: _statusColor(anime.status), fontWeight: FontWeight.w600, fontSize: 12),
+                                  text: (anime.status ?? 'UNKNOWN').replaceAll(
+                                    '_',
+                                    ' ',
+                                  ),
+                                  style: TextStyle(
+                                    color: _statusColor(anime.status),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
                                 ),
-                                const TextSpan(text: '  •  ', style: TextStyle(color: AppPalette.textMuted, fontSize: 12)),
+                                const TextSpan(
+                                  text: '  •  ',
+                                  style: TextStyle(
+                                    color: AppPalette.textMuted,
+                                    fontSize: 12,
+                                  ),
+                                ),
                                 TextSpan(
                                   text: '★ ${(anime.averageScore ?? 0) / 10}',
-                                  style: const TextStyle(color: AppPalette.accent, fontWeight: FontWeight.w600, fontSize: 12),
+                                  style: const TextStyle(
+                                    color: AppPalette.accent,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
@@ -251,7 +280,11 @@ class _SearchInputState extends State<SearchInput> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppPalette.border.withValues(alpha: 0.5)),
             boxShadow: [
-              BoxShadow(color: AppPalette.black.withValues(alpha: 0.5), blurRadius: 24, offset: const Offset(0, 12)),
+              BoxShadow(
+                color: AppPalette.black.withValues(alpha: 0.5),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
             ],
           ),
           child: child,
@@ -276,7 +309,11 @@ class _SearchInputState extends State<SearchInput> {
           hintStyle: const TextStyle(color: AppPalette.textMuted, fontSize: 14),
           prefixIcon: const Padding(
             padding: EdgeInsets.only(left: 14, right: 10),
-            child: Icon(Icons.search_rounded, color: AppPalette.textMuted, size: 20),
+            child: Icon(
+              Icons.search_rounded,
+              color: AppPalette.textMuted,
+              size: 20,
+            ),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
           // ── FIXED: Added Clear (X) suffix button ──
@@ -285,7 +322,11 @@ class _SearchInputState extends State<SearchInput> {
             builder: (context, value, child) {
               if (value.text.isEmpty) return const SizedBox.shrink();
               return IconButton(
-                icon: const Icon(Icons.cancel_rounded, color: AppPalette.textMuted, size: 18),
+                icon: const Icon(
+                  Icons.cancel_rounded,
+                  color: AppPalette.textMuted,
+                  size: 18,
+                ),
                 onPressed: () {
                   widget.controller.clear();
                   _onTextChanged('');
@@ -296,14 +337,21 @@ class _SearchInputState extends State<SearchInput> {
           filled: true,
           fillColor: AppPalette.white.withValues(alpha: 0.05),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 11,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(24),
-            borderSide: BorderSide(color: AppPalette.white.withValues(alpha: 0.1)),
+            borderSide: BorderSide(
+              color: AppPalette.white.withValues(alpha: 0.1),
+            ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(24),
-            borderSide: BorderSide(color: AppPalette.white.withValues(alpha: 0.1)),
+            borderSide: BorderSide(
+              color: AppPalette.white.withValues(alpha: 0.1),
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(24),

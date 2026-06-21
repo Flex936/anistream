@@ -16,7 +16,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   late final AnilistQueryService _api;
-  
+
   late Future<List<Anime>> _trendingFuture;
   late Future<List<Anime>> _seasonPopularFuture;
   late Future<List<Anime>> _allTimePopularFuture;
@@ -64,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 96),
-            
+
             AnimeCarousel(
               title: 'Trending Now',
               future: _trendingFuture,
@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onRetry: _loadTrending,
               autofocusFirst: true,
             ),
-            
+
             AnimeCarousel(
               title: 'Popular This Season',
               future: _seasonPopularFuture,

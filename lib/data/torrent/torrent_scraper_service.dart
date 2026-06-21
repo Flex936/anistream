@@ -325,13 +325,15 @@ class TorrentScraperService {
       score += 50;
     }
 
-    if (!batchMode && (tl.contains('- $epStr') || tl.contains(' $epStr ')))
+    if (!batchMode && (tl.contains('- $epStr') || tl.contains(' $epStr '))) {
       score += 20;
+    }
 
     if (tl.contains('subsplease') ||
         tl.contains('erai-raws') ||
-        tl.contains('horriblesubs'))
+        tl.contains('horriblesubs')) {
       score += 30;
+    }
 
     if (tl.contains('1080p')) {
       score += 20;

@@ -40,7 +40,10 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
     final isAnyYear = _selectedYear > currentYear;
 
     return ClipRRect(
-      borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), bottomLeft: Radius.circular(24)),
+      borderRadius: const BorderRadius.only(
+        topLeft: Radius.circular(24),
+        bottomLeft: Radius.circular(24),
+      ),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
         child: Material(
@@ -53,14 +56,34 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Filters', style: TextStyle(color: AppPalette.textMain, fontSize: 24, fontWeight: FontWeight.bold)),
-                    IconButton(icon: const Icon(Icons.close, color: AppPalette.textMuted), onPressed: () => Navigator.pop(context)),
+                    const Text(
+                      'Filters',
+                      style: TextStyle(
+                        color: AppPalette.textMain,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close,
+                        color: AppPalette.textMuted,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 32),
-                
+
                 // ── Status Filter ──
-                const Text('Status', style: TextStyle(color: AppPalette.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+                const Text(
+                  'Status',
+                  style: TextStyle(
+                    color: AppPalette.textMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -74,10 +97,19 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                       },
                       backgroundColor: AppPalette.surface,
                       selectedColor: AppPalette.primary.withValues(alpha: 0.2),
-                      labelStyle: TextStyle(color: isSelected ? AppPalette.primary : AppPalette.textMain, fontSize: 12),
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? AppPalette.primary
+                            : AppPalette.textMain,
+                        fontSize: 12,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(color: isSelected ? AppPalette.primary : AppPalette.border),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppPalette.primary
+                              : AppPalette.border,
+                        ),
                       ),
                     );
                   }).toList(),
@@ -88,12 +120,29 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Minimum Score', style: TextStyle(color: AppPalette.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text(_minScore == 0 ? 'Any' : '$_minScore', style: const TextStyle(color: AppPalette.primary, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Minimum Score',
+                      style: TextStyle(
+                        color: AppPalette.textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      _minScore == 0 ? 'Any' : '$_minScore',
+                      style: const TextStyle(
+                        color: AppPalette.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 SliderTheme(
-                  data: const SliderThemeData(activeTrackColor: AppPalette.primary, thumbColor: AppPalette.primary, inactiveTrackColor: AppPalette.border),
+                  data: const SliderThemeData(
+                    activeTrackColor: AppPalette.primary,
+                    thumbColor: AppPalette.primary,
+                    inactiveTrackColor: AppPalette.border,
+                  ),
                   child: Slider(
                     value: _minScore.toDouble(),
                     min: 0,
@@ -108,12 +157,29 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Release Year', style: TextStyle(color: AppPalette.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
-                    Text(isAnyYear ? 'Any' : '${_selectedYear.toInt()}', style: const TextStyle(color: AppPalette.primary, fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Release Year',
+                      style: TextStyle(
+                        color: AppPalette.textMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      isAnyYear ? 'Any' : '${_selectedYear.toInt()}',
+                      style: const TextStyle(
+                        color: AppPalette.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
                 SliderTheme(
-                  data: const SliderThemeData(activeTrackColor: AppPalette.primary, thumbColor: AppPalette.primary, inactiveTrackColor: AppPalette.border),
+                  data: const SliderThemeData(
+                    activeTrackColor: AppPalette.primary,
+                    thumbColor: AppPalette.primary,
+                    inactiveTrackColor: AppPalette.border,
+                  ),
                   child: Slider(
                     value: _selectedYear,
                     min: 1980,
@@ -124,24 +190,32 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                 ),
 
                 const Spacer(),
-                
+
                 // ── Apply Button ──
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary, 
-                      foregroundColor: AppPalette.white, 
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: () {
                       Navigator.pop(context);
                       widget.onApply(_minScore, _selectedStatus, _selectedYear);
                     },
-                    child: const Text('Apply Filters', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    child: const Text(
+                      'Apply Filters',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                )
+                ),
               ],
             ),
           ),

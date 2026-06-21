@@ -16,7 +16,9 @@ Future<void> showSettingsMenu(BuildContext context) {
     transitionBuilder: (context, animation, _, child) {
       return SlideTransition(
         position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-            .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+            .animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            ),
         child: child,
       );
     },
@@ -41,7 +43,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late String _hardwareDecoding;
   late bool _autoPlayRecommended;
 
-  bool get _isDesktop => Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  bool get _isDesktop =>
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
   @override
   void initState() {
@@ -62,7 +65,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   Future<void> _handleSave() async {
     setState(() => _saving = true);
-    
+
     try {
       await _service.save(
         AppSettings(
@@ -107,20 +110,39 @@ class _SettingsMenuState extends State<SettingsMenu> {
           width: isMobile ? MediaQuery.of(context).size.width : 450,
           height: double.infinity,
           child: ClipRRect(
-            borderRadius: isMobile 
-                ? BorderRadius.zero 
-                : const BorderRadius.only(topLeft: Radius.circular(24), bottomLeft: Radius.circular(24)),
+            borderRadius: isMobile
+                ? BorderRadius.zero
+                : const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    bottomLeft: Radius.circular(24),
+                  ),
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
               child: Container(
                 decoration: BoxDecoration(
                   color: AppPalette.base.withValues(alpha: 0.65),
-                  border: isMobile ? null : Border(
-                    left: BorderSide(color: AppPalette.white.withValues(alpha: 0.1), width: 1),
-                    top: BorderSide(color: AppPalette.white.withValues(alpha: 0.1), width: 1),
-                    bottom: BorderSide(color: AppPalette.white.withValues(alpha: 0.1), width: 1),
-                  ),
-                  boxShadow: [BoxShadow(color: AppPalette.black.withValues(alpha: 0.6), blurRadius: 40)],
+                  border: isMobile
+                      ? null
+                      : Border(
+                          left: BorderSide(
+                            color: AppPalette.white.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                          top: BorderSide(
+                            color: AppPalette.white.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                          bottom: BorderSide(
+                            color: AppPalette.white.withValues(alpha: 0.1),
+                            width: 1,
+                          ),
+                        ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppPalette.black.withValues(alpha: 0.6),
+                      blurRadius: 40,
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -131,8 +153,18 @@ class _SettingsMenuState extends State<SettingsMenu> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Settings', style: TextStyle(color: AppPalette.textMain, fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-                          _CloseButton(onPressed: () => Navigator.of(context).pop()),
+                          const Text(
+                            'Settings',
+                            style: TextStyle(
+                              color: AppPalette.textMain,
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          _CloseButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
                         ],
                       ),
                     ),
@@ -140,65 +172,116 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     // ── CONTENT ──
                     Expanded(
                       child: _loading
-                          ? const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation(AppPalette.primary)))
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation(
+                                  AppPalette.primary,
+                                ),
+                              ),
+                            )
                           : ListView(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                               children: [
-                                const SectionLabel(label: 'Content Preferences'),
+                                const SectionLabel(
+                                  label: 'Content Preferences',
+                                ),
                                 const SizedBox(height: 8),
                                 SettingRowTile(
                                   title: 'Filter Ecchi',
-                                  subtitle: 'Automatically hide borderline adult content from search results.',
+                                  subtitle:
+                                      'Automatically hide borderline adult content from search results.',
                                   value: _filterEcchi,
-                                  onChanged: (v) => setState(() => _filterEcchi = v),
+                                  onChanged: (v) =>
+                                      setState(() => _filterEcchi = v),
                                   autofocus: true,
                                 ),
-                                
+
                                 const SizedBox(height: 24),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  child: Divider(color: AppPalette.white.withValues(alpha: 0.1)),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: Divider(
+                                    color: AppPalette.white.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(height: 24),
 
-                                const SectionLabel(label: 'Playback Preferences'),
+                                const SectionLabel(
+                                  label: 'Playback Preferences',
+                                ),
                                 const SizedBox(height: 8),
                                 SettingRowTile(
                                   title: 'Auto-Play Recommended',
-                                  subtitle: 'Skip the release list and instantly stream the highest-rated torrent.',
+                                  subtitle:
+                                      'Skip the release list and instantly stream the highest-rated torrent.',
                                   value: _autoPlayRecommended,
-                                  onChanged: (v) => setState(() => _autoPlayRecommended = v),
+                                  onChanged: (v) =>
+                                      setState(() => _autoPlayRecommended = v),
                                 ),
 
                                 if (_isDesktop) ...[
                                   const SizedBox(height: 24),
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                                    child: Divider(color: AppPalette.white.withValues(alpha: 0.1)),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    child: Divider(
+                                      color: AppPalette.white.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                    ),
                                   ),
                                   const SizedBox(height: 24),
-                                  
+
                                   const SectionLabel(label: 'Playback Engine'),
                                   const SizedBox(height: 16),
                                   const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 16),
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text('Hardware Decoding', style: TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w600)),
+                                        Text(
+                                          'Hardware Decoding',
+                                          style: TextStyle(
+                                            color: AppPalette.textMain,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                         SizedBox(height: 4),
-                                        Text('Use your GPU to decode video streams for vastly improved performance and lower battery usage.', style: TextStyle(color: AppPalette.textMuted, fontSize: 12, height: 1.4)),
+                                        Text(
+                                          'Use your GPU to decode video streams for vastly improved performance and lower battery usage.',
+                                          style: TextStyle(
+                                            color: AppPalette.textMuted,
+                                            fontSize: 12,
+                                            height: 1.4,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
                                   const SizedBox(height: 16),
-                                  
+
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
                                     child: _HoverableDropdown(
                                       value: _hardwareDecoding,
                                       onChanged: (val) {
-                                        if (val != null) setState(() => _hardwareDecoding = val);
+                                        if (val != null) {
+                                          setState(
+                                            () => _hardwareDecoding = val,
+                                          );
+                                        }
                                       },
                                     ),
                                   ),
@@ -213,7 +296,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: AppPalette.base.withValues(alpha: 0.4),
-                        border: Border(top: BorderSide(color: AppPalette.white.withValues(alpha: 0.05))),
+                        border: Border(
+                          top: BorderSide(
+                            color: AppPalette.white.withValues(alpha: 0.05),
+                          ),
+                        ),
                       ),
                       child: FilledButton(
                         onPressed: _saving ? null : _handleSave,
@@ -221,11 +308,29 @@ class _SettingsMenuState extends State<SettingsMenu> {
                           backgroundColor: AppPalette.primary,
                           foregroundColor: AppPalette.white,
                           padding: const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
                         child: _saving
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppPalette.white)))
-                            : const Text('Save Changes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.2)),
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    AppPalette.white,
+                                  ),
+                                ),
+                              )
+                            : const Text(
+                                'Save Changes',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
                       ),
                     ),
                   ],
@@ -263,23 +368,51 @@ class _HoverableDropdownState extends State<_HoverableDropdown> {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
-          color: _hovered ? AppPalette.white.withValues(alpha: 0.1) : AppPalette.white.withValues(alpha: 0.05),
+          color: _hovered
+              ? AppPalette.white.withValues(alpha: 0.1)
+              : AppPalette.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _hovered ? AppPalette.white.withValues(alpha: 0.2) : AppPalette.white.withValues(alpha: 0.1)),
+          border: Border.all(
+            color: _hovered
+                ? AppPalette.white.withValues(alpha: 0.2)
+                : AppPalette.white.withValues(alpha: 0.1),
+          ),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: widget.value,
             dropdownColor: AppPalette.surface,
-            icon: const Icon(Icons.expand_more_rounded, color: AppPalette.textMuted),
+            icon: const Icon(
+              Icons.expand_more_rounded,
+              color: AppPalette.textMuted,
+            ),
             isExpanded: true,
-            style: const TextStyle(color: AppPalette.textMain, fontSize: 14, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              color: AppPalette.textMain,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
             items: const [
-              DropdownMenuItem(value: 'auto', child: Text('Auto (Safe Default)')),
-              DropdownMenuItem(value: 'cuda-copy', child: Text('NVIDIA (CUDA)')),
-              DropdownMenuItem(value: 'd3d11va-copy', child: Text('Windows Native (D3D11VA)')),
-              DropdownMenuItem(value: 'videotoolbox-copy', child: Text('Apple Silicon (VideoToolbox)')),
-              DropdownMenuItem(value: 'none', child: Text('Software Only (CPU)')),
+              DropdownMenuItem(
+                value: 'auto',
+                child: Text('Auto (Safe Default)'),
+              ),
+              DropdownMenuItem(
+                value: 'cuda-copy',
+                child: Text('NVIDIA (CUDA)'),
+              ),
+              DropdownMenuItem(
+                value: 'd3d11va-copy',
+                child: Text('Windows Native (D3D11VA)'),
+              ),
+              DropdownMenuItem(
+                value: 'videotoolbox-copy',
+                child: Text('Apple Silicon (VideoToolbox)'),
+              ),
+              DropdownMenuItem(
+                value: 'none',
+                child: Text('Software Only (CPU)'),
+              ),
             ],
             onChanged: widget.onChanged,
           ),
@@ -311,10 +444,16 @@ class _CloseButtonState extends State<_CloseButton> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: _hovered ? AppPalette.white.withValues(alpha: 0.1) : AppPalette.transparent,
+            color: _hovered
+                ? AppPalette.white.withValues(alpha: 0.1)
+                : AppPalette.transparent,
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.close_rounded, size: 22, color: _hovered ? AppPalette.white : AppPalette.textMuted),
+          child: Icon(
+            Icons.close_rounded,
+            size: 22,
+            color: _hovered ? AppPalette.white : AppPalette.textMuted,
+          ),
         ),
       ),
     );

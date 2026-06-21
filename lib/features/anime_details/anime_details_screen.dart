@@ -74,7 +74,11 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => TheaterScreen(episode: ep, torrent: torrents.first),
+            builder: (_) => TheaterScreen(
+              anime: widget.anime,
+              episode: ep,
+              torrent: torrents.first,
+            ),
           ),
         );
       } else {
@@ -161,6 +165,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                       final ep = index + 1;
                       return EpisodeTile(
                         key: ValueKey(ep),
+                        anime: widget.anime,
                         episodeNumber: ep,
                         isExpanded: _expandedEpisode == ep,
                         torrentFuture: _expandedEpisode == ep

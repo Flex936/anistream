@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AnilistAuthService {
-  static const int _clientId = 43011; 
+  static const int _clientId = 43011;
   static const int _port = 3456;
   static const String _callbackPath = '/callback';
   static const String _storePath = '/store';
@@ -27,7 +27,9 @@ class AnilistAuthService {
     try {
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, _port);
     } on SocketException {
-      throw Exception('Cannot start auth server: port $_port is already in use. Close other AniStream windows and try again.');
+      throw Exception(
+        'Cannot start auth server: port $_port is already in use. Close other AniStream windows and try again.',
+      );
     }
 
     final authUri = Uri.parse(
@@ -48,7 +50,7 @@ class AnilistAuthService {
 
         case _storePath when req.method == 'POST':
           final body = (await utf8.decodeStream(req)).trim();
-          final params = Uri.splitQueryString(body); 
+          final params = Uri.splitQueryString(body);
           final token = params['access_token'];
 
           req.response
