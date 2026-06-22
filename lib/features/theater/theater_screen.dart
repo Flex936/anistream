@@ -48,7 +48,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _videoInitialized = false;
   bool _showControls = true;
   bool _isSettingsOpen = false;
-  bool _isFullscreen = false;
+  bool _isFullscreen = true;
   Timer? _hideControlsTimer;
   bool _isClosing = false;
 
