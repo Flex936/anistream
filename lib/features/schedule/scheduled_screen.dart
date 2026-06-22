@@ -260,7 +260,7 @@ class _DayShelf extends StatelessWidget {
         ),
         SizedBox(
           height:
-              260, // Fixed height specifically tuned for a 2/3 aspect ratio card + text
+              300, // Fixed height specifically tuned for a 2/3 aspect ratio card + text
           child: ListView.separated(
             padding: EdgeInsets.symmetric(horizontal: hPad),
             scrollDirection: Axis.horizontal,
@@ -268,7 +268,7 @@ class _DayShelf extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 16),
             itemBuilder: (context, i) {
               return SizedBox(
-                width: 130, // Excellent width for mobile and TV grids
+                width: 160, // Excellent width for mobile and TV grids
                 child: CalendarCard(
                   anime: items[i],
                   formatLocalTime: formatLocalTime,

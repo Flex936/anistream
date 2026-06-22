@@ -47,7 +47,7 @@ class CalendarCard extends StatelessWidget {
                   color: hovered
                       ? AppPalette.primary.withValues(alpha: 0.80)
                       : AppPalette.border,
-                  width: hovered ? 2 : 1, // Nice distinct border for TV focus
+                  width: hovered ? 2 : 1,
                 ),
                 boxShadow: uiPerformanceMode
                     ? null
