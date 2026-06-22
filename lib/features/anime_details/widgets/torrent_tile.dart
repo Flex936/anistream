@@ -7,12 +7,14 @@ import '../../../shared/widgets/hover_focus_builder.dart';
 class TorrentTile extends StatelessWidget {
   final Torrent torrent;
   final bool isRecommended;
+  final bool uiPerformanceMode;
   final VoidCallback onStream;
 
   const TorrentTile({
     super.key,
     required this.torrent,
     this.isRecommended = false,
+    this.uiPerformanceMode = false,
     required this.onStream,
   });
 
@@ -45,14 +47,15 @@ class TorrentTile extends StatelessWidget {
                 ? AppPalette.primary.withValues(alpha: 0.4)
                 : AppPalette.border,
           ),
-          boxShadow: isRecommended
+          // ── Drops the shadow if performance mode is enabled ──
+          boxShadow: (isRecommended && !uiPerformanceMode)
               ? [
                   BoxShadow(
                     color: AppPalette.primary.withValues(alpha: 0.08),
                     blurRadius: 16,
                   ),
                 ]
-              : [],
+              : null,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
@@ -160,7 +163,9 @@ class TorrentTile extends StatelessWidget {
                         color: hovered
                             ? AppPalette.primary
                             : AppPalette.primary.withValues(alpha: 0.10),
-                        boxShadow: hovered
+                        boxShadow:
+                            (hovered &&
+                                !uiPerformanceMode) // Drop hover glow if in performance mode
                             ? [
                                 BoxShadow(
                                   color: AppPalette.primary.withValues(
@@ -169,7 +174,7 @@ class TorrentTile extends StatelessWidget {
                                   blurRadius: 14,
                                 ),
                               ]
-                            : const [],
+                            : null,
                       ),
                       child: Icon(
                         Icons.play_arrow_rounded,

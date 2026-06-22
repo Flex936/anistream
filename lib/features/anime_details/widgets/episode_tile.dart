@@ -11,18 +11,14 @@ class EpisodeTile extends StatelessWidget {
   final Anime anime;
   final int episodeNumber;
   final bool isExpanded;
-
-  // ── Progress Styling Variables ──
   final int? userProgress;
   final bool isUpNext;
-
   final Future<List<Torrent>>? torrentFuture;
   final VoidCallback onToggle;
   final VoidCallback? onReturnFromTheater;
-
-  // ── NEW: AutoPlay UI State ──
   final bool isAutoPlayEnabled;
   final bool isCurrentlyLoading;
+  final bool uiPerformanceMode;
 
   const EpisodeTile({
     super.key,
@@ -36,6 +32,7 @@ class EpisodeTile extends StatelessWidget {
     this.onReturnFromTheater,
     this.isAutoPlayEnabled = false,
     this.isCurrentlyLoading = false,
+    this.uiPerformanceMode = false,
   });
 
   @override
@@ -146,7 +143,6 @@ class EpisodeTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                // ── Trailing UI Logic ──
                 if (isCurrentlyLoading)
                   const SizedBox(
                     width: 20,
@@ -276,6 +272,7 @@ class EpisodeTile extends StatelessWidget {
                 TorrentTile(
                   torrent: torrents[i],
                   isRecommended: i == 0,
+                  uiPerformanceMode: uiPerformanceMode,
                   onStream: () {
                     Navigator.push(
                       context,

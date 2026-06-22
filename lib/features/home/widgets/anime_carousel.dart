@@ -12,6 +12,7 @@ class AnimeCarousel extends StatefulWidget {
   final ValueChanged<Anime>? onSelectAnime;
   final VoidCallback onRetry;
   final bool autofocusFirst;
+  final bool uiPerformanceMode;
 
   const AnimeCarousel({
     super.key,
@@ -20,6 +21,7 @@ class AnimeCarousel extends StatefulWidget {
     this.onSelectAnime,
     required this.onRetry,
     this.autofocusFirst = false,
+    this.uiPerformanceMode = false,
   });
 
   @override
@@ -201,6 +203,7 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                             AppPalette.base.withValues(alpha: 0.9),
                             AppPalette.base.withValues(alpha: 0.0),
                           ],
+                          uiPerformanceMode: widget.uiPerformanceMode,
                           onTap: () => _scroll(-1.0),
                         ),
                       ),
@@ -217,6 +220,7 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                             AppPalette.base.withValues(alpha: 0.0),
                             AppPalette.base.withValues(alpha: 0.9),
                           ],
+                          uiPerformanceMode: widget.uiPerformanceMode,
                           onTap: () => _scroll(1.0),
                         ),
                       ),
@@ -236,16 +240,32 @@ class _NavArrow extends StatelessWidget {
   final Alignment alignment;
   final List<Color> gradientColors;
   final VoidCallback onTap;
+  final bool uiPerformanceMode;
 
   const _NavArrow({
     required this.icon,
     required this.alignment,
     required this.gradientColors,
     required this.onTap,
+    this.uiPerformanceMode = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    // The core arrow button visual
+    final arrowContent = Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        // Increase opacity if blur is disabled to maintain contrast
+        color: AppPalette.black.withValues(
+          alpha: uiPerformanceMode ? 0.8 : 0.4,
+        ),
+        shape: BoxShape.circle,
+        border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
+      ),
+      child: Icon(icon, color: AppPalette.white, size: 28),
+    );
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -261,20 +281,12 @@ class _NavArrow extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppPalette.black.withValues(alpha: 0.4),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppPalette.white.withValues(alpha: 0.1),
+          child: uiPerformanceMode
+              ? arrowContent // Return without blur
+              : BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: arrowContent, // Return with frosted glass
                 ),
-              ),
-              child: Icon(icon, color: AppPalette.white, size: 28),
-            ),
-          ),
         ),
       ),
     );

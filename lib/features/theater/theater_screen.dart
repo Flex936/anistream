@@ -51,7 +51,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _isFullscreen = false;
   Timer? _hideControlsTimer;
   bool _isClosing = false;
+
   late bool _autoSkip;
+
+  // ── INDEPENDENT PERFORMANCE SETTINGS ──
+  bool _uiPerformanceMode = false;
+  String _videoFilterQuality = 'low';
 
   List<Chapter> _chapters = [];
   StreamSubscription? _posSub;
@@ -76,6 +81,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
         }
       },
     );
+
+    // ── Load Settings ──
+    SettingsService().load().then((s) {
+      if (mounted) {
+        setState(() {
+          _uiPerformanceMode = s.uiPerformanceMode;
+          _videoFilterQuality = s.videoFilterQuality;
+        });
+      }
+    });
 
     _initPlayerAndStream();
     _startHideControlsTimer();
@@ -276,6 +291,21 @@ class _TheaterScreenState extends State<TheaterScreen> {
     super.dispose();
   }
 
+  // ── Helper to map string preference to Flutter Enum ──
+  FilterQuality _getFilterQuality() {
+    switch (_videoFilterQuality) {
+      case 'high':
+        return FilterQuality.high;
+      case 'medium':
+        return FilterQuality.medium;
+      case 'none':
+        return FilterQuality.none;
+      case 'low':
+      default:
+        return FilterQuality.low;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Focus(
@@ -308,6 +338,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
                     child: Video(
                       controller: _videoController,
                       controls: NoVideoControls,
+                      filterQuality:
+                          _getFilterQuality(), // ── Applies the user preference ──
                     ),
                   ),
 
@@ -327,6 +359,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                 onTap: () {},
                                 child: TheaterTopBar(
                                   episode: widget.episode,
+                                  uiPerformanceMode: _uiPerformanceMode,
                                   onBack: _exitTheater,
                                 ),
                               ),
@@ -340,9 +373,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                 child: TheaterControls(
                                   player: _player,
                                   chapterMetadata: _chapters,
-                                  autoSkip: _autoSkip,
                                   isSettingsOpen: _isSettingsOpen,
                                   isFullscreen: _isFullscreen,
+                                  uiPerformanceMode: _uiPerformanceMode,
                                   onToggleFullscreen: _toggleFullscreen,
                                   onInteract: _startHideControlsTimer,
                                   onToggleSettings: () => setState(
@@ -362,6 +395,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       right: 32,
                       child: TheaterSettingsMenu(
                         player: _player,
+                        uiPerformanceMode: _uiPerformanceMode,
                         onClose: () => setState(() => _isSettingsOpen = false),
                       ),
                     ),

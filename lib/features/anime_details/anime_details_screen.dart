@@ -26,20 +26,26 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   final TorrentScraperService _scraper = TorrentScraperService();
   final Map<int, Future<List<Torrent>>> _torrentFutures = {};
 
-  // ── Progress State ──
   int? _userProgress;
   int _expandedEpisode = -1;
 
-  // ── RENAMED ──
   bool _autoPlayEnabled = false;
   bool _isFetchingSource = false;
   int _autoPlayTargetEpisode = -1;
+
+  // ── UI Performance State ──
+  bool _uiPerformanceMode = false;
 
   @override
   void initState() {
     super.initState();
     SettingsService().load().then((s) {
-      if (mounted) setState(() => _autoPlayEnabled = s.autoPlayEnabled);
+      if (mounted) {
+        setState(() {
+          _autoPlayEnabled = s.autoPlayEnabled;
+          _uiPerformanceMode = s.uiPerformanceMode;
+        });
+      }
     });
 
     _fetchProgress();
@@ -50,7 +56,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       widget.anime.id,
     );
     if (!mounted || progress == null) return;
-
     setState(() => _userProgress = progress);
   }
 
@@ -100,9 +105,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         setState(() => _expandedEpisode = ep);
       }
     } catch (_) {
-      if (mounted) {
-        setState(() => _expandedEpisode = ep);
-      }
+      if (mounted) setState(() => _expandedEpisode = ep);
     } finally {
       if (mounted) {
         setState(() {
@@ -131,7 +134,11 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
           CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
-                child: HeroBanner(anime: widget.anime, onBack: widget.onBack),
+                child: HeroBanner(
+                  anime: widget.anime,
+                  onBack: widget.onBack,
+                  uiPerformanceMode: _uiPerformanceMode,
+                ),
               ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 16),
@@ -200,6 +207,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         isAutoPlayEnabled: _autoPlayEnabled,
                         isCurrentlyLoading:
                             _isFetchingSource && _autoPlayTargetEpisode == ep,
+                        uiPerformanceMode: _uiPerformanceMode,
                         torrentFuture: _expandedEpisode == ep
                             ? _futureFor(ep)
                             : null,
@@ -220,37 +228,42 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
                 builder: (context, opacity, child) {
-                  return Opacity(
-                    opacity: opacity,
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                      child: Container(
-                        color: AppPalette.base.withValues(alpha: 0.75),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  AppPalette.primary,
-                                ),
-                                strokeWidth: 3,
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                'Finding best source for Episode $_autoPlayTargetEpisode...',
-                                style: const TextStyle(
-                                  color: AppPalette.textMain,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                  Widget overlayContent = Container(
+                    color: AppPalette.base.withValues(
+                      alpha: _uiPerformanceMode ? 0.95 : 0.75,
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppPalette.primary,
+                            ),
+                            strokeWidth: 3,
                           ),
-                        ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'Finding best source for Episode $_autoPlayTargetEpisode...',
+                            style: const TextStyle(
+                              color: AppPalette.textMain,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
+
+                  if (!_uiPerformanceMode) {
+                    overlayContent = BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: overlayContent,
+                    );
+                  }
+
+                  return Opacity(opacity: opacity, child: overlayContent);
                 },
               ),
             ),

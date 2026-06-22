@@ -5,6 +5,7 @@ import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/media_list.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
+import '../../core/settings/settings_service.dart';
 import '../../shared/widgets/hover_focus_builder.dart';
 import 'widgets/watchlist_cards.dart';
 
@@ -41,10 +42,18 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   bool _isListView = false;
   String? _hoveredBanner;
 
+  bool _uiPerformanceMode = false;
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+
+    // ── Load Performance Setting ──
+    SettingsService().load().then((s) {
+      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+    });
+
     _fetchTab(_activeStatus);
   }
 
@@ -100,7 +109,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       );
 
       if (mounted) {
-        // ── Local Deduplication ──
         final existingIds = _entries[status]!.map((e) => e.media.id).toSet();
         final newUniqueEntries = result.entries
             .where((e) => !existingIds.contains(e.media.id))
@@ -184,7 +192,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Background banner (no changes needed)
         Positioned.fill(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 600),
@@ -201,26 +208,31 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                         errorBuilder: (context, error, stackTrace) =>
                             const ColoredBox(color: AppPalette.base),
                       ),
-                      BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-                        child: Container(
-                          color: AppPalette.base.withValues(alpha: 0.85),
+
+                      // ── CONDITIONAL BACKGROUND BLUR ──
+                      if (_uiPerformanceMode)
+                        Container(
+                          color: AppPalette.base.withValues(alpha: 0.90),
+                        ) // Fast fallback
+                      else
+                        BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+                          child: Container(
+                            color: AppPalette.base.withValues(alpha: 0.85),
+                          ),
                         ),
-                      ),
                     ],
                   )
                 : const SizedBox.shrink(),
           ),
         ),
 
-        // ── Total Sliver Implementation ──
         Positioned.fill(
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
               const SliverToBoxAdapter(child: SizedBox(height: 96)),
 
-              // Title and Tabs
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(32, 0, 32, 24),
@@ -315,7 +327,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 ),
               ),
 
-              // Content States
               if (_initialLoading)
                 SliverToBoxAdapter(
                   child: SizedBox(
@@ -343,7 +354,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               else
                 _isListView ? _buildListLayout() : _buildGridLayout(),
 
-              // Loading Indicator at the bottom
               if (_fetchingNext)
                 const SliverToBoxAdapter(
                   child: Padding(
@@ -401,6 +411,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                   child: HeroCard(
                     entry: entry,
                     autofocus: i == 0,
+                    uiPerformanceMode: _uiPerformanceMode,
                     onTap: () => widget.onSelectAnime?.call(entry.media),
                     onHover: (hovered) => _handleHover(hoverImage, hovered),
                   ),
@@ -417,6 +428,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                     autofocus: i == 0,
                     listStatus: _activeStatus,
                     showProgress: false,
+                    uiPerformanceMode: _uiPerformanceMode,
                     onTap: () => widget.onSelectAnime?.call(entry.media),
                     onHover: (hovered) => _handleHover(hoverImage, hovered),
                   ),
@@ -446,6 +458,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 entry: _activeEntries[i],
                 autofocus: i == 0,
                 showProgress: _activeStatus == 'CURRENT',
+                uiPerformanceMode: _uiPerformanceMode,
                 onTap: () =>
                     widget.onSelectAnime?.call(_activeEntries[i].media),
                 onHover: (hovered) => _handleHover(
@@ -461,6 +474,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     );
   }
 }
+
+// ... Keep _TabButton, _LoadingPane, _EmptyPane, and _ErrorPane exactly as they were!
 
 // ── Private sub-widgets for Screen ──
 

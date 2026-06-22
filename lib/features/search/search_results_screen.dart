@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
+import '../../core/settings/settings_service.dart';
 import '../../shared/widgets/anime_card.dart';
 import 'widgets/search_filter_panel.dart';
 
@@ -28,11 +29,19 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   String _selectedStatus = 'ANY';
   late double _selectedYear;
 
+  bool _uiPerformanceMode = false;
+
   @override
   void initState() {
     super.initState();
     _selectedYear = DateTime.now().year.toDouble() + 1;
     _api = AnilistQueryService();
+
+    // ── Load Performance Setting ──
+    SettingsService().load().then((s) {
+      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+    });
+
     _executeSearch();
   }
 
@@ -75,6 +84,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       initialMinScore: _minScore,
       initialStatus: _selectedStatus,
       initialYear: _selectedYear,
+      uiPerformanceMode: _uiPerformanceMode,
       onApply: (minScore, status, year) {
         setState(() {
           _minScore = minScore;

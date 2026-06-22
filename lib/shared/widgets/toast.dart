@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_palette.dart';
+import '../../core/settings/settings_service.dart';
 
 // ── Apple-Style Premium Glass Toast (Bottom) ──
 
@@ -20,53 +21,95 @@ class AppleSnackBar {
         padding: EdgeInsets.zero,
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.only(bottom: 40, left: 16, right: 16),
-        content: Align(
-          alignment: Alignment.bottomCenter,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(50),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: AppPalette.surface.withValues(alpha: 0.75),
-                  borderRadius: BorderRadius.circular(50),
-                  border: Border.all(
-                    color: AppPalette.white.withValues(alpha: 0.15),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppPalette.black.withValues(alpha: 0.25),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, color: iconColor, size: 20),
-                    const SizedBox(width: 10),
-                    Text(
-                      message,
-                      style: const TextStyle(
-                        color: AppPalette.textMain,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        content: _BottomToastWidget(
+          message: message,
+          icon: icon,
+          iconColor: iconColor,
         ),
       ),
+    );
+  }
+}
+
+class _BottomToastWidget extends StatefulWidget {
+  final String message;
+  final IconData icon;
+  final Color iconColor;
+
+  const _BottomToastWidget({
+    required this.message,
+    required this.icon,
+    required this.iconColor,
+  });
+
+  @override
+  State<_BottomToastWidget> createState() => _BottomToastWidgetState();
+}
+
+class _BottomToastWidgetState extends State<_BottomToastWidget> {
+  bool _uiPerformanceMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    SettingsService().load().then((s) {
+      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppPalette.surface.withValues(
+          alpha: _uiPerformanceMode ? 0.98 : 0.75,
+        ),
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(
+          color: AppPalette.white.withValues(alpha: 0.15),
+          width: 1,
+        ),
+        boxShadow: _uiPerformanceMode
+            ? null
+            : [
+                // ── Drop shadow conditionally ──
+                BoxShadow(
+                  color: AppPalette.black.withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(widget.icon, color: widget.iconColor, size: 20),
+          const SizedBox(width: 10),
+          Text(
+            widget.message,
+            style: const TextStyle(
+              color: AppPalette.textMain,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // ── Conditional Blur ──
+    if (!_uiPerformanceMode) {
+      content = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        child: content,
+      );
+    }
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: ClipRRect(borderRadius: BorderRadius.circular(50), child: content),
     );
   }
 }
@@ -119,6 +162,7 @@ class _TopToastWidgetState extends State<_TopToastWidget>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _offsetAnimation;
+  bool _uiPerformanceMode = false;
 
   @override
   void initState() {
@@ -131,6 +175,10 @@ class _TopToastWidgetState extends State<_TopToastWidget>
       begin: const Offset(0, -1.5),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+    SettingsService().load().then((s) {
+      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+    });
 
     _controller.forward();
 
@@ -150,8 +198,56 @@ class _TopToastWidgetState extends State<_TopToastWidget>
 
   @override
   Widget build(BuildContext context) {
+    Widget content = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppPalette.surface.withValues(
+          alpha: _uiPerformanceMode ? 0.98 : 0.75,
+        ),
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(
+          color: AppPalette.white.withValues(alpha: 0.15),
+          width: 1,
+        ),
+        boxShadow: _uiPerformanceMode
+            ? null
+            : [
+                // ── Drop shadow conditionally ──
+                BoxShadow(
+                  color: AppPalette.black.withValues(alpha: 0.25),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(widget.icon, color: widget.iconColor, size: 20),
+          const SizedBox(width: 10),
+          Text(
+            widget.message,
+            style: const TextStyle(
+              color: AppPalette.textMain,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // ── Conditional Blur ──
+    if (!_uiPerformanceMode) {
+      content = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        child: content,
+      );
+    }
+
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 24, // Respects safe area
+      top: MediaQuery.of(context).padding.top + 24,
       left: 16,
       right: 16,
       child: SafeArea(
@@ -163,46 +259,7 @@ class _TopToastWidgetState extends State<_TopToastWidget>
               alignment: Alignment.topCenter,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(50),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppPalette.surface.withValues(alpha: 0.75),
-                      borderRadius: BorderRadius.circular(50),
-                      border: Border.all(
-                        color: AppPalette.white.withValues(alpha: 0.15),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppPalette.black.withValues(alpha: 0.25),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(widget.icon, color: widget.iconColor, size: 20),
-                        const SizedBox(width: 10),
-                        Text(
-                          widget.message,
-                          style: const TextStyle(
-                            color: AppPalette.textMain,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                child: content,
               ),
             ),
           ),

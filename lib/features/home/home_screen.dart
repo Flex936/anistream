@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_palette.dart';
+import '../../core/settings/settings_service.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import 'widgets/anime_carousel.dart';
@@ -21,6 +22,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late Future<List<Anime>> _seasonPopularFuture;
   late Future<List<Anime>> _allTimePopularFuture;
 
+  bool _uiPerformanceMode = false;
+
   @override
   void initState() {
     super.initState();
@@ -28,6 +31,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _trendingFuture = _api.getTrendingAnime(perPage: 15);
     _seasonPopularFuture = _api.getPopularThisSeason(perPage: 15);
     _allTimePopularFuture = _api.getAllTimePopular(perPage: 15);
+
+    // ── Load Performance Setting ──
+    SettingsService().load().then((s) {
+      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+    });
   }
 
   @override
@@ -68,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
             AnimeCarousel(
               title: 'Trending Now',
               future: _trendingFuture,
+              uiPerformanceMode: _uiPerformanceMode,
               onSelectAnime: widget.onSelectAnime,
               onRetry: _loadTrending,
               autofocusFirst: true,
@@ -76,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
             AnimeCarousel(
               title: 'Popular This Season',
               future: _seasonPopularFuture,
+              uiPerformanceMode: _uiPerformanceMode,
               onSelectAnime: widget.onSelectAnime,
               onRetry: _loadSeasonPopular,
             ),
@@ -83,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
             AnimeCarousel(
               title: 'All Time Popular',
               future: _allTimePopularFuture,
+              uiPerformanceMode: _uiPerformanceMode,
               onSelectAnime: widget.onSelectAnime,
               onRetry: _loadAllTimePopular,
             ),

@@ -12,6 +12,7 @@ import '../../../shared/utils/anime_status_style.dart';
 class SearchInput extends StatefulWidget {
   final TextEditingController controller;
   final bool autoFocus;
+  final bool uiPerformanceMode;
   final ValueChanged<String>? onChanged;
   final ValueChanged<Anime>? onSelectAnime;
   final ValueChanged<String>? onSubmitted;
@@ -20,6 +21,7 @@ class SearchInput extends StatefulWidget {
     super.key,
     required this.controller,
     this.autoFocus = false,
+    this.uiPerformanceMode = false,
     this.onChanged,
     this.onSelectAnime,
     this.onSubmitted,
@@ -132,7 +134,6 @@ class _SearchInputState extends State<SearchInput> {
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final renderBox = context.findRenderObject() as RenderBox?;
-        // We use the exact width of the input field so it scales perfectly on mobile
         final width = renderBox?.size.width ?? 300.0;
 
         return Positioned(
@@ -265,28 +266,36 @@ class _SearchInputState extends State<SearchInput> {
   }
 
   Widget _buildGlassContainer({required Widget child, double? height}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: AppPalette.base.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppPalette.border.withValues(alpha: 0.5)),
-            boxShadow: [
-              BoxShadow(
-                color: AppPalette.black.withValues(alpha: 0.5),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: child,
+    Widget content = Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: AppPalette.base.withValues(
+          alpha: widget.uiPerformanceMode ? 0.98 : 0.85,
         ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppPalette.border.withValues(alpha: 0.5)),
+        boxShadow: widget.uiPerformanceMode
+            ? null // ── Remove drop shadow for performance ──
+            : [
+                BoxShadow(
+                  color: AppPalette.black.withValues(alpha: 0.5),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
       ),
+      child: child,
     );
+
+    // ── Conditional Blur ──
+    if (!widget.uiPerformanceMode) {
+      content = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: content,
+      );
+    }
+
+    return ClipRRect(borderRadius: BorderRadius.circular(16), child: content);
   }
 
   @override
@@ -312,7 +321,6 @@ class _SearchInputState extends State<SearchInput> {
             ),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
-          // ── FIXED: Added Clear (X) suffix button ──
           suffixIcon: ValueListenableBuilder<TextEditingValue>(
             valueListenable: widget.controller,
             builder: (context, value, child) {

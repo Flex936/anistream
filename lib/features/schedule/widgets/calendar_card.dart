@@ -11,6 +11,7 @@ class CalendarCard extends StatelessWidget {
   final String Function(int timestamp) getTimeRemaining;
   final bool autofocus;
   final VoidCallback? onTap;
+  final bool uiPerformanceMode;
 
   const CalendarCard({
     super.key,
@@ -19,6 +20,7 @@ class CalendarCard extends StatelessWidget {
     required this.getTimeRemaining,
     this.autofocus = false,
     this.onTap,
+    this.uiPerformanceMode = false,
   });
 
   @override
@@ -43,26 +45,26 @@ class CalendarCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: hovered
-                      ? AppPalette.primary.withValues(alpha: 0.50)
+                      ? AppPalette.primary.withValues(alpha: 0.80)
                       : AppPalette.border,
+                  width: hovered ? 2 : 1, // Nice distinct border for TV focus
                 ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x4D000000),
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
-                ],
+                boxShadow: uiPerformanceMode
+                    ? null
+                    : const [
+                        BoxShadow(
+                          color: Color(0x4D000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(9),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    AppNetworkImage(
-                      url: anime.coverImage?.large,
-                      scale: hovered ? 1.05 : 1.0,
-                    ),
+                    AppNetworkImage(url: anime.coverImage?.large),
                     AnimatedOpacity(
                       opacity: hovered ? 1.0 : 0.0,
                       duration: const Duration(milliseconds: 250),
@@ -87,21 +89,13 @@ class CalendarCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: AppPalette.primary,
                             borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppPalette.primary.withValues(
-                                  alpha: 0.55,
-                                ),
-                                blurRadius: 8,
-                              ),
-                            ],
                           ),
                           child: Text(
                             epLabel,
                             style: const TextStyle(
                               color: AppPalette.white,
                               fontSize: 9,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
@@ -112,15 +106,17 @@ class CalendarCard extends StatelessWidget {
                       right: 6,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 2,
+                          horizontal: 6,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
-                          color: AppPalette.black.withValues(alpha: 0.72),
-                          borderRadius: BorderRadius.circular(4),
+                          color: AppPalette.black.withValues(
+                            alpha: uiPerformanceMode ? 0.9 : 0.72,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
                           border: Border.all(
                             color: AppPalette.statusReleasing.withValues(
-                              alpha: 0.30,
+                              alpha: 0.40,
                             ),
                           ),
                         ),
@@ -128,8 +124,8 @@ class CalendarCard extends StatelessWidget {
                           formatLocalTime(nextEp.airingAt),
                           style: const TextStyle(
                             color: AppPalette.statusReleasing,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -139,14 +135,14 @@ class CalendarCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 150),
             style: TextStyle(
               color: hovered ? AppPalette.primary : AppPalette.textMain,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              height: 1.3,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
             ),
             child: Text(
               anime.title.romaji ?? anime.title.english ?? 'Unknown',
@@ -159,7 +155,7 @@ class CalendarCard extends StatelessWidget {
             getTimeRemaining(nextEp.airingAt),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppPalette.textMuted, fontSize: 9),
+            style: const TextStyle(color: AppPalette.textMuted, fontSize: 10),
           ),
         ],
       ),

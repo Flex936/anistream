@@ -41,9 +41,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   late bool _filterEcchi;
   late String _hardwareDecoding;
-  late String _androidHwDec; // ── NEW ──
+  late String _androidHwDec;
   late bool _autoPlayEnabled;
   late bool _autoSkip;
+
+  // ── Performance Settings ──
+  late bool _uiPerformanceMode;
+  late String _videoFilterQuality;
 
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -60,9 +64,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
     setState(() {
       _filterEcchi = s.filterEcchi;
       _hardwareDecoding = s.hardwareDecoding;
-      _androidHwDec = s.androidHwDec; // ── NEW ──
+      _androidHwDec = s.androidHwDec;
       _autoPlayEnabled = s.autoPlayEnabled;
       _autoSkip = s.autoSkip;
+      _uiPerformanceMode = s.uiPerformanceMode;
+      _videoFilterQuality = s.videoFilterQuality;
       _loading = false;
     });
   }
@@ -74,9 +80,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
         AppSettings(
           filterEcchi: _filterEcchi,
           hardwareDecoding: _hardwareDecoding,
-          androidHwDec: _androidHwDec, // ── NEW ──
+          androidHwDec: _androidHwDec,
           autoPlayEnabled: _autoPlayEnabled,
           autoSkip: _autoSkip,
+          uiPerformanceMode: _uiPerformanceMode,
+          videoFilterQuality: _videoFilterQuality,
         ),
       );
       if (mounted) {
@@ -199,7 +207,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                   showDividerAbove: true,
                                   children: [
                                     SettingRowTile(
-                                      title: '1-Click Auto-Play',
+                                      title: 'Auto-Play',
                                       subtitle:
                                           'Skip the release list and instantly stream the highest-rated torrent.',
                                       value: _autoPlayEnabled,
@@ -213,6 +221,86 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                       value: _autoSkip,
                                       onChanged: (v) =>
                                           setState(() => _autoSkip = v),
+                                    ),
+                                    SettingRowTile(
+                                      title: 'UI Performance Mode',
+                                      subtitle:
+                                          'Disables frosted glass, blurs, and animations. Highly recommended for Android TVs.',
+                                      value: _uiPerformanceMode,
+                                      onChanged: (v) => setState(
+                                        () => _uiPerformanceMode = v,
+                                      ),
+                                    ),
+
+                                    // ── Video Filter Quality Dropdown ──
+                                    const SizedBox(height: 16),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Video Scaling Quality',
+                                            style: TextStyle(
+                                              color: AppPalette.textMain,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            'Determines how the GPU scales video frames. Set to "None" if 1080p stutters on your TV.',
+                                            style: TextStyle(
+                                              color: AppPalette.textMuted,
+                                              fontSize: 12,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      child: SettingsDropdown(
+                                        value: _videoFilterQuality,
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: 'high',
+                                            child: Text(
+                                              'High (Best Anti-Aliasing)',
+                                            ),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'medium',
+                                            child: Text('Medium'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'low',
+                                            child: Text(
+                                              'Low (Flutter Default)',
+                                            ),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'none',
+                                            child: Text(
+                                              'None (Raw Pixels / Best FPS)',
+                                            ),
+                                          ),
+                                        ],
+                                        onChanged: (val) {
+                                          if (val != null) {
+                                            setState(
+                                              () => _videoFilterQuality = val,
+                                            );
+                                          }
+                                        },
+                                      ),
                                     ),
                                   ],
                                 ),

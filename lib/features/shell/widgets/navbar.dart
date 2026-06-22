@@ -12,6 +12,7 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
   final String searchQuery;
   final bool isLoggedIn;
   final bool isScrolled;
+  final bool uiPerformanceMode;
 
   final ValueChanged<String>? onSearch;
   final VoidCallback? onHome;
@@ -27,6 +28,7 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
     this.searchQuery = '',
     this.isLoggedIn = false,
     this.isScrolled = false,
+    this.uiPerformanceMode = false,
     this.onSearch,
     this.onHome,
     this.onLogin,
@@ -122,6 +124,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
       },
       pageBuilder: (_, _, _) => _MobileMenu(
         isLoggedIn: widget.isLoggedIn,
+        uiPerformanceMode: widget.uiPerformanceMode,
         onScheduled: widget.onScheduled,
         onWatchlist: widget.onWatchlist,
         onLogin: widget.onLogin,
@@ -139,30 +142,38 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
       builder: (context, blurAmount, child) {
-        return ClipRRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: blurAmount, sigmaY: blurAmount),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              height: widget.preferredSize.height,
-              padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
-              decoration: BoxDecoration(
-                color: widget.isScrolled
-                    ? AppPalette.base.withValues(alpha: 0.75)
-                    : AppPalette.transparent,
-                border: Border(
-                  bottom: BorderSide(
-                    color: AppPalette.white.withValues(
-                      alpha: widget.isScrolled ? 0.05 : 0.0,
-                    ),
-                    width: 1,
-                  ),
+        Widget navContent = AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          height: widget.preferredSize.height,
+          padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
+          decoration: BoxDecoration(
+            color: widget.isScrolled
+                // ── Increase opacity from 0.75 to 0.95 if blur is removed ──
+                ? AppPalette.base.withValues(
+                    alpha: widget.uiPerformanceMode ? 0.95 : 0.75,
+                  )
+                : AppPalette.transparent,
+            border: Border(
+              bottom: BorderSide(
+                color: AppPalette.white.withValues(
+                  alpha: widget.isScrolled ? 0.05 : 0.0,
                 ),
+                width: 1,
               ),
-              child: child,
             ),
           ),
+          child: child,
         );
+
+        // ── Conditional Blur ──
+        if (!widget.uiPerformanceMode) {
+          navContent = BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: blurAmount, sigmaY: blurAmount),
+            child: navContent,
+          );
+        }
+
+        return ClipRRect(child: navContent);
       },
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
@@ -192,6 +203,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
           child: SearchInput(
             controller: _searchController,
             autoFocus: true,
+            uiPerformanceMode: widget.uiPerformanceMode,
             onChanged: widget.onSearch,
             onSubmitted: (query) {
               setState(() => _mobileSearchActive = false);
@@ -220,6 +232,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
               constraints: const BoxConstraints(maxWidth: 400),
               child: SearchInput(
                 controller: _searchController,
+                uiPerformanceMode: widget.uiPerformanceMode,
                 onChanged: widget.onSearch,
                 onSubmitted: widget.onSubmitted,
                 onSelectAnime: widget.onSelectAnime,
@@ -321,6 +334,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
 
 class _MobileMenu extends StatelessWidget {
   final bool isLoggedIn;
+  final bool uiPerformanceMode; // ── NEW ──
   final VoidCallback? onScheduled;
   final VoidCallback? onWatchlist;
   final VoidCallback? onLogin;
@@ -328,6 +342,7 @@ class _MobileMenu extends StatelessWidget {
 
   const _MobileMenu({
     required this.isLoggedIn,
+    this.uiPerformanceMode = false,
     this.onScheduled,
     this.onWatchlist,
     this.onLogin,
@@ -341,6 +356,88 @@ class _MobileMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget menuContent = Container(
+      decoration: BoxDecoration(
+        color: AppPalette.base.withValues(
+          alpha: uiPerformanceMode ? 0.95 : 0.65,
+        ),
+        border: Border(
+          left: BorderSide(
+            color: AppPalette.white.withValues(alpha: 0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 16, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Menu',
+                    style: TextStyle(
+                      color: AppPalette.textMain,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppPalette.textMuted,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _MobileMenuTile(
+              icon: Icons.calendar_month_outlined,
+              title: 'Schedule',
+              onTap: () => _handleTap(context, onScheduled),
+            ),
+            if (isLoggedIn)
+              _MobileMenuTile(
+                icon: Icons.video_library_outlined,
+                title: 'My Watchlist',
+                onTap: () => _handleTap(context, onWatchlist),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Divider(color: AppPalette.white.withValues(alpha: 0.1)),
+            ),
+            _MobileMenuTile(
+              icon: Icons.person_outline_rounded,
+              title: isLoggedIn ? 'Log out of AniList' : 'Log in to AniList',
+              iconColor: isLoggedIn
+                  ? AppPalette.statusCancelled
+                  : AppPalette.statusReleasing,
+              onTap: () => _handleTap(context, onLogin),
+            ),
+            _MobileMenuTile(
+              icon: Icons.settings_outlined,
+              title: 'Settings',
+              onTap: () => _handleTap(context, onSettings),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // ── Conditional Blur ──
+    if (!uiPerformanceMode) {
+      menuContent = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+        child: menuContent,
+      );
+    }
+
     return Align(
       alignment: Alignment.centerRight,
       child: Material(
@@ -353,87 +450,7 @@ class _MobileMenu extends StatelessWidget {
               topLeft: Radius.circular(24),
               bottomLeft: Radius.circular(24),
             ),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppPalette.base.withValues(alpha: 0.65),
-                  border: Border(
-                    left: BorderSide(
-                      color: AppPalette.white.withValues(alpha: 0.1),
-                      width: 1,
-                    ),
-                  ),
-                ),
-                child: SafeArea(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 24, 16, 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Menu',
-                              style: TextStyle(
-                                color: AppPalette.textMain,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.close_rounded,
-                                color: AppPalette.textMuted,
-                              ),
-                              onPressed: () => Navigator.of(context).pop(),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _MobileMenuTile(
-                        icon: Icons.calendar_month_outlined,
-                        title: 'Schedule',
-                        onTap: () => _handleTap(context, onScheduled),
-                      ),
-                      if (isLoggedIn)
-                        _MobileMenuTile(
-                          icon: Icons.video_library_outlined,
-                          title: 'My Watchlist',
-                          onTap: () => _handleTap(context, onWatchlist),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        child: Divider(
-                          color: AppPalette.white.withValues(alpha: 0.1),
-                        ),
-                      ),
-                      _MobileMenuTile(
-                        icon: Icons.person_outline_rounded,
-                        title: isLoggedIn
-                            ? 'Log out of AniList'
-                            : 'Log in to AniList',
-                        iconColor: isLoggedIn
-                            ? AppPalette.statusCancelled
-                            : AppPalette.statusReleasing,
-                        onTap: () => _handleTap(context, onLogin),
-                      ),
-                      _MobileMenuTile(
-                        icon: Icons.settings_outlined,
-                        title: 'Settings',
-                        onTap: () => _handleTap(context, onSettings),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            child: menuContent,
           ),
         ),
       ),
@@ -504,8 +521,6 @@ class _MobileMenuTileState extends State<_MobileMenuTile> {
     );
   }
 }
-
-// ── FIXED: Decomposed StatefulWidgets -> HoverFocusBuilder StatelessWidgets ──
 
 class _NavLogo extends StatelessWidget {
   final VoidCallback? onTap;

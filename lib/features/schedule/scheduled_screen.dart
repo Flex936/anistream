@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
+import '../../core/settings/settings_service.dart';
 import 'widgets/calendar_card.dart';
 
 class ScheduledScreen extends StatefulWidget {
@@ -22,6 +23,8 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   DateTime _now = DateTime.now();
   final ScrollController _scrollController = ScrollController();
 
+  bool _uiPerformanceMode = false;
+
   static const List<String> _days = [
     'Monday',
     'Tuesday',
@@ -37,6 +40,11 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
     super.initState();
     _api = AnilistQueryService();
     _animeFuture = _api.getCurrentlyAiring();
+
+    // ── Load Performance Setting ──
+    SettingsService().load().then((s) {
+      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+    });
 
     _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
@@ -92,134 +100,105 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
       if (h > 0) return '${h}h ${m}m left';
       if (m > 0) return '${m}m left';
     }
-    return 'Airing now / Aired';
-  }
-
-  void _scrollToTop() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        0.0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-      );
-    }
+    return 'Airing now';
   }
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final hPad = isMobile ? 16.0 : 32.0;
+
     return FutureBuilder<List<Anime>>(
       future: _animeFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 96),
-                SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.5,
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppPalette.primary,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          return const Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
             ),
           );
         }
 
         if (snapshot.hasError) {
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 96),
-                SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.5,
-                  child: _ErrorPane(error: snapshot.error, onRetry: _reload),
-                ),
-              ],
-            ),
+          return Center(
+            child: _ErrorPane(error: snapshot.error, onRetry: _reload),
           );
         }
 
         final calendar = _buildCalendar(snapshot.data ?? []);
 
+        // ── Reorder days to start with "Today" ──
+        final todayIdx = _now.weekday - 1;
+        final orderedDays = [
+          ..._days.sublist(todayIdx),
+          ..._days.sublist(0, todayIdx),
+        ];
+
         return SingleChildScrollView(
           controller: _scrollController,
+          padding: const EdgeInsets.only(bottom: 64),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 96),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(32, 0, 32, 24),
-                child: Column(
+              Padding(
+                padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 24),
+                child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Weekly Anime Schedule',
+                      'Schedule',
                       style: TextStyle(
                         color: AppPalette.textMain,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
+                        fontSize: 32, // Apple-style large header
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.0,
                       ),
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Times are automatically adjusted to your local timezone.',
+                      'Automatically adjusted to your local timezone.',
                       style: TextStyle(
                         color: AppPalette.textMuted,
-                        fontSize: 13,
+                        fontSize: 14,
                       ),
                     ),
                   ],
                 ),
               ),
-              _buildGrid(calendar),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
-  Widget _buildGrid(Map<String, List<Anime>> calendar) {
-    final todayIndex = _now.weekday - 1;
+              // ── Stack Horizontal Shelves Vertically ──
+              for (int i = 0; i < orderedDays.length; i++) ...[
+                Builder(
+                  builder: (context) {
+                    final dayName = orderedDays[i];
+                    final items = calendar[dayName]!;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = 10.0;
-        const hPad = 32.0;
-        const bPad = 24.0;
-        final available = constraints.maxWidth - 2 * hPad;
-        final naturalWidth = (available - 6 * gap) / 7;
-        final colWidth = naturalWidth.clamp(148.0, double.infinity);
+                    // Hide days with no anime releases to keep the UI clean
+                    if (items.isEmpty) return const SizedBox.shrink();
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(hPad, 0, hPad, bPad),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: List.generate(_days.length, (i) {
-              return Padding(
-                padding: EdgeInsets.only(right: i < _days.length - 1 ? gap : 0),
-                child: _DayColumn(
-                  day: _days[i],
-                  items: calendar[_days[i]]!,
-                  width: colWidth,
-                  isToday: i == todayIndex,
-                  formatLocalTime: _formatLocalTime,
-                  getTimeRemaining: _getTimeRemaining,
-                  onSelectAnime: widget.onSelectAnime,
-                  isFirstGlobal:
-                      i == _days.indexWhere((d) => calendar[d]!.isNotEmpty),
-                  onFocusFirstItem: _scrollToTop,
+                    // Dynamic naming for Apple-style UX
+                    String displayTitle = dayName;
+                    if (i == 0) {
+                      displayTitle = 'Today';
+                    } else if (i == 1) {
+                      displayTitle = 'Tomorrow';
+                    }
+
+                    return _DayShelf(
+                      title: displayTitle,
+                      items: items,
+                      hPad: hPad,
+                      formatLocalTime: _formatLocalTime,
+                      getTimeRemaining: _getTimeRemaining,
+                      onSelectAnime: widget.onSelectAnime,
+                      uiPerformanceMode: _uiPerformanceMode,
+                    );
+                  },
                 ),
-              );
-            }),
+              ],
+            ],
           ),
         );
       },
@@ -227,128 +206,82 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   }
 }
 
-class _DayColumn extends StatelessWidget {
-  final String day;
+// ── Horizontal Carousel Shelf ──
+class _DayShelf extends StatelessWidget {
+  final String title;
   final List<Anime> items;
-  final double width;
-  final bool isToday;
+  final double hPad;
   final String Function(int) formatLocalTime;
   final String Function(int) getTimeRemaining;
   final ValueChanged<Anime>? onSelectAnime;
-  final bool isFirstGlobal;
-  final VoidCallback? onFocusFirstItem;
+  final bool uiPerformanceMode;
 
-  const _DayColumn({
-    required this.day,
+  const _DayShelf({
+    required this.title,
     required this.items,
-    required this.width,
-    required this.isToday,
+    required this.hPad,
     required this.formatLocalTime,
     required this.getTimeRemaining,
     this.onSelectAnime,
-    this.isFirstGlobal = false,
-    this.onFocusFirstItem,
+    required this.uiPerformanceMode,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      decoration: BoxDecoration(
-        color: AppPalette.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isToday
-              ? AppPalette.primary.withValues(alpha: 0.40)
-              : AppPalette.border,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-            child: Row(
-              children: [
-                Text(
-                  day,
-                  style: TextStyle(
-                    color: isToday ? AppPalette.primary : AppPalette.textMain,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppPalette.textMain,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
                 ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppPalette.overlay,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '${items.length}',
-                    style: const TextStyle(
-                      color: AppPalette.textMuted,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '${items.length} releases',
+                style: const TextStyle(
+                  color: AppPalette.textMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, thickness: 1, color: AppPalette.border),
-          const SizedBox(height: 6),
-
-          if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(
-                child: Text(
-                  'No releases',
-                  style: TextStyle(
-                    color: AppPalette.textMuted,
-                    fontSize: 10,
-                    fontStyle: FontStyle.italic,
-                  ),
+        ),
+        SizedBox(
+          height:
+              260, // Fixed height specifically tuned for a 2/3 aspect ratio card + text
+          child: ListView.separated(
+            padding: EdgeInsets.symmetric(horizontal: hPad),
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 16),
+            itemBuilder: (context, i) {
+              return SizedBox(
+                width: 130, // Excellent width for mobile and TV grids
+                child: CalendarCard(
+                  anime: items[i],
+                  formatLocalTime: formatLocalTime,
+                  getTimeRemaining: getTimeRemaining,
+                  onTap: () => onSelectAnime?.call(items[i]),
+                  uiPerformanceMode: uiPerformanceMode,
                 ),
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (int i = 0; i < items.length; i++) ...[
-                    Focus(
-                      canRequestFocus: false,
-                      skipTraversal: true,
-                      onFocusChange: (focused) {
-                        if (focused && i == 0) {
-                          onFocusFirstItem?.call();
-                        }
-                      },
-                      child: CalendarCard(
-                        anime: items[i],
-                        autofocus: isFirstGlobal && i == 0,
-                        formatLocalTime: formatLocalTime,
-                        getTimeRemaining: getTimeRemaining,
-                        onTap: () => onSelectAnime?.call(items[i]),
-                      ),
-                    ),
-                    if (i < items.length - 1) const SizedBox(height: 12),
-                  ],
-                ],
-              ),
-            ),
-        ],
-      ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 }
@@ -361,47 +294,45 @@ class _ErrorPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.wifi_off_rounded,
-            color: AppPalette.textMuted,
-            size: 52,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(
+          Icons.wifi_off_rounded,
+          color: AppPalette.textMuted,
+          size: 52,
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Could not load schedule',
+          style: TextStyle(
+            color: AppPalette.textMain,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Could not load schedule',
-            style: TextStyle(
-              color: AppPalette.textMain,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          child: Text(
+            error.toString(),
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
           ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48),
-            child: Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
-            ),
+        ),
+        const SizedBox(height: 24),
+        OutlinedButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Try again'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppPalette.primary,
+            side: const BorderSide(color: AppPalette.primary),
           ),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Try again'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppPalette.primary,
-              side: const BorderSide(color: AppPalette.primary),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

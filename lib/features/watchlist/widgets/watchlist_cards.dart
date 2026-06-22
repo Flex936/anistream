@@ -12,15 +12,12 @@ String _stripHtml(String? html) {
   return html.replaceAll(RegExp(r'<[^>]+>'), '').trim();
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  HeroCard (16:9 Continue Watching Card)
-// ════════════════════════════════════════════════════════════════════════════
-
 class HeroCard extends StatelessWidget {
   final MediaListEntry entry;
   final VoidCallback onTap;
   final ValueChanged<bool> onHover;
   final bool autofocus;
+  final bool uiPerformanceMode;
 
   const HeroCard({
     super.key,
@@ -28,6 +25,7 @@ class HeroCard extends StatelessWidget {
     required this.onTap,
     required this.onHover,
     this.autofocus = false,
+    this.uiPerformanceMode = false,
   });
 
   @override
@@ -35,7 +33,6 @@ class HeroCard extends StatelessWidget {
     final media = entry.media;
     final progress = entry.progress;
 
-    // ── Image Optimization (Prefer Large > ExtraLarge) ──
     final imgUrl =
         media.bannerImage ??
         media.coverImage?.large ??
@@ -61,14 +58,15 @@ class HeroCard extends StatelessWidget {
                 ? AppPalette.primary.withValues(alpha: 0.5)
                 : AppPalette.border,
           ),
-          boxShadow: hovered
+          boxShadow:
+              (hovered && !uiPerformanceMode) // ── Drop shadow conditionally ──
               ? [
                   BoxShadow(
                     color: AppPalette.primary.withValues(alpha: 0.2),
                     blurRadius: 20,
                   ),
                 ]
-              : const [],
+              : null,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(15),
@@ -77,8 +75,10 @@ class HeroCard extends StatelessWidget {
             children: [
               AppNetworkImage(
                 url: imgUrl,
-                scale: hovered ? 1.05 : 1.0,
-                cacheWidth: 600, // Landscape cards can use a bit more res
+                scale: (hovered && !uiPerformanceMode)
+                    ? 1.05
+                    : 1.0, // ── Disable scale logic ──
+                cacheWidth: 600,
               ),
               Container(
                 decoration: BoxDecoration(
@@ -94,7 +94,7 @@ class HeroCard extends StatelessWidget {
               ),
               Center(
                 child: AnimatedScale(
-                  scale: hovered ? 1.1 : 1.0,
+                  scale: (hovered && !uiPerformanceMode) ? 1.1 : 1.0,
                   duration: const Duration(milliseconds: 200),
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -167,16 +167,13 @@ class HeroCard extends StatelessWidget {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  ListCard (Dense layout for Planning/Watched list)
-// ════════════════════════════════════════════════════════════════════════════
-
 class ListCard extends StatelessWidget {
   final MediaListEntry entry;
   final bool showProgress;
   final VoidCallback onTap;
   final ValueChanged<bool> onHover;
   final bool autofocus;
+  final bool uiPerformanceMode;
 
   const ListCard({
     super.key,
@@ -185,6 +182,7 @@ class ListCard extends StatelessWidget {
     required this.onTap,
     required this.onHover,
     this.autofocus = false,
+    this.uiPerformanceMode = false,
   });
 
   @override
@@ -219,8 +217,10 @@ class ListCard extends StatelessWidget {
                 aspectRatio: 0.7,
                 child: AppNetworkImage(
                   url: media.coverImage?.large ?? media.coverImage?.extraLarge,
-                  scale: hovered ? 1.05 : 1.0,
-                  cacheWidth: 300, // Small image, hard limit physical decodes
+                  scale: (hovered && !uiPerformanceMode)
+                      ? 1.05
+                      : 1.0, // ── Disable scale ──
+                  cacheWidth: 300,
                 ),
               ),
             ),
@@ -324,10 +324,6 @@ class ListCard extends StatelessWidget {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  WatchlistCard (Upgraded Grid Layout for Planning/Watched Tab)
-// ════════════════════════════════════════════════════════════════════════════
-
 class WatchlistCard extends StatelessWidget {
   final MediaListEntry entry;
   final String listStatus;
@@ -335,6 +331,7 @@ class WatchlistCard extends StatelessWidget {
   final VoidCallback onTap;
   final ValueChanged<bool> onHover;
   final bool autofocus;
+  final bool uiPerformanceMode;
 
   const WatchlistCard({
     super.key,
@@ -344,6 +341,7 @@ class WatchlistCard extends StatelessWidget {
     required this.onTap,
     required this.onHover,
     this.autofocus = false,
+    this.uiPerformanceMode = false,
   });
 
   String get _overlayLabel {
@@ -382,14 +380,16 @@ class WatchlistCard extends StatelessWidget {
                       ? AppPalette.primary.withValues(alpha: 0.55)
                       : AppPalette.border,
                 ),
-                boxShadow: hovered
+                boxShadow:
+                    (hovered &&
+                        !uiPerformanceMode) // ── Conditional drop shadow ──
                     ? [
                         BoxShadow(
                           color: AppPalette.primary.withValues(alpha: 0.18),
                           blurRadius: 24,
                         ),
                       ]
-                    : const [],
+                    : null,
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
@@ -400,8 +400,10 @@ class WatchlistCard extends StatelessWidget {
                       url:
                           media.coverImage?.large ??
                           media.coverImage?.extraLarge,
-                      scale: hovered ? 1.05 : 1.0,
-                      cacheWidth: 450, // Ideal sweet spot for grids
+                      scale: (hovered && !uiPerformanceMode)
+                          ? 1.05
+                          : 1.0, // ── Disable scale ──
+                      cacheWidth: 450,
                     ),
 
                     if (showProgress)
@@ -450,7 +452,11 @@ class WatchlistCard extends StatelessWidget {
                         ),
                       ),
 
-                    _PlayOverlay(visible: hovered, label: _overlayLabel),
+                    _PlayOverlay(
+                      visible: hovered,
+                      label: _overlayLabel,
+                      uiPerformanceMode: uiPerformanceMode,
+                    ),
 
                     if (showProgress)
                       Positioned(
@@ -518,13 +524,16 @@ class WatchlistCard extends StatelessWidget {
   }
 }
 
-// ── Private Reusable Card Helpers ──
-
 class _PlayOverlay extends StatelessWidget {
   final bool visible;
   final String label;
+  final bool uiPerformanceMode;
 
-  const _PlayOverlay({required this.visible, required this.label});
+  const _PlayOverlay({
+    required this.visible,
+    required this.label,
+    this.uiPerformanceMode = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -547,12 +556,15 @@ class _PlayOverlay extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppPalette.primary,
                   borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppPalette.primary.withValues(alpha: 0.55),
-                      blurRadius: 18,
-                    ),
-                  ],
+                  boxShadow: uiPerformanceMode
+                      ? null
+                      : [
+                          // ── Drop hover shadow ──
+                          BoxShadow(
+                            color: AppPalette.primary.withValues(alpha: 0.55),
+                            blurRadius: 18,
+                          ),
+                        ],
                 ),
                 child: Text(
                   label,

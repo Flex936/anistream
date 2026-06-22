@@ -7,7 +7,6 @@ import '../../../shared/widgets/app_network_image.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 import '../../../shared/utils/anime_status_style.dart';
 
-// ── Private Formatting Helpers ──
 String _stripHtml(String? html) {
   if (html == null || html.isEmpty) return 'No synopsis available.';
   return html
@@ -17,24 +16,24 @@ String _stripHtml(String? html) {
       .trim();
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  HeroBanner
-// ════════════════════════════════════════════════════════════════════════════
-
 class HeroBanner extends StatelessWidget {
   final Anime anime;
   final VoidCallback? onBack;
+  final bool uiPerformanceMode;
 
-  const HeroBanner({super.key, required this.anime, this.onBack});
+  const HeroBanner({
+    super.key,
+    required this.anime,
+    this.onBack,
+    this.uiPerformanceMode = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-
     return isMobile ? _buildMobileLayout() : _buildDesktopLayout();
   }
 
-  // ── 1. Desktop Layout (Classic Stacked Banner) ──
   Widget _buildDesktopLayout() {
     final bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
     final posterUrl = anime.coverImage?.extraLarge;
@@ -62,7 +61,14 @@ class HeroBanner extends StatelessWidget {
             ),
           ),
 
-          Positioned(top: 96, left: 48, child: _FloatingNavBar(onBack: onBack)),
+          Positioned(
+            top: 96,
+            left: 48,
+            child: _FloatingNavBar(
+              onBack: onBack,
+              uiPerformanceMode: uiPerformanceMode,
+            ),
+          ),
 
           Positioned(
             bottom: 24,
@@ -71,7 +77,11 @@ class HeroBanner extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                if (posterUrl != null) _PosterImage(url: posterUrl),
+                if (posterUrl != null)
+                  _PosterImage(
+                    url: posterUrl,
+                    uiPerformanceMode: uiPerformanceMode,
+                  ),
                 const SizedBox(width: 48),
                 Expanded(child: _AnimeTextInfo(anime: anime, isMobile: false)),
               ],
@@ -82,7 +92,6 @@ class HeroBanner extends StatelessWidget {
     );
   }
 
-  // ── 2. Mobile Layout (Safe Column Layout) ──
   Widget _buildMobileLayout() {
     final bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
     final posterUrl = anime.coverImage?.extraLarge;
@@ -91,7 +100,6 @@ class HeroBanner extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Top section with Banner Background and Back Button
         SizedBox(
           height: 250,
           child: Stack(
@@ -122,7 +130,10 @@ class HeroBanner extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 24, left: 16),
                   child: Align(
                     alignment: Alignment.topLeft,
-                    child: _FloatingNavBar(onBack: onBack),
+                    child: _FloatingNavBar(
+                      onBack: onBack,
+                      uiPerformanceMode: uiPerformanceMode,
+                    ),
                   ),
                 ),
               ),
@@ -130,18 +141,18 @@ class HeroBanner extends StatelessWidget {
           ),
         ),
 
-        // Bottom section with Poster and Text
         Transform.translate(
-          offset: const Offset(
-            0,
-            -80,
-          ), // Pulls the content up over the banner gradient
+          offset: const Offset(0, -80),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (posterUrl != null) _PosterImage(url: posterUrl),
+                if (posterUrl != null)
+                  _PosterImage(
+                    url: posterUrl,
+                    uiPerformanceMode: uiPerformanceMode,
+                  ),
                 const SizedBox(height: 32),
                 _AnimeTextInfo(anime: anime, isMobile: true),
               ],
@@ -155,7 +166,8 @@ class HeroBanner extends StatelessWidget {
 
 class _PosterImage extends StatelessWidget {
   final String url;
-  const _PosterImage({required this.url});
+  final bool uiPerformanceMode;
+  const _PosterImage({required this.url, this.uiPerformanceMode = false});
 
   @override
   Widget build(BuildContext context) {
@@ -164,13 +176,16 @@ class _PosterImage extends StatelessWidget {
       height: 330,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppPalette.black.withValues(alpha: 0.6),
-            blurRadius: 40,
-            offset: const Offset(0, 20),
-          ),
-        ],
+        boxShadow: uiPerformanceMode
+            ? null
+            : [
+                // ── Disabled in performance mode
+                BoxShadow(
+                  color: AppPalette.black.withValues(alpha: 0.6),
+                  blurRadius: 40,
+                  offset: const Offset(0, 20),
+                ),
+              ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
@@ -259,7 +274,8 @@ class _AnimeTextInfo extends StatelessWidget {
 
 class _FloatingNavBar extends StatelessWidget {
   final VoidCallback? onBack;
-  const _FloatingNavBar({this.onBack});
+  final bool uiPerformanceMode;
+  const _FloatingNavBar({this.onBack, this.uiPerformanceMode = false});
 
   @override
   Widget build(BuildContext context) {
@@ -271,50 +287,61 @@ class _FloatingNavBar extends StatelessWidget {
           Navigator.maybePop(context);
         }
       },
-      builder: (context, hovered) => ClipRRect(
-        borderRadius: BorderRadius.circular(30),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: hovered
-                  ? AppPalette.white.withValues(alpha: 0.15)
-                  : AppPalette.black.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(
-                color: AppPalette.white.withValues(alpha: 0.1),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AnimatedSlide(
-                  offset: hovered ? const Offset(-0.15, 0) : Offset.zero,
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOutCubic,
-                  child: const Icon(
-                    Icons.arrow_back_rounded,
-                    size: 18,
-                    color: AppPalette.textMain,
+      builder: (context, hovered) {
+        final content = AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: hovered
+                ? AppPalette.white.withValues(alpha: 0.15)
+                : AppPalette.black.withValues(
+                    alpha: uiPerformanceMode ? 0.8 : 0.4,
                   ),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Back',
-                  style: TextStyle(
-                    color: AppPalette.textMain,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
           ),
-        ),
-      ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedSlide(
+                offset: hovered ? const Offset(-0.15, 0) : Offset.zero,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                child: const Icon(
+                  Icons.arrow_back_rounded,
+                  size: 18,
+                  color: AppPalette.textMain,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Back',
+                style: TextStyle(
+                  color: AppPalette.textMain,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+
+        if (uiPerformanceMode) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: content,
+          );
+        }
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: content,
+          ),
+        );
+      },
     );
   }
 }

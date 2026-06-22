@@ -6,33 +6,43 @@ import '../services/streaming_controller_service.dart';
 class FrostedIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
+  final bool uiPerformanceMode;
 
   const FrostedIconButton({
     super.key,
     required this.icon,
     required this.onPressed,
+    this.uiPerformanceMode = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Material(
-          color: AppPalette.black.withValues(alpha: 0.4),
-          child: InkWell(
-            onTap: onPressed,
-            hoverColor: AppPalette.white.withValues(alpha: 0.2),
-            child: Container(
-              width: 48,
-              height: 48,
-              alignment: Alignment.center,
-              child: Icon(icon, color: AppPalette.white, size: 24),
-            ),
-          ),
+    // ── The core button UI ──
+    Widget buttonContent = Material(
+      color: AppPalette.black.withValues(alpha: uiPerformanceMode ? 0.8 : 0.4),
+      child: InkWell(
+        onTap: onPressed,
+        hoverColor: AppPalette.white.withValues(alpha: 0.2),
+        child: Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          child: Icon(icon, color: AppPalette.white, size: 24),
         ),
       ),
+    );
+
+    // ── Apply blur only if performance mode is OFF ──
+    if (!uiPerformanceMode) {
+      buttonContent = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: buttonContent,
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: buttonContent,
     );
   }
 }
@@ -40,14 +50,24 @@ class FrostedIconButton extends StatelessWidget {
 class TheaterTopBar extends StatelessWidget {
   final int episode;
   final VoidCallback onBack;
+  final bool uiPerformanceMode;
 
-  const TheaterTopBar({super.key, required this.episode, required this.onBack});
+  const TheaterTopBar({
+    super.key,
+    required this.episode,
+    required this.onBack,
+    this.uiPerformanceMode = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        FrostedIconButton(icon: Icons.arrow_back_rounded, onPressed: onBack),
+        FrostedIconButton(
+          icon: Icons.arrow_back_rounded,
+          onPressed: onBack,
+          uiPerformanceMode: uiPerformanceMode,
+        ),
         const SizedBox(width: 16),
         Text(
           'Episode $episode',
@@ -76,6 +96,7 @@ class TheaterLoadingOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      // The loading overlay was already solid, so no blur to remove here!
       color: AppPalette.black.withValues(alpha: 0.85),
       child: Center(
         child: Column(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../core/theme/app_palette.dart';
+import '../../core/settings/settings_service.dart';
 import 'widgets/navbar.dart';
 import '../settings/settings_menu.dart';
 import '../anime_details/anime_details_screen.dart';
@@ -30,11 +31,20 @@ class _AppShellState extends State<AppShell> {
   String _searchQuery = '';
   bool _isScrolled = false;
 
+  bool _uiPerformanceMode = false;
+
   @override
   void initState() {
     super.initState();
     _history = [HomeScreen(onSelectAnime: _handleSelectAnime)];
     _restoreSession();
+    _loadSettings();
+  }
+
+  // ── Reloads settings instantly ──
+  Future<void> _loadSettings() async {
+    final s = await SettingsService().load();
+    if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
   }
 
   Widget get _currentView => _history.last;
@@ -135,6 +145,7 @@ class _AppShellState extends State<AppShell> {
           searchQuery: _searchQuery,
           isLoggedIn: _isLoggedIn,
           isScrolled: _isScrolled,
+          uiPerformanceMode: _uiPerformanceMode,
           onHome: _goHome,
           onSearch: _handleTextChange,
           onSubmitted: _handleSubmit,
@@ -144,7 +155,11 @@ class _AppShellState extends State<AppShell> {
           onWatchlist: () =>
               _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
           onLogin: _handleLogin,
-          onSettings: () => showSettingsMenu(context),
+          // ── Reload settings automatically when the menu closes ──
+          onSettings: () async {
+            await showSettingsMenu(context);
+            _loadSettings();
+          },
         ),
         body: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),

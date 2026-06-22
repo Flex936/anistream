@@ -5,10 +5,11 @@ import '../utils/anime_status_style.dart';
 import '../../features/anime_details/anime_details_screen.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
+import '../../core/settings/settings_service.dart';
 import 'app_network_image.dart';
 import 'hover_focus_builder.dart';
 
-class AnimeCard extends StatelessWidget {
+class AnimeCard extends StatefulWidget {
   final Anime anime;
   final ValueChanged<Anime>? onSelect;
   final bool autofocus;
@@ -21,21 +22,36 @@ class AnimeCard extends StatelessWidget {
   });
 
   @override
+  State<AnimeCard> createState() => _AnimeCardState();
+}
+
+class _AnimeCardState extends State<AnimeCard> {
+  bool _uiPerformanceMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    SettingsService().load().then((s) {
+      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: HoverFocusBuilder(
-            autofocus: autofocus,
+            autofocus: widget.autofocus,
             onTap: () {
-              if (onSelect != null) {
-                onSelect!(anime);
+              if (widget.onSelect != null) {
+                widget.onSelect!(widget.anime);
               } else {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AnimeDetailsScreen(anime: anime),
+                    builder: (_) => AnimeDetailsScreen(anime: widget.anime),
                   ),
                 );
               }
@@ -50,7 +66,7 @@ class AnimeCard extends StatelessWidget {
                       ? AppPalette.primary.withValues(alpha: 0.55)
                       : AppPalette.border,
                 ),
-                boxShadow: hovered
+                boxShadow: (hovered && !_uiPerformanceMode)
                     ? [
                         BoxShadow(
                           color: AppPalette.primary.withValues(alpha: 0.18),
@@ -65,24 +81,28 @@ class AnimeCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    AppNetworkImage(url: anime.coverImage?.extraLarge),
+                    AppNetworkImage(url: widget.anime.coverImage?.extraLarge),
                     Positioned(
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: _PosterGradient(score: anime.averageScore),
+                      child: _PosterGradient(score: widget.anime.averageScore),
                     ),
                     Positioned(
                       top: 8,
                       left: 8,
                       child: _StatusBadge(
-                        label: anime.status?.statusLabel ?? 'UNKNOWN',
+                        label: widget.anime.status?.statusLabel ?? 'UNKNOWN',
                         color:
-                            anime.status?.statusColor ??
+                            widget.anime.status?.statusColor ??
                             AppPalette.statusDefault,
+                        uiPerformanceMode: _uiPerformanceMode,
                       ),
                     ),
-                    _HoverOverlay(visible: hovered),
+                    _HoverOverlay(
+                      visible: hovered,
+                      uiPerformanceMode: _uiPerformanceMode,
+                    ),
                   ],
                 ),
               ),
@@ -92,7 +112,7 @@ class AnimeCard extends StatelessWidget {
         const SizedBox(height: 10),
         HoverFocusBuilder(
           builder: (context, _) => Text(
-            anime.title.display,
+            widget.anime.title.display,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -105,7 +125,7 @@ class AnimeCard extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '${anime.nextAiringEpisode != null ? anime.nextAiringEpisode!.episode : anime.episodes ?? '?'} Episodes',
+          '${widget.anime.nextAiringEpisode != null ? widget.anime.nextAiringEpisode!.episode : widget.anime.episodes ?? '?'} Episodes',
           style: const TextStyle(color: AppPalette.textMuted, fontSize: 11),
         ),
       ],
@@ -158,39 +178,55 @@ class _PosterGradient extends StatelessWidget {
 class _StatusBadge extends StatelessWidget {
   final String label;
   final Color color;
-  const _StatusBadge({required this.label, required this.color});
+  final bool uiPerformanceMode;
+
+  const _StatusBadge({
+    required this.label,
+    required this.color,
+    this.uiPerformanceMode = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppPalette.black.withValues(alpha: 0.58),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: color.withValues(alpha: 0.40)),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
-            ),
-          ),
+    Widget badgeContent = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppPalette.black.withValues(
+          alpha: uiPerformanceMode ? 0.85 : 0.58,
+        ),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.40)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
         ),
       ),
+    );
+
+    if (!uiPerformanceMode) {
+      badgeContent = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: badgeContent,
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: badgeContent,
     );
   }
 }
 
 class _HoverOverlay extends StatelessWidget {
   final bool visible;
-  const _HoverOverlay({required this.visible});
+  final bool uiPerformanceMode;
+
+  const _HoverOverlay({required this.visible, this.uiPerformanceMode = false});
 
   @override
   Widget build(BuildContext context) {
@@ -210,13 +246,15 @@ class _HoverOverlay extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppPalette.primary,
                   shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppPalette.primary.withValues(alpha: 0.55),
-                      blurRadius: 22,
-                      spreadRadius: 2,
-                    ),
-                  ],
+                  boxShadow: uiPerformanceMode
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: AppPalette.primary.withValues(alpha: 0.55),
+                            blurRadius: 22,
+                            spreadRadius: 2,
+                          ),
+                        ],
                 ),
                 child: const Icon(
                   Icons.play_arrow_rounded,

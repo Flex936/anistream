@@ -9,11 +9,13 @@ enum _MenuPage { main, subtitles, audio }
 class TheaterSettingsMenu extends StatefulWidget {
   final Player player;
   final VoidCallback onClose;
+  final bool uiPerformanceMode;
 
   const TheaterSettingsMenu({
     super.key,
     required this.player,
     required this.onClose,
+    this.uiPerformanceMode = false,
   });
 
   @override
@@ -62,36 +64,43 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
 
   @override
   Widget build(BuildContext context) {
+    // ── The Core Menu UI ──
+    Widget menuContent = Container(
+      width: 280,
+      constraints: const BoxConstraints(maxHeight: 350),
+      decoration: BoxDecoration(
+        color: AppPalette.surface.withValues(
+          alpha: widget.uiPerformanceMode ? 0.98 : 0.85,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: switch (_currentPage) {
+            _MenuPage.main => _buildMain(),
+            _MenuPage.subtitles => _buildSubtitles(),
+            _MenuPage.audio => _buildAudio(),
+          },
+        ),
+      ),
+    );
+
+    // ── Conditionally apply the Blur ──
+    if (!widget.uiPerformanceMode) {
+      menuContent = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: menuContent,
+      );
+    }
+
     return FocusScope(
       autofocus: true,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-          child: Container(
-            width: 280,
-            constraints: const BoxConstraints(maxHeight: 350),
-            decoration: BoxDecoration(
-              color: AppPalette.surface.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppPalette.white.withValues(alpha: 0.1),
-              ),
-            ),
-            // ── Transparent Material catches the splash ripples ──
-            child: Material(
-              color: Colors.transparent,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: switch (_currentPage) {
-                  _MenuPage.main => _buildMain(),
-                  _MenuPage.subtitles => _buildSubtitles(),
-                  _MenuPage.audio => _buildAudio(),
-                },
-              ),
-            ),
-          ),
-        ),
+        child: menuContent,
       ),
     );
   }
