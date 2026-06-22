@@ -90,13 +90,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
     final platform = _player.platform;
     if (platform is NativePlayer) {
       if (hwdec == 'auto') {
-        if (Platform.isLinux || Platform.isWindows) {
+        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
           platform.setProperty('hwdec', 'auto-safe');
           windowManager.setFullScreen(true);
         } else if (Platform.isAndroid) {
-          platform.setProperty('hwdec', 'mediacodec-copy');
-        } else if (Platform.isIOS || Platform.isMacOS) {
-          platform.setProperty('hwdec', 'videotoolbox-copy');
+          platform.setProperty('hwdec', 'mediacodec');
+        } else if (Platform.isIOS) {
+          platform.setProperty('hwdec', 'videotoolbox');
         }
       } else if (hwdec != 'none') {
         platform.setProperty('hwdec', hwdec);
