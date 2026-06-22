@@ -166,11 +166,13 @@ class SettingRowTile extends StatelessWidget {
 class SettingsDropdown extends StatelessWidget {
   final String value;
   final ValueChanged<String?> onChanged;
+  final List<DropdownMenuItem<String>> items;
 
   const SettingsDropdown({
     super.key,
     required this.value,
     required this.onChanged,
+    required this.items,
   });
 
   @override
@@ -204,28 +206,7 @@ class SettingsDropdown extends StatelessWidget {
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
-            items: const [
-              DropdownMenuItem(
-                value: 'auto',
-                child: Text('Auto (Safe Default)'),
-              ),
-              DropdownMenuItem(
-                value: 'cuda-copy',
-                child: Text('NVIDIA (CUDA)'),
-              ),
-              DropdownMenuItem(
-                value: 'd3d11va-copy',
-                child: Text('Windows Native (D3D11VA)'),
-              ),
-              DropdownMenuItem(
-                value: 'videotoolbox-copy',
-                child: Text('Apple Silicon (VideoToolbox)'),
-              ),
-              DropdownMenuItem(
-                value: 'none',
-                child: Text('Software Only (CPU)'),
-              ),
-            ],
+            items: items, // ── UPDATED ──
             onChanged: onChanged,
           ),
         ),

@@ -41,7 +41,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   late bool _filterEcchi;
   late String _hardwareDecoding;
-  late bool _autoPlayRecommended;
+  late String _androidHwDec; // ── NEW ──
+  late bool _autoPlayEnabled;
   late bool _autoSkip;
 
   bool get _isDesktop =>
@@ -59,7 +60,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
     setState(() {
       _filterEcchi = s.filterEcchi;
       _hardwareDecoding = s.hardwareDecoding;
-      _autoPlayRecommended = s.autoPlayRecommended;
+      _androidHwDec = s.androidHwDec; // ── NEW ──
+      _autoPlayEnabled = s.autoPlayEnabled;
       _autoSkip = s.autoSkip;
       _loading = false;
     });
@@ -72,7 +74,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
         AppSettings(
           filterEcchi: _filterEcchi,
           hardwareDecoding: _hardwareDecoding,
-          autoPlayRecommended: _autoPlayRecommended,
+          androidHwDec: _androidHwDec, // ── NEW ──
+          autoPlayEnabled: _autoPlayEnabled,
           autoSkip: _autoSkip,
         ),
       );
@@ -138,12 +141,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             width: 1,
                           ),
                         ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppPalette.black.withValues(alpha: 0.6),
-                      blurRadius: 40,
-                    ),
-                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -202,13 +199,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                   showDividerAbove: true,
                                   children: [
                                     SettingRowTile(
-                                      title: 'Auto-Play Recommended',
+                                      title: '1-Click Auto-Play',
                                       subtitle:
                                           'Skip the release list and instantly stream the highest-rated torrent.',
-                                      value: _autoPlayRecommended,
-                                      onChanged: (v) => setState(
-                                        () => _autoPlayRecommended = v,
-                                      ),
+                                      value: _autoPlayEnabled,
+                                      onChanged: (v) =>
+                                          setState(() => _autoPlayEnabled = v),
                                     ),
                                     SettingRowTile(
                                       title: 'Auto-Skip',
@@ -222,7 +218,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 ),
                                 if (_isDesktop)
                                   SettingsSection(
-                                    label: 'Playback Engine',
+                                    label: 'Desktop Playback Engine',
                                     showDividerAbove: true,
                                     children: [
                                       const Padding(
@@ -260,10 +256,105 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                         ),
                                         child: SettingsDropdown(
                                           value: _hardwareDecoding,
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'auto',
+                                              child: Text(
+                                                'Auto (Safe Default)',
+                                              ),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'cuda-copy',
+                                              child: Text('NVIDIA (CUDA)'),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'd3d11va-copy',
+                                              child: Text(
+                                                'Windows Native (D3D11VA)',
+                                              ),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'videotoolbox-copy',
+                                              child: Text(
+                                                'Apple Silicon (VideoToolbox)',
+                                              ),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'none',
+                                              child: Text(
+                                                'Software Only (CPU)',
+                                              ),
+                                            ),
+                                          ],
                                           onChanged: (val) {
                                             if (val != null) {
                                               setState(
                                                 () => _hardwareDecoding = val,
+                                              );
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                if (Platform.isAndroid)
+                                  SettingsSection(
+                                    label: 'Android Playback Engine',
+                                    showDividerAbove: true,
+                                    children: [
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Hardware Decoding (Android)',
+                                              style: TextStyle(
+                                                color: AppPalette.textMain,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              'Phones run best on "mediacodec" (Zero-Copy). Android TVs with weak drivers may crash and require "mediacodec-copy".',
+                                              style: TextStyle(
+                                                color: AppPalette.textMuted,
+                                                fontSize: 12,
+                                                height: 1.4,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        child: SettingsDropdown(
+                                          value: _androidHwDec,
+                                          items: const [
+                                            DropdownMenuItem(
+                                              value: 'mediacodec-copy',
+                                              child: Text(
+                                                'mediacodec-copy (Safe / TV Mode)',
+                                              ),
+                                            ),
+                                            DropdownMenuItem(
+                                              value: 'mediacodec',
+                                              child: Text(
+                                                'mediacodec (Zero-Copy / Fast)',
+                                              ),
+                                            ),
+                                          ],
+                                          onChanged: (val) {
+                                            if (val != null) {
+                                              setState(
+                                                () => _androidHwDec = val,
                                               );
                                             }
                                           },

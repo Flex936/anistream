@@ -84,8 +84,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _initPlayerAndStream() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-    _autoSkip = prefs.getBool(SettingsService.kAutoSkip) ?? false;
+
     final hwdec = prefs.getString(SettingsService.kHwDec) ?? 'auto';
+    final androidHwDec =
+        prefs.getString(SettingsService.kAndroidHwDec) ?? 'mediacodec-copy';
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
@@ -94,7 +96,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
           platform.setProperty('hwdec', 'auto-safe');
           windowManager.setFullScreen(true);
         } else if (Platform.isAndroid) {
-          platform.setProperty('hwdec', 'mediacodec');
+          platform.setProperty('hwdec', androidHwDec);
         } else if (Platform.isIOS) {
           platform.setProperty('hwdec', 'videotoolbox');
         }

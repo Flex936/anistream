@@ -20,6 +20,10 @@ class EpisodeTile extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback? onReturnFromTheater;
 
+  // ── NEW: AutoPlay UI State ──
+  final bool isAutoPlayEnabled;
+  final bool isCurrentlyLoading;
+
   const EpisodeTile({
     super.key,
     required this.anime,
@@ -30,6 +34,8 @@ class EpisodeTile extends StatelessWidget {
     this.torrentFuture,
     required this.onToggle,
     this.onReturnFromTheater,
+    this.isAutoPlayEnabled = false,
+    this.isCurrentlyLoading = false,
   });
 
   @override
@@ -37,10 +43,8 @@ class EpisodeTile extends StatelessWidget {
     final isMobile = MediaQuery.of(context).size.width < 600;
     final hPad = isMobile ? 16.0 : 28.0;
 
-    // ── GHOSTED LOGIC ──
     final isWatched = userProgress != null && episodeNumber <= userProgress!;
 
-    // Base colors derived from state
     final Color numColor = isExpanded
         ? AppPalette.primary
         : isUpNext
@@ -142,18 +146,39 @@ class EpisodeTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                AnimatedRotation(
-                  turns: isExpanded ? 0.5 : 0.0,
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeOutCubic,
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 22,
-                    color: isExpanded
+                // ── Trailing UI Logic ──
+                if (isCurrentlyLoading)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppPalette.primary,
+                      ),
+                    ),
+                  )
+                else if (isAutoPlayEnabled)
+                  Icon(
+                    Icons.play_arrow_rounded,
+                    size: 24,
+                    color: hovered
                         ? AppPalette.primary
                         : AppPalette.textMuted.withValues(alpha: 0.5),
+                  )
+                else
+                  AnimatedRotation(
+                    turns: isExpanded ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 22,
+                      color: isExpanded
+                          ? AppPalette.primary
+                          : AppPalette.textMuted.withValues(alpha: 0.5),
+                    ),
                   ),
-                ),
               ],
             ),
           ),

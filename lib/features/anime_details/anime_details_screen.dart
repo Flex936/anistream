@@ -28,18 +28,18 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
   // ── Progress State ──
   int? _userProgress;
-
   int _expandedEpisode = -1;
-  bool _autoPlayRecommended = false;
 
-  bool _isAutoPlaying = false;
+  // ── RENAMED ──
+  bool _autoPlayEnabled = false;
+  bool _isFetchingSource = false;
   int _autoPlayTargetEpisode = -1;
 
   @override
   void initState() {
     super.initState();
     SettingsService().load().then((s) {
-      if (mounted) setState(() => _autoPlayRecommended = s.autoPlayRecommended);
+      if (mounted) setState(() => _autoPlayEnabled = s.autoPlayEnabled);
     });
 
     _fetchProgress();
@@ -68,15 +68,15 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   );
 
   void _toggleEpisode(int ep) async {
-    if (_isAutoPlaying) return;
+    if (_isFetchingSource) return;
 
-    if (!_autoPlayRecommended) {
+    if (!_autoPlayEnabled) {
       setState(() => _expandedEpisode = _expandedEpisode == ep ? -1 : ep);
       return;
     }
 
     setState(() {
-      _isAutoPlaying = true;
+      _isFetchingSource = true;
       _autoPlayTargetEpisode = ep;
       _expandedEpisode = -1;
     });
@@ -86,7 +86,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (!mounted) return;
 
       if (torrents.isNotEmpty) {
-        // Re-fetch progress when returning from Theater in case they watched an episode
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -107,7 +106,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          _isAutoPlaying = false;
+          _isFetchingSource = false;
           _autoPlayTargetEpisode = -1;
         });
       }
@@ -186,7 +185,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final ep = index + 1;
-                      // Only mark it as 'Up Next' if there actually is a next episode
                       final isUpNext =
                           _userProgress != null &&
                           ep == (_userProgress! + 1) &&
@@ -199,11 +197,13 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         isExpanded: _expandedEpisode == ep,
                         userProgress: _userProgress,
                         isUpNext: isUpNext,
+                        isAutoPlayEnabled: _autoPlayEnabled,
+                        isCurrentlyLoading:
+                            _isFetchingSource && _autoPlayTargetEpisode == ep,
                         torrentFuture: _expandedEpisode == ep
                             ? _futureFor(ep)
                             : null,
                         onToggle: () => _toggleEpisode(ep),
-                        // ── Pass the fetch logic down to update UI natively ──
                         onReturnFromTheater: _fetchProgress,
                       );
                     }, childCount: _episodeCount),
@@ -213,7 +213,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
             ],
           ),
 
-          if (_isAutoPlaying)
+          if (_isFetchingSource)
             Positioned.fill(
               child: TweenAnimationBuilder<double>(
                 tween: Tween<double>(begin: 0.0, end: 1.0),
