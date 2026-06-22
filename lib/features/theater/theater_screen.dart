@@ -188,7 +188,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
             _isAutoSkipping &&
             _currentAutoSkipChapter == activeChapter) {
           debugPrint('⏭Executing skip to: ${activeChapter!.end}');
-          _player.seek(activeChapter!.end);
+          _player.seek(activeChapter.end);
           _isAutoSkipping = false;
         }
       });
