@@ -51,6 +51,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _isFullscreen = false;
   Timer? _hideControlsTimer;
   bool _isClosing = false;
+  late bool _autoSkip;
 
   List<Chapter> _chapters = [];
   StreamSubscription? _posSub;
@@ -83,7 +84,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _initPlayerAndStream() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-
+    _autoSkip = prefs.getBool(SettingsService.kAutoSkip) ?? false;
     final hwdec = prefs.getString(SettingsService.kHwDec) ?? 'auto';
 
     final platform = _player.platform;
@@ -337,6 +338,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                 child: TheaterControls(
                                   player: _player,
                                   chapterMetadata: _chapters,
+                                  autoSkip: _autoSkip,
                                   isSettingsOpen: _isSettingsOpen,
                                   isFullscreen: _isFullscreen,
                                   onToggleFullscreen: _toggleFullscreen,

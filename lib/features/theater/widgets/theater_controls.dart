@@ -13,6 +13,8 @@ class TheaterControls extends StatefulWidget {
   final VoidCallback onToggleFullscreen;
   final bool isSettingsOpen;
   final bool isFullscreen;
+  final bool autoSkip;
+
   final List<Chapter> chapterMetadata;
 
   const TheaterControls({
@@ -24,6 +26,7 @@ class TheaterControls extends StatefulWidget {
     required this.isSettingsOpen,
     required this.isFullscreen,
     this.chapterMetadata = const [],
+    required this.autoSkip,
   });
 
   @override
@@ -31,8 +34,10 @@ class TheaterControls extends StatefulWidget {
 }
 
 class ChapteredTrackShape extends RoundedRectSliderTrackShape {
-  final List<double> stops;
-  const ChapteredTrackShape({required this.stops});
+  final List<double> stops; // normalized 0.0–1.0 chapter starts
+  final double notchWidth;
+
+  const ChapteredTrackShape({required this.stops, this.notchWidth = 3.0});
 
   @override
   void paint(
@@ -48,6 +53,35 @@ class ChapteredTrackShape extends RoundedRectSliderTrackShape {
     bool isEnabled = false,
     double additionalActiveTrackHeight = 2,
   }) {
+    final validStops = stops.where((s) => s > 0.01 && s < 0.99).toList();
+
+    if (validStops.isEmpty) {
+      super.paint(
+        context,
+        offset,
+        parentBox: parentBox,
+        sliderTheme: sliderTheme,
+        enableAnimation: enableAnimation,
+        textDirection: textDirection,
+        thumbCenter: thumbCenter,
+        isDiscrete: isDiscrete,
+        isEnabled: isEnabled,
+        additionalActiveTrackHeight: additionalActiveTrackHeight,
+      );
+      return;
+    }
+
+    final canvas = context.canvas;
+
+    final layerBounds = Rect.fromLTWH(
+      offset.dx,
+      offset.dy,
+      parentBox.size.width,
+      parentBox.size.height,
+    );
+
+    canvas.saveLayer(layerBounds, Paint());
+
     super.paint(
       context,
       offset,
@@ -61,8 +95,6 @@ class ChapteredTrackShape extends RoundedRectSliderTrackShape {
       additionalActiveTrackHeight: additionalActiveTrackHeight,
     );
 
-    if (stops.isEmpty) return;
-
     final trackRect = getPreferredRect(
       parentBox: parentBox,
       offset: offset,
@@ -71,23 +103,22 @@ class ChapteredTrackShape extends RoundedRectSliderTrackShape {
       isDiscrete: isDiscrete,
     );
 
-    // Cuts physical gaps using the base color
-    final paint = Paint()..color = AppPalette.base.withValues(alpha: 0.95);
-    const markWidth = 2.5;
+    final clearPaint = Paint()..blendMode = BlendMode.clear;
 
-    for (final stop in stops) {
-      if (stop <= 0.01 || stop >= 0.99) continue;
+    for (final stop in validStops) {
       final dx = trackRect.left + stop * trackRect.width;
-      context.canvas.drawRect(
+      canvas.drawRect(
         Rect.fromLTWH(
-          dx - markWidth / 2,
-          trackRect.top,
-          markWidth,
-          trackRect.height,
+          dx - notchWidth / 2,
+          layerBounds.top,
+          notchWidth,
+          layerBounds.height,
         ),
-        paint,
+        clearPaint,
       );
     }
+
+    canvas.restore();
   }
 }
 
@@ -102,6 +133,9 @@ class _TheaterControlsState extends State<TheaterControls> {
   late final StreamSubscription _durationSub;
   late final StreamSubscription _volumeSub;
 
+  Timer? _autoSkipTimer;
+  Chapter? _autoSkipArmedFor;
+
   @override
   void initState() {
     super.initState();
@@ -115,6 +149,7 @@ class _TheaterControlsState extends State<TheaterControls> {
     });
     _positionSub = widget.player.stream.position.listen((v) {
       if (mounted) setState(() => _position = v);
+      _updateAutoSkipTimer();
     });
     _durationSub = widget.player.stream.duration.listen((v) {
       if (mounted) setState(() => _duration = v);
@@ -125,12 +160,48 @@ class _TheaterControlsState extends State<TheaterControls> {
   }
 
   @override
+  void didUpdateWidget(TheaterControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.autoSkip != widget.autoSkip ||
+        oldWidget.chapterMetadata != widget.chapterMetadata) {
+      _updateAutoSkipTimer();
+    }
+  }
+
+  @override
   void dispose() {
     _playingSub.cancel();
     _positionSub.cancel();
     _durationSub.cancel();
     _volumeSub.cancel();
+    _autoSkipTimer?.cancel();
     super.dispose();
+  }
+
+  void _updateAutoSkipTimer() {
+    final target = _activeSkipChapter;
+
+    if (target == null || !widget.autoSkip) {
+      _autoSkipTimer?.cancel();
+      _autoSkipTimer = null;
+      _autoSkipArmedFor = null;
+      return;
+    }
+
+    if (_autoSkipArmedFor == target) return;
+
+    _autoSkipTimer?.cancel();
+    _autoSkipArmedFor = target;
+    _autoSkipTimer = Timer(const Duration(seconds: 2), () {
+      _autoSkipTimer = null;
+      _autoSkipArmedFor = null;
+
+      if (mounted && widget.autoSkip && _activeSkipChapter == target) {
+        widget.player.seek(target.end);
+        widget.onInteract();
+      }
+    });
   }
 
   void _onSeek(double value) {
@@ -169,6 +240,13 @@ class _TheaterControlsState extends State<TheaterControls> {
         .map((c) => c.start.inMilliseconds / maxDuration)
         .toList();
     final skipTarget = _activeSkipChapter;
+
+    void skipChapter() {
+      if (skipTarget != null) {
+        widget.player.seek(skipTarget.end);
+        widget.onInteract();
+      }
+    }
 
     return ShaderMask(
       // Apple-style Fading Frosted Glass
@@ -219,12 +297,7 @@ class _TheaterControlsState extends State<TheaterControls> {
                           borderRadius: BorderRadius.circular(20),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(20),
-                            onTap: () {
-                              if (skipTarget != null) {
-                                widget.player.seek(skipTarget.end);
-                                widget.onInteract();
-                              }
-                            },
+                            onTap: skipChapter,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,

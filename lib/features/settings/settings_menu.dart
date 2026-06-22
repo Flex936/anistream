@@ -42,6 +42,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late bool _filterEcchi;
   late String _hardwareDecoding;
   late bool _autoPlayRecommended;
+  late bool _autoSkip;
 
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -59,6 +60,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
       _filterEcchi = s.filterEcchi;
       _hardwareDecoding = s.hardwareDecoding;
       _autoPlayRecommended = s.autoPlayRecommended;
+      _autoSkip = s.autoSkip;
       _loading = false;
     });
   }
@@ -71,6 +73,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           filterEcchi: _filterEcchi,
           hardwareDecoding: _hardwareDecoding,
           autoPlayRecommended: _autoPlayRecommended,
+          autoSkip: _autoSkip,
         ),
       );
       if (mounted) {
@@ -206,6 +209,14 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                       onChanged: (v) => setState(
                                         () => _autoPlayRecommended = v,
                                       ),
+                                    ),
+                                    SettingRowTile(
+                                      title: 'Auto-Skip',
+                                      subtitle:
+                                          'Skip the Openings and Endings of anime if available.',
+                                      value: _autoSkip,
+                                      onChanged: (v) =>
+                                          setState(() => _autoSkip = v),
                                     ),
                                   ],
                                 ),
