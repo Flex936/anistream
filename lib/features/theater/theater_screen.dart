@@ -52,7 +52,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Timer? _hideControlsTimer;
   bool _isClosing = false;
 
-  late bool _autoSkip;
+  // ── AUTOSKIP STATE ──
+  bool _autoSkip = false;
+  bool _isAutoSkipping = false;
+  Chapter? _currentAutoSkipChapter;
+  Timer? _autoSkipTimer;
 
   // ── INDEPENDENT PERFORMANCE SETTINGS ──
   bool _uiPerformanceMode = false;
@@ -82,12 +86,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
       },
     );
 
-    // ── Load Settings ──
     SettingsService().load().then((s) {
       if (mounted) {
         setState(() {
           _uiPerformanceMode = s.uiPerformanceMode;
           _videoFilterQuality = s.videoFilterQuality;
+          _autoSkip = s.autoSkip;
         });
       }
     });
@@ -134,7 +138,61 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _posSub = _player.stream.position.listen((pos) {
       _tracker.updateProgress(pos, _player.state.duration);
+      _handleAutoSkip(pos);
     });
+  }
+
+  void _handleAutoSkip(Duration pos) {
+    if (!_autoSkip || _chapters.isEmpty) return;
+
+    Chapter? activeChapter;
+    for (final c in _chapters) {
+      if (c.isSkippable &&
+          pos >= c.start &&
+          pos < (c.end - const Duration(seconds: 1))) {
+        activeChapter = c;
+        break;
+      }
+    }
+
+    if (activeChapter == null) {
+      if (_isAutoSkipping) {
+        debugPrint('Auto-skip cancelled (user intervened or chapter ended)');
+        _autoSkipTimer?.cancel();
+        _isAutoSkipping = false;
+        _currentAutoSkipChapter = null;
+      }
+      return;
+    }
+
+    if (_currentAutoSkipChapter != activeChapter) {
+      debugPrint(
+        'Auto-skip triggered for: "${activeChapter.title}" (${activeChapter.start} -> ${activeChapter.end})',
+      );
+
+      _autoSkipTimer?.cancel();
+      _isAutoSkipping = true;
+      _currentAutoSkipChapter = activeChapter;
+
+      if (mounted) {
+        AppleTopSnackBar.show(
+          context: context,
+          message: 'Auto-skipping ${activeChapter.skipLabel} in 2s...',
+          icon: Icons.fast_forward_rounded,
+          iconColor: AppPalette.primary,
+        );
+      }
+
+      _autoSkipTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted &&
+            _isAutoSkipping &&
+            _currentAutoSkipChapter == activeChapter) {
+          debugPrint('⏭Executing skip to: ${activeChapter!.end}');
+          _player.seek(activeChapter!.end);
+          _isAutoSkipping = false;
+        }
+      });
+    }
   }
 
   void _onTorrentStateChanged() {
@@ -146,6 +204,17 @@ class _TheaterScreenState extends State<TheaterScreen> {
         _,
       ) async {
         final resolvedChapters = await loadChapters(_player);
+
+        // ── LOGGING TO INSPECT MKV CHAPTERS ──
+        debugPrint('\n─── LOADED CHAPTERS ───');
+        for (int i = 0; i < resolvedChapters.length; i++) {
+          final c = resolvedChapters[i];
+          debugPrint(
+            '[$i] "${c.title}" | ${c.start} -> ${c.end} | Skippable: ${c.isSkippable}',
+          );
+        }
+        debugPrint('───────────────────────────\n');
+
         if (mounted) setState(() => _chapters = resolvedChapters);
       });
 
@@ -270,6 +339,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       await WidgetsBinding.instance.endOfFrame;
     }
     _hideControlsTimer?.cancel();
+    _autoSkipTimer?.cancel();
     _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
@@ -281,6 +351,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   void dispose() {
     _focusNode.dispose();
     _hideControlsTimer?.cancel();
+    _autoSkipTimer?.cancel();
     _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
@@ -291,7 +362,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     super.dispose();
   }
 
-  // ── Helper to map string preference to Flutter Enum ──
   FilterQuality _getFilterQuality() {
     switch (_videoFilterQuality) {
       case 'high':
@@ -338,8 +408,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                     child: Video(
                       controller: _videoController,
                       controls: NoVideoControls,
-                      filterQuality:
-                          _getFilterQuality(), // ── Applies the user preference ──
+                      filterQuality: _getFilterQuality(),
                     ),
                   ),
 
