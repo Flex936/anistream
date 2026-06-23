@@ -14,12 +14,12 @@ import '../../data/torrent/models/torrent.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
 import '../../shared/widgets/toast.dart';
-import 'services/streaming_controller_service.dart';
+import 'services/streaming_controller.dart';
 import 'services/theater_data.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_settings.dart';
-import 'widgets/theater_batch_picker.dart';
+import 'widgets/batch_picker.dart';
 
 class TheaterScreen extends StatefulWidget {
   final Anime anime;

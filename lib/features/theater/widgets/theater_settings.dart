@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import '../../../core/theme/app_palette.dart';
+import '../services/track_name_parser.dart';
 
 enum _MenuPage { main, subtitles, audio }
 
@@ -58,13 +59,14 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
     super.dispose();
   }
 
-  String _getAudioName(AudioTrack? t) => t?.title ?? t?.language ?? 'Auto';
-  String _getSubtitleName(SubtitleTrack? t) =>
-      t?.id == 'no' ? 'Disabled' : (t?.title ?? t?.language ?? 'Auto');
+  // Use the parser just for the small preview string on the main page
+  String _getAudioPreview(AudioTrack? t) =>
+      TrackNameParser.parseAudio(t).mainTitle;
+  String _getSubtitlePreview(SubtitleTrack? t) =>
+      TrackNameParser.parseSubtitle(t).mainTitle;
 
   @override
   Widget build(BuildContext context) {
-    // ── The Core Menu UI ──
     Widget menuContent = Container(
       width: 280,
       constraints: const BoxConstraints(maxHeight: 350),
@@ -88,7 +90,6 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
       ),
     );
 
-    // ── Conditionally apply the Blur ──
     if (!widget.uiPerformanceMode) {
       menuContent = BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
@@ -112,14 +113,14 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
         _Tile(
           icon: Icons.subtitles_outlined,
           title: 'Subtitles',
-          sub: _getSubtitleName(_activeSubtitle),
+          sub: _getSubtitlePreview(_activeSubtitle),
           onTap: () => setState(() => _currentPage = _MenuPage.subtitles),
           autofocus: true,
         ),
         _Tile(
           icon: Icons.audiotrack_outlined,
           title: 'Audio',
-          sub: _getAudioName(_activeAudio),
+          sub: _getAudioPreview(_activeAudio),
           onTap: () => setState(() => _currentPage = _MenuPage.audio),
         ),
       ],
@@ -142,7 +143,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
             itemBuilder: (context, index) {
               final t = _tracks.subtitle[index];
               return _TrackTile(
-                title: _getSubtitleName(t),
+                track: TrackNameParser.parseSubtitle(t),
                 selected: t.id == _activeSubtitle?.id,
                 onTap: () {
                   widget.player.setSubtitleTrack(t);
@@ -172,7 +173,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
             itemBuilder: (context, index) {
               final t = _tracks.audio[index];
               return _TrackTile(
-                title: _getAudioName(t),
+                track: TrackNameParser.parseAudio(t),
                 selected: t.id == _activeAudio?.id,
                 onTap: () {
                   widget.player.setAudioTrack(t);
@@ -253,14 +254,16 @@ class _Back extends StatelessWidget {
 }
 
 class _TrackTile extends StatelessWidget {
-  final String title;
+  final ParsedTrack track;
   final bool selected;
   final VoidCallback onTap;
+
   const _TrackTile({
-    required this.title,
+    required this.track,
     required this.selected,
     required this.onTap,
   });
+
   @override
   Widget build(BuildContext context) {
     return ListTile(
@@ -269,12 +272,23 @@ class _TrackTile extends StatelessWidget {
       hoverColor: AppPalette.white.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       title: Text(
-        title,
+        track.mainTitle,
         style: TextStyle(
           color: selected ? AppPalette.primary : AppPalette.textMain,
           fontSize: 14,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
+      // ── Conditionally display technical specs in gray subtitle ──
+      subtitle: track.subTitle != null
+          ? Text(
+              track.subTitle!,
+              style: TextStyle(
+                color: AppPalette.textMuted.withValues(alpha: 0.8),
+                fontSize: 11,
+              ),
+            )
+          : null,
       trailing: selected
           ? const Icon(Icons.check, color: AppPalette.primary, size: 18)
           : null,
