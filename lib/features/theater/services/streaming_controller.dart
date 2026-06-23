@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:libtorrent_flutter/libtorrent_flutter.dart';
 
+import '../../../data/torrent/services/torrent_parser.dart';
+
 class BatchFileOption {
   final int index;
   final String name;
@@ -63,7 +65,10 @@ class StreamingController extends ChangeNotifier {
     LibtorrentFlutter engine,
     Map<int, TorrentInfo> torrents,
   ) {
-    if (_torrentId == null || !torrents.containsKey(_torrentId)) return;
+    if (_torrentId == null || !torrents.containsKey(_torrentId)) {
+      return;
+    }
+
     final t = torrents[_torrentId]!;
 
     if (!t.hasMetadata) {
@@ -110,6 +115,7 @@ class StreamingController extends ChangeNotifier {
         final matches = _batchFiles
             .where((f) => f.guessedEpisode == _requestedEpisode)
             .toList();
+
         if (matches.length == 1) {
           _updateStatus(
             'Found Episode $_requestedEpisode in batch, starting...',
@@ -128,7 +134,10 @@ class StreamingController extends ChangeNotifier {
   }
 
   void selectBatchFile(int fileIndex) {
-    if (_torrentId == null || _isReadyToPlay) return;
+    if (_torrentId == null || _isReadyToPlay) {
+      return;
+    }
+
     _needsManualSelection = false;
     _updateStatus('Starting playback engine...');
     notifyListeners();
@@ -157,31 +166,24 @@ class StreamingController extends ChangeNotifier {
     }
   }
 
+  // ── PRE-COMPILED PARSER ──
   int? _guessEpisodeNumber(String rawName) {
-    final fileName = rawName.split(RegExp(r'[\\/]')).last.toLowerCase();
-    const resolutionNumbers = {480, 720, 1080, 2160};
-
-    final patterns = <RegExp>[
-      RegExp(r's\d{1,2}e(\d{1,3})'),
-      RegExp(r'(?:^|[\[\s_.-])ep?(?:isode)?\s*\.?\s*(\d{1,3})(?=[\]\s_.-]|$)'),
-      RegExp(r'-\s*(\d{1,3})(?=\(|\[|v\d|\.|\s|$)'),
-      RegExp(r'(?:^|[\s_.])(\d{1,3})(?=[\s_.]|$)'),
-    ];
-
-    for (final pattern in patterns) {
-      final match = pattern.firstMatch(fileName);
-      if (match == null) continue;
-      final n = int.tryParse(match.group(1)!);
-      if (n != null && n > 0 && !resolutionNumbers.contains(n)) {
-        return n;
-      }
+    final meta = TorrentParser.parse(rawName);
+    if (meta.episode != -1) {
+      return meta.episode;
+    } else {
+      return null;
     }
-    return null;
   }
 
   void _updateStatus(String text) {
-    if (_hasError) return;
-    if (_isReadyToPlay && _statusText == 'Starting playback engine...') return;
+    if (_hasError) {
+      return;
+    }
+    if (_isReadyToPlay && _statusText == 'Starting playback engine...') {
+      return;
+    }
+
     _statusText = text;
     notifyListeners();
   }

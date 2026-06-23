@@ -48,8 +48,10 @@ class Anime {
   final String? description;
   final int? episodes;
   final String? status;
+  final String? format;
   final int? averageScore;
   final List<String>? genres;
+  final List<String>? synonyms;
   final NextAiringEpisode? nextAiringEpisode;
 
   const Anime({
@@ -60,8 +62,10 @@ class Anime {
     this.description,
     this.episodes,
     this.status,
+    this.format,
     this.averageScore,
     this.genres,
+    this.synonyms,
     this.nextAiringEpisode,
   });
 
@@ -80,8 +84,12 @@ class Anime {
       description: json['description'] as String?,
       episodes: (json['episodes'] as num?)?.toInt(),
       status: json['status'] as String?,
+      format: json['format'] as String?,
       averageScore: (json['averageScore'] as num?)?.toInt(),
       genres: (json['genres'] as List<dynamic>?)
+          ?.map((e) => e.toString())
+          .toList(),
+      synonyms: (json['synonyms'] as List<dynamic>?)
           ?.map((e) => e.toString())
           .toList(),
       nextAiringEpisode: rawNextEp != null
