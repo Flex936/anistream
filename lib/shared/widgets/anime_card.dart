@@ -125,7 +125,7 @@ class _AnimeCardState extends State<AnimeCard> {
         ),
         const SizedBox(height: 4),
         Text(
-          '${widget.anime.nextAiringEpisode != null ? widget.anime.nextAiringEpisode!.episode : widget.anime.episodes ?? '?'} Episodes',
+          '${widget.anime.nextAiringEpisode != null ? widget.anime.nextAiringEpisode!.episode - 1 : widget.anime.episodes ?? '?'} Episodes',
           style: const TextStyle(color: AppPalette.textMuted, fontSize: 11),
         ),
       ],
