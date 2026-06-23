@@ -1,3 +1,7 @@
 {
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "problems.decorations.enabled": false,
+    "dart.analysisExcludedFolders": [
+        "D:/programming/anistream/claude_temp"
+    ]
 }
