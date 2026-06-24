@@ -6,6 +6,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/app_network_image.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 import '../../../shared/utils/anime_status_style.dart';
+import './external_link_buttons.dart';
 
 String _stripHtml(String? html) {
   if (html == null || html.isEmpty) return 'No synopsis available.';
@@ -252,6 +253,25 @@ class _AnimeTextInfo extends StatelessWidget {
                 label:
                     '★ ${(anime.averageScore! / 10).toStringAsFixed(1)} Score',
                 color: AppPalette.accent,
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
+          children: [
+            ExternalLinkButton(
+              label: 'AniList',
+              url: 'https://anilist.co/anime/${anime.id}',
+              color: const Color(0xFF3DB4F2),
+            ),
+            if (anime.idMal != null)
+              ExternalLinkButton(
+                label: 'MyAnimeList',
+                url: 'https://myanimelist.net/anime/${anime.idMal}',
+                color: const Color(0xFF2E51A2),
               ),
           ],
         ),

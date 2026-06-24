@@ -42,6 +42,7 @@ class AnimeCoverImage {
 
 class Anime {
   final int id;
+  final int? idMal;
   final AnimeTitle title;
   final AnimeCoverImage? coverImage;
   final String? bannerImage;
@@ -56,6 +57,7 @@ class Anime {
 
   const Anime({
     required this.id,
+    this.idMal,
     required this.title,
     this.coverImage,
     this.bannerImage,
@@ -76,6 +78,7 @@ class Anime {
 
     return Anime(
       id: (json['id'] as num).toInt(),
+      idMal: (json['idMal'] as num?)?.toInt(),
       title: rawTitle != null
           ? AnimeTitle.fromJson(rawTitle)
           : const AnimeTitle(),
