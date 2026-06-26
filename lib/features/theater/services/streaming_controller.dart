@@ -19,6 +19,12 @@ class BatchFileOption {
 }
 
 class StreamingController extends ChangeNotifier {
+  // ── PRE-BUFFER GATE ──────────────────────────────────────────────────────────
+  /// Minimum sequential buffer percentage before the URL is handed to the
+  /// player. 2 % gives MPV a solid head-start without making the user wait
+  /// long. Raise it if black-frames persist on very slow connections.
+  static const double _kPreBufferThreshold = 0.1;
+
   String _statusText = 'Initializing Native Engine...';
   String get statusText => _statusText;
 
@@ -47,7 +53,7 @@ class StreamingController extends ChangeNotifier {
   Future<void> initialize(String magnetUri, {int? episodeNumber}) async {
     _requestedEpisode = episodeNumber;
     try {
-      await LibtorrentFlutter.init(uploadLimit: 100000);
+      await LibtorrentFlutter.init();
       final engine = LibtorrentFlutter.instance;
 
       _torrentSub = engine.torrentUpdates.listen(
@@ -134,13 +140,11 @@ class StreamingController extends ChangeNotifier {
   }
 
   void selectBatchFile(int fileIndex) {
-    if (_torrentId == null || _isReadyToPlay) {
-      return;
-    }
+    if (_torrentId == null || _isReadyToPlay) return;
 
     _needsManualSelection = false;
-    _updateStatus('Starting playback engine...');
-    notifyListeners();
+    _statusText = 'Initializing selected file…';
+    notifyListeners(); // Immediately dismiss the picker before stream setup begins
     _beginStream(LibtorrentFlutter.instance, fileIndex: fileIndex);
   }
 
@@ -150,16 +154,48 @@ class StreamingController extends ChangeNotifier {
           ? engine.startStream(_torrentId!)
           : engine.startStream(_torrentId!, fileIndex: fileIndex);
 
+      // ── PRE-BUFFER GATE ─────────────────────────────────────────────────────
+      // We have the localhost URL, but the torrent has written zero bytes yet.
+      // _isReadyToPlay stays false — the TheaterLoadingOverlay remains visible.
+      // The gate opens only once the sequential buffer reaches the threshold,
+      // giving MPV a contiguous chunk of data to parse headers and start
+      // decoding without hitting an immediate EOF / black screen.
       _streamUrl = streamInfo.url;
-      _isReadyToPlay = true;
-      _updateStatus('Starting playback engine...');
-      notifyListeners();
+      _updateStatus('Buffering… 0.0%');
 
       _streamSub = engine.streamUpdates.listen((streams) {
+        if (_hasError) return;
+
         try {
           final s = streams.values.firstWhere((st) => st.url == _streamUrl);
-          debugPrint('[Torrent Engine] Sequential Buffer: ${s.bufferPct}%');
-        } catch (_) {}
+          final pct = s.bufferPct;
+
+          // Gate is already open — log for diagnostics, no more UI churn.
+          if (_isReadyToPlay) {
+            debugPrint(
+              '[Torrent Engine] Sequential Buffer: ${pct.toStringAsFixed(1)}%',
+            );
+            return;
+          }
+
+          // Throttle rebuilds: only notify when the displayed text changes.
+          // streamUpdates can fire many times per second; skipping no-op
+          // notifies keeps the widget tree quiet during rapid piece downloads.
+          final label = 'Buffering… ${pct.toStringAsFixed(1)}%';
+          if (_statusText != label) {
+            _statusText = label;
+            notifyListeners();
+          }
+
+          // Open the gate: hand control to the player for the first time.
+          if (pct >= _kPreBufferThreshold) {
+            _isReadyToPlay = true;
+            _statusText = 'Starting playback engine...';
+            notifyListeners();
+          }
+        } catch (_) {
+          // Stream entry not yet registered in the map — silently wait.
+        }
       });
     } catch (e) {
       _handleError('Failed to mount stream: $e');
@@ -177,13 +213,9 @@ class StreamingController extends ChangeNotifier {
   }
 
   void _updateStatus(String text) {
-    if (_hasError) {
-      return;
-    }
-    if (_isReadyToPlay && _statusText == 'Starting playback engine...') {
-      return;
-    }
-
+    if (_hasError) return;
+    // Once the gate is open and the final status is set, freeze it.
+    if (_isReadyToPlay && _statusText == 'Starting playback engine...') return;
     _statusText = text;
     notifyListeners();
   }

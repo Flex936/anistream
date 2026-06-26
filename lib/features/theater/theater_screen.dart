@@ -110,6 +110,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
+      // ── HARDWARE DECODING ──────────────────────────────────────────────────
       if (hwdec == 'auto') {
         if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
           platform.setProperty('hwdec', 'auto-safe');
@@ -122,6 +123,29 @@ class _TheaterScreenState extends State<TheaterScreen> {
       } else if (hwdec != 'none') {
         platform.setProperty('hwdec', hwdec);
       }
+
+      // ── P2P DEMUXER TUNING ─────────────────────────────────────────────────
+      // MPV's defaults assume a stable local file. P2P streams arrive in
+      // bursts and can stall mid-playback when the sequential buffer catches
+      // up to the playhead. These three properties collectively give the
+      // demuxer far more runway to absorb those stalls transparently:
+      //
+      //   cache=yes              — enable the in-memory demuxer cache (off by
+      //                            default for non-network sources in mpv).
+      //   demuxer-max-bytes      — 150 MB of RAM for the forward cache. Sized
+      //                            for HD anime (≈ 40–70 MB/min at x265). A
+      //                            runtime RAM check is intentionally omitted:
+      //                            doing it cleanly requires a native plugin
+      //                            (e.g., device_info_plus) added solely for
+      //                            this one heuristic, and 150 MB is safe for
+      //                            any modern device this app targets.
+      //   demuxer-readahead-secs — instruct MPV to greedily read up to 2
+      //                            minutes ahead of the playhead. Combined with
+      //                            the large byte cap, this absorbs swarm
+      //                            download dips without a visible stutter.
+      platform.setProperty('cache', 'yes');
+      platform.setProperty('demuxer-max-bytes', '150000000');
+      platform.setProperty('demuxer-readahead-secs', '120');
     }
 
     _torrentController.initialize(
