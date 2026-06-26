@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../services/theater_data.dart';
@@ -44,6 +45,9 @@ class _TheaterControlsState extends State<TheaterControls> {
   late final StreamSubscription _durationSub;
   late final StreamSubscription _volumeSub;
 
+  // ── NEW: Initialize once, use everywhere ──
+  final _prefs = SharedPreferencesAsync();
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +81,37 @@ class _TheaterControlsState extends State<TheaterControls> {
 
   void _onSeek(Duration time) {
     widget.player.seek(time);
+    widget.onInteract();
+  }
+
+  // ── Call this in your Slider's onChanged callback ──
+  Future<void> _handleVolumeChanged(double value) async {
+    widget.player.setVolume(value);
+
+    // Never save a 0.0 volume to preferences, or unmuting will break!
+    if (value > 0) {
+      await _prefs.setDouble('theater_volume', value);
+    }
+  }
+
+  // ── Call this in your Mute IconButton's onPressed callback ──
+  Future<void> _toggleMute() async {
+    if (widget.player.state.volume == 0) {
+      // ── UNMUTE ──
+      // Fetch the last known good volume (default to 100 if missing)
+      double savedVolume = await _prefs.getDouble('theater_volume') ?? 100.0;
+
+      // Fallback safeguard just in case 0.0 somehow got saved
+      if (savedVolume == 0) savedVolume = 100.0;
+
+      widget.player.setVolume(savedVolume);
+    } else {
+      // ── MUTE ──
+      // Before we mute, lock in the current volume to preferences
+      await _prefs.setDouble('theater_volume', widget.player.state.volume);
+      widget.player.setVolume(0.0);
+    }
+
     widget.onInteract();
   }
 
@@ -226,10 +261,7 @@ class _TheaterControlsState extends State<TheaterControls> {
                   color: AppPalette.white,
                   size: 24,
                 ),
-                onPressed: () {
-                  widget.player.setVolume(_volume == 0 ? 100.0 : 0.0);
-                  widget.onInteract();
-                },
+                onPressed: _toggleMute,
               ),
               SizedBox(
                 width: 120,
@@ -251,7 +283,7 @@ class _TheaterControlsState extends State<TheaterControls> {
                     max: 100,
                     value: _volume.clamp(0.0, 100.0),
                     onChanged: (v) {
-                      widget.player.setVolume(v);
+                      _handleVolumeChanged(v);
                       widget.onInteract();
                     },
                   ),

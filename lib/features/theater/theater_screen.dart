@@ -101,12 +101,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   Future<void> _initPlayerAndStream() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = SharedPreferencesAsync();
     if (!mounted) return;
 
-    final hwdec = prefs.getString(SettingsService.kHwDec) ?? 'auto';
+    final hwdec = await prefs.getString(SettingsService.kHwDec) ?? 'auto';
     final androidHwDec =
-        prefs.getString(SettingsService.kAndroidHwDec) ?? 'mediacodec-copy';
+        await prefs.getString(SettingsService.kAndroidHwDec) ??
+        'mediacodec-copy';
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
@@ -147,6 +148,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
       platform.setProperty('demuxer-max-bytes', '150000000');
       platform.setProperty('demuxer-readahead-secs', '120');
     }
+
+    // ── RESTORE PERSISTENT VOLUME ──
+    final savedVolume = await prefs.getDouble('theater_volume') ?? 100.0;
+    _player.setVolume(savedVolume);
 
     _torrentController.initialize(
       widget.torrent.magnetLink,
@@ -304,9 +309,18 @@ class _TheaterScreenState extends State<TheaterScreen> {
         _player.seek(target > duration ? duration : target);
       }
     } else if (key == LogicalKeyboardKey.arrowUp) {
-      _player.setVolume((_player.state.volume + 5).clamp(0, 100));
+      final newVol = (_player.state.volume + 5).clamp(0.0, 100.0);
+      _player.setVolume(newVol);
+      if (newVol > 0) {
+        // ── NEW: Fire-and-forget async write ──
+        SharedPreferencesAsync().setDouble('theater_volume', newVol);
+      }
     } else if (key == LogicalKeyboardKey.arrowDown) {
-      _player.setVolume((_player.state.volume - 5).clamp(0, 100));
+      final newVol = (_player.state.volume - 5).clamp(0.0, 100.0);
+      _player.setVolume(newVol);
+      if (newVol > 0) {
+        SharedPreferencesAsync().setDouble('theater_volume', newVol);
+      }
     } else if (key == LogicalKeyboardKey.keyF) {
       _toggleFullscreen();
     } else if (key == LogicalKeyboardKey.escape ||
