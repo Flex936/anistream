@@ -47,7 +47,7 @@ class StreamingController extends ChangeNotifier {
   Future<void> initialize(String magnetUri, {int? episodeNumber}) async {
     _requestedEpisode = episodeNumber;
     try {
-      await LibtorrentFlutter.init();
+      await LibtorrentFlutter.init(uploadLimit: 100000);
       final engine = LibtorrentFlutter.instance;
 
       _torrentSub = engine.torrentUpdates.listen(
