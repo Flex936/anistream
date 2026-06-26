@@ -39,7 +39,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
     // ── Load Performance Setting ──
     SettingsService().load().then((s) {
-      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+      if (mounted) {
+        setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+      }
     });
 
     _executeSearch();
@@ -61,20 +63,24 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
   void _executeSearch() {
     if (widget.query.trim().isEmpty) {
-      setState(() => _searchFuture = null);
+      if (mounted) {
+        setState(() => _searchFuture = null);
+      }
       return;
     }
 
-    setState(() {
-      _searchFuture = _api.searchAnime(
-        widget.query,
-        minScore: _minScore > 0 ? _minScore : null,
-        status: _selectedStatus == 'ANY' ? null : _selectedStatus,
-        year: _selectedYear > DateTime.now().year
-            ? null
-            : _selectedYear.toInt(),
-      );
-    });
+    if (mounted) {
+      setState(() {
+        _searchFuture = _api.searchAnime(
+          widget.query,
+          minScore: _minScore > 0 ? _minScore : null,
+          status: _selectedStatus == 'ANY' ? null : _selectedStatus,
+          year: _selectedYear > DateTime.now().year
+              ? null
+              : _selectedYear.toInt(),
+        );
+      });
+    }
   }
 
   void _openFilterDrawer() {

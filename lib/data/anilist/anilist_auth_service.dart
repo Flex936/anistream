@@ -12,14 +12,15 @@ class AnilistAuthService {
   static const String _storePath = '/store';
   static const String _prefKey = 'anilist_access_token';
 
+  // ── Reusable SharedPreferencesAsync instance ──
+  final _prefs = SharedPreferencesAsync();
+
   Future<String?> getStoredToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_prefKey);
+    return await _prefs.getString(_prefKey);
   }
 
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefKey);
+    await _prefs.remove(_prefKey);
   }
 
   Future<String?> login() async {
@@ -79,8 +80,7 @@ class AnilistAuthService {
     }
 
     if (token != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefKey, token);
+      await _prefs.setString(_prefKey, token);
     }
     return token;
   }

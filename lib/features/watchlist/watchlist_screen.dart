@@ -65,6 +65,9 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   }
 
   void _onScroll() {
+    // ── Safely check if the controller is attached before reading position ──
+    if (!_scrollController.hasClients) return;
+
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 500) {
       if (!_initialLoading && !_fetchingNext && _hasNext[_activeStatus]!) {
@@ -474,10 +477,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     );
   }
 }
-
-// ... Keep _TabButton, _LoadingPane, _EmptyPane, and _ErrorPane exactly as they were!
-
-// ── Private sub-widgets for Screen ──
 
 class _TabButton extends StatelessWidget {
   final IconData icon;

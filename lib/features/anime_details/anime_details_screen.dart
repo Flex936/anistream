@@ -91,7 +91,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (!mounted) return;
 
       if (torrents.isNotEmpty) {
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => TheaterScreen(
@@ -100,17 +100,25 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
               torrent: torrents.first,
             ),
           ),
-        ).then((_) => _fetchProgress());
+        );
+        if (mounted) {
+          _fetchProgress();
+        }
       } else {
-        setState(() => _expandedEpisode = ep);
+        if (mounted) setState(() => _expandedEpisode = ep);
       }
     } catch (_) {
       if (mounted) setState(() => _expandedEpisode = ep);
     } finally {
       if (mounted) {
-        setState(() {
-          _isFetchingSource = false;
-          _autoPlayTargetEpisode = -1;
+        // ── Safely teardown the loading overlay after the frame ──
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _isFetchingSource = false;
+              _autoPlayTargetEpisode = -1;
+            });
+          }
         });
       }
     }

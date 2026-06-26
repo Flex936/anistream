@@ -31,27 +31,30 @@ class SettingsService {
   static const String kUiPerformanceMode = 'ui_performance_mode';
   static const String kVideoFilterQuality = 'video_filter_quality';
 
+  // ── Instantiate the modern async API once ──
+  final _prefs = SharedPreferencesAsync();
+
   Future<AppSettings> load() async {
-    final prefs = await SharedPreferences.getInstance();
+    // ── Await each individual read from the async disk store ──
     return AppSettings(
-      filterEcchi: prefs.getBool(kFilterEcchi) ?? true,
-      hardwareDecoding: prefs.getString(kHwDec) ?? 'auto',
-      androidHwDec: prefs.getString(kAndroidHwDec) ?? 'mediacodec-copy',
-      autoPlayEnabled: prefs.getBool(kAutoPlayEnabled) ?? false,
-      autoSkip: prefs.getBool(kAutoSkip) ?? false,
-      uiPerformanceMode: prefs.getBool(kUiPerformanceMode) ?? false,
-      videoFilterQuality: prefs.getString(kVideoFilterQuality) ?? 'low',
+      filterEcchi: await _prefs.getBool(kFilterEcchi) ?? true,
+      hardwareDecoding: await _prefs.getString(kHwDec) ?? 'auto',
+      androidHwDec: await _prefs.getString(kAndroidHwDec) ?? 'mediacodec-copy',
+      autoPlayEnabled: await _prefs.getBool(kAutoPlayEnabled) ?? false,
+      autoSkip: await _prefs.getBool(kAutoSkip) ?? false,
+      uiPerformanceMode: await _prefs.getBool(kUiPerformanceMode) ?? false,
+      videoFilterQuality: await _prefs.getString(kVideoFilterQuality) ?? 'low',
     );
   }
 
   Future<void> save(AppSettings settings) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(kFilterEcchi, settings.filterEcchi);
-    await prefs.setString(kHwDec, settings.hardwareDecoding);
-    await prefs.setString(kAndroidHwDec, settings.androidHwDec);
-    await prefs.setBool(kAutoPlayEnabled, settings.autoPlayEnabled);
-    await prefs.setBool(kAutoSkip, settings.autoSkip);
-    await prefs.setBool(kUiPerformanceMode, settings.uiPerformanceMode);
-    await prefs.setString(kVideoFilterQuality, settings.videoFilterQuality);
+    // ── Fire-and-forget or await individual background writes ──
+    await _prefs.setBool(kFilterEcchi, settings.filterEcchi);
+    await _prefs.setString(kHwDec, settings.hardwareDecoding);
+    await _prefs.setString(kAndroidHwDec, settings.androidHwDec);
+    await _prefs.setBool(kAutoPlayEnabled, settings.autoPlayEnabled);
+    await _prefs.setBool(kAutoSkip, settings.autoSkip);
+    await _prefs.setBool(kUiPerformanceMode, settings.uiPerformanceMode);
+    await _prefs.setString(kVideoFilterQuality, settings.videoFilterQuality);
   }
 }

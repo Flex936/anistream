@@ -43,7 +43,6 @@ class _AppShellState extends State<AppShell> {
     _loadSettings();
   }
 
-  // ── Reloads settings instantly ──
   Future<void> _loadSettings() async {
     final s = await SettingsService().load();
     if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
@@ -118,6 +117,7 @@ class _AppShellState extends State<AppShell> {
     if (_isLoggedIn) {
       await _auth.logout();
       AnilistQueryService.clearToken();
+      if (!mounted) return;
       setState(() => _isLoggedIn = false);
       if (_currentView is WatchlistScreen) _goHome();
       return;
@@ -151,8 +151,10 @@ class _AppShellState extends State<AppShell> {
       onForward: _goForward,
       child: PopScope(
         canPop: _history.length <= 1,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _goBack();
+        // ── MODERNIZED POPSCOPE CALLBACK ──
+        onPopInvokedWithResult: (bool didPop, dynamic result) {
+          if (didPop) return;
+          _goBack();
         },
         child: Scaffold(
           backgroundColor: AppPalette.base,
@@ -171,10 +173,12 @@ class _AppShellState extends State<AppShell> {
             onWatchlist: () =>
                 _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
             onLogin: _handleLogin,
-            // ── Reload settings automatically when the menu closes ──
             onSettings: () async {
               await showSettingsMenu(context);
-              _loadSettings();
+              // ── Verify mounted before loading async settings ──
+              if (mounted) {
+                _loadSettings();
+              }
             },
           ),
           body: GestureDetector(
@@ -185,6 +189,7 @@ class _AppShellState extends State<AppShell> {
                 if (notification.depth == 0) {
                   final isScrolled = notification.metrics.pixels > 20;
                   if (isScrolled != _isScrolled) {
+                    // Safe post-frame rebuild
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted) setState(() => _isScrolled = isScrolled);
                     });

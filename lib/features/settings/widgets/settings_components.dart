@@ -206,7 +206,7 @@ class SettingsDropdown extends StatelessWidget {
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
-            items: items, // ── UPDATED ──
+            items: items,
             onChanged: onChanged,
           ),
         ),

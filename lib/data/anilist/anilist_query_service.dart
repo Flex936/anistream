@@ -210,8 +210,10 @@ class AnilistQueryService {
     String? status,
     int? year,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final filterEcchi = prefs.getBool(SettingsService.kFilterEcchi) ?? true;
+    // ── Upgraded to SharedPreferencesAsync ──
+    final prefs = SharedPreferencesAsync();
+    final filterEcchi =
+        await prefs.getBool(SettingsService.kFilterEcchi) ?? true;
     final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
 
     final variables = <String, dynamic>{
