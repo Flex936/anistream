@@ -5,6 +5,7 @@ import '../services/theater_data.dart';
 class Seekbar extends StatefulWidget {
   final Duration position;
   final Duration duration;
+  final Duration buffer;
   final List<Chapter> chapters;
   final ValueChanged<Duration> onSeek;
   final VoidCallback onSeekStart;
@@ -15,6 +16,7 @@ class Seekbar extends StatefulWidget {
     super.key,
     required this.position,
     required this.duration,
+    required this.buffer,
     required this.chapters,
     required this.onSeek,
     required this.onSeekStart,
@@ -83,6 +85,10 @@ class _SeekbarState extends State<Seekbar> {
           if (_isDragging) currentPercentage = _dragX / maxWidth;
           currentPercentage = currentPercentage.clamp(0.0, 1.0);
 
+          // ── Calculate Buffer Percentage ──
+          final double bufferPercentage = (widget.buffer.inMilliseconds / maxMs)
+              .clamp(0.0, 1.0);
+
           final hoverPercentage = (_hoverX / maxWidth).clamp(0.0, 1.0);
           final hoverDuration = Duration(
             milliseconds: (hoverPercentage * maxMs).toInt(),
@@ -127,6 +133,7 @@ class _SeekbarState extends State<Seekbar> {
                 alignment: Alignment.centerLeft,
                 clipBehavior: Clip.none,
                 children: [
+                  // 1. Background Track (Faint Outline)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     curve: Curves.easeOutCubic,
@@ -137,6 +144,21 @@ class _SeekbarState extends State<Seekbar> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
+
+                  // ── 2. Buffer Track (Medium Opaque) ──
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    height: trackHeight,
+                    width: maxWidth * bufferPercentage,
+                    decoration: BoxDecoration(
+                      // Uses a slightly brighter white/gray so it stands out against the background
+                      color: AppPalette.white.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+
+                  // 3. Hover Ghost Track
                   AnimatedContainer(
                     duration: _isDragging
                         ? Duration.zero
@@ -145,11 +167,13 @@ class _SeekbarState extends State<Seekbar> {
                     width: _hoverX,
                     decoration: BoxDecoration(
                       color: AppPalette.white.withValues(
-                        alpha: isExpanded ? 0.35 : 0.0,
+                        alpha: isExpanded ? 0.2 : 0.0,
                       ),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
+
+                  // 4. Actual Position Track (Solid White)
                   AnimatedContainer(
                     duration: _isDragging
                         ? Duration.zero
@@ -161,6 +185,8 @@ class _SeekbarState extends State<Seekbar> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
+
+                  // 5. Chapter Markers (Cuts through the tracks)
                   for (final chapter in widget.chapters) ...[
                     if (chapter.start.inMilliseconds > 0 &&
                         chapter.start.inMilliseconds < maxMs)
@@ -173,6 +199,8 @@ class _SeekbarState extends State<Seekbar> {
                         ),
                       ),
                   ],
+
+                  // 6. Playhead Thumb
                   Positioned(
                     left: (maxWidth * currentPercentage) - (thumbSize / 2),
                     child: AnimatedContainer(
@@ -195,6 +223,8 @@ class _SeekbarState extends State<Seekbar> {
                       ),
                     ),
                   ),
+
+                  // 7. Hover Tooltip
                   if (isExpanded)
                     Positioned(
                       top: -10,

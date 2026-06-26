@@ -39,13 +39,14 @@ class _TheaterControlsState extends State<TheaterControls> {
   double _volume = 100.0;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  Duration _buffer = Duration.zero;
 
   late final StreamSubscription _playingSub;
   late final StreamSubscription _positionSub;
   late final StreamSubscription _durationSub;
   late final StreamSubscription _volumeSub;
+  late final StreamSubscription _bufferSub;
 
-  // ── NEW: Initialize once, use everywhere ──
   final _prefs = SharedPreferencesAsync();
 
   @override
@@ -55,6 +56,7 @@ class _TheaterControlsState extends State<TheaterControls> {
     _position = widget.player.state.position;
     _duration = widget.player.state.duration;
     _volume = widget.player.state.volume;
+    _buffer = widget.player.state.buffer;
 
     _playingSub = widget.player.stream.playing.listen((v) {
       if (mounted) setState(() => _isPlaying = v);
@@ -68,6 +70,9 @@ class _TheaterControlsState extends State<TheaterControls> {
     _volumeSub = widget.player.stream.volume.listen((v) {
       if (mounted) setState(() => _volume = v);
     });
+    _bufferSub = widget.player.stream.buffer.listen((v) {
+      if (mounted) setState(() => _buffer = v);
+    });
   }
 
   @override
@@ -76,6 +81,7 @@ class _TheaterControlsState extends State<TheaterControls> {
     _positionSub.cancel();
     _durationSub.cancel();
     _volumeSub.cancel();
+    _bufferSub.cancel();
     super.dispose();
   }
 
@@ -84,7 +90,6 @@ class _TheaterControlsState extends State<TheaterControls> {
     widget.onInteract();
   }
 
-  // ── Call this in your Slider's onChanged callback ──
   Future<void> _handleVolumeChanged(double value) async {
     widget.player.setVolume(value);
 
@@ -94,7 +99,6 @@ class _TheaterControlsState extends State<TheaterControls> {
     }
   }
 
-  // ── Call this in your Mute IconButton's onPressed callback ──
   Future<void> _toggleMute() async {
     if (widget.player.state.volume == 0) {
       // ── UNMUTE ──
@@ -220,6 +224,7 @@ class _TheaterControlsState extends State<TheaterControls> {
           Seekbar(
             position: _position,
             duration: _duration,
+            buffer: _buffer,
             chapters: widget.chapterMetadata,
             uiPerformanceMode: widget.uiPerformanceMode,
             onSeek: _onSeek,
