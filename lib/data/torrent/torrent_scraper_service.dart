@@ -10,7 +10,6 @@ import '../anilist/models/anime.dart';
 import 'models/torrent.dart';
 import 'services/torrent_parser.dart';
 
-// ── Pre-compiled Regexes for URL generation ──
 abstract final class _QueryRegex {
   static final extractSeason = RegExp(
     r'(?:season\s*(\d+)|\bs(\d+)\b)',
@@ -85,6 +84,32 @@ class TorrentScraperService {
   TorrentScraperService({http.Client? client})
     : _client = client ?? http.Client();
 
+  // ── Convert Nyaa string (e.g. "1.2 GiB") to raw Megabytes ──
+  static double _parseSizeToMB(String sizeStr) {
+    final lower = sizeStr.toLowerCase().trim();
+    final regex = RegExp(r'([\d.]+)\s*([kmg]i?b)');
+    final match = regex.firstMatch(lower);
+
+    if (match == null) {
+      return 0.0;
+    }
+
+    final value = double.tryParse(match.group(1)!) ?? 0.0;
+    final unit = match.group(2)!;
+
+    if (unit.contains('g')) {
+      return value * 1024;
+    }
+    if (unit.contains('m')) {
+      return value;
+    }
+    if (unit.contains('k')) {
+      return value / 1024;
+    }
+
+    return 0.0;
+  }
+
   Future<List<Torrent>> fetchTorrents(Anime anime, int episodeNumber) async {
     final title = anime.title;
     final epStr = episodeNumber.toString().padLeft(2, '0');
@@ -116,7 +141,6 @@ class TorrentScraperService {
       String titleText, {
       required bool batchMode,
     }) async {
-      // ── Use Pre-compiled Regexes ──
       final safeTitle = titleText
           .replaceAll(_QueryRegex.stripTags, '')
           .replaceAll(_QueryRegex.punctuation, ' ')
@@ -159,7 +183,6 @@ class TorrentScraperService {
     }
 
     // ── 3. Execute the Queue ──
-
     if (isFinished && !isMovie) {
       for (final t in searchQueue) {
         batchResults = await trySearch(t, batchMode: true);
@@ -252,10 +275,14 @@ class TorrentScraperService {
   }) {
     final rawTitle = item.findElements('title').firstOrNull?.innerText ?? '';
     final infoHash = item.findElements('nyaa:infoHash').firstOrNull?.innerText;
-    final size =
-        item.findElements('nyaa:size').firstOrNull?.innerText ?? 'Unknown';
+    final sizeStr =
+        item.findElements('nyaa:size').firstOrNull?.innerText ?? '0 MiB';
     final seedersStr =
         item.findElements('nyaa:seeders').firstOrNull?.innerText ?? '0';
+    final trustedStr =
+        item.findElements('nyaa:trusted').firstOrNull?.innerText ?? 'No';
+
+    final isTrusted = trustedStr.toLowerCase() == 'yes';
 
     if (infoHash == null || infoHash.isEmpty) {
       return null;
@@ -266,7 +293,6 @@ class TorrentScraperService {
       return null;
     }
 
-    // ── Pre-compiled Tokenizer parsing the release ──
     final meta = TorrentParser.parse(rawTitle);
 
     double score = 100.0;
@@ -288,13 +314,15 @@ class TorrentScraperService {
 
       score += 100;
 
-      if (meta.batchStart <= 1 &&
-          totalEpisodes != null &&
-          meta.batchEnd >= totalEpisodes) {
-        score += 20;
-      } else if (meta.batchStart > episodeNumber ||
-          meta.batchEnd < episodeNumber) {
-        return null;
+      if (meta.batchStart != -1 && meta.batchEnd != -1) {
+        if (meta.batchStart <= 1 &&
+            totalEpisodes != null &&
+            meta.batchEnd >= totalEpisodes) {
+          score += 20;
+        } else if (meta.batchStart > episodeNumber ||
+            meta.batchEnd < episodeNumber) {
+          return null;
+        }
       }
     } else {
       if (meta.isBatch) {
@@ -347,6 +375,14 @@ class TorrentScraperService {
       score += 50;
     }
 
+    // Language Tags
+    /* if (tl.contains('dual audio')) {
+      score += 40;
+    }
+    if (tl.contains('multi-sub') || tl.contains('multisub')) {
+      score += 20;
+    } */
+
     // 5. Codec & Resolution Quality Modifiers
     if (meta.resolution == '1080p') {
       score += 20;
@@ -370,29 +406,75 @@ class TorrentScraperService {
       score += 15;
     }
     if (tl.contains('opus')) {
-      score += 10;
+      score += 15;
     }
-    if (tl.contains('web-dl') || tl.contains('webdl')) {
+    if (tl.contains('webrip')) {
       score += 10;
-    } else if (tl.contains('webrip')) {
+    } else if (tl.contains('web-dl') || tl.contains('webdl')) {
       score += 5;
     }
 
     // 6. Trusted Groups
-    if (meta.releaseGroup.toLowerCase().contains('subsplease') ||
-        meta.releaseGroup.toLowerCase().contains('erai-raws')) {
+    if (isTrusted) {
       score += 30;
     }
 
     // 7. Logarithmic Seeder Algorithm
     score += (math.log(seedCount + 1) * 5).clamp(0, 50);
 
+    // ── GOLDILOCKS SIZE-TO-BITRATE CURVE ──
+    final sizeMB = _parseSizeToMB(sizeStr);
+
+    if (sizeMB > 0) {
+      double avgEpSizeMB = sizeMB;
+
+      // If it's a batch, find the episode count to get the per-episode average
+      if (meta.isBatch) {
+        int epCount = 1;
+        if (meta.batchStart != -1 &&
+            meta.batchEnd != -1 &&
+            meta.batchEnd >= meta.batchStart) {
+          epCount = (meta.batchEnd - meta.batchStart) + 1;
+        } else if (totalEpisodes != null && totalEpisodes > 0) {
+          epCount = totalEpisodes;
+        } else {
+          epCount = 12; // Fallback assumption: a standard 1-cour season
+        }
+        avgEpSizeMB = sizeMB / epCount;
+      }
+
+      // Apply the Curve
+      if (isMovie) {
+        // Movies (approx. 4x episode length)
+        if (avgEpSizeMB < 800) {
+          score -= 30; // Bitrate starved (< 800MB)
+        } else if (avgEpSizeMB >= 1500 && avgEpSizeMB <= 6000) {
+          score += 30; // Goldilocks Zone (1.5GB to 6GB)
+        } else if (avgEpSizeMB > 10000) {
+          score -= 40; // Buffering nightmare (> 10GB)
+        }
+      } else {
+        // Standard TV Episode
+        if (avgEpSizeMB < 150) {
+          score -= 30; // Bitrate starved (< 150MB)
+        } else if (avgEpSizeMB >= 250 && avgEpSizeMB <= 1200) {
+          score += 30; // Goldilocks Zone (250MB to 1.2GB)
+        } else if (avgEpSizeMB >= 150 && avgEpSizeMB < 250) {
+          score += 10; // Acceptable but low
+        } else if (avgEpSizeMB > 1200 && avgEpSizeMB <= 2500) {
+          score += 10; // High quality but bulky
+        } else if (avgEpSizeMB > 2500) {
+          score -= 30; // Buffering nightmare (> 2.5GB)
+        }
+      }
+    }
+
     return Torrent(
       id: infoHash,
       title: rawTitle,
       releaseGroup: meta.releaseGroup,
       resolution: meta.resolution,
-      size: size,
+      size: sizeStr,
       seeders: seedCount,
       magnetLink: _buildMagnet(infoHash, rawTitle),
       score: score,
