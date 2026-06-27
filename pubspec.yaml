@@ -41,6 +41,7 @@ dependencies:
   package_info_plus: ^10.1.0
   wakelock_plus: ^1.6.1
   url_launcher: ^6.3.2
+  desktop_multi_window: ^0.3.0
 
 dev_dependencies:
   flutter_test:

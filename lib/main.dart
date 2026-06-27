@@ -3,8 +3,11 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 import 'app.dart';
+import 'features/pip/pip_args.dart';
+import 'features/pip/pip_player_window.dart';
 
 void main() async {
   // 1. Initialize Flutter Engine
@@ -14,9 +17,15 @@ void main() async {
   MediaKit.ensureInitialized();
 
   // 3. Initialize Native Desktop Window
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    await windowManager.ensureInitialized();
-
+  final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+  if (isDesktop) await windowManager.ensureInitialized();
+  final windowController = await WindowController.fromCurrentEngine();
+  final pipArgs = PipArgs.fromRaw(windowController.arguments);
+  if (pipArgs.isPip) {
+    runApp(PipPlayerWindow(args: pipArgs));
+    return; // ── skip all the normal main-window setup below ──
+  }
+  if (isDesktop) {
     WindowOptions windowOptions = const WindowOptions(
       title: 'AniStream',
       minimumSize: Size(
@@ -33,7 +42,6 @@ void main() async {
       await windowManager.focus();
     });
   }
-
   // 4. Boot App
   runApp(const AniStreamApp());
 }

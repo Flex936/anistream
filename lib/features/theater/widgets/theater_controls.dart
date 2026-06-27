@@ -17,6 +17,7 @@ class TheaterControls extends StatefulWidget {
   final bool isFullscreen;
   final List<Chapter> chapterMetadata;
   final bool uiPerformanceMode;
+  final VoidCallback onPip;
 
   const TheaterControls({
     super.key,
@@ -26,6 +27,7 @@ class TheaterControls extends StatefulWidget {
     required this.onToggleFullscreen,
     required this.isSettingsOpen,
     required this.isFullscreen,
+    required this.onPip,
     this.uiPerformanceMode = false,
     this.chapterMetadata = const [],
   });
@@ -304,6 +306,14 @@ class _TheaterControlsState extends State<TheaterControls> {
                   size: 26,
                 ),
                 onPressed: widget.onToggleSettings,
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.picture_in_picture,
+                  color: AppPalette.white,
+                  size: 26,
+                ),
+                onPressed: widget.onPip,
               ),
               IconButton(
                 icon: Icon(

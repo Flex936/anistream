@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 import '../../core/theme/app_palette.dart';
 import '../../core/settings/settings_service.dart';
@@ -14,6 +15,7 @@ import '../../data/torrent/models/torrent.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
 import '../../shared/widgets/toast.dart';
+import '../pip/pip_args.dart';
 import 'services/streaming_controller.dart';
 import 'services/theater_data.dart';
 import 'widgets/theater_player.dart';
@@ -43,7 +45,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   late final Player _player;
   late final VideoController _videoController;
-
+  WindowController? _ownWindowController;
   final FocusNode _focusNode = FocusNode();
   bool _videoInitialized = false;
   bool _showControls = true;
@@ -98,6 +100,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _initPlayerAndStream();
     _startHideControlsTimer();
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      _registerPipReturnHandler();
+    }
   }
 
   Future<void> _initPlayerAndStream() async {
@@ -385,6 +390,62 @@ class _TheaterScreenState extends State<TheaterScreen> {
     if (mounted) Navigator.pop(context);
   }
 
+  Future<void> _registerPipReturnHandler() async {
+    _ownWindowController = await WindowController.fromCurrentEngine();
+    _ownWindowController!.setWindowMethodHandler((call) async {
+      if (call.method == 'pip_returned') {
+        final positionMs = (call.arguments as Map)['positionMs'] as int;
+        _player.seek(Duration(milliseconds: positionMs));
+        _player.play();
+        await windowManager.show();
+        await windowManager.focus();
+      }
+      return null;
+    });
+  }
+
+  Future<WindowController?> _findExistingPipWindow() async {
+    final all = await WindowController.getAll();
+    for (final controller in all) {
+      if (PipArgs.fromRaw(controller.arguments).isPip) return controller;
+    }
+    return null;
+  }
+
+  Future<void> _popOutToPip() async {
+    final streamUrl = _torrentController.streamUrl;
+    if (streamUrl == null || _ownWindowController == null) return;
+
+    final existing = await _findExistingPipWindow();
+    if (existing != null) {
+      await existing.invokeMethod('focus_pip');
+      await windowManager.minimize();
+      return;
+    }
+
+    final position = _player.state.position;
+    _player.pause();
+
+    final args = PipArgs.pip(
+      streamUrl: streamUrl,
+      title: widget.anime.title.display,
+      episode: widget.episode,
+      positionMs: position.inMilliseconds,
+      mainWindowId: _ownWindowController!.windowId,
+    );
+
+    final pipController = await WindowController.create(
+      WindowConfiguration(hiddenAtLaunch: true, arguments: args.toRaw()),
+    );
+    await pipController.show();
+    await windowManager.minimize();
+  }
+
+  Future<void> _forceClosePip() async {
+    final existing = await _findExistingPipWindow();
+    await existing?.invokeMethod('force_close');
+  }
+
   @override
   void dispose() {
     _focusNode.dispose();
@@ -393,6 +454,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
+    _forceClosePip();
     if (!_isClosing) {
       _isClosing = true;
       Future.microtask(_disposePlaybackResources);
@@ -488,6 +550,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                   onToggleSettings: () => setState(
                                     () => _isSettingsOpen = !_isSettingsOpen,
                                   ),
+                                  onPip: _popOutToPip,
                                 ),
                               ),
                             ),
