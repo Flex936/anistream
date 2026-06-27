@@ -54,13 +54,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Timer? _hideControlsTimer;
   bool _isClosing = false;
 
-  // ── AUTOSKIP STATE ──
   bool _autoSkip = false;
   bool _isAutoSkipping = false;
   Chapter? _currentAutoSkipChapter;
   Timer? _autoSkipTimer;
 
-  // ── INDEPENDENT PERFORMANCE SETTINGS ──
   bool _uiPerformanceMode = false;
   String _videoFilterQuality = 'low';
 
@@ -70,6 +68,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   void initState() {
     super.initState();
+
     _player = Player(configuration: const PlayerConfiguration(libass: true));
     _videoController = VideoController(_player);
     _torrentController = StreamingController();
@@ -100,12 +99,21 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _initPlayerAndStream();
     _startHideControlsTimer();
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+
+    if (Platform.isLinux || Platform.isMacOS) {
       _registerPipReturnHandler();
     }
   }
 
   Future<void> _initPlayerAndStream() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+
     final prefs = SharedPreferencesAsync();
     if (!mounted) return;
 
@@ -116,9 +124,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     final platform = _player.platform;
     if (platform is NativePlayer) {
-      // ── HARDWARE DECODING ──────────────────────────────────────────────────
       if (hwdec == 'auto') {
-        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+        if (Platform.isLinux || Platform.isMacOS) {
           platform.setProperty('hwdec', 'auto-safe');
           windowManager.setFullScreen(true);
         } else if (Platform.isAndroid) {
@@ -130,31 +137,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
         platform.setProperty('hwdec', hwdec);
       }
 
-      // ── P2P DEMUXER TUNING ─────────────────────────────────────────────────
-      // MPV's defaults assume a stable local file. P2P streams arrive in
-      // bursts and can stall mid-playback when the sequential buffer catches
-      // up to the playhead. These three properties collectively give the
-      // demuxer far more runway to absorb those stalls transparently:
-      //
-      //   cache=yes              — enable the in-memory demuxer cache (off by
-      //                            default for non-network sources in mpv).
-      //   demuxer-max-bytes      — 150 MB of RAM for the forward cache. Sized
-      //                            for HD anime (≈ 40–70 MB/min at x265). A
-      //                            runtime RAM check is intentionally omitted:
-      //                            doing it cleanly requires a native plugin
-      //                            (e.g., device_info_plus) added solely for
-      //                            this one heuristic, and 150 MB is safe for
-      //                            any modern device this app targets.
-      //   demuxer-readahead-secs — instruct MPV to greedily read up to 2
-      //                            minutes ahead of the playhead. Combined with
-      //                            the large byte cap, this absorbs swarm
-      //                            download dips without a visible stutter.
       platform.setProperty('cache', 'yes');
       platform.setProperty('demuxer-max-bytes', '150000000');
       platform.setProperty('demuxer-readahead-secs', '120');
     }
 
-    // ── RESTORE PERSISTENT VOLUME ──
     final savedVolume = await prefs.getDouble('theater_volume') ?? 100.0;
     _player.setVolume(savedVolume);
 
@@ -238,17 +225,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
         _,
       ) async {
         final resolvedChapters = await loadChapters(_player);
-
-        // ── LOGGING TO INSPECT MKV CHAPTERS ──
-        debugPrint('\n─── LOADED CHAPTERS ───');
-        for (int i = 0; i < resolvedChapters.length; i++) {
-          final c = resolvedChapters[i];
-          debugPrint(
-            '[$i] "${c.title}" | ${c.start} -> ${c.end} | Skippable: ${c.isSkippable}',
-          );
-        }
-        debugPrint('───────────────────────────\n');
-
         if (mounted) setState(() => _chapters = resolvedChapters);
       });
 
@@ -317,7 +293,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
       final newVol = (_player.state.volume + 5).clamp(0.0, 100.0);
       _player.setVolume(newVol);
       if (newVol > 0) {
-        // ── NEW: Fire-and-forget async write ──
         SharedPreferencesAsync().setDouble('theater_volume', newVol);
       }
     } else if (key == LogicalKeyboardKey.arrowDown) {
@@ -367,7 +342,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     await _player.stop();
     await _player.dispose();
     _torrentController.dispose();
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+    if (Platform.isLinux || Platform.isMacOS) {
       if (await windowManager.isFullScreen()) {
         await windowManager.setFullScreen(false);
       }
@@ -377,6 +352,17 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _exitTheater() async {
     if (_isClosing) return;
     _isClosing = true;
+
+    if (Platform.isAndroid || Platform.isIOS) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+
     if (mounted) {
       setState(() => _videoInitialized = false);
       await WidgetsBinding.instance.endOfFrame;
@@ -408,14 +394,20 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   Future<WindowController?> _findExistingPipWindow() async {
+    if (Platform.isAndroid || Platform.isIOS) return null;
+
     final all = await WindowController.getAll();
     for (final controller in all) {
-      if (PipArgs.fromRaw(controller.arguments).isPip) return controller;
+      if (PipArgs.fromRaw(controller.arguments.toString()).isPip) {
+        return controller;
+      }
     }
     return null;
   }
 
   Future<void> _popOutToPip() async {
+    if (Platform.isAndroid || Platform.isIOS) return;
+
     final streamUrl = _torrentController.streamUrl;
     if (streamUrl == null || _ownWindowController == null) return;
 
@@ -444,12 +436,23 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   Future<void> _forceClosePip() async {
+    if (Platform.isAndroid || Platform.isIOS) return;
     final existing = await _findExistingPipWindow();
     await existing?.invokeMethod('force_close');
   }
 
   @override
   void dispose() {
+    if (Platform.isAndroid || Platform.isIOS) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+
     _focusNode.dispose();
     _hideControlsTimer?.cancel();
     _autoSkipTimer?.cancel();
@@ -457,6 +460,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
     _forceClosePip();
+
     if (!_isClosing) {
       _isClosing = true;
       Future.microtask(_disposePlaybackResources);

@@ -6,7 +6,7 @@ class PipArgs {
   final String? title;
   final int? episode;
   final int positionMs;
-  final String? mainWindowId; // windowId is a String in this package
+  final String? mainWindowId;
 
   const PipArgs.main()
     : isPip = false,
@@ -25,15 +25,23 @@ class PipArgs {
   }) : isPip = true;
 
   static PipArgs fromRaw(String? raw) {
-    if (raw == null || raw.isEmpty) return const PipArgs.main();
-    final map = jsonDecode(raw) as Map<String, dynamic>;
-    return PipArgs.pip(
-      streamUrl: map['streamUrl'] as String,
-      title: map['title'] as String,
-      episode: map['episode'] as int,
-      positionMs: map['positionMs'] as int,
-      mainWindowId: map['mainWindowId'] as String,
-    );
+    // Prevent crashes if the argument is missing or malformed
+    if (raw == null || raw.trim().isEmpty || raw == 'null') {
+      return const PipArgs.main();
+    }
+
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return PipArgs.pip(
+        streamUrl: map['streamUrl'] as String?,
+        title: map['title'] as String?,
+        episode: map['episode'] as int?,
+        positionMs: map['positionMs'] as int? ?? 0,
+        mainWindowId: map['mainWindowId'] as String?,
+      );
+    } catch (_) {
+      return const PipArgs.main();
+    }
   }
 
   String toRaw() => jsonEncode({

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
@@ -94,8 +95,6 @@ class _TheaterControlsState extends State<TheaterControls> {
 
   Future<void> _handleVolumeChanged(double value) async {
     widget.player.setVolume(value);
-
-    // Never save a 0.0 volume to preferences, or unmuting will break!
     if (value > 0) {
       await _prefs.setDouble('theater_volume', value);
     }
@@ -103,21 +102,13 @@ class _TheaterControlsState extends State<TheaterControls> {
 
   Future<void> _toggleMute() async {
     if (widget.player.state.volume == 0) {
-      // ── UNMUTE ──
-      // Fetch the last known good volume (default to 100 if missing)
       double savedVolume = await _prefs.getDouble('theater_volume') ?? 100.0;
-
-      // Fallback safeguard just in case 0.0 somehow got saved
       if (savedVolume == 0) savedVolume = 100.0;
-
       widget.player.setVolume(savedVolume);
     } else {
-      // ── MUTE ──
-      // Before we mute, lock in the current volume to preferences
       await _prefs.setDouble('theater_volume', widget.player.state.volume);
       widget.player.setVolume(0.0);
     }
-
     widget.onInteract();
   }
 
@@ -307,14 +298,18 @@ class _TheaterControlsState extends State<TheaterControls> {
                 ),
                 onPressed: widget.onToggleSettings,
               ),
-              IconButton(
-                icon: Icon(
-                  Icons.picture_in_picture,
-                  color: AppPalette.white,
-                  size: 26,
+
+              // ── Hide the PIP button on Android/iOS since it relies on desktop_multi_window ──
+              if (Platform.isMacOS || Platform.isLinux)
+                IconButton(
+                  icon: const Icon(
+                    Icons.picture_in_picture,
+                    color: AppPalette.white,
+                    size: 26,
+                  ),
+                  onPressed: widget.onPip,
                 ),
-                onPressed: widget.onPip,
-              ),
+
               IconButton(
                 icon: Icon(
                   widget.isFullscreen

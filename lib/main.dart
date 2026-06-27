@@ -3,29 +3,37 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 import 'app.dart';
 import 'features/pip/pip_args.dart';
 import 'features/pip/pip_player_window.dart';
 
-void main() async {
+// ── Accept CLI args to instantly intercept the sub-window ──
+void main(List<String> args) async {
   // 1. Initialize Flutter Engine
   WidgetsFlutterBinding.ensureInitialized();
 
   // 2. Initialize Video Player Engine
   MediaKit.ensureInitialized();
 
-  // 3. Initialize Native Desktop Window
   final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-  if (isDesktop) await windowManager.ensureInitialized();
-  final windowController = await WindowController.fromCurrentEngine();
-  final pipArgs = PipArgs.fromRaw(windowController.arguments);
-  if (pipArgs.isPip) {
-    runApp(PipPlayerWindow(args: pipArgs));
-    return; // ── skip all the normal main-window setup below ──
+
+  // 3. Intercept PIP Window Spawn (Desktop ONLY)
+  // desktop_multi_window passes 'multi_window' as the first argument when spawning a sub-window.
+  if (isDesktop && args.isNotEmpty && args.first == 'multi_window') {
+    final rawArgs = args.length > 2 ? args[2] : null;
+    final pipArgs = PipArgs.fromRaw(rawArgs);
+
+    if (pipArgs.isPip) {
+      runApp(PipPlayerWindow(args: pipArgs));
+      return; // ── skip all the normal main-window setup below ──
+    }
   }
+
+  // 4. Initialize Native Desktop Window
   if (isDesktop) {
+    await windowManager.ensureInitialized();
+
     WindowOptions windowOptions = const WindowOptions(
       title: 'AniStream',
       minimumSize: Size(
@@ -42,6 +50,7 @@ void main() async {
       await windowManager.focus();
     });
   }
-  // 4. Boot App
+
+  // 5. Boot App
   runApp(const AniStreamApp());
 }
