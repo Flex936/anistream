@@ -34,8 +34,11 @@ class _PipPlayerWindowState extends State<PipPlayerWindow> {
     _configurePlayer();
 
     _player.open(Media(widget.args.streamUrl!));
-    _player.stream.duration.firstWhere((d) => d > Duration.zero).then((_) {
+    _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
+      _,
+    ) async {
       _player.seek(Duration(milliseconds: widget.args.positionMs));
+      await _notifyMainWindowReady();
     });
   }
 
@@ -82,6 +85,17 @@ class _PipPlayerWindowState extends State<PipPlayerWindow> {
     }
     await _player.dispose();
     await windowManager.close();
+  }
+
+  Future<void> _notifyMainWindowReady() async {
+    if (widget.args.mainWindowId == null) return;
+    try {
+      await WindowController.fromWindowId(
+        widget.args.mainWindowId!,
+      ).invokeMethod('pip_ready');
+    } catch (_) {
+      // Non-fatal — worst case the main window just stays un-minimized.
+    }
   }
 
   @override

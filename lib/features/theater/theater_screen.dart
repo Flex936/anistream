@@ -393,12 +393,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _registerPipReturnHandler() async {
     _ownWindowController = await WindowController.fromCurrentEngine();
     _ownWindowController!.setWindowMethodHandler((call) async {
-      if (call.method == 'pip_returned') {
-        final positionMs = (call.arguments as Map)['positionMs'] as int;
-        _player.seek(Duration(milliseconds: positionMs));
-        _player.play();
-        await windowManager.show();
-        await windowManager.focus();
+      switch (call.method) {
+        case 'pip_returned':
+          final positionMs = (call.arguments as Map)['positionMs'] as int;
+          _player.seek(Duration(milliseconds: positionMs));
+          _player.play();
+          await windowManager.show();
+          await windowManager.focus();
+        case 'pip_ready':
+          await windowManager.minimize();
       }
       return null;
     });
@@ -438,7 +441,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
       WindowConfiguration(hiddenAtLaunch: true, arguments: args.toRaw()),
     );
     await pipController.show();
-    await windowManager.minimize();
   }
 
   Future<void> _forceClosePip() async {
