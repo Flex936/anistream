@@ -39,15 +39,15 @@ class _SettingsMenuState extends State<SettingsMenu> {
   bool _loading = true;
   bool _saving = false;
 
-  late bool _filterEcchi;
-  late String _hardwareDecoding;
-  late String _androidHwDec;
-  late bool _autoPlayEnabled;
-  late bool _autoSkip;
+  // ── REMOVED LATE: Gave default values to prevent LateInitializationError ──
+  bool _filterEcchi = true;
+  String _hardwareDecoding = 'auto';
+  String _androidHwDec = 'mediacodec-copy';
+  bool _autoPlayEnabled = false;
+  bool _autoSkip = false;
 
-  // ── Performance Settings ──
-  late bool _uiPerformanceMode;
-  late String _videoFilterQuality;
+  bool _uiPerformanceMode = false;
+  String _videoFilterQuality = 'low';
 
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
