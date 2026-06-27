@@ -1,5 +1,5 @@
 name: anistream
-description: "A high-performance desktop client for instantly streaming anime torrents."
+description: "An app for streaming anime torrents."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
