@@ -80,8 +80,8 @@ abstract final class TorrentParser {
         continue;
       }
 
-      // FAST PATH 1: Numbers
-      final num = int.tryParse(t);
+      // FAST PATH 1: Numbers (with optional trailing version suffix e.g. "06v2")
+      final num = int.tryParse(_stripVersionSuffix(t));
       if (num != null) {
         if (num == 1080 || num == 720 || num == 480 || num == 2160) {
           continue;
@@ -313,6 +313,9 @@ abstract final class TorrentParser {
   /// Replaces `^s(\d+)e(\d+)$`. (The original pattern also had a trailing
   /// `(?:-(\d+))?` batch group — proven unreachable, see the note in
   /// `parse()`, so it's simply not reproduced here.)
+  ///
+  /// Also accepts an optional trailing version suffix on the episode part,
+  /// e.g. `s01e06v2` — the `v<digits>` is ignored.
   static ({int season, int episode})? _matchSeasonEpisodeToken(String t) {
     final len = t.length;
     if (t.codeUnitAt(0) != 0x73 /* s */ ) return null;
@@ -332,8 +335,22 @@ abstract final class TorrentParser {
     while (i < len && _isDigit(t.codeUnitAt(i))) {
       i++;
     }
-    if (i == epStart || i != len) return null;
-    final episode = int.parse(t.substring(epStart, i));
+    if (i == epStart) return null;
+    final epEnd = i; // marks the end of the bare episode digits
+    // Allow an optional trailing version suffix: v<digits> (e.g. "s01e06v2")
+    if (i < len && t.codeUnitAt(i) == 0x76 /* v */) {
+      final vStart = i + 1;
+      var j = vStart;
+      while (j < len && _isDigit(t.codeUnitAt(j))) {
+        j++;
+      }
+      if (j > vStart && j == len) {
+        // valid v<digits> suffix — consume it so the final `i != len` check passes
+        i = j;
+      }
+    }
+    if (i != len) return null;
+    final episode = int.parse(t.substring(epStart, epEnd));
 
     return (season: season, episode: episode);
   }
@@ -356,4 +373,25 @@ abstract final class TorrentParser {
   /// Replaces `^(episode|ep|e)$`.
   static bool _isEpisodeKeyword(String t) =>
       t == 'episode' || t == 'ep' || t == 'e';
+
+  /// Strips a trailing version suffix of the form `v<digits>` from a token,
+  /// returning the bare numeric string so that e.g. `"06v2"` → `"06"`.
+  /// Returns the original token unchanged if the suffix isn't present or the
+  /// remaining prefix is empty.
+  static String _stripVersionSuffix(String t) {
+    final vIdx = t.indexOf('v');
+    if (vIdx <= 0) return t; // no 'v', or 'v' at position 0 (not a number)
+    final afterV = t.substring(vIdx + 1);
+    if (afterV.isEmpty) return t;
+    // Only strip if the part after 'v' is all digits and the part before 'v'
+    // is also all digits (so we don't mangle tokens like "av1" codec names).
+    for (int k = 0; k < afterV.length; k++) {
+      if (!_isDigit(afterV.codeUnitAt(k))) return t;
+    }
+    final base = t.substring(0, vIdx);
+    for (int k = 0; k < base.length; k++) {
+      if (!_isDigit(base.codeUnitAt(k))) return t;
+    }
+    return base;
+  }
 }
