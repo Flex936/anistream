@@ -28,20 +28,20 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  desktop_multi_window: ^0.3.0
   flutter:
     sdk: flutter
-  media_kit: ^1.2.6
-  media_kit_video: ^2.0.1
-  media_kit_libs_video: ^1.0.7
-  libtorrent_flutter: ^1.8.5
   http: ^1.6.0
-  xml: ^7.0.1
-  window_manager: ^0.5.1
+  libtorrent_flutter: ^1.8.5
+  media_kit: ^1.2.6
+  media_kit_libs_video: ^1.0.7
+  media_kit_video: ^2.0.1
+  package_info_plus: ^10.2.0
   shared_preferences: ^2.5.5
-  package_info_plus: ^10.1.0
-  wakelock_plus: ^1.6.1
   url_launcher: ^6.3.2
-  desktop_multi_window: ^0.3.0
+  wakelock_plus: ^1.6.1
+  window_manager: ^0.5.1
+  xml: ^6.6.1
 
 dev_dependencies:
   flutter_test:
