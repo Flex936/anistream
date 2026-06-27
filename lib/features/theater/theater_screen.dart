@@ -588,10 +588,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                 files: _torrentController.batchFiles,
                                 requestedEpisode: widget.episode,
                                 onSelect: _torrentController.selectBatchFile,
+                                onBack: _exitTheater,
                               )
                             : TheaterLoadingOverlay(
                                 episode: widget.episode,
                                 controller: _torrentController,
+                                onBack: _exitTheater,
                               );
                       },
                     ),

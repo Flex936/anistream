@@ -7,12 +7,14 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
   final List<BatchFileOption> files;
   final int? requestedEpisode;
   final void Function(int fileIndex) onSelect;
+  final VoidCallback? onBack;
 
   const BatchEpisodePickerOverlay({
     super.key,
     required this.files,
     required this.onSelect,
     this.requestedEpisode,
+    this.onBack,
   });
 
   static String _formatSize(int bytes) {
@@ -49,7 +51,7 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 8, 8),
                   child: Row(
                     children: [
                       const Icon(
@@ -68,6 +70,17 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (onBack != null)
+                        IconButton(
+                          tooltip: 'Go back',
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: AppPalette.textMuted,
+                            size: 20,
+                          ),
+                          onPressed: onBack,
+                          splashRadius: 18,
+                        ),
                     ],
                   ),
                 ),
