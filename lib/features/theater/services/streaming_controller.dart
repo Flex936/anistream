@@ -3,38 +3,33 @@ import 'package:flutter/foundation.dart';
 import 'package:libtorrent_flutter/libtorrent_flutter.dart';
 
 import '../../../data/torrent/services/torrent_parser.dart';
+import 'streaming_controller_base.dart';
 
-class BatchFileOption {
-  final int index;
-  final String name;
-  final int size;
-  final int? guessedEpisode;
+// BatchFileOption is now defined in streaming_controller_base.dart.
+// Re-export it so existing imports of this file keep working without changes.
+export 'streaming_controller_base.dart' show BatchFileOption;
 
-  const BatchFileOption({
-    required this.index,
-    required this.name,
-    required this.size,
-    this.guessedEpisode,
-  });
-}
-
-class StreamingController extends ChangeNotifier {
-  // ── PRE-BUFFER GATE ──────────────────────────────────────────────────────────
+class StreamingController extends BaseStreamingController {
+  // ── PRE-BUFFER GATE ──────────────────────────────────────────────────────
   /// Minimum sequential buffer percentage before the URL is handed to the
   /// player. 2 % gives MPV a solid head-start without making the user wait
   /// long. Raise it if black-frames persist on very slow connections.
   static const double _kPreBufferThreshold = 0.1;
 
   String _statusText = 'Initializing Native Engine...';
+  @override
   String get statusText => _statusText;
 
   String? _streamUrl;
+  @override
   String? get streamUrl => _streamUrl;
 
   bool _isReadyToPlay = false;
+  @override
   bool get isReadyToPlay => _isReadyToPlay;
 
   bool _hasError = false;
+  @override
   bool get hasError => _hasError;
 
   int? _torrentId;
@@ -42,14 +37,17 @@ class StreamingController extends ChangeNotifier {
   StreamSubscription? _streamSub;
 
   bool _needsManualSelection = false;
+  @override
   bool get needsManualSelection => _needsManualSelection;
 
   List<BatchFileOption> _batchFiles = [];
+  @override
   List<BatchFileOption> get batchFiles => _batchFiles;
 
   int? _requestedEpisode;
   bool _filesResolved = false;
 
+  @override
   Future<void> initialize(String magnetUri, {int? episodeNumber}) async {
     _requestedEpisode = episodeNumber;
     try {
@@ -139,12 +137,13 @@ class StreamingController extends ChangeNotifier {
     }
   }
 
+  @override
   void selectBatchFile(int fileIndex) {
     if (_torrentId == null || _isReadyToPlay) return;
 
     _needsManualSelection = false;
     _statusText = 'Initializing selected file…';
-    notifyListeners(); // Immediately dismiss the picker before stream setup begins
+    notifyListeners();
     _beginStream(LibtorrentFlutter.instance, fileIndex: fileIndex);
   }
 
@@ -154,12 +153,6 @@ class StreamingController extends ChangeNotifier {
           ? engine.startStream(_torrentId!)
           : engine.startStream(_torrentId!, fileIndex: fileIndex);
 
-      // ── PRE-BUFFER GATE ─────────────────────────────────────────────────────
-      // We have the localhost URL, but the torrent has written zero bytes yet.
-      // _isReadyToPlay stays false — the TheaterLoadingOverlay remains visible.
-      // The gate opens only once the sequential buffer reaches the threshold,
-      // giving MPV a contiguous chunk of data to parse headers and start
-      // decoding without hitting an immediate EOF / black screen.
       _streamUrl = streamInfo.url;
       _updateStatus('Buffering… 0.0%');
 
@@ -170,7 +163,6 @@ class StreamingController extends ChangeNotifier {
           final s = streams.values.firstWhere((st) => st.url == _streamUrl);
           final pct = s.bufferPct;
 
-          // Gate is already open — log for diagnostics, no more UI churn.
           if (_isReadyToPlay) {
             debugPrint(
               '[Torrent Engine] Sequential Buffer: ${pct.toStringAsFixed(1)}%',
@@ -178,23 +170,19 @@ class StreamingController extends ChangeNotifier {
             return;
           }
 
-          // Throttle rebuilds: only notify when the displayed text changes.
-          // streamUpdates can fire many times per second; skipping no-op
-          // notifies keeps the widget tree quiet during rapid piece downloads.
           final label = 'Buffering… ${pct.toStringAsFixed(1)}%';
           if (_statusText != label) {
             _statusText = label;
             notifyListeners();
           }
 
-          // Open the gate: hand control to the player for the first time.
           if (pct >= _kPreBufferThreshold) {
             _isReadyToPlay = true;
             _statusText = 'Starting playback engine...';
             notifyListeners();
           }
         } catch (_) {
-          // Stream entry not yet registered in the map — silently wait.
+          // Stream entry not yet registered — silently wait.
         }
       });
     } catch (e) {
@@ -202,19 +190,13 @@ class StreamingController extends ChangeNotifier {
     }
   }
 
-  // ── PRE-COMPILED PARSER ──
   int? _guessEpisodeNumber(String rawName) {
     final meta = TorrentParser.parse(rawName);
-    if (meta.episode != -1) {
-      return meta.episode;
-    } else {
-      return null;
-    }
+    return meta.episode != -1 ? meta.episode : null;
   }
 
   void _updateStatus(String text) {
     if (_hasError) return;
-    // Once the gate is open and the final status is set, freeze it.
     if (_isReadyToPlay && _statusText == 'Starting playback engine...') return;
     _statusText = text;
     notifyListeners();

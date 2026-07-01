@@ -15,13 +15,15 @@ import '../../data/torrent/models/torrent.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
 import '../../shared/widgets/toast.dart';
-import '../pip/pip_args.dart';
+import 'services/streaming_controller_base.dart';
 import 'services/streaming_controller.dart';
+import 'services/remote_streaming_controller.dart';
 import 'services/theater_data.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_settings.dart';
 import 'widgets/batch_picker.dart';
+import '../pip/pip_args.dart';
 
 class TheaterScreen extends StatefulWidget {
   final Anime anime;
@@ -40,12 +42,17 @@ class TheaterScreen extends StatefulWidget {
 }
 
 class _TheaterScreenState extends State<TheaterScreen> {
-  late final StreamingController _torrentController;
-  late final AnilistTrackerService _tracker;
+  // ── Streaming controller ─────────────────────────────────────────────────
+  // Starts as a placeholder StreamingController (with no listener added).
+  // _initPlayerAndStream() replaces it with the right type once settings are
+  // loaded. The type is BaseStreamingController so TheaterScreen never needs
+  // to know which mode is active.
+  BaseStreamingController _torrentController = StreamingController();
 
+  late final AnilistTrackerService _tracker;
   late final Player _player;
   late final VideoController _videoController;
-  WindowController? _ownWindowController;
+
   final FocusNode _focusNode = FocusNode();
   bool _videoInitialized = false;
   bool _showControls = true;
@@ -53,12 +60,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _isFullscreen = true;
   Timer? _hideControlsTimer;
   bool _isClosing = false;
+  WindowController? _ownWindowController;
 
+  // ── Auto-skip ────────────────────────────────────────────────────────────
   bool _autoSkip = false;
   bool _isAutoSkipping = false;
   Chapter? _currentAutoSkipChapter;
   Timer? _autoSkipTimer;
 
+  // ── Performance settings ─────────────────────────────────────────────────
   bool _uiPerformanceMode = false;
   String _videoFilterQuality = 'low';
 
@@ -68,11 +78,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   void initState() {
     super.initState();
-
     _player = Player(configuration: const PlayerConfiguration(libass: true));
     _videoController = VideoController(_player);
-    _torrentController = StreamingController();
-    _torrentController.addListener(_onTorrentStateChanged);
+
+    // Placeholder has no listener yet — _initPlayerAndStream adds one to the
+    // real controller after it decides which type to create.
 
     _tracker = AnilistTrackerService(
       onSuccess: () {
@@ -87,16 +97,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
       },
     );
 
-    SettingsService().load().then((s) {
-      if (mounted) {
-        setState(() {
-          _uiPerformanceMode = s.uiPerformanceMode;
-          _videoFilterQuality = s.videoFilterQuality;
-          _autoSkip = s.autoSkip;
-        });
-      }
-    });
-
     _initPlayerAndStream();
     _startHideControlsTimer();
 
@@ -106,26 +106,56 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   Future<void> _initPlayerAndStream() async {
-    if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
-    }
-
-    final prefs = SharedPreferencesAsync();
     if (!mounted) return;
 
-    final hwdec = await prefs.getString(SettingsService.kHwDec) ?? 'auto';
-    final androidHwDec =
-        await prefs.getString(SettingsService.kAndroidHwDec) ??
-        'mediacodec-copy';
+    // ── Load all settings in one call ─────────────────────────────────────
+    // This replaces the original two separate prefs reads (SettingsService
+    // in initState + SharedPreferencesAsync in this method).
+    final s = await SettingsService().load();
+    if (!mounted) return;
 
+    // Apply performance and playback flags immediately.
+    setState(() {
+      _uiPerformanceMode = s.uiPerformanceMode;
+      _videoFilterQuality = s.videoFilterQuality;
+      _autoSkip = s.autoSkip;
+    });
+
+    // ── Pick controller ───────────────────────────────────────────────────
+    // Build the correct controller based on whether server mode is on.
+    final BaseStreamingController newController;
+    if (s.serverMode && s.serverUrl.isNotEmpty) {
+      newController = RemoteStreamingController(serverUrl: s.serverUrl);
+    } else {
+      newController = StreamingController();
+    }
+    newController.addListener(_onTorrentStateChanged);
+
+    if (!mounted) {
+      // Widget was disposed before we could swap — clean up the orphan.
+      newController.dispose();
+      return;
+    }
+
+    // Swap: ListenableBuilder will unsubscribe from the placeholder and
+    // subscribe to newController in the next rebuild triggered by setState.
+    final oldPlaceholder = _torrentController;
+    setState(() => _torrentController = newController);
+
+    // Dispose the placeholder AFTER the rebuild so ListenableBuilder can
+    // safely call removeListener on it first.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => oldPlaceholder.dispose(),
+    );
+
+    // ── Hardware decoding ─────────────────────────────────────────────────
     final platform = _player.platform;
     if (platform is NativePlayer) {
+      final hwdec = s.hardwareDecoding;
+      final androidHwDec = s.androidHwDec;
+
       if (hwdec == 'auto') {
-        if (Platform.isLinux || Platform.isMacOS) {
+        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
           platform.setProperty('hwdec', 'auto-safe');
           windowManager.setFullScreen(true);
         } else if (Platform.isAndroid) {
@@ -137,19 +167,27 @@ class _TheaterScreenState extends State<TheaterScreen> {
         platform.setProperty('hwdec', hwdec);
       }
 
+      // P2P demuxer tuning — keeps MPV happy on bursty torrent streams.
+      // In server mode the stream comes off a LAN HTTP server, so these
+      // settings still help MPV absorb any micro-stalls.
       platform.setProperty('cache', 'yes');
       platform.setProperty('demuxer-max-bytes', '150000000');
       platform.setProperty('demuxer-readahead-secs', '120');
     }
 
-    final savedVolume = await prefs.getDouble('theater_volume') ?? 100.0;
+    // ── Restore persistent volume ─────────────────────────────────────────
+    final savedVolume =
+        await SharedPreferencesAsync().getDouble('theater_volume') ?? 100.0;
     _player.setVolume(savedVolume);
 
+    // ── Start streaming ───────────────────────────────────────────────────
+    // Fire and forget — state changes come back via _onTorrentStateChanged.
     _torrentController.initialize(
       widget.torrent.magnetLink,
       episodeNumber: widget.episode,
     );
 
+    // ── AniList progress tracking ─────────────────────────────────────────
     await _tracker.init(
       mediaId: widget.anime.id,
       episode: widget.episode,
@@ -162,6 +200,39 @@ class _TheaterScreenState extends State<TheaterScreen> {
       _handleAutoSkip(pos);
     });
   }
+
+  // ── Controller listener ───────────────────────────────────────────────────
+
+  void _onTorrentStateChanged() {
+    if (_torrentController.isReadyToPlay && !_videoInitialized) {
+      setState(() => _videoInitialized = true);
+      // In local mode:  streamUrl = http://127.0.0.1:<port>/...
+      // In server mode: streamUrl = http://<server-ip>:7878/api/stream/:id/video
+      // MPV handles both identically via range requests.
+      _player.open(Media(_torrentController.streamUrl!));
+
+      _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
+        _,
+      ) async {
+        final resolvedChapters = await loadChapters(_player);
+
+        debugPrint('\n─── LOADED CHAPTERS ───');
+        for (int i = 0; i < resolvedChapters.length; i++) {
+          final c = resolvedChapters[i];
+          debugPrint(
+            '[$i] "${c.title}" | ${c.start} -> ${c.end} | Skippable: ${c.isSkippable}',
+          );
+        }
+        debugPrint('───────────────────────────\n');
+
+        if (mounted) setState(() => _chapters = resolvedChapters);
+      });
+
+      _player.play();
+    }
+  }
+
+  // ── Auto-skip ─────────────────────────────────────────────────────────────
 
   void _handleAutoSkip(Duration pos) {
     if (!_autoSkip || _chapters.isEmpty) return;
@@ -208,7 +279,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
         if (mounted &&
             _isAutoSkipping &&
             _currentAutoSkipChapter == activeChapter) {
-          debugPrint('⏭Executing skip to: ${activeChapter!.end}');
+          debugPrint('⏭ Executing skip to: ${activeChapter!.end}');
           _player.seek(activeChapter.end);
           _isAutoSkipping = false;
         }
@@ -216,21 +287,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
   }
 
-  void _onTorrentStateChanged() {
-    if (_torrentController.isReadyToPlay && !_videoInitialized) {
-      setState(() => _videoInitialized = true);
-      _player.open(Media(_torrentController.streamUrl!));
-
-      _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
-        _,
-      ) async {
-        final resolvedChapters = await loadChapters(_player);
-        if (mounted) setState(() => _chapters = resolvedChapters);
-      });
-
-      _player.play();
-    }
-  }
+  // ── Keyboard ──────────────────────────────────────────────────────────────
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -320,6 +377,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
     return KeyEventResult.handled;
   }
 
+  // ── Controls visibility ───────────────────────────────────────────────────
+
   void _startHideControlsTimer() {
     _hideControlsTimer?.cancel();
     if (!mounted) return;
@@ -332,6 +391,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
     });
   }
 
+  // ── Window / exit ─────────────────────────────────────────────────────────
+
   Future<void> _toggleFullscreen() async {
     _isFullscreen = !_isFullscreen;
     await windowManager.setFullScreen(_isFullscreen);
@@ -342,7 +403,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     await _player.stop();
     await _player.dispose();
     _torrentController.dispose();
-    if (Platform.isLinux || Platform.isMacOS) {
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       if (await windowManager.isFullScreen()) {
         await windowManager.setFullScreen(false);
       }
@@ -468,6 +529,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
     super.dispose();
   }
 
+  // ── Video quality ─────────────────────────────────────────────────────────
+
   FilterQuality _getFilterQuality() {
     switch (_videoFilterQuality) {
       case 'high':
@@ -481,6 +544,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
         return FilterQuality.low;
     }
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -508,6 +573,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
+                  // ── Video ─────────────────────────────────────────────────
                   AnimatedOpacity(
                     opacity: _videoInitialized ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 300),
@@ -518,6 +584,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                     ),
                   ),
 
+                  // ── Playback controls overlay ─────────────────────────────
                   if (_videoInitialized)
                     AnimatedOpacity(
                       opacity: _showControls ? 1.0 : 0.0,
@@ -565,6 +632,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       ),
                     ),
 
+                  // ── Track / subtitle picker ───────────────────────────────
                   if (_isSettingsOpen)
                     Positioned(
                       bottom: 110,
@@ -576,25 +644,29 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       ),
                     ),
 
+                  // ── Loading / batch-picker overlay ────────────────────────
+                  // ListenableBuilder re-renders whenever _torrentController
+                  // calls notifyListeners(). Works identically for both the
+                  // local and remote controller since they share the same base.
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 600),
                     child: ListenableBuilder(
                       listenable: _torrentController,
                       builder: (context, _) {
-                        return _torrentController.isReadyToPlay
-                            ? const SizedBox.shrink()
-                            : _torrentController.needsManualSelection
-                            ? BatchEpisodePickerOverlay(
-                                files: _torrentController.batchFiles,
-                                requestedEpisode: widget.episode,
-                                onSelect: _torrentController.selectBatchFile,
-                                onBack: _exitTheater,
-                              )
-                            : TheaterLoadingOverlay(
-                                episode: widget.episode,
-                                controller: _torrentController,
-                                onBack: _exitTheater,
-                              );
+                        if (_torrentController.isReadyToPlay) {
+                          return const SizedBox.shrink();
+                        }
+                        if (_torrentController.needsManualSelection) {
+                          return BatchEpisodePickerOverlay(
+                            files: _torrentController.batchFiles,
+                            requestedEpisode: widget.episode,
+                            onSelect: _torrentController.selectBatchFile,
+                          );
+                        }
+                        return TheaterLoadingOverlay(
+                          episode: widget.episode,
+                          controller: _torrentController,
+                        );
                       },
                     ),
                   ),

@@ -215,6 +215,98 @@ class SettingsDropdown extends StatelessWidget {
   }
 }
 
+/// A styled text field for settings values such as the server URL.
+class SettingsTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final String? label;
+  final bool enabled;
+  final TextInputType keyboardType;
+
+  const SettingsTextField({
+    super.key,
+    required this.controller,
+    required this.hint,
+    this.label,
+    this.enabled = true,
+    this.keyboardType = TextInputType.url,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label != null) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 6),
+            child: Text(
+              label!,
+              style: const TextStyle(
+                color: AppPalette.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+        TextField(
+          controller: controller,
+          enabled: enabled,
+          keyboardType: keyboardType,
+          autocorrect: false,
+          style: TextStyle(
+            color: enabled ? AppPalette.textMain : AppPalette.textMuted,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: AppPalette.textMuted,
+              fontSize: 14,
+            ),
+            filled: true,
+            fillColor: AppPalette.white.withValues(
+              alpha: enabled ? 0.06 : 0.02,
+            ),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: AppPalette.white.withValues(alpha: 0.1),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: AppPalette.white.withValues(alpha: 0.1),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: AppPalette.primary,
+                width: 1.5,
+              ),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: AppPalette.white.withValues(alpha: 0.05),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class SettingsCloseButton extends StatelessWidget {
   final VoidCallback onPressed;
   const SettingsCloseButton({super.key, required this.onPressed});

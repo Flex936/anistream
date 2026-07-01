@@ -46,4 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
 claude_temp
+
+
+anistream_server/.torrent.*
+
