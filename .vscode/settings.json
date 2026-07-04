@@ -1,19 +1,7 @@
 {
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.formatOnSave": true,
-
-  "[svelte]": {
-    "editor.defaultFormatter": "svelte.svelte-vscode"
-  },
-
-  "[go]": {
-    "editor.defaultFormatter": "golang.go",
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-      "source.organizeImports": "explicit"
-    }
-  },
-  "gopls": {
-    "formatting.local": "anistream"
-  }
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "problems.decorations.enabled": false,
+    "dart.analysisExcludedFolders": [
+        "D:/programming/anistream/claude_temp"
+    ]
 }
