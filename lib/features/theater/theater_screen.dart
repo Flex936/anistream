@@ -79,7 +79,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
   void initState() {
     super.initState();
     _player = Player(configuration: const PlayerConfiguration(libass: true));
-    _videoController = VideoController(_player);
+    const videoConfig = VideoControllerConfiguration(
+      androidAttachSurfaceAfterVideoParameters: true,
+    );
+    _videoController = VideoController(
+      _player,
+      configuration: videoConfig,
+    );
 
     // Placeholder has no listener yet — _initPlayerAndStream adds one to the
     // real controller after it decides which type to create.
