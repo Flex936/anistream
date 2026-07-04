@@ -11,8 +11,7 @@ Built entirely in **Flutter and Dart**, AniStream bypasses heavy webviews and El
 * **P2P Playback:** Click an episode, and streaming begins within seconds. The app utilizes a high-performance C++ torrent engine (`libtorrent`) with time-critical piece deadlines to stream data sequentially without buffering.
 * **AniList Syncing:** Log in via secure OAuth2 into your AniList account. The app automatically pulls your current **Watching** and **Plan to Watch** lists into a personalized library view.
 * **Progress Tracker:** Watching an episode past the **90% mark** triggers an automated progress update to your AniList account.
-* **Upscaling (via `libmpv`):** Turn 1080p source video into a razor-sharp experience on 1440p or 4K monitors using advanced shaders directly integrated into the native media player.
-* **Hardware Acceleration:** Powered by the `media_kit` package, the video player taps directly into your OS graphics pipeline (NVENC, AMF, QuickSync, VideoToolbox) for 4K AV1 and HEVC decoding with near-zero CPU usage.
+* **Hardware Acceleration:** Powered by the `media_kit` package, the video player taps directly into your OS graphics pipeline (NVENC, AMF, QuickSync, VideoToolbox) for HEVC decoding with near-zero CPU usage.
 
 ---
 
@@ -81,23 +80,33 @@ flutter doctor
 
 ### Windows Installation
 
-#### 1. Install System Dependencies
+#### 1. Install Git
 
-Open a terminal as Administrator. You need the Flutter SDK, Git, and MPV:
+Install Git via winget:
 
 ```cmd
-winget install Flutter.Flutter
 winget install Git.Git
-winget install shinchiro.mpv
 ```
 
-#### 2. Install Visual Studio Build Tools
+#### 2. Install the Flutter SDK
 
-Flutter Windows desktop applications require the C++ desktop development workload.
+Download and install the Flutter SDK from the [official Flutter website](https://docs.flutter.dev/get-started/install/windows/desktop). Extract it somewhere like `C:\flutter` and add `C:\flutter\bin` to your `PATH` environment variable.
 
-1. Download [Visual Studio Installer](https://visualstudio.microsoft.com/downloads/).
-2. Select **Desktop development with C++**.
-3. Install and restart your PC.
+Then run the diagnostic tool to verify your setup and download the Dart SDK:
+
+```cmd
+flutter doctor
+```
+
+#### 3. Install Visual Studio 2022 Build Tools
+
+Flutter Windows desktop apps require the MSVC C++ compiler and the Windows SDK.
+
+1. Download [Visual Studio 2022 Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) *(or the full Visual Studio 2022 IDE)*.
+2. In the installer, select the **Desktop development with C++** workload.
+3. Complete the installation and restart your PC.
+
+After restarting, run `flutter doctor` again to confirm all Windows requirements are satisfied.
 
 ---
 
@@ -158,6 +167,28 @@ flutter build windows --release
 *Outputs to: `build/windows/x64/runner/Release/*`
 
 These commands strip debug symbols, aggressively tree-shake unused code, and output a native executable that requires no external VMs or browsers to run.
+
+---
+
+*For Android (Phone or AndroidTV):*
+
+```bash
+flutter build apk --release
+```
+
+*Outputs to: `build/app/outputs/flutter-apk/*`                                                                                                           
+
+These commands strip debug symbols, aggressively tree-shake unused code, and output a native executable that requires no external VMs or browsers to run.
+
+> Note: AndroidTV currently doesn't use your TV's built in DPU, so if your TV model has a weak GPU it most likely won't run 1080p footage. *(will most likely run 720p)*
+---
+
+
+## AniStream Remote Server
+
+AniStream ships an optional companion **Go server** (`anistream_server/`) designed for thin clients — Android TV boxes, phones, or weak laptops — that lack the hardware muscle to run a full BitTorrent engine locally. Instead of seeding and downloading on-device, the Flutter app sends a magnet link to the server over the LAN. The server (running on a PC, NAS, or Raspberry Pi) handles all torrent activity and exposes the resulting video as an HTTP range-request stream that MPV opens directly, giving you remote-playback quality without any of the client-side overhead.
+
+For full setup instructions, CLI flags, the REST API reference, and systemd service configuration, see the **[AniStream Server README](anistream_server/README.md)**.
 
 ---
 
