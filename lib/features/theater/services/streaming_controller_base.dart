@@ -30,8 +30,8 @@ abstract class BaseStreamingController extends ChangeNotifier {
   String get statusText;
 
   /// The URL handed to media_kit once the stream is ready.
-  /// Local mode: http://127.0.0.1:<port>/...
-  /// Server mode: http://<server-ip>:7878/api/stream/<id>/video
+  /// Local mode: http://127.0.0.1:\<port\>/...
+  /// Server mode: http://\<server-ip\>:7878/api/stream/\<id\>/video
   String? get streamUrl;
 
   /// True once enough data has been buffered to hand the URL to the player.

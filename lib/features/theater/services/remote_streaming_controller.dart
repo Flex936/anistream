@@ -62,7 +62,7 @@ class RemoteStreamingController extends BaseStreamingController {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'magnet': magnetUri,
-              if (episodeNumber != null) 'episode_number': episodeNumber,
+              'episode_number': ?episodeNumber,
             }),
           )
           .timeout(const Duration(seconds: 15));
