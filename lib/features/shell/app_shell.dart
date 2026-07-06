@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_service.dart';
+import '../../core/settings/settings_scope.dart';
+import 'controllers/navigation_controller.dart';
 import 'widgets/navbar.dart';
 import '../settings/settings_menu.dart';
 import '../anime_details/anime_details_screen.dart';
@@ -24,81 +25,46 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   final _auth = AnilistAuthService();
-
-  late final List<Widget> _history;
-  final List<Widget> _forwardStack = [];
+  late final NavigationController _nav;
 
   bool _isLoggedIn = false;
   bool _loginBusy = false;
   String _searchQuery = '';
   bool _isScrolled = false;
 
-  bool _uiPerformanceMode = false;
-
   @override
   void initState() {
     super.initState();
-    _history = [HomeScreen(onSelectAnime: _handleSelectAnime)];
+    _nav = NavigationController(
+      buildHome: () => HomeScreen(onSelectAnime: _handleSelectAnime),
+    );
     _restoreSession();
-    _loadSettings();
   }
 
-  Future<void> _loadSettings() async {
-    final s = await SettingsService().load();
-    if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
-  }
-
-  Widget get _currentView => _history.last;
-
-  void _navigateTo(Widget view) {
-    setState(() {
-      _history.add(view);
-      _forwardStack.clear();
-      _isScrolled = false;
-    });
-  }
-
-  bool _goBack() {
-    if (_history.length <= 1) return false;
-    setState(() {
-      _forwardStack.add(_history.removeLast());
-      _isScrolled = false;
-    });
-    return true;
-  }
-
-  bool _goForward() {
-    if (_forwardStack.isEmpty) return false;
-    setState(() {
-      _history.add(_forwardStack.removeLast());
-      _isScrolled = false;
-    });
-    return true;
-  }
-
-  void _goHome() {
-    setState(() {
-      _searchQuery = '';
-      _history.clear();
-      _forwardStack.clear();
-      _history.add(HomeScreen(onSelectAnime: _handleSelectAnime));
-      _isScrolled = false;
-    });
+  @override
+  void dispose() {
+    _nav.dispose();
+    super.dispose();
   }
 
   void _handleSelectAnime(Anime anime) {
-    _navigateTo(AnimeDetailsScreen(anime: anime, onBack: _goBack));
+    _nav.navigateTo(AnimeDetailsScreen(anime: anime, onBack: _nav.goBack));
   }
 
   void _handleTextChange(String query) => setState(() => _searchQuery = query);
 
+  void _handleGoHome() {
+    _nav.goHome();
+    setState(() => _searchQuery = '');
+  }
+
   void _handleSubmit(String query) {
     FocusScope.of(context).unfocus();
     if (query.trim().isEmpty) {
-      _goHome();
+      _handleGoHome();
       return;
     }
-    _navigateTo(
+    _nav.navigateTo(
       SearchResultsScreen(query: query, onSelectAnime: _handleSelectAnime),
     );
   }
@@ -119,7 +85,7 @@ class _AppShellState extends State<AppShell> {
       AnilistQueryService.clearToken();
       if (!mounted) return;
       setState(() => _isLoggedIn = false);
-      if (_currentView is WatchlistScreen) _goHome();
+      if (_nav.current is WatchlistScreen) _nav.goHome();
       return;
     }
 
@@ -146,60 +112,67 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
+
     return MouseBackForwardListener(
-      onBack: _goBack,
-      onForward: _goForward,
+      onBack: _nav.goBack,
+      onForward: _nav.goForward,
       child: PopScope(
-        canPop: _history.length <= 1,
-        // ── MODERNIZED POPSCOPE CALLBACK ──
+        canPop: !_nav.canGoBack,
         onPopInvokedWithResult: (bool didPop, dynamic result) {
           if (didPop) return;
-          _goBack();
+          _nav.goBack();
         },
-        child: Scaffold(
-          backgroundColor: AppPalette.base,
-          extendBodyBehindAppBar: true,
-          appBar: AniStreamNavBar(
-            searchQuery: _searchQuery,
-            isLoggedIn: _isLoggedIn,
-            isScrolled: _isScrolled,
-            uiPerformanceMode: _uiPerformanceMode,
-            onHome: _goHome,
-            onSearch: _handleTextChange,
-            onSubmitted: _handleSubmit,
-            onSelectAnime: _handleSelectAnime,
-            onScheduled: () =>
-                _navigateTo(ScheduledScreen(onSelectAnime: _handleSelectAnime)),
-            onWatchlist: () =>
-                _navigateTo(WatchlistScreen(onSelectAnime: _handleSelectAnime)),
-            onLogin: _handleLogin,
-            onSettings: () async {
-              await showSettingsMenu(context);
-              // ── Verify mounted before loading async settings ──
-              if (mounted) {
-                _loadSettings();
-              }
-            },
-          ),
-          body: GestureDetector(
-            onTap: () => FocusScope.of(context).unfocus(),
-            behavior: HitTestBehavior.opaque,
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (ScrollNotification notification) {
-                if (notification.depth == 0) {
-                  final isScrolled = notification.metrics.pixels > 20;
-                  if (isScrolled != _isScrolled) {
-                    // Safe post-frame rebuild
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) setState(() => _isScrolled = isScrolled);
-                    });
-                  }
-                }
-                return false;
-              },
-              child: _currentView,
-            ),
-          ),
+        // ── Rebuilds whenever NavigationController's history changes,
+        // replacing the old setState()-driven _history/_forwardStack
+        // fields that used to live directly on this State. ──
+        child: ListenableBuilder(
+          listenable: _nav,
+          builder: (context, _) {
+            return Scaffold(
+              backgroundColor: AppPalette.base,
+              extendBodyBehindAppBar: true,
+              appBar: AniStreamNavBar(
+                searchQuery: _searchQuery,
+                isLoggedIn: _isLoggedIn,
+                isScrolled: _isScrolled,
+                uiPerformanceMode: uiPerformanceMode,
+                onHome: _handleGoHome,
+                onSearch: _handleTextChange,
+                onSubmitted: _handleSubmit,
+                onSelectAnime: _handleSelectAnime,
+                onScheduled: () => _nav.navigateTo(
+                  ScheduledScreen(onSelectAnime: _handleSelectAnime),
+                ),
+                onWatchlist: () => _nav.navigateTo(
+                  WatchlistScreen(onSelectAnime: _handleSelectAnime),
+                ),
+                onLogin: _handleLogin,
+                // ── SettingsScope propagates saved changes automatically,
+                // so there's no need to manually reload settings after the
+                // menu closes anymore. ──
+                onSettings: () => showSettingsMenu(context),
+              ),
+              body: GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
+                behavior: HitTestBehavior.opaque,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification notification) {
+                    if (notification.depth == 0) {
+                      final isScrolled = notification.metrics.pixels > 20;
+                      if (isScrolled != _isScrolled) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) setState(() => _isScrolled = isScrolled);
+                        });
+                      }
+                    }
+                    return false;
+                  },
+                  child: _nav.current,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

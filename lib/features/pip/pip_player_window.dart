@@ -4,6 +4,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 
+import '../theater/services/player_configurator.dart';
 import 'pip_args.dart';
 
 class PipPlayerWindow extends StatefulWidget {
@@ -31,7 +32,7 @@ class _PipPlayerWindowState extends State<PipPlayerWindow> {
     );
     _initWindow();
     _registerWindowMethodHandler();
-    _configurePlayer();
+    PlayerConfigurator.configureForPip(_player);
 
     _player.open(Media(widget.args.streamUrl!));
     _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
@@ -40,16 +41,6 @@ class _PipPlayerWindowState extends State<PipPlayerWindow> {
       _player.seek(Duration(milliseconds: widget.args.positionMs));
       await _notifyMainWindowReady();
     });
-  }
-
-  void _configurePlayer() {
-    final platform = _player.platform;
-    if (platform is NativePlayer) {
-      platform.setProperty('hwdec', 'auto-safe');
-      platform.setProperty('cache', 'yes');
-      platform.setProperty('demuxer-max-bytes', '150000000');
-      platform.setProperty('demuxer-readahead-secs', '120');
-    }
   }
 
   Future<void> _initWindow() async {
@@ -108,7 +99,6 @@ class _PipPlayerWindowState extends State<PipPlayerWindow> {
           fit: StackFit.expand,
           children: [
             Video(controller: _videoController, controls: NoVideoControls),
-            // drag handle — frameless window has no titlebar to grab
             const Positioned(
               top: 0,
               left: 0,

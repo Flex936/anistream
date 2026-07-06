@@ -1,7 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_service.dart';
+import '../../core/settings/settings_scope.dart';
+import 'glass_toast_content.dart';
 
 // ── Apple-Style Premium Glass Toast (Bottom) ──
 
@@ -31,7 +30,7 @@ class AppleSnackBar {
   }
 }
 
-class _BottomToastWidget extends StatefulWidget {
+class _BottomToastWidget extends StatelessWidget {
   final String message;
   final IconData icon;
   final Color iconColor;
@@ -43,73 +42,17 @@ class _BottomToastWidget extends StatefulWidget {
   });
 
   @override
-  State<_BottomToastWidget> createState() => _BottomToastWidgetState();
-}
-
-class _BottomToastWidgetState extends State<_BottomToastWidget> {
-  bool _uiPerformanceMode = false;
-
-  @override
-  void initState() {
-    super.initState();
-    SettingsService().load().then((s) {
-      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    Widget content = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppPalette.surface.withValues(
-          alpha: _uiPerformanceMode ? 0.98 : 0.75,
-        ),
-        borderRadius: BorderRadius.circular(50),
-        border: Border.all(
-          color: AppPalette.white.withValues(alpha: 0.15),
-          width: 1,
-        ),
-        boxShadow: _uiPerformanceMode
-            ? null
-            : [
-                // ── Drop shadow conditionally ──
-                BoxShadow(
-                  color: AppPalette.black.withValues(alpha: 0.25),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(widget.icon, color: widget.iconColor, size: 20),
-          const SizedBox(width: 10),
-          Text(
-            widget.message,
-            style: const TextStyle(
-              color: AppPalette.textMain,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    // ── Conditional Blur ──
-    if (!_uiPerformanceMode) {
-      content = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-        child: content,
-      );
-    }
+    final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
     return Align(
       alignment: Alignment.bottomCenter,
-      child: ClipRRect(borderRadius: BorderRadius.circular(50), child: content),
+      child: GlassToastContent(
+        message: message,
+        icon: icon,
+        iconColor: iconColor,
+        uiPerformanceMode: uiPerformanceMode,
+      ),
     );
   }
 }
@@ -162,7 +105,6 @@ class _TopToastWidgetState extends State<_TopToastWidget>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _offsetAnimation;
-  bool _uiPerformanceMode = false;
 
   @override
   void initState() {
@@ -175,10 +117,6 @@ class _TopToastWidgetState extends State<_TopToastWidget>
       begin: const Offset(0, -1.5),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
-
-    SettingsService().load().then((s) {
-      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
-    });
 
     _controller.forward();
 
@@ -198,56 +136,15 @@ class _TopToastWidgetState extends State<_TopToastWidget>
 
   @override
   Widget build(BuildContext context) {
-    Widget content = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppPalette.surface.withValues(
-          alpha: _uiPerformanceMode ? 0.98 : 0.75,
-        ),
-        borderRadius: BorderRadius.circular(50),
-        border: Border.all(
-          color: AppPalette.white.withValues(alpha: 0.15),
-          width: 1,
-        ),
-        boxShadow: _uiPerformanceMode
-            ? null
-            : [
-                // ── Drop shadow conditionally ──
-                BoxShadow(
-                  color: AppPalette.black.withValues(alpha: 0.25),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(widget.icon, color: widget.iconColor, size: 20),
-          const SizedBox(width: 10),
-          Text(
-            widget.message,
-            style: const TextStyle(
-              color: AppPalette.textMain,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    // ── Conditional Blur ──
-    if (!_uiPerformanceMode) {
-      content = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-        child: content,
-      );
-    }
+    // ── Uses SettingsScope directly instead of a locally-loaded
+    // _uiPerformanceMode field — this widget is inserted via Overlay, so it
+    // sits above whatever context called AppleTopSnackBar.show(context),
+    // and SettingsScope is mounted at the app root, so it's always reachable
+    // here. ──
+    final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
     return Positioned(
-      top: MediaQuery.sizeOf(context).top + 24,
+      top: MediaQuery.paddingOf(context).top + 24,
       left: 16,
       right: 16,
       child: SafeArea(
@@ -257,9 +154,11 @@ class _TopToastWidgetState extends State<_TopToastWidget>
             position: _offsetAnimation,
             child: Align(
               alignment: Alignment.topCenter,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(50),
-                child: content,
+              child: GlassToastContent(
+                message: widget.message,
+                icon: widget.icon,
+                iconColor: widget.iconColor,
+                uiPerformanceMode: uiPerformanceMode,
               ),
             ),
           ),

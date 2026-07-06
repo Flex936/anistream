@@ -4,13 +4,9 @@ import 'package:flutter/material.dart';
 import '../../../data/anilist/models/media_list.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/utils/anime_status_style.dart';
+import '../../../shared/utils/html_utils.dart';
 import '../../../shared/widgets/app_network_image.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
-
-String _stripHtml(String? html) {
-  if (html == null || html.isEmpty) return 'No synopsis available.';
-  return html.replaceAll(RegExp(r'<[^>]+>'), '').trim();
-}
 
 class HeroCard extends StatelessWidget {
   final MediaListEntry entry;
@@ -58,8 +54,7 @@ class HeroCard extends StatelessWidget {
                 ? AppPalette.primary.withValues(alpha: 0.5)
                 : AppPalette.border,
           ),
-          boxShadow:
-              (hovered && !uiPerformanceMode) // ── Drop shadow conditionally ──
+          boxShadow: (hovered && !uiPerformanceMode)
               ? [
                   BoxShadow(
                     color: AppPalette.primary.withValues(alpha: 0.2),
@@ -75,9 +70,7 @@ class HeroCard extends StatelessWidget {
             children: [
               AppNetworkImage(
                 url: imgUrl,
-                scale: (hovered && !uiPerformanceMode)
-                    ? 1.05
-                    : 1.0, // ── Disable scale logic ──
+                scale: (hovered && !uiPerformanceMode) ? 1.05 : 1.0,
                 cacheWidth: 600,
               ),
               Container(
@@ -217,9 +210,7 @@ class ListCard extends StatelessWidget {
                 aspectRatio: 0.7,
                 child: AppNetworkImage(
                   url: media.coverImage?.large ?? media.coverImage?.extraLarge,
-                  scale: (hovered && !uiPerformanceMode)
-                      ? 1.05
-                      : 1.0, // ── Disable scale ──
+                  scale: (hovered && !uiPerformanceMode) ? 1.05 : 1.0,
                   cacheWidth: 300,
                 ),
               ),
@@ -304,7 +295,9 @@ class ListCard extends StatelessWidget {
                   ],
                   Expanded(
                     child: Text(
-                      _stripHtml(media.description),
+                      // ── Was a locally-defined _stripHtml; now shared
+                      // via stripAnilistHtml (single-line summary form). ──
+                      stripAnilistHtml(media.description),
                       maxLines: isMobile ? 3 : 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -380,9 +373,7 @@ class WatchlistCard extends StatelessWidget {
                       ? AppPalette.primary.withValues(alpha: 0.55)
                       : AppPalette.border,
                 ),
-                boxShadow:
-                    (hovered &&
-                        !uiPerformanceMode) // ── Conditional drop shadow ──
+                boxShadow: (hovered && !uiPerformanceMode)
                     ? [
                         BoxShadow(
                           color: AppPalette.primary.withValues(alpha: 0.18),
@@ -400,9 +391,7 @@ class WatchlistCard extends StatelessWidget {
                       url:
                           media.coverImage?.large ??
                           media.coverImage?.extraLarge,
-                      scale: (hovered && !uiPerformanceMode)
-                          ? 1.05
-                          : 1.0, // ── Disable scale ──
+                      scale: (hovered && !uiPerformanceMode) ? 1.05 : 1.0,
                       cacheWidth: 450,
                     ),
 
@@ -559,7 +548,6 @@ class _PlayOverlay extends StatelessWidget {
                   boxShadow: uiPerformanceMode
                       ? null
                       : [
-                          // ── Drop hover shadow ──
                           BoxShadow(
                             color: AppPalette.primary.withValues(alpha: 0.55),
                             blurRadius: 18,

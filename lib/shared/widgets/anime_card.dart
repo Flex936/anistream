@@ -1,15 +1,15 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../utils/anime_status_style.dart';
 import '../../features/anime_details/anime_details_screen.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_service.dart';
+import '../../core/settings/settings_scope.dart';
 import 'app_network_image.dart';
+import 'frosted_container.dart';
 import 'hover_focus_builder.dart';
 
-class AnimeCard extends StatefulWidget {
+class AnimeCard extends StatelessWidget {
   final Anime anime;
   final ValueChanged<Anime>? onSelect;
   final bool autofocus;
@@ -22,36 +22,23 @@ class AnimeCard extends StatefulWidget {
   });
 
   @override
-  State<AnimeCard> createState() => _AnimeCardState();
-}
-
-class _AnimeCardState extends State<AnimeCard> {
-  bool _uiPerformanceMode = false;
-
-  @override
-  void initState() {
-    super.initState();
-    SettingsService().load().then((s) {
-      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: HoverFocusBuilder(
-            autofocus: widget.autofocus,
+            autofocus: autofocus,
             onTap: () {
-              if (widget.onSelect != null) {
-                widget.onSelect!(widget.anime);
+              if (onSelect != null) {
+                onSelect!(anime);
               } else {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => AnimeDetailsScreen(anime: widget.anime),
+                    builder: (_) => AnimeDetailsScreen(anime: anime),
                   ),
                 );
               }
@@ -66,7 +53,7 @@ class _AnimeCardState extends State<AnimeCard> {
                       ? AppPalette.primary.withValues(alpha: 0.55)
                       : AppPalette.border,
                 ),
-                boxShadow: (hovered && !_uiPerformanceMode)
+                boxShadow: (hovered && !uiPerformanceMode)
                     ? [
                         BoxShadow(
                           color: AppPalette.primary.withValues(alpha: 0.18),
@@ -81,27 +68,27 @@ class _AnimeCardState extends State<AnimeCard> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    AppNetworkImage(url: widget.anime.coverImage?.extraLarge),
+                    AppNetworkImage(url: anime.coverImage?.extraLarge),
                     Positioned(
                       left: 0,
                       right: 0,
                       bottom: 0,
-                      child: _PosterGradient(score: widget.anime.averageScore),
+                      child: _PosterGradient(score: anime.averageScore),
                     ),
                     Positioned(
                       top: 8,
                       left: 8,
                       child: _StatusBadge(
-                        label: widget.anime.status?.statusLabel ?? 'UNKNOWN',
+                        label: anime.status?.statusLabel ?? 'UNKNOWN',
                         color:
-                            widget.anime.status?.statusColor ??
+                            anime.status?.statusColor ??
                             AppPalette.statusDefault,
-                        uiPerformanceMode: _uiPerformanceMode,
+                        uiPerformanceMode: uiPerformanceMode,
                       ),
                     ),
                     _HoverOverlay(
                       visible: hovered,
-                      uiPerformanceMode: _uiPerformanceMode,
+                      uiPerformanceMode: uiPerformanceMode,
                     ),
                   ],
                 ),
@@ -112,7 +99,7 @@ class _AnimeCardState extends State<AnimeCard> {
         const SizedBox(height: 10),
         HoverFocusBuilder(
           builder: (context, _) => Text(
-            widget.anime.title.display,
+            anime.title.display,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -125,7 +112,7 @@ class _AnimeCardState extends State<AnimeCard> {
         ),
         const SizedBox(height: 4),
         Text(
-          '${widget.anime.nextAiringEpisode != null ? widget.anime.nextAiringEpisode!.episode - 1 : widget.anime.episodes ?? '?'} Episodes',
+          '${anime.nextAiringEpisode != null ? anime.nextAiringEpisode!.episode - 1 : anime.episodes ?? '?'} Episodes',
           style: const TextStyle(color: AppPalette.textMuted, fontSize: 11),
         ),
       ],
@@ -188,36 +175,29 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget badgeContent = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppPalette.black.withValues(
-          alpha: uiPerformanceMode ? 0.85 : 0.58,
-        ),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.40)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.6,
-        ),
-      ),
-    );
-
-    if (!uiPerformanceMode) {
-      badgeContent = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-        child: badgeContent,
-      );
-    }
-
-    return ClipRRect(
+    return FrostedContainer(
+      uiPerformanceMode: uiPerformanceMode,
+      sigma: 6,
       borderRadius: BorderRadius.circular(6),
-      child: badgeContent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppPalette.black.withValues(
+            alpha: uiPerformanceMode ? 0.85 : 0.58,
+          ),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withValues(alpha: 0.40)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+          ),
+        ),
+      ),
     );
   }
 }

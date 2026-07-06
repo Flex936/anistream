@@ -1,11 +1,11 @@
 import 'dart:io' show Platform;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
+import '../../../shared/widgets/frosted_container.dart';
 import 'search_input.dart';
 
 class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
@@ -142,13 +142,12 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
       builder: (context, blurAmount, child) {
-        Widget navContent = AnimatedContainer(
+        final navContent = AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           height: widget.preferredSize.height,
           padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
           decoration: BoxDecoration(
             color: widget.isScrolled
-                // ── Increase opacity from 0.75 to 0.95 if blur is removed ──
                 ? AppPalette.base.withValues(
                     alpha: widget.uiPerformanceMode ? 0.95 : 0.75,
                   )
@@ -165,15 +164,13 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
           child: child,
         );
 
-        // ── Conditional Blur ──
-        if (!widget.uiPerformanceMode) {
-          navContent = BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: blurAmount, sigmaY: blurAmount),
-            child: navContent,
-          );
-        }
-
-        return ClipRRect(child: navContent);
+        // ── Blur amount is animated (0 → 16), so sigma is passed through
+        // dynamically instead of the fixed value most other call sites use. ──
+        return FrostedContainer(
+          uiPerformanceMode: widget.uiPerformanceMode,
+          sigma: blurAmount,
+          child: navContent,
+        );
       },
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
@@ -334,7 +331,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
 
 class _MobileMenu extends StatelessWidget {
   final bool isLoggedIn;
-  final bool uiPerformanceMode; // ── NEW ──
+  final bool uiPerformanceMode;
   final VoidCallback? onScheduled;
   final VoidCallback? onWatchlist;
   final VoidCallback? onLogin;
@@ -356,7 +353,7 @@ class _MobileMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget menuContent = Container(
+    final menuContent = Container(
       decoration: BoxDecoration(
         color: AppPalette.base.withValues(
           alpha: uiPerformanceMode ? 0.95 : 0.65,
@@ -430,14 +427,6 @@ class _MobileMenu extends StatelessWidget {
       ),
     );
 
-    // ── Conditional Blur ──
-    if (!uiPerformanceMode) {
-      menuContent = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: menuContent,
-      );
-    }
-
     return Align(
       alignment: Alignment.centerRight,
       child: Material(
@@ -445,7 +434,9 @@ class _MobileMenu extends StatelessWidget {
         child: SizedBox(
           width: MediaQuery.sizeOf(context).width * 0.85,
           height: double.infinity,
-          child: ClipRRect(
+          child: FrostedContainer(
+            uiPerformanceMode: uiPerformanceMode,
+            sigma: 40,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(24),
               bottomLeft: Radius.circular(24),

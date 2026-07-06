@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'anilist_query_service.dart';
+import 'anilist_queries.dart';
 import 'package:anistream/core/logging/app_logger.dart';
 
 class AnilistTrackerService {
@@ -46,11 +47,7 @@ class AnilistTrackerService {
   Future<void> _fetchCurrentStatus() async {
     try {
       final response = await _api.executeRaw(
-        '''
-        query (\$mediaId: Int) {
-          Media(id: \$mediaId) { mediaListEntry { status progress } }
-        }
-      ''',
+        AnilistQueries.mediaListEntryStatus,
         {'mediaId': _mediaId},
       );
 
@@ -117,11 +114,7 @@ class AnilistTrackerService {
 
     try {
       final response = await _api.executeRaw(
-        '''
-        mutation (\$mediaId: Int, \$progress: Int, \$status: MediaListStatus) {
-          SaveMediaListEntry (mediaId: \$mediaId, progress: \$progress, status: \$status) { id }
-        }
-      ''',
+        AnilistQueries.saveMediaListEntry,
         {'mediaId': _mediaId, 'progress': trackProgress, 'status': newStatus},
       );
 

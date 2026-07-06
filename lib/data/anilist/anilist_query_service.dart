@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:anistream/core/logging/app_logger.dart';
 import '../../core/settings/settings_service.dart';
+import 'anilist_queries.dart';
 import 'models/anime.dart';
 import 'models/media_list.dart';
 
@@ -45,30 +46,6 @@ class AnilistQueryService {
     if (_token != null) 'Authorization': 'Bearer $_token',
   };
 
-  Future<int?> _resolveViewerId() async {
-    if (_viewerId != null) return _viewerId;
-    if (!isLoggedIn) return null;
-
-    try {
-      final resp = await _httpClient
-          .post(
-            Uri.parse(_endpoint),
-            headers: _headers,
-            body: jsonEncode({'query': 'query { Viewer { id } }'}),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      if (resp.statusCode != 200) return null;
-
-      final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
-      _viewerId = (decoded['data']?['Viewer']?['id'] as num?)?.toInt();
-      return _viewerId;
-    } catch (e, st) {
-      AppLogger.e('AnilistQueryService', 'Fetch status error', e, st);
-      return null;
-    }
-  }
-
   String get _currentSeason => switch (DateTime.now().month) {
     >= 4 && <= 6 => 'SPRING',
     >= 7 && <= 9 => 'SUMMER',
@@ -76,6 +53,8 @@ class AnilistQueryService {
     _ => 'WINTER',
   };
 
+  /// Raw POST — used directly by callers (e.g. AnilistTrackerService) that
+  /// need the http.Response itself rather than a parsed model.
   Future<http.Response> executeRaw(
     String query,
     Map<String, dynamic> variables,
@@ -89,21 +68,20 @@ class AnilistQueryService {
         .timeout(const Duration(seconds: 15));
   }
 
-  Future<List<Anime>> _execute(
+  /// Generic "POST → assert success → decode → select" pipeline. Every
+  /// method below just supplies a [select] callback for the slice of the
+  /// decoded body it cares about; the transport/error handling lives here
+  /// exactly once instead of being copy-pasted per method.
+  Future<T> _query<T>(
     String query,
     Map<String, dynamic> variables,
+    T Function(Map<String, dynamic> data) select,
   ) async {
     try {
       final response = await executeRaw(query, variables);
       _assertResponse(response);
-
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final mediaList =
-          decoded['data']?['Page']?['media'] as List<dynamic>? ?? const [];
-
-      return mediaList
-          .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
-          .toList();
+      return select(decoded['data'] as Map<String, dynamic>? ?? const {});
     } on SocketException {
       throw const AnilistException(
         'No internet connection. Please check your network.',
@@ -133,76 +111,57 @@ class AnilistQueryService {
     }
   }
 
-  Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) {
-    return _execute(_Queries.trending, {'page': page, 'perPage': perPage});
+  List<Anime> _animeListFromPage(Map<String, dynamic> data) {
+    final mediaList = data['Page']?['media'] as List<dynamic>? ?? const [];
+    return mediaList
+        .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) {
-    return _execute(_Queries.seasonPopular, {
-      'page': page,
-      'perPage': perPage,
-      'season': _currentSeason,
-      'seasonYear': DateTime.now().year,
-    });
-  }
-
-  Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) {
-    return _execute(_Queries.allTimePopular, {
-      'page': page,
-      'perPage': perPage,
-    });
-  }
-
-  Future<({List<MediaListEntry> entries, bool hasNextPage})> getUserWatchlist({
-    required String status,
-    int page = 1,
-    int perPage = 40,
-  }) async {
-    if (!isLoggedIn) throw const AnilistException('Not logged in');
-    final viewerId = await _resolveViewerId();
-    if (viewerId == null) {
-      throw const AnilistException('Could not resolve viewer ID');
-    }
+  Future<int?> _resolveViewerId() async {
+    if (_viewerId != null) return _viewerId;
+    if (!isLoggedIn) return null;
 
     try {
-      final response = await executeRaw(_Queries.userWatchlistPaged, {
-        'userId': viewerId,
-        'status': status,
-        'page': page,
-        'perPage': perPage,
-      });
-      _assertResponse(response);
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final pageData = decoded['data']?['Page'];
-
-      final hasNextPage =
-          pageData?['pageInfo']?['hasNextPage'] as bool? ?? false;
-      final rawList = pageData?['mediaList'] as List<dynamic>? ?? const [];
-
-      final entries = rawList
-          .map((r) => MediaListEntry.fromJson(r as Map<String, dynamic>))
-          .toList();
-      return (entries: entries, hasNextPage: hasNextPage);
-    } on SocketException {
-      throw const AnilistException(
-        'No internet connection. Please check your network.',
+      _viewerId = await _query(
+        AnilistQueries.viewerId,
+        const {},
+        (data) => (data['Viewer']?['id'] as num?)?.toInt(),
       );
-    } on TimeoutException {
-      throw const AnilistException(
-        'Connection timed out. AniList might be down.',
-      );
+      return _viewerId;
+    } catch (e, st) {
+      AppLogger.e('AnilistQueryService', 'Fetch viewer id error', e, st);
+      return null;
     }
   }
 
-  Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) {
-    return _execute(_Queries.currentlyAiring, {
-      'page': page,
-      'perPage': perPage,
-      'currentSeason': _currentSeason,
-      'currentYear': DateTime.now().year,
-    });
-  }
+  Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) =>
+      _query(AnilistQueries.trending, {
+        'page': page,
+        'perPage': perPage,
+      }, _animeListFromPage);
+
+  Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) =>
+      _query(AnilistQueries.seasonPopular, {
+        'page': page,
+        'perPage': perPage,
+        'season': _currentSeason,
+        'seasonYear': DateTime.now().year,
+      }, _animeListFromPage);
+
+  Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) =>
+      _query(AnilistQueries.allTimePopular, {
+        'page': page,
+        'perPage': perPage,
+      }, _animeListFromPage);
+
+  Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) =>
+      _query(AnilistQueries.currentlyAiring, {
+        'page': page,
+        'perPage': perPage,
+        'currentSeason': _currentSeason,
+        'currentYear': DateTime.now().year,
+      }, _animeListFromPage);
 
   Future<List<Anime>> searchAnime(
     String query, {
@@ -210,7 +169,6 @@ class AnilistQueryService {
     String? status,
     int? year,
   }) async {
-    // ── Upgraded to SharedPreferencesAsync ──
     final prefs = SharedPreferencesAsync();
     final filterEcchi =
         await prefs.getBool(SettingsService.kFilterEcchi) ?? true;
@@ -225,84 +183,50 @@ class AnilistQueryService {
     if (status != null && status != 'ANY') variables['status'] = status;
     if (year != null) variables['seasonYear'] = year;
 
-    return _execute(_Queries.search, variables);
+    return _query(AnilistQueries.search, variables, _animeListFromPage);
+  }
+
+  Future<({List<MediaListEntry> entries, bool hasNextPage})> getUserWatchlist({
+    required String status,
+    int page = 1,
+    int perPage = 40,
+  }) async {
+    if (!isLoggedIn) throw const AnilistException('Not logged in');
+    final viewerId = await _resolveViewerId();
+    if (viewerId == null) {
+      throw const AnilistException('Could not resolve viewer ID');
+    }
+
+    return _query(
+      AnilistQueries.userWatchlistPaged,
+      {'userId': viewerId, 'status': status, 'page': page, 'perPage': perPage},
+      (data) {
+        final pageData = data['Page'];
+        final hasNextPage =
+            pageData?['pageInfo']?['hasNextPage'] as bool? ?? false;
+        final rawList = pageData?['mediaList'] as List<dynamic>? ?? const [];
+        final entries = rawList
+            .map((r) => MediaListEntry.fromJson(r as Map<String, dynamic>))
+            .toList();
+        return (entries: entries, hasNextPage: hasNextPage);
+      },
+    );
   }
 
   Future<int?> getMediaProgress(int mediaId) async {
     if (!isLoggedIn) return null;
     try {
-      final response = await executeRaw(
-        'query (\$id: Int) { Media(id: \$id) { mediaListEntry { progress } } }',
+      return await _query(
+        AnilistQueries.mediaProgress,
         {'id': mediaId},
+        (data) =>
+            (data['Media']?['mediaListEntry']?['progress'] as num?)?.toInt(),
       );
-      if (response.statusCode != 200) return null;
-      final data = jsonDecode(response.body);
-      return data['data']?['Media']?['mediaListEntry']?['progress'] as int?;
     } catch (e, st) {
-      AppLogger.e('AnilistQueryService', 'Fetch status error', e, st);
+      AppLogger.e('AnilistQueryService', 'Fetch progress error', e, st);
       return null;
     }
   }
 
   void dispose() => _httpClient.close();
-}
-
-abstract final class _Fragments {
-  static const String mediaCore = r'''
-    id
-    idMal
-    title { romaji english }
-    synonyms
-    coverImage { extraLarge large }
-    bannerImage
-    description
-    episodes
-    status
-    format
-    averageScore
-    nextAiringEpisode { episode airingAt }
-  ''';
-}
-
-abstract final class _Queries {
-  static const String trending =
-      '''
-    query GetTrendingAnime(\$page: Int, \$perPage: Int) {
-      Page(page: \$page, perPage: \$perPage) { media(sort: TRENDING_DESC, type: ANIME, isAdult: false, status_not: NOT_YET_RELEASED) { ${_Fragments.mediaCore} } }
-    }''';
-
-  static const String seasonPopular =
-      '''
-    query GetSeasonPopular(\$page: Int, \$perPage: Int, \$season: MediaSeason, \$seasonYear: Int) {
-      Page(page: \$page, perPage: \$perPage) { media(season: \$season, seasonYear: \$seasonYear, sort: POPULARITY_DESC, type: ANIME, isAdult: false) { ${_Fragments.mediaCore} } }
-    }''';
-
-  static const String allTimePopular =
-      '''
-    query GetAllTimePopular(\$page: Int, \$perPage: Int) {
-      Page(page: \$page, perPage: \$perPage) { media(sort: POPULARITY_DESC, type: ANIME, isAdult: false) { ${_Fragments.mediaCore} } }
-    }''';
-
-  static const String search =
-      '''
-    query (\$search: String, \$bannedGenres: [String], \$minScore: Int, \$status: MediaStatus, \$seasonYear: Int) {
-      Page(page: 1, perPage: 15) { media(search: \$search, type: ANIME, sort: SEARCH_MATCH, isAdult: false, genre_not_in: \$bannedGenres, status_not: NOT_YET_RELEASED, averageScore_greater: \$minScore, status: \$status, seasonYear: \$seasonYear) { ${_Fragments.mediaCore} } }
-    }''';
-
-  static const String userWatchlistPaged =
-      '''
-    query (\$userId: Int, \$status: MediaListStatus, \$page: Int, \$perPage: Int) {
-      Page(page: \$page, perPage: \$perPage) {
-        pageInfo { hasNextPage }
-        mediaList(userId: \$userId, type: ANIME, status: \$status, sort: [MEDIA_TITLE_ROMAJI, MEDIA_ID_DESC]) {
-          progress
-          media { ${_Fragments.mediaCore} genres }
-        }
-      }
-    }''';
-
-  static const String currentlyAiring = r'''
-    query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason, $currentYear: Int) {
-      Page(page: $page, perPage: $perPage) { media(type: ANIME, season: $currentSeason, seasonYear: $currentYear, sort: TRENDING_DESC, countryOfOrigin: "JP", isAdult: false, format_not_in: [SPECIAL, OVA, ONA, MOVIE]) { id idMal title { romaji english } synonyms coverImage { extraLarge large } bannerImage description episodes status nextAiringEpisode { episode airingAt } } }
-    }''';
 }

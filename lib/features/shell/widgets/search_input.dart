@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,6 +6,7 @@ import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/app_network_image.dart';
+import '../../../shared/widgets/frosted_container.dart';
 import '../../../shared/utils/anime_status_style.dart';
 
 class SearchInput extends StatefulWidget {
@@ -266,7 +266,7 @@ class _SearchInputState extends State<SearchInput> {
   }
 
   Widget _buildGlassContainer({required Widget child, double? height}) {
-    Widget content = Container(
+    final content = Container(
       height: height,
       decoration: BoxDecoration(
         color: AppPalette.base.withValues(
@@ -275,7 +275,7 @@ class _SearchInputState extends State<SearchInput> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppPalette.border.withValues(alpha: 0.5)),
         boxShadow: widget.uiPerformanceMode
-            ? null // ── Remove drop shadow for performance ──
+            ? null
             : [
                 BoxShadow(
                   color: AppPalette.black.withValues(alpha: 0.5),
@@ -287,15 +287,12 @@ class _SearchInputState extends State<SearchInput> {
       child: child,
     );
 
-    // ── Conditional Blur ──
-    if (!widget.uiPerformanceMode) {
-      content = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: content,
-      );
-    }
-
-    return ClipRRect(borderRadius: BorderRadius.circular(16), child: content);
+    return FrostedContainer(
+      uiPerformanceMode: widget.uiPerformanceMode,
+      sigma: 16,
+      borderRadius: BorderRadius.circular(16),
+      child: content,
+    );
   }
 
   @override

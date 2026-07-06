@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io' show Platform;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/widgets/frosted_container.dart';
 import '../services/theater_data.dart';
 import 'seekbar.dart';
 
@@ -155,7 +155,6 @@ class _TheaterControlsState extends State<TheaterControls> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Skip Button Popup ──
           Align(
             alignment: Alignment.centerRight,
             child: AnimatedOpacity(
@@ -213,7 +212,6 @@ class _TheaterControlsState extends State<TheaterControls> {
             ),
           ),
 
-          // ── Extracted Seekbar ──
           Seekbar(
             position: _position,
             duration: _duration,
@@ -226,7 +224,6 @@ class _TheaterControlsState extends State<TheaterControls> {
           ),
           const SizedBox(height: 12),
 
-          // ── Controls Row ──
           Row(
             children: [
               IconButton(
@@ -299,7 +296,6 @@ class _TheaterControlsState extends State<TheaterControls> {
                 onPressed: widget.onToggleSettings,
               ),
 
-              // ── Hide the PIP button on Android/iOS since it relies on desktop_multi_window ──
               if (Platform.isMacOS || Platform.isLinux)
                 IconButton(
                   icon: const Icon(
@@ -330,6 +326,13 @@ class _TheaterControlsState extends State<TheaterControls> {
       return coreControls;
     }
 
+    // ── Note: this composes a ShaderMask (fade at the top edge) around the
+    // blur, which is a one-off shape FrostedContainer doesn't model (its
+    // simple on/off blur toggle assumes no extra masking). We still route
+    // the actual blur through FrostedContainer with uiPerformanceMode
+    // hardcoded false, since the branch above already guarantees we only
+    // get here when blur should be applied — this keeps the blur constants
+    // (sigma) defined in one place rather than a second raw BackdropFilter. ──
     return ShaderMask(
       shaderCallback: (rect) => LinearGradient(
         begin: Alignment.topCenter,
@@ -338,8 +341,9 @@ class _TheaterControlsState extends State<TheaterControls> {
         stops: const [0.0, 0.4, 1.0],
       ).createShader(rect),
       blendMode: BlendMode.dstIn,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+      child: FrostedContainer(
+        uiPerformanceMode: false,
+        sigma: 30,
         child: coreControls,
       ),
     );

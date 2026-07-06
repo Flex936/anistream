@@ -1,21 +1,13 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/app_network_image.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
+import '../../../shared/widgets/frosted_container.dart';
 import '../../../shared/utils/anime_status_style.dart';
+import '../../../shared/utils/html_utils.dart';
 import './external_link_buttons.dart';
-
-String _stripHtml(String? html) {
-  if (html == null || html.isEmpty) return 'No synopsis available.';
-  return html
-      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
-      .replaceAll(RegExp(r'<[^>]+>'), '')
-      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-      .trim();
-}
 
 class HeroBanner extends StatelessWidget {
   final Anime anime;
@@ -180,7 +172,6 @@ class _PosterImage extends StatelessWidget {
         boxShadow: uiPerformanceMode
             ? null
             : [
-                // ── Disabled in performance mode
                 BoxShadow(
                   color: AppPalette.black.withValues(alpha: 0.6),
                   blurRadius: 40,
@@ -277,7 +268,10 @@ class _AnimeTextInfo extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         Text(
-          _stripHtml(anime.description),
+          // ── Was a locally-defined _stripHtml; now shared with
+          // watchlist_cards.dart via stripAnilistHtml. This screen wants
+          // multi-paragraph line breaks preserved, unlike the card summary. ──
+          stripAnilistHtml(anime.description, preserveLineBreaks: true),
           maxLines: isMobile ? 5 : 4,
           textAlign: isMobile ? TextAlign.center : TextAlign.left,
           overflow: TextOverflow.ellipsis,
@@ -347,19 +341,11 @@ class _FloatingNavBar extends StatelessWidget {
           ),
         );
 
-        if (uiPerformanceMode) {
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(30),
-            child: content,
-          );
-        }
-
-        return ClipRRect(
+        return FrostedContainer(
+          uiPerformanceMode: uiPerformanceMode,
+          sigma: 12,
           borderRadius: BorderRadius.circular(30),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: content,
-          ),
+          child: content,
         );
       },
     );

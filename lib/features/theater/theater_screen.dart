@@ -10,7 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_service.dart';
+import '../../core/settings/settings_scope.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
@@ -19,6 +19,8 @@ import 'services/streaming_controller_base.dart';
 import 'services/streaming_controller.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/theater_data.dart';
+import 'services/player_configurator.dart';
+import 'services/auto_skip_controller.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_settings.dart';
@@ -42,16 +44,12 @@ class TheaterScreen extends StatefulWidget {
 }
 
 class _TheaterScreenState extends State<TheaterScreen> {
-  // ── Streaming controller ─────────────────────────────────────────────────
-  // Starts as a placeholder StreamingController (with no listener added).
-  // _initPlayerAndStream() replaces it with the right type once settings are
-  // loaded. The type is BaseStreamingController so TheaterScreen never needs
-  // to know which mode is active.
   BaseStreamingController _torrentController = StreamingController();
 
   late final AnilistTrackerService _tracker;
   late final Player _player;
   late final VideoController _videoController;
+  late final AutoSkipController _autoSkipController;
 
   final FocusNode _focusNode = FocusNode();
   bool _videoInitialized = false;
@@ -62,11 +60,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _isClosing = false;
   WindowController? _ownWindowController;
 
-  // ── Auto-skip ────────────────────────────────────────────────────────────
+  // ── Auto-skip setting (the state machine itself now lives in
+  // AutoSkipController) ──
   bool _autoSkip = false;
-  bool _isAutoSkipping = false;
-  Chapter? _currentAutoSkipChapter;
-  Timer? _autoSkipTimer;
 
   // ── Performance settings ─────────────────────────────────────────────────
   bool _uiPerformanceMode = false;
@@ -84,8 +80,20 @@ class _TheaterScreenState extends State<TheaterScreen> {
     );
     _videoController = VideoController(_player, configuration: videoConfig);
 
-    // Placeholder has no listener yet — _initPlayerAndStream adds one to the
-    // real controller after it decides which type to create.
+    _autoSkipController = AutoSkipController(
+      player: _player,
+      isEnabled: () => _autoSkip,
+      onSkipArmed: (skipLabel) {
+        if (mounted) {
+          AppleTopSnackBar.show(
+            context: context,
+            message: 'Auto-skipping $skipLabel in 2s...',
+            icon: Icons.fast_forward_rounded,
+            iconColor: AppPalette.primary,
+          );
+        }
+      },
+    );
 
     _tracker = AnilistTrackerService(
       onSuccess: () {
@@ -111,21 +119,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _initPlayerAndStream() async {
     if (!mounted) return;
 
-    // ── Load all settings in one call ─────────────────────────────────────
-    // This replaces the original two separate prefs reads (SettingsService
-    // in initState + SharedPreferencesAsync in this method).
-    final s = await SettingsService().load();
-    if (!mounted) return;
+    final s = SettingsScope.of(context, listen: false).settings;
 
-    // Apply performance and playback flags immediately.
     setState(() {
       _uiPerformanceMode = s.uiPerformanceMode;
       _videoFilterQuality = s.videoFilterQuality;
       _autoSkip = s.autoSkip;
     });
 
-    // ── Pick controller ───────────────────────────────────────────────────
-    // Build the correct controller based on whether server mode is on.
     final BaseStreamingController newController;
     if (s.serverMode && s.serverUrl.isNotEmpty) {
       newController = RemoteStreamingController(serverUrl: s.serverUrl);
@@ -135,47 +136,26 @@ class _TheaterScreenState extends State<TheaterScreen> {
     newController.addListener(_onTorrentStateChanged);
 
     if (!mounted) {
-      // Widget was disposed before we could swap — clean up the orphan.
       newController.dispose();
       return;
     }
 
-    // Swap: ListenableBuilder will unsubscribe from the placeholder and
-    // subscribe to newController in the next rebuild triggered by setState.
     final oldPlaceholder = _torrentController;
     setState(() => _torrentController = newController);
 
-    // Dispose the placeholder AFTER the rebuild so ListenableBuilder can
-    // safely call removeListener on it first.
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => oldPlaceholder.dispose(),
     );
 
-    // ── Hardware decoding ─────────────────────────────────────────────────
-    final platform = _player.platform;
-    if (platform is NativePlayer) {
-      final hwdec = s.hardwareDecoding;
-      final androidHwDec = s.androidHwDec;
+    // ── Hardware decoding + streaming tuning (shared with PIP window) ──
+    PlayerConfigurator.configureForTheater(_player, s);
 
-      if (hwdec == 'auto') {
-        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-          platform.setProperty('hwdec', 'auto-safe');
-          windowManager.setFullScreen(true);
-        } else if (Platform.isAndroid) {
-          platform.setProperty('hwdec', androidHwDec);
-        } else if (Platform.isIOS) {
-          platform.setProperty('hwdec', 'videotoolbox');
-        }
-      } else if (hwdec != 'none') {
-        platform.setProperty('hwdec', hwdec);
-      }
-
-      // P2P demuxer tuning — keeps MPV happy on bursty torrent streams.
-      // In server mode the stream comes off a LAN HTTP server, so these
-      // settings still help MPV absorb any micro-stalls.
-      platform.setProperty('cache', 'yes');
-      platform.setProperty('demuxer-max-bytes', '150000000');
-      platform.setProperty('demuxer-readahead-secs', '120');
+    // Preserves the original quirk: fullscreen is only forced here when
+    // hwdec is left on "auto" and we're on a desktop platform (matches the
+    // prior inline logic exactly).
+    if (s.hardwareDecoding == 'auto' &&
+        (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+      windowManager.setFullScreen(true);
     }
 
     // ── Restore persistent volume ─────────────────────────────────────────
@@ -184,7 +164,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _player.setVolume(savedVolume);
 
     // ── Start streaming ───────────────────────────────────────────────────
-    // Fire and forget — state changes come back via _onTorrentStateChanged.
     _torrentController.initialize(
       widget.torrent.magnetLink,
       episodeNumber: widget.episode,
@@ -200,7 +179,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _posSub = _player.stream.position.listen((pos) {
       _tracker.updateProgress(pos, _player.state.duration);
-      _handleAutoSkip(pos);
+      _autoSkipController.onPosition(pos);
     });
   }
 
@@ -209,9 +188,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
   void _onTorrentStateChanged() {
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
-      // In local mode:  streamUrl = http://127.0.0.1:<port>/...
-      // In server mode: streamUrl = http://<server-ip>:7878/api/stream/:id/video
-      // MPV handles both identically via range requests.
       _player.open(Media(_torrentController.streamUrl!));
 
       _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
@@ -228,65 +204,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
         }
         debugPrint('───────────────────────────\n');
 
-        if (mounted) setState(() => _chapters = resolvedChapters);
+        if (mounted) {
+          setState(() => _chapters = resolvedChapters);
+          _autoSkipController.chapters = resolvedChapters;
+        }
       });
 
       _player.play();
-    }
-  }
-
-  // ── Auto-skip ─────────────────────────────────────────────────────────────
-
-  void _handleAutoSkip(Duration pos) {
-    if (!_autoSkip || _chapters.isEmpty) return;
-
-    Chapter? activeChapter;
-    for (final c in _chapters) {
-      if (c.isSkippable &&
-          pos >= c.start &&
-          pos < (c.end - const Duration(seconds: 1))) {
-        activeChapter = c;
-        break;
-      }
-    }
-
-    if (activeChapter == null) {
-      if (_isAutoSkipping) {
-        debugPrint('Auto-skip cancelled (user intervened or chapter ended)');
-        _autoSkipTimer?.cancel();
-        _isAutoSkipping = false;
-        _currentAutoSkipChapter = null;
-      }
-      return;
-    }
-
-    if (_currentAutoSkipChapter != activeChapter) {
-      debugPrint(
-        'Auto-skip triggered for: "${activeChapter.title}" (${activeChapter.start} -> ${activeChapter.end})',
-      );
-
-      _autoSkipTimer?.cancel();
-      _isAutoSkipping = true;
-      _currentAutoSkipChapter = activeChapter;
-
-      if (mounted) {
-        AppleTopSnackBar.show(
-          context: context,
-          message: 'Auto-skipping ${activeChapter.skipLabel} in 2s...',
-          icon: Icons.fast_forward_rounded,
-          iconColor: AppPalette.primary,
-        );
-      }
-
-      _autoSkipTimer = Timer(const Duration(seconds: 2), () {
-        if (mounted &&
-            _isAutoSkipping &&
-            _currentAutoSkipChapter == activeChapter) {
-          debugPrint('⏭ Executing skip to: ${activeChapter!.end}');
-          _player.seek(activeChapter.end);
-          _isAutoSkipping = false;
-        }
-      });
     }
   }
 
@@ -432,7 +356,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       await WidgetsBinding.instance.endOfFrame;
     }
     _hideControlsTimer?.cancel();
-    _autoSkipTimer?.cancel();
+    _autoSkipController.dispose();
     _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
@@ -519,7 +443,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _focusNode.dispose();
     _hideControlsTimer?.cancel();
-    _autoSkipTimer?.cancel();
+    _autoSkipController.dispose();
     _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
@@ -569,7 +493,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // ── Video ─────────────────────────────────────────────────
                   AnimatedOpacity(
                     opacity: _videoInitialized ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 300),
@@ -580,7 +503,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
                     ),
                   ),
 
-                  // ── Playback controls overlay ─────────────────────────────
                   if (_videoInitialized)
                     AnimatedOpacity(
                       opacity: _showControls ? 1.0 : 0.0,
@@ -628,7 +550,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       ),
                     ),
 
-                  // ── Track / subtitle picker ───────────────────────────────
                   if (_isSettingsOpen)
                     Positioned(
                       bottom: 110,
@@ -640,10 +561,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       ),
                     ),
 
-                  // ── Loading / batch-picker overlay ────────────────────────
-                  // ListenableBuilder re-renders whenever _torrentController
-                  // calls notifyListeners(). Works identically for both the
-                  // local and remote controller since they share the same base.
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 600),
                     child: ListenableBuilder(

@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/widgets/frosted_container.dart';
 import '../services/track_name_parser.dart';
 
 enum _MenuPage { main, subtitles, audio }
@@ -59,7 +59,6 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
     super.dispose();
   }
 
-  // Use the parser just for the small preview string on the main page
   String _getAudioPreview(AudioTrack? t) =>
       TrackNameParser.parseAudio(t).mainTitle;
   String _getSubtitlePreview(SubtitleTrack? t) =>
@@ -67,7 +66,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
 
   @override
   Widget build(BuildContext context) {
-    Widget menuContent = Container(
+    final menuContent = Container(
       width: 280,
       constraints: const BoxConstraints(maxHeight: 350),
       decoration: BoxDecoration(
@@ -90,16 +89,11 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
       ),
     );
 
-    if (!widget.uiPerformanceMode) {
-      menuContent = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: menuContent,
-      );
-    }
-
     return FocusScope(
       autofocus: true,
-      child: ClipRRect(
+      child: FrostedContainer(
+        uiPerformanceMode: widget.uiPerformanceMode,
+        sigma: 16,
         borderRadius: BorderRadius.circular(12),
         child: menuContent,
       ),
@@ -279,7 +273,6 @@ class _TrackTile extends StatelessWidget {
           fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
-      // ── Conditionally display technical specs in gray subtitle ──
       subtitle: track.subTitle != null
           ? Text(
               track.subTitle!,

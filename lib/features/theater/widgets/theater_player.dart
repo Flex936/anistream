@@ -1,6 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/widgets/frosted_container.dart';
 import '../services/streaming_controller_base.dart';
 
 class FrostedIconButton extends StatelessWidget {
@@ -17,7 +17,7 @@ class FrostedIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget buttonContent = Material(
+    final buttonContent = Material(
       color: AppPalette.black.withValues(alpha: uiPerformanceMode ? 0.8 : 0.4),
       child: InkWell(
         onTap: onPressed,
@@ -31,14 +31,9 @@ class FrostedIconButton extends StatelessWidget {
       ),
     );
 
-    if (!uiPerformanceMode) {
-      buttonContent = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: buttonContent,
-      );
-    }
-
-    return ClipRRect(
+    return FrostedContainer(
+      uiPerformanceMode: uiPerformanceMode,
+      sigma: 10,
       borderRadius: BorderRadius.circular(24),
       child: buttonContent,
     );

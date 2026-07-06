@@ -1,12 +1,12 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
-import '../../core/settings/settings_service.dart';
+import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
+import '../../shared/widgets/frosted_container.dart';
 import '../theater/theater_screen.dart';
 
 import 'widgets/hero_banner.dart';
@@ -29,25 +29,12 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   int? _userProgress;
   int _expandedEpisode = -1;
 
-  bool _autoPlayEnabled = false;
   bool _isFetchingSource = false;
   int _autoPlayTargetEpisode = -1;
-
-  // ── UI Performance State ──
-  bool _uiPerformanceMode = false;
 
   @override
   void initState() {
     super.initState();
-    SettingsService().load().then((s) {
-      if (mounted) {
-        setState(() {
-          _autoPlayEnabled = s.autoPlayEnabled;
-          _uiPerformanceMode = s.uiPerformanceMode;
-        });
-      }
-    });
-
     _fetchProgress();
   }
 
@@ -75,7 +62,12 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   void _toggleEpisode(int ep) async {
     if (_isFetchingSource) return;
 
-    if (!_autoPlayEnabled) {
+    final autoPlayEnabled = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.autoPlayEnabled;
+
+    if (!autoPlayEnabled) {
       setState(() => _expandedEpisode = _expandedEpisode == ep ? -1 : ep);
       return;
     }
@@ -111,7 +103,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (mounted) setState(() => _expandedEpisode = ep);
     } finally {
       if (mounted) {
-        // ── Safely teardown the loading overlay after the frame ──
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             setState(() {
@@ -134,6 +125,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.sizeOf(context).width < 600;
     final hPad = isMobile ? 24.0 : 48.0;
+    final settings = SettingsScope.of(context).settings;
+    final autoPlayEnabled = settings.autoPlayEnabled;
+    final uiPerformanceMode = settings.uiPerformanceMode;
 
     return Scaffold(
       backgroundColor: AppPalette.base,
@@ -145,7 +139,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                 child: HeroBanner(
                   anime: widget.anime,
                   onBack: widget.onBack,
-                  uiPerformanceMode: _uiPerformanceMode,
+                  uiPerformanceMode: uiPerformanceMode,
                 ),
               ),
               SliverPadding(
@@ -212,10 +206,10 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         isExpanded: _expandedEpisode == ep,
                         userProgress: _userProgress,
                         isUpNext: isUpNext,
-                        isAutoPlayEnabled: _autoPlayEnabled,
+                        isAutoPlayEnabled: autoPlayEnabled,
                         isCurrentlyLoading:
                             _isFetchingSource && _autoPlayTargetEpisode == ep,
-                        uiPerformanceMode: _uiPerformanceMode,
+                        uiPerformanceMode: uiPerformanceMode,
                         torrentFuture: _expandedEpisode == ep
                             ? _futureFor(ep)
                             : null,
@@ -236,40 +230,37 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
                 builder: (context, opacity, child) {
-                  Widget overlayContent = Container(
-                    color: AppPalette.base.withValues(
-                      alpha: _uiPerformanceMode ? 0.95 : 0.75,
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              AppPalette.primary,
+                  final overlayContent = FrostedContainer(
+                    uiPerformanceMode: uiPerformanceMode,
+                    sigma: 12,
+                    child: Container(
+                      color: AppPalette.base.withValues(
+                        alpha: uiPerformanceMode ? 0.95 : 0.75,
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppPalette.primary,
+                              ),
+                              strokeWidth: 3,
                             ),
-                            strokeWidth: 3,
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'Finding best source for Episode $_autoPlayTargetEpisode...',
-                            style: const TextStyle(
-                              color: AppPalette.textMain,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                            const SizedBox(height: 24),
+                            Text(
+                              'Finding best source for Episode $_autoPlayTargetEpisode...',
+                              style: const TextStyle(
+                                color: AppPalette.textMain,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   );
-
-                  if (!_uiPerformanceMode) {
-                    overlayContent = BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                      child: overlayContent,
-                    );
-                  }
 
                   return Opacity(opacity: opacity, child: overlayContent);
                 },

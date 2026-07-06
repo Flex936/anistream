@@ -1,12 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-import '../../data/anilist/anilist_query_service.dart';
-import '../../data/anilist/models/media_list.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_service.dart';
+import '../../core/settings/settings_scope.dart';
 import '../../shared/widgets/hover_focus_builder.dart';
+import '../../shared/utils/responsive_grid.dart';
+import 'controllers/watchlist_controller.dart';
 import 'widgets/watchlist_cards.dart';
 
 class WatchlistScreen extends StatefulWidget {
@@ -19,60 +19,33 @@ class WatchlistScreen extends StatefulWidget {
 }
 
 class _WatchlistScreenState extends State<WatchlistScreen> {
-  final AnilistQueryService _api = AnilistQueryService();
+  late final WatchlistController _controller;
   final ScrollController _scrollController = ScrollController();
-
-  final Map<String, List<MediaListEntry>> _entries = {
-    'CURRENT': [],
-    'PLANNING': [],
-    'COMPLETED': [],
-  };
-  final Map<String, int> _pages = {'CURRENT': 1, 'PLANNING': 1, 'COMPLETED': 1};
-  final Map<String, bool> _hasNext = {
-    'CURRENT': true,
-    'PLANNING': true,
-    'COMPLETED': true,
-  };
-
-  bool _initialLoading = true;
-  bool _fetchingNext = false;
-  String? _error;
-  String _activeStatus = 'CURRENT';
 
   bool _isListView = false;
   String? _hoveredBanner;
 
-  bool _uiPerformanceMode = false;
-
   @override
   void initState() {
     super.initState();
+    _controller = WatchlistController();
     _scrollController.addListener(_onScroll);
-
-    // ── Load Performance Setting ──
-    SettingsService().load().then((s) {
-      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
-    });
-
-    _fetchTab(_activeStatus);
+    _controller.loadInitial();
   }
 
   @override
   void dispose() {
-    _api.dispose();
+    _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   void _onScroll() {
-    // ── Safely check if the controller is attached before reading position ──
     if (!_scrollController.hasClients) return;
 
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 500) {
-      if (!_initialLoading && !_fetchingNext && _hasNext[_activeStatus]!) {
-        _fetchTab(_activeStatus);
-      }
+      _controller.fetchNextForActiveTab();
     }
   }
 
@@ -86,83 +59,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     }
   }
 
-  Future<void> _fetchTab(String status, {bool refresh = false}) async {
-    if (refresh) {
-      _pages[status] = 1;
-      _hasNext[status] = true;
-      _entries[status] = [];
-    }
-
-    if (!_hasNext[status]!) return;
-
-    setState(() {
-      if (_entries[status]!.isEmpty) {
-        _initialLoading = true;
-        _error = null;
-      } else {
-        _fetchingNext = true;
-      }
-    });
-
-    try {
-      final result = await _api.getUserWatchlist(
-        status: status,
-        page: _pages[status]!,
-        perPage: 36,
-      );
-
-      if (mounted) {
-        final existingIds = _entries[status]!.map((e) => e.media.id).toSet();
-        final newUniqueEntries = result.entries
-            .where((e) => !existingIds.contains(e.media.id))
-            .toList();
-
-        setState(() {
-          _entries[status]!.addAll(newUniqueEntries);
-          _hasNext[status] = result.hasNextPage;
-          _pages[status] = _pages[status]! + 1;
-          _initialLoading = false;
-          _fetchingNext = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _initialLoading = false;
-          _fetchingNext = false;
-        });
-      }
-    }
-  }
-
-  void _switchTab(String newStatus) {
-    if (_activeStatus == newStatus) return;
-    setState(() => _activeStatus = newStatus);
-
-    if (_entries[newStatus]!.isEmpty && _hasNext[newStatus]!) {
-      _fetchTab(newStatus);
-    }
-  }
-
-  List<MediaListEntry> get _activeEntries => _entries[_activeStatus] ?? [];
-
-  int _verticalColumns(double width) {
-    if (width < 600) return 2;
-    if (width < 900) return 3;
-    if (width < 1200) return 4;
-    if (width < 1500) return 5;
-    return 6;
-  }
-
-  int _landscapeColumns(double width) {
-    if (width < 600) return 1;
-    if (width < 900) return 2;
-    if (width < 1200) return 3;
-    if (width < 1500) return 4;
-    return 5;
-  }
-
   void _handleHover(String? bannerUrl, bool isHovered) {
     if (isHovered && bannerUrl != null) {
       setState(() => _hoveredBanner = bannerUrl);
@@ -171,8 +67,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     }
   }
 
-  Widget _buildEmptyState() {
-    return switch (_activeStatus) {
+  Widget _buildEmptyState(String activeStatus) {
+    return switch (activeStatus) {
       'CURRENT' => const _EmptyPane(
         icon: Icons.play_circle_outline_rounded,
         title: 'No Active Shows',
@@ -193,201 +89,220 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 600),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            child: (_hoveredBanner != null && _hoveredBanner!.trim().isNotEmpty)
-                ? Stack(
-                    key: ValueKey(_hoveredBanner),
-                    fit: StackFit.expand,
-                    children: [
-                      Image.network(
-                        _hoveredBanner!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const ColoredBox(color: AppPalette.base),
-                      ),
+    final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
-                      // ── CONDITIONAL BACKGROUND BLUR ──
-                      if (_uiPerformanceMode)
-                        Container(
-                          color: AppPalette.base.withValues(alpha: 0.90),
-                        ) // Fast fallback
-                      else
-                        BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-                          child: Container(
-                            color: AppPalette.base.withValues(alpha: 0.85),
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 600),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child:
+                    (_hoveredBanner != null &&
+                        _hoveredBanner!.trim().isNotEmpty)
+                    ? Stack(
+                        key: ValueKey(_hoveredBanner),
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            _hoveredBanner!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const ColoredBox(color: AppPalette.base),
                           ),
-                        ),
-                    ],
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ),
+                          if (uiPerformanceMode)
+                            Container(
+                              color: AppPalette.base.withValues(alpha: 0.90),
+                            )
+                          else
+                            BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+                              child: Container(
+                                color: AppPalette.base.withValues(alpha: 0.85),
+                              ),
+                            ),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ),
 
-        Positioned.fill(
-          child: CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              const SliverToBoxAdapter(child: SizedBox(height: 96)),
+            Positioned.fill(
+              child: CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  const SliverToBoxAdapter(child: SizedBox(height: 96)),
 
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 24),
-                  child: Wrap(
-                    alignment: WrapAlignment.start,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 32,
-                    runSpacing: 16,
-                    children: [
-                      const Text(
-                        'My Library',
-                        style: TextStyle(
-                          color: AppPalette.textMain,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.4,
-                        ),
-                      ),
-                      Wrap(
-                        spacing: 16,
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(32, 0, 32, 24),
+                      child: Wrap(
+                        alignment: WrapAlignment.start,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 32,
                         runSpacing: 16,
                         children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              color: AppPalette.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppPalette.border),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.grid_view_rounded,
-                                    size: 20,
-                                    color: !_isListView
-                                        ? AppPalette.primary
-                                        : AppPalette.textMuted,
-                                  ),
-                                  onPressed: () =>
-                                      setState(() => _isListView = false),
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.view_list_rounded,
-                                    size: 20,
-                                    color: _isListView
-                                        ? AppPalette.primary
-                                        : AppPalette.textMuted,
-                                  ),
-                                  onPressed: () =>
-                                      setState(() => _isListView = true),
-                                ),
-                              ],
+                          const Text(
+                            'My Library',
+                            style: TextStyle(
+                              color: AppPalette.textMain,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.4,
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: AppPalette.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppPalette.border),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _TabButton(
-                                  icon: Icons.play_arrow_rounded,
-                                  label: 'Watching',
-                                  active: _activeStatus == 'CURRENT',
-                                  onTap: () => _switchTab('CURRENT'),
+                          Wrap(
+                            spacing: 16,
+                            runSpacing: 16,
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: AppPalette.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppPalette.border),
                                 ),
-                                _TabButton(
-                                  icon: Icons.calendar_today_outlined,
-                                  label: 'Planning',
-                                  active: _activeStatus == 'PLANNING',
-                                  onTap: () => _switchTab('PLANNING'),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.grid_view_rounded,
+                                        size: 20,
+                                        color: !_isListView
+                                            ? AppPalette.primary
+                                            : AppPalette.textMuted,
+                                      ),
+                                      onPressed: () =>
+                                          setState(() => _isListView = false),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.view_list_rounded,
+                                        size: 20,
+                                        color: _isListView
+                                            ? AppPalette.primary
+                                            : AppPalette.textMuted,
+                                      ),
+                                      onPressed: () =>
+                                          setState(() => _isListView = true),
+                                    ),
+                                  ],
                                 ),
-                                _TabButton(
-                                  icon: Icons.check_circle_outline_rounded,
-                                  label: 'Watched',
-                                  active: _activeStatus == 'COMPLETED',
-                                  onTap: () => _switchTab('COMPLETED'),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: AppPalette.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppPalette.border),
                                 ),
-                              ],
-                            ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _TabButton(
+                                      icon: Icons.play_arrow_rounded,
+                                      label: 'Watching',
+                                      active:
+                                          _controller.activeStatus == 'CURRENT',
+                                      onTap: () =>
+                                          _controller.switchTab('CURRENT'),
+                                    ),
+                                    _TabButton(
+                                      icon: Icons.calendar_today_outlined,
+                                      label: 'Planning',
+                                      active:
+                                          _controller.activeStatus ==
+                                          'PLANNING',
+                                      onTap: () =>
+                                          _controller.switchTab('PLANNING'),
+                                    ),
+                                    _TabButton(
+                                      icon: Icons.check_circle_outline_rounded,
+                                      label: 'Watched',
+                                      active:
+                                          _controller.activeStatus ==
+                                          'COMPLETED',
+                                      onTap: () =>
+                                          _controller.switchTab('COMPLETED'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-              ),
-
-              if (_initialLoading)
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: MediaQuery.sizeOf(context).height * 0.5,
-                    child: const _LoadingPane(),
-                  ),
-                )
-              else if (_error != null)
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: MediaQuery.sizeOf(context).height * 0.5,
-                    child: _ErrorPane(
-                      message: _error!,
-                      onRetry: () => _fetchTab(_activeStatus, refresh: true),
                     ),
                   ),
-                )
-              else if (_activeEntries.isEmpty)
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: MediaQuery.sizeOf(context).height * 0.5,
-                    child: _buildEmptyState(),
-                  ),
-                )
-              else
-                _isListView ? _buildListLayout() : _buildGridLayout(),
 
-              if (_fetchingNext)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppPalette.primary,
+                  if (_controller.isInitialLoading)
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: MediaQuery.sizeOf(context).height * 0.5,
+                        child: const _LoadingPane(),
+                      ),
+                    )
+                  else if (_controller.error != null)
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: MediaQuery.sizeOf(context).height * 0.5,
+                        child: _ErrorPane(
+                          message: _controller.error!,
+                          onRetry: _controller.refreshActiveTab,
                         ),
-                        strokeWidth: 2.5,
+                      ),
+                    )
+                  else if (_controller.activeEntries.isEmpty)
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: MediaQuery.sizeOf(context).height * 0.5,
+                        child: _buildEmptyState(_controller.activeStatus),
+                      ),
+                    )
+                  else
+                    _isListView
+                        ? _buildListLayout(uiPerformanceMode)
+                        : _buildGridLayout(uiPerformanceMode),
+
+                  if (_controller.isFetchingNext)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppPalette.primary,
+                            ),
+                            strokeWidth: 2.5,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 48)),
-            ],
-          ),
-        ),
-      ],
+                  const SliverToBoxAdapter(child: SizedBox(height: 48)),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildGridLayout() {
-    final isWatching = _activeStatus == 'CURRENT';
+  Widget _buildGridLayout(bool uiPerformanceMode) {
+    final activeStatus = _controller.activeStatus;
+    final activeEntries = _controller.activeEntries;
+    final isWatching = activeStatus == 'CURRENT';
 
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final cols = isWatching
-            ? _landscapeColumns(constraints.crossAxisExtent)
-            : _verticalColumns(constraints.crossAxisExtent);
+            ? landscapeGridColumns(constraints.crossAxisExtent)
+            : verticalGridColumns(constraints.crossAxisExtent);
         final aspectRatio = isWatching ? 1.77 : 0.52;
 
         return SliverPadding(
@@ -400,7 +315,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               childAspectRatio: aspectRatio,
             ),
             delegate: SliverChildBuilderDelegate((context, i) {
-              final entry = _activeEntries[i];
+              final entry = activeEntries[i];
               final hoverImage =
                   entry.media.bannerImage ?? entry.media.coverImage?.display;
 
@@ -414,7 +329,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                   child: HeroCard(
                     entry: entry,
                     autofocus: i == 0,
-                    uiPerformanceMode: _uiPerformanceMode,
+                    uiPerformanceMode: uiPerformanceMode,
                     onTap: () => widget.onSelectAnime?.call(entry.media),
                     onHover: (hovered) => _handleHover(hoverImage, hovered),
                   ),
@@ -429,22 +344,25 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                   child: WatchlistCard(
                     entry: entry,
                     autofocus: i == 0,
-                    listStatus: _activeStatus,
+                    listStatus: activeStatus,
                     showProgress: false,
-                    uiPerformanceMode: _uiPerformanceMode,
+                    uiPerformanceMode: uiPerformanceMode,
                     onTap: () => widget.onSelectAnime?.call(entry.media),
                     onHover: (hovered) => _handleHover(hoverImage, hovered),
                   ),
                 );
               }
-            }, childCount: _activeEntries.length),
+            }, childCount: activeEntries.length),
           ),
         );
       },
     );
   }
 
-  Widget _buildListLayout() {
+  Widget _buildListLayout(bool uiPerformanceMode) {
+    final activeStatus = _controller.activeStatus;
+    final activeEntries = _controller.activeEntries;
+
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       sliver: SliverList(
@@ -458,21 +376,20 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 if (f && i == 0) _scrollToTop();
               },
               child: ListCard(
-                entry: _activeEntries[i],
+                entry: activeEntries[i],
                 autofocus: i == 0,
-                showProgress: _activeStatus == 'CURRENT',
-                uiPerformanceMode: _uiPerformanceMode,
-                onTap: () =>
-                    widget.onSelectAnime?.call(_activeEntries[i].media),
+                showProgress: activeStatus == 'CURRENT',
+                uiPerformanceMode: uiPerformanceMode,
+                onTap: () => widget.onSelectAnime?.call(activeEntries[i].media),
                 onHover: (hovered) => _handleHover(
-                  _activeEntries[i].media.bannerImage ??
-                      _activeEntries[i].media.coverImage?.display,
+                  activeEntries[i].media.bannerImage ??
+                      activeEntries[i].media.coverImage?.display,
                   hovered,
                 ),
               ),
             ),
           );
-        }, childCount: _activeEntries.length),
+        }, childCount: activeEntries.length),
       ),
     );
   }

@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_service.dart';
+import '../../core/settings/settings_scope.dart';
+import 'utils/schedule_grouping.dart';
 import 'widgets/calendar_card.dart';
 
 class ScheduledScreen extends StatefulWidget {
@@ -23,28 +24,11 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   DateTime _now = DateTime.now();
   final ScrollController _scrollController = ScrollController();
 
-  bool _uiPerformanceMode = false;
-
-  static const List<String> _days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-
   @override
   void initState() {
     super.initState();
     _api = AnilistQueryService();
     _animeFuture = _api.getCurrentlyAiring();
-
-    // ── Load Performance Setting ──
-    SettingsService().load().then((s) {
-      if (mounted) setState(() => _uiPerformanceMode = s.uiPerformanceMode);
-    });
 
     _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() => _now = DateTime.now());
@@ -60,28 +44,6 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   }
 
   void _reload() => setState(() => _animeFuture = _api.getCurrentlyAiring());
-
-  Map<String, List<Anime>> _buildCalendar(List<Anime> anime) {
-    final grid = {for (final day in _days) day: <Anime>[]};
-
-    final active = anime.where((a) => a.nextAiringEpisode != null).toList()
-      ..sort(
-        (a, b) => a.nextAiringEpisode!.airingAt.compareTo(
-          b.nextAiringEpisode!.airingAt,
-        ),
-      );
-
-    for (final item in active) {
-      final airDate = DateTime.fromMillisecondsSinceEpoch(
-        item.nextAiringEpisode!.airingAt * 1000,
-      );
-      final idx = airDate.weekday - 1;
-      if (idx >= 0 && idx < _days.length) {
-        grid[_days[idx]]!.add(item);
-      }
-    }
-    return grid;
-  }
 
   String _formatLocalTime(int timestamp) {
     final d = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
@@ -107,6 +69,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.sizeOf(context).width < 600;
     final hPad = isMobile ? 16.0 : 32.0;
+    final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
     return FutureBuilder<List<Anime>>(
       future: _animeFuture,
@@ -126,13 +89,13 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
           );
         }
 
-        final calendar = _buildCalendar(snapshot.data ?? []);
+        final calendar = groupByWeekday(snapshot.data ?? []);
 
         // ── Reorder days to start with "Today" ──
         final todayIdx = _now.weekday - 1;
         final orderedDays = [
-          ..._days.sublist(todayIdx),
-          ..._days.sublist(0, todayIdx),
+          ...weekdays.sublist(todayIdx),
+          ...weekdays.sublist(0, todayIdx),
         ];
 
         return SingleChildScrollView(
@@ -151,7 +114,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                       'Schedule',
                       style: TextStyle(
                         color: AppPalette.textMain,
-                        fontSize: 32, // Apple-style large header
+                        fontSize: 32,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -1.0,
                       ),
@@ -168,17 +131,14 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                 ),
               ),
 
-              // ── Stack Horizontal Shelves Vertically ──
               for (int i = 0; i < orderedDays.length; i++) ...[
                 Builder(
                   builder: (context) {
                     final dayName = orderedDays[i];
                     final items = calendar[dayName]!;
 
-                    // Hide days with no anime releases to keep the UI clean
                     if (items.isEmpty) return const SizedBox.shrink();
 
-                    // Dynamic naming for Apple-style UX
                     String displayTitle = dayName;
                     if (i == 0) {
                       displayTitle = 'Today';
@@ -193,7 +153,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                       formatLocalTime: _formatLocalTime,
                       getTimeRemaining: _getTimeRemaining,
                       onSelectAnime: widget.onSelectAnime,
-                      uiPerformanceMode: _uiPerformanceMode,
+                      uiPerformanceMode: uiPerformanceMode,
                     );
                   },
                 ),
@@ -259,8 +219,7 @@ class _DayShelf extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height:
-              300, // Fixed height specifically tuned for a 2/3 aspect ratio card + text
+          height: 300,
           child: ListView.separated(
             padding: EdgeInsets.symmetric(horizontal: hPad),
             scrollDirection: Axis.horizontal,
@@ -268,7 +227,7 @@ class _DayShelf extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 16),
             itemBuilder: (context, i) {
               return SizedBox(
-                width: 160, // Excellent width for mobile and TV grids
+                width: 160,
                 child: CalendarCard(
                   anime: items[i],
                   formatLocalTime: formatLocalTime,

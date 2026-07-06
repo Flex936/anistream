@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'core/theme/app_palette.dart';
 import 'core/router/app_router.dart';
 import 'core/logging/app_logger.dart';
+import 'core/settings/settings_scope.dart';
 
 class AniStreamApp extends StatefulWidget {
   const AniStreamApp({super.key});
@@ -17,9 +18,6 @@ class _AniStreamAppState extends State<AniStreamApp>
   @override
   void initState() {
     super.initState();
-    // Lets AppLogger flush to disk when the app is backgrounded, put to
-    // sleep, or torn down by the OS — the cases a plain process-exit hook
-    // can't see on mobile.
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -31,7 +29,6 @@ class _AniStreamAppState extends State<AniStreamApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // Belt-and-braces final flush for a normal widget-tree teardown.
     AppLogger.dispose();
     super.dispose();
   }
@@ -55,7 +52,10 @@ class _AniStreamAppState extends State<AniStreamApp>
           brightness: Brightness.dark,
         ),
       ),
-      // Hands off navigation responsibility to our dedicated router
+      // ── Wraps every route (and dialogs like the settings menu) in a
+      // single shared settings source, replacing per-screen
+      // SettingsService().load() boilerplate. ──
+      builder: (context, child) => SettingsScope(child: child!),
       initialRoute: AppRouter.initial,
       onGenerateRoute: AppRouter.onGenerateRoute,
     );

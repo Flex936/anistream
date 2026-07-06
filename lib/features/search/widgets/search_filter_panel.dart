@@ -1,7 +1,7 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/widgets/frosted_container.dart';
 
 class SearchFilterPanel extends StatefulWidget {
   final int initialMinScore;
@@ -41,9 +41,7 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
     final currentYear = DateTime.now().year;
     final isAnyYear = _selectedYear > currentYear;
 
-    // ── BASE PANEL MATERIAL ──
-    Widget panelContent = Material(
-      // Bump opacity if blur is disabled to ensure readability over grid items
+    final panelContent = Material(
       color: AppPalette.base.withValues(
         alpha: widget.uiPerformanceMode ? 0.98 : 0.75,
       ),
@@ -71,7 +69,6 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
             ),
             const SizedBox(height: 32),
 
-            // ── Status Filter ──
             const Text(
               'Status',
               style: TextStyle(
@@ -113,7 +110,6 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
             ),
             const SizedBox(height: 32),
 
-            // ── Minimum Score Filter ──
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -150,7 +146,6 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
             ),
             const SizedBox(height: 32),
 
-            // ── Year Filter ──
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -188,7 +183,6 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
 
             const Spacer(),
 
-            // ── Apply Button ──
             SizedBox(
               width: double.infinity,
               height: 48,
@@ -215,15 +209,9 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
       ),
     );
 
-    // ── CONDITIONAL BLUR ──
-    if (!widget.uiPerformanceMode) {
-      panelContent = BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-        child: panelContent,
-      );
-    }
-
-    return ClipRRect(
+    return FrostedContainer(
+      uiPerformanceMode: widget.uiPerformanceMode,
+      sigma: 30,
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(24),
         bottomLeft: Radius.circular(24),
