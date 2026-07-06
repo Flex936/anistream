@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:anistream/core/logging/app_logger.dart';
 import '../../core/settings/settings_service.dart';
 import 'models/anime.dart';
 import 'models/media_list.dart';
@@ -63,7 +63,8 @@ class AnilistQueryService {
       final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
       _viewerId = (decoded['data']?['Viewer']?['id'] as num?)?.toInt();
       return _viewerId;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('AnilistQueryService', 'Fetch status error', e, st);
       return null;
     }
   }
@@ -238,7 +239,8 @@ class AnilistQueryService {
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body);
       return data['data']?['Media']?['mediaListEntry']?['progress'] as int?;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.e('AnilistQueryService', 'Fetch status error', e, st);
       return null;
     }
   }

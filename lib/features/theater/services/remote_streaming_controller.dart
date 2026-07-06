@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-
-import 'package:flutter/foundation.dart';
+import 'package:anistream/core/logging/app_logger.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../data/torrent/services/torrent_parser.dart';
@@ -55,6 +54,14 @@ class RemoteStreamingController extends BaseStreamingController {
 
   @override
   Future<void> initialize(String magnetUri, {int? episodeNumber}) async {
+    AppLogger.i(
+      'StreamingController',
+      'Adding magnet, requested episode: $episodeNumber',
+    );
+    AppLogger.i(
+      'StreamingController',
+      'Batch torrent detected — ${_batchFiles.length} files',
+    );
     try {
       final resp = await _http
           .post(
@@ -193,7 +200,7 @@ class RemoteStreamingController extends BaseStreamingController {
     _pollTimer?.cancel();
     _pollTimer = null;
     notifyListeners();
-    debugPrint('[RemoteStreamingController] Error: $msg');
+    AppLogger.e('RemoteStreamingController', msg);
   }
 
   @override

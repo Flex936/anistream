@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:developer';
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:anistream/core/logging/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart';
@@ -197,6 +197,10 @@ class TorrentScraperService {
         }
       }
 
+      AppLogger.i(
+        'TorrentScraper',
+        'Searching "${buildQuery(safeTitle)}" (batchMode: $batchMode)',
+      );
       var found = await _searchAndScore(
         searchQuery: buildQuery(safeTitle),
         animeTitle: titleText,
@@ -210,7 +214,10 @@ class TorrentScraperService {
         final words = safeTitle.split(' ');
         if (words.length > 4) {
           final shortTitle = words.take(4).join(' ');
-          log("[Scraper] Truncated fallback query: '$shortTitle'");
+          AppLogger.i(
+            'TorrentScraper',
+            "Truncated fallback query: '$shortTitle'",
+          );
           found = await _searchAndScore(
             searchQuery: buildQuery(shortTitle),
             animeTitle: titleText,
@@ -297,21 +304,26 @@ class TorrentScraperService {
           break; // ── Exit the loop early ──
         } else {
           lastException = Exception('HTTP ${res.statusCode}');
-          log(
-            '[Scraper] Mirror $baseUrl failed with HTTP ${res.statusCode}. Trying next...',
+          AppLogger.w(
+            'TorrentScraper',
+            'Mirror $baseUrl failed with HTTP ${res.statusCode}, trying next mirror',
           );
         }
       } on SocketException {
         lastException = Exception('DNS/Network Block');
-        log(
-          '[Scraper] Mirror $baseUrl is blocked or unreachable (SocketException). Trying next...',
+        AppLogger.w(
+          'TorrentScraper',
+          ' Mirror $baseUrl is blocked or unreachable (SocketException). Trying next...',
         );
       } on TimeoutException {
         lastException = Exception('Connection Timeout');
-        log('[Scraper] Mirror $baseUrl timed out. Trying next...');
+        AppLogger.w(
+          'TorrentScraper',
+          ' Mirror $baseUrl timed out. Trying next...',
+        );
       } catch (e) {
         lastException = Exception(e.toString());
-        log('[Scraper] Mirror $baseUrl failed: $e');
+        AppLogger.w('TorrentScraper', ' Mirror $baseUrl failed: $e');
       }
     }
 
@@ -332,6 +344,10 @@ class TorrentScraperService {
     ));
 
     validTorrents.sort((a, b) => b.score.compareTo(a.score));
+    AppLogger.i(
+      'TorrentScraper',
+      'Feed returned ${validTorrents.length} scored candidates',
+    );
     return validTorrents;
   }
 

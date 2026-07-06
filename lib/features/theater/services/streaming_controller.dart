@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:anistream/core/logging/app_logger.dart';
 import 'package:libtorrent_flutter/libtorrent_flutter.dart';
 
 import '../../../data/torrent/services/torrent_parser.dart';
@@ -49,6 +49,14 @@ class StreamingController extends BaseStreamingController {
 
   @override
   Future<void> initialize(String magnetUri, {int? episodeNumber}) async {
+    AppLogger.i(
+      'StreamingController',
+      'Adding magnet, requested episode: $episodeNumber',
+    );
+    AppLogger.i(
+      'StreamingController',
+      'Batch torrent detected — ${_batchFiles.length} files',
+    );
     _requestedEpisode = episodeNumber;
     try {
       await LibtorrentFlutter.init();
@@ -139,6 +147,10 @@ class StreamingController extends BaseStreamingController {
 
   @override
   void selectBatchFile(int fileIndex) {
+    AppLogger.i(
+      'StreamingController',
+      'Batch torrent detected — ${_batchFiles.length} files',
+    );
     if (_torrentId == null || _isReadyToPlay) return;
 
     _needsManualSelection = false;
@@ -164,8 +176,9 @@ class StreamingController extends BaseStreamingController {
           final pct = s.bufferPct;
 
           if (_isReadyToPlay) {
-            debugPrint(
-              '[Torrent Engine] Sequential Buffer: ${pct.toStringAsFixed(1)}%',
+            AppLogger.i(
+              'Torrent',
+              'Sequential Buffer: ${pct.toStringAsFixed(1)}%',
             );
             return;
           }
@@ -206,7 +219,7 @@ class StreamingController extends BaseStreamingController {
     _hasError = true;
     _statusText = error;
     notifyListeners();
-    debugPrint('[StreamingController Error] $error');
+    AppLogger.e('StreamingController', error);
   }
 
   @override
@@ -220,7 +233,7 @@ class StreamingController extends BaseStreamingController {
         engine.stopAllStreamsForTorrent(_torrentId!);
         engine.removeTorrent(_torrentId!, deleteFiles: true);
       } catch (e) {
-        debugPrint('[StreamingController] Silent teardown failure: $e');
+        AppLogger.i('StreamingController', 'Silent teardown failure: $e');
       }
     }
     super.dispose();

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'anilist_query_service.dart';
+import 'package:anistream/core/logging/app_logger.dart';
 
 class AnilistTrackerService {
   final AnilistQueryService _api = AnilistQueryService();
@@ -34,8 +35,8 @@ class AnilistTrackerService {
       _totalEpisodes = totalEpisodes;
 
       await _fetchCurrentStatus();
-    } catch (e) {
-      debugPrint('[AnilistTracker] Init error: $e');
+    } catch (e, st) {
+      AppLogger.e('AnilistTrackerService', 'Fetch status error', e, st);
     }
   }
 
@@ -71,8 +72,8 @@ class AnilistTrackerService {
           }
         }
       }
-    } catch (e) {
-      debugPrint('[AnilistTracker] Fetch status error: $e');
+    } catch (e, st) {
+      AppLogger.e('AnilistTrackerService', 'Fetch status error', e, st);
     }
   }
 
