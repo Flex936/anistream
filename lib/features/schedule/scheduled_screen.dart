@@ -105,7 +105,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     final hPad = isMobile ? 16.0 : 32.0;
 
     return FutureBuilder<List<Anime>>(

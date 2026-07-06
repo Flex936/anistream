@@ -170,14 +170,14 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
 
     return Align(
       alignment: Alignment.centerRight,
       child: Material(
         color: Colors.transparent,
         child: SizedBox(
-          width: isMobile ? MediaQuery.of(context).size.width : 450,
+          width: isMobile ? MediaQuery.sizeOf(context).width : 450,
           height: double.infinity,
           child: ClipRRect(
             borderRadius: isMobile

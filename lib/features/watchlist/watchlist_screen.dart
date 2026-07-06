@@ -333,14 +333,14 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               if (_initialLoading)
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.5,
+                    height: MediaQuery.sizeOf(context).height * 0.5,
                     child: const _LoadingPane(),
                   ),
                 )
               else if (_error != null)
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.5,
+                    height: MediaQuery.sizeOf(context).height * 0.5,
                     child: _ErrorPane(
                       message: _error!,
                       onRetry: () => _fetchTab(_activeStatus, refresh: true),
@@ -350,7 +350,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               else if (_activeEntries.isEmpty)
                 SliverToBoxAdapter(
                   child: SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.5,
+                    height: MediaQuery.sizeOf(context).height * 0.5,
                     child: _buildEmptyState(),
                   ),
                 )

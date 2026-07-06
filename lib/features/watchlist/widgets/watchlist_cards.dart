@@ -188,7 +188,7 @@ class ListCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = entry.media;
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
 
     return HoverFocusBuilder(
       autofocus: autofocus,

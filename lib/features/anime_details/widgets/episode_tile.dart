@@ -37,7 +37,7 @@ class EpisodeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
     final hPad = isMobile ? 16.0 : 28.0;
 
     final isWatched = userProgress != null && episodeNumber <= userProgress!;

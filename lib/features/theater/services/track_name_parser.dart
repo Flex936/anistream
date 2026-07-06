@@ -11,57 +11,20 @@ class TrackNameParser {
   // ── Maps standard 2 and 3 letter ISO codes to readable names ──
   static String _normalizeLanguage(String lang) {
     final l = lang.toLowerCase().trim();
-    switch (l) {
-      case 'eng':
-      case 'en':
-      case 'english':
-        return 'English';
-      case 'jpn':
-      case 'ja':
-      case 'japanese':
-        return 'Japanese';
-      case 'spa':
-      case 'es':
-      case 'spanish':
-        return 'Spanish';
-      case 'fre':
-      case 'fra':
-      case 'fr':
-      case 'french':
-        return 'French';
-      case 'ger':
-      case 'de':
-      case 'deu':
-      case 'german':
-        return 'German';
-      case 'por':
-      case 'pt':
-      case 'portuguese':
-        return 'Portuguese';
-      case 'ita':
-      case 'it':
-      case 'italian':
-        return 'Italian';
-      case 'rus':
-      case 'ru':
-      case 'russian':
-        return 'Russian';
-      case 'chi':
-      case 'zh':
-      case 'zho':
-      case 'chinese':
-        return 'Chinese';
-      case 'ara':
-      case 'ar':
-      case 'arabic':
-        return 'Arabic';
-      case 'und':
-      case 'unk':
-      case '':
-        return ''; // Undefined/Unknown
-      default:
-        return _capitalize(lang);
-    }
+    return switch (l) {
+      'eng' || 'en' || 'english' => 'English',
+      'jpn' || 'ja' || 'japanese' => 'Japanese',
+      'spa' || 'es' || 'spanish' => 'Spanish',
+      'fre' || 'fra' || 'fr' || 'french' => 'French',
+      'ger' || 'de' || 'deu' || 'german' => 'German',
+      'por' || 'pt' || 'portuguese' => 'Portuguese',
+      'ita' || 'it' || 'italian' => 'Italian',
+      'rus' || 'ru' || 'russian' => 'Russian',
+      'chi' || 'zh' || 'zho' || 'chinese' => 'Chinese',
+      'ara' || 'ar' || 'arabic' => 'Arabic',
+      'und' || 'unk' || '' => '',
+      _ => _capitalize(lang),
+    };
   }
 
   static ParsedTrack parseAudio(AudioTrack? t) {

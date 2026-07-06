@@ -247,7 +247,7 @@ class _TopToastWidgetState extends State<_TopToastWidget>
     }
 
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 24,
+      top: MediaQuery.sizeOf(context).top + 24,
       left: 16,
       right: 16,
       child: SafeArea(

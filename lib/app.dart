@@ -49,8 +49,6 @@ class _AniStreamAppState extends State<AniStreamApp>
       title: 'AniStream',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        brightness: Brightness.dark,
-        // Globally sets the background so you don't need it on individual Scaffolds!
         scaffoldBackgroundColor: AppPalette.base,
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppPalette.primary,

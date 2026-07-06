@@ -135,7 +135,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = MediaQuery.of(context).size.width < 600;
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
 
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0.0, end: widget.isScrolled ? 16.0 : 0.0),
@@ -443,7 +443,7 @@ class _MobileMenu extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: SizedBox(
-          width: MediaQuery.of(context).size.width * 0.85,
+          width: MediaQuery.sizeOf(context).width * 0.85,
           height: double.infinity,
           child: ClipRRect(
             borderRadius: const BorderRadius.only(

@@ -69,13 +69,12 @@ class AnilistQueryService {
     }
   }
 
-  String get _currentSeason {
-    final month = DateTime.now().month;
-    if (month >= 4 && month <= 6) return 'SPRING';
-    if (month >= 7 && month <= 9) return 'SUMMER';
-    if (month >= 10 && month <= 12) return 'FALL';
-    return 'WINTER';
-  }
+  String get _currentSeason => switch (DateTime.now().month) {
+    >= 4 && <= 6 => 'SPRING',
+    >= 7 && <= 9 => 'SUMMER',
+    >= 10 && <= 12 => 'FALL',
+    _ => 'WINTER',
+  };
 
   Future<http.Response> executeRaw(
     String query,

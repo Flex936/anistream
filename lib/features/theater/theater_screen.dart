@@ -82,10 +82,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     const videoConfig = VideoControllerConfiguration(
       androidAttachSurfaceAfterVideoParameters: true,
     );
-    _videoController = VideoController(
-      _player,
-      configuration: videoConfig,
-    );
+    _videoController = VideoController(_player, configuration: videoConfig);
 
     // Placeholder has no listener yet — _initPlayerAndStream adds one to the
     // real controller after it decides which type to create.
@@ -537,19 +534,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   // ── Video quality ─────────────────────────────────────────────────────────
 
-  FilterQuality _getFilterQuality() {
-    switch (_videoFilterQuality) {
-      case 'high':
-        return FilterQuality.high;
-      case 'medium':
-        return FilterQuality.medium;
-      case 'none':
-        return FilterQuality.none;
-      case 'low':
-      default:
-        return FilterQuality.low;
-    }
-  }
+  FilterQuality _getFilterQuality() => switch (_videoFilterQuality) {
+    'high' => FilterQuality.high,
+    'medium' => FilterQuality.medium,
+    'none' => FilterQuality.none,
+    _ => FilterQuality.low,
+  };
 
   // ── Build ─────────────────────────────────────────────────────────────────
 

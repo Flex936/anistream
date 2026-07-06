@@ -129,27 +129,16 @@ class TorrentScraperService {
   // sub-microsecond operation.
   static double _parseSizeToMB(String sizeStr) {
     final lower = sizeStr.toLowerCase().trim();
-    final regex = RegExp(r'([\d.]+)\s*([kmg]i?b)');
-    final match = regex.firstMatch(lower);
-
-    if (match == null) {
-      return 0.0;
-    }
+    final match = RegExp(r'([\d.]+)\s*([kmg]i?b)').firstMatch(lower);
+    if (match == null) return 0.0;
 
     final value = double.tryParse(match.group(1)!) ?? 0.0;
-    final unit = match.group(2)!;
-
-    if (unit.contains('g')) {
-      return value * 1024;
-    }
-    if (unit.contains('m')) {
-      return value;
-    }
-    if (unit.contains('k')) {
-      return value / 1024;
-    }
-
-    return 0.0;
+    return switch (match.group(2)!) {
+      final u when u.contains('g') => value * 1024,
+      final u when u.contains('m') => value,
+      final u when u.contains('k') => value / 1024,
+      _ => 0.0,
+    };
   }
 
   Future<List<Torrent>> fetchTorrents(Anime anime, int episodeNumber) async {

@@ -84,7 +84,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   void _openFilterDrawer() {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
 
     final panel = SearchFilterPanel(
       initialMinScore: _minScore,
@@ -212,7 +212,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.5,
+                    height: MediaQuery.sizeOf(context).height * 0.5,
                     child: const Center(
                       child: CircularProgressIndicator(
                         valueColor: AlwaysStoppedAnimation(AppPalette.primary),
@@ -226,7 +226,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                       ? err.message
                       : 'An unexpected error occurred.';
                   return SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.5,
+                    height: MediaQuery.sizeOf(context).height * 0.5,
                     child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -253,7 +253,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                 final results = snapshot.data ?? [];
                 if (results.isEmpty) {
                   return SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.5,
+                    height: MediaQuery.sizeOf(context).height * 0.5,
                     child: const Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
