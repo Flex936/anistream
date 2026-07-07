@@ -134,22 +134,19 @@ class HeroBanner extends StatelessWidget {
           ),
         ),
 
-        Transform.translate(
-          offset: const Offset(0, -80),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (posterUrl != null)
-                  _PosterImage(
-                    url: posterUrl,
-                    uiPerformanceMode: uiPerformanceMode,
-                  ),
-                const SizedBox(height: 32),
-                _AnimeTextInfo(anime: anime, isMobile: true),
-              ],
-            ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, -80, 24, 0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (posterUrl != null)
+                _PosterImage(
+                  url: posterUrl,
+                  uiPerformanceMode: uiPerformanceMode,
+                ),
+              const SizedBox(height: 32),
+              _AnimeTextInfo(anime: anime, isMobile: true),
+            ],
           ),
         ),
       ],

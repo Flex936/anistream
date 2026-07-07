@@ -87,12 +87,18 @@ class EpisodeTile extends StatelessWidget {
               children: [
                 SizedBox(
                   width: isMobile ? 26 : 34,
-                  child: Text(
-                    episodeNumber.toString().padLeft(2, '0'),
-                    style: TextStyle(
-                      color: numColor,
-                      fontSize: isMobile ? 16 : 20,
-                      fontWeight: FontWeight.w800,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      episodeNumber.toString().padLeft(2, '0'),
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        color: numColor,
+                        fontSize: isMobile ? 16 : 20,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),

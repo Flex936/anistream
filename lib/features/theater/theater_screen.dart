@@ -80,6 +80,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
     );
     _videoController = VideoController(_player, configuration: videoConfig);
 
+    if (Platform.isAndroid || Platform.isIOS) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+
     _autoSkipController = AutoSkipController(
       player: _player,
       isEnabled: () => _autoSkip,
@@ -322,7 +330,27 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   Future<void> _toggleFullscreen() async {
     _isFullscreen = !_isFullscreen;
-    await windowManager.setFullScreen(_isFullscreen);
+
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      await windowManager.setFullScreen(_isFullscreen);
+    } else if (Platform.isAndroid || Platform.isIOS) {
+      if (_isFullscreen) {
+        await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        await SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      } else {
+        await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        await SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      }
+    }
+
     if (mounted) setState(() {});
   }
 
@@ -512,7 +540,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                         child: Stack(
                           children: [
                             Positioned(
-                              top: 40,
+                              top: 24 + MediaQuery.paddingOf(context).top,
                               left: 24,
                               right: 24,
                               child: GestureDetector(

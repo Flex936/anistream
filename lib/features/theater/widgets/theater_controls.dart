@@ -259,7 +259,10 @@ class _TheaterControlsState extends State<TheaterControls> {
                 onPressed: _toggleMute,
               ),
               SizedBox(
-                width: 120,
+                width: (MediaQuery.sizeOf(context).width * 0.12).clamp(
+                  70.0,
+                  120.0,
+                ),
                 child: SliderTheme(
                   data: SliderThemeData(
                     activeTrackColor: AppPalette.white,

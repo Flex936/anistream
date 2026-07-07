@@ -276,20 +276,27 @@ class ListCard extends StatelessWidget {
                   if (!isMobile &&
                       media.genres != null &&
                       media.genres!.isNotEmpty) ...[
-                    Wrap(
-                      spacing: 8,
-                      children: media.genres!
-                          .take(4)
-                          .map(
-                            (g) => Text(
-                              '#$g',
-                              style: const TextStyle(
-                                color: AppPalette.primary,
-                                fontSize: 11,
-                              ),
-                            ),
-                          )
-                          .toList(),
+                    SizedBox(
+                      height: 16,
+                      child: ClipRect(
+                        child: Wrap(
+                          spacing: 8,
+                          children: media.genres!
+                              .take(3)
+                              .map(
+                                (g) => Text(
+                                  '#$g',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppPalette.primary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 8),
                   ],
