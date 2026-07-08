@@ -68,7 +68,19 @@ class AnimeCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    AppNetworkImage(url: anime.coverImage?.extraLarge),
+                    // ── cacheWidth added: this card renders at ~170dp in
+                    // every carousel and at similar widths in search/grid
+                    // layouts, but was decoding `extraLarge` (the largest
+                    // AniList cover variant) at full resolution every time.
+                    // Given this is the single most-instantiated poster
+                    // widget in the app, that was real, repeated,
+                    // avoidable decode + RAM cost. 450 covers up to ~2.6x
+                    // device pixel ratio at the widest display width this
+                    // card is actually used at. ──
+                    AppNetworkImage(
+                      url: anime.coverImage?.extraLarge,
+                      cacheWidth: 450,
+                    ),
                     Positioned(
                       left: 0,
                       right: 0,

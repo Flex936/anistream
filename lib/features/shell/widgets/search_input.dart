@@ -200,7 +200,13 @@ class _SearchInputState extends State<SearchInput> {
                         width: 32,
                         height: 48,
                         child: anime.coverImage?.display != null
-                            ? AppNetworkImage(url: anime.coverImage!.display!)
+                            ? AppNetworkImage(
+                                url: anime.coverImage!.display!,
+                                // ── cacheWidth added: this thumbnail
+                                // renders at 32dp wide, yet was decoding
+                                // a full-resolution poster. 100 gives ~3x headroom. ──
+                                cacheWidth: 100,
+                              )
                             : const ColoredBox(color: AppPalette.surface),
                       ),
                     ),

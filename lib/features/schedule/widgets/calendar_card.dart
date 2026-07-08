@@ -64,7 +64,13 @@ class CalendarCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    AppNetworkImage(url: anime.coverImage?.large),
+                    // ── cacheWidth added: displayed at 160dp in
+                    // ScheduledScreen's day shelves, was decoding
+                    // `coverImage.large` at full resolution. ──
+                    AppNetworkImage(
+                      url: anime.coverImage?.large,
+                      cacheWidth: 400,
+                    ),
                     AnimatedOpacity(
                       opacity: hovered ? 1.0 : 0.0,
                       duration: const Duration(milliseconds: 250),

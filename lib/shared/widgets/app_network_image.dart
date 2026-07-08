@@ -38,17 +38,26 @@ class AppNetworkImage extends StatelessWidget {
         cacheWidth: cacheWidth, // Tells Flutter to discard excess pixel data!
         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
           if (wasSynchronouslyLoaded) return child;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              const _SkeletonShimmer(),
-              AnimatedOpacity(
-                opacity: frame != null ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOut,
-                child: child,
-              ),
-            ],
+
+          // ── AnimatedSwitcher (not a permanently-mounted Stack) is the
+          // fix here. The old version kept `_SkeletonShimmer` in the tree
+          // forever, hidden behind AnimatedOpacity(opacity: 0) once loaded
+          // — its AnimationController never stopped ticking for the rest
+          // of the widget's life. Keying the child on load state means the
+          // skeleton branch (and its controller) is disposed the moment
+          // AnimatedSwitcher finishes cross-fading to the loaded image. ──
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            layoutBuilder: (currentChild, previousChildren) => Stack(
+              fit: StackFit.expand,
+              children: [...previousChildren, ?currentChild],
+            ),
+            child: frame != null
+                ? KeyedSubtree(key: const ValueKey('loaded'), child: child)
+                : const KeyedSubtree(
+                    key: ValueKey('skeleton'),
+                    child: _SkeletonShimmer(),
+                  ),
           );
         },
         errorBuilder: (_, _, _) => const _SkeletonShimmer(

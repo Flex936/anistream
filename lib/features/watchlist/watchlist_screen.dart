@@ -23,7 +23,13 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   final ScrollController _scrollController = ScrollController();
 
   bool _isListView = false;
-  String? _hoveredBanner;
+
+  // ── Was a plain `String? _hoveredBanner` field driven by setState() on
+  // this entire State — hovering any single card in a 36-item grid was
+  // rebuilding the whole screen, including the CustomScrollView's slivers.
+  // As a ValueNotifier, only the small ValueListenableBuilder wrapping the
+  // background image below rebuilds on hover; the grid/list never does. ──
+  final ValueNotifier<String?> _hoveredBanner = ValueNotifier<String?>(null);
 
   @override
   void initState() {
@@ -37,6 +43,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
+    _hoveredBanner.dispose();
     super.dispose();
   }
 
@@ -61,9 +68,9 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
   void _handleHover(String? bannerUrl, bool isHovered) {
     if (isHovered && bannerUrl != null) {
-      setState(() => _hoveredBanner = bannerUrl);
-    } else if (!isHovered && _hoveredBanner == bannerUrl) {
-      setState(() => _hoveredBanner = null);
+      _hoveredBanner.value = bannerUrl;
+    } else if (!isHovered && _hoveredBanner.value == bannerUrl) {
+      _hoveredBanner.value = null;
     }
   }
 
@@ -96,38 +103,59 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       builder: (context, _) {
         return Stack(
           children: [
+            // ── Hover-driven background: isolated behind a
+            // ValueListenableBuilder so hovering a card only rebuilds this
+            // small subtree, never the grid/list below it. ──
             Positioned.fill(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                child:
-                    (_hoveredBanner != null &&
-                        _hoveredBanner!.trim().isNotEmpty)
-                    ? Stack(
-                        key: ValueKey(_hoveredBanner),
-                        fit: StackFit.expand,
-                        children: [
-                          Image.network(
-                            _hoveredBanner!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const ColoredBox(color: AppPalette.base),
-                          ),
-                          if (uiPerformanceMode)
-                            Container(
-                              color: AppPalette.base.withValues(alpha: 0.90),
-                            )
-                          else
-                            BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-                              child: Container(
-                                color: AppPalette.base.withValues(alpha: 0.85),
+              child: ValueListenableBuilder<String?>(
+                valueListenable: _hoveredBanner,
+                builder: (context, hoveredBanner, _) {
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 600),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    child:
+                        (hoveredBanner != null &&
+                            hoveredBanner.trim().isNotEmpty)
+                        ? Stack(
+                            key: ValueKey(hoveredBanner),
+                            fit: StackFit.expand,
+                            children: [
+                              Image.network(
+                                hoveredBanner,
+                                fit: BoxFit.cover,
+                                // ── cacheWidth added: this is a
+                                // full-screen backdrop that's immediately
+                                // heavily blurred (or fully covered in
+                                // performance mode) — decoding it at full
+                                // network resolution bought nothing. ──
+                                cacheWidth: 400,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const ColoredBox(color: AppPalette.base),
                               ),
-                            ),
-                        ],
-                      )
-                    : const SizedBox.shrink(),
+                              if (uiPerformanceMode)
+                                Container(
+                                  color: AppPalette.base.withValues(
+                                    alpha: 0.90,
+                                  ),
+                                )
+                              else
+                                BackdropFilter(
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 50,
+                                    sigmaY: 50,
+                                  ),
+                                  child: Container(
+                                    color: AppPalette.base.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          )
+                        : const SizedBox.shrink(),
+                  );
+                },
               ),
             ),
 

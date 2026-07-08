@@ -178,7 +178,12 @@ class _PosterImage extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: AppNetworkImage(url: url),
+        // ── cacheWidth added: this poster always renders at a fixed
+        // 220dp width, but was decoding `extraLarge` (AniList's biggest
+        // cover variant) at native resolution every time the details
+        // screen opened. 500 covers up to ~2.27x device pixel ratio,
+        // which is enough headroom for effectively every real device. ──
+        child: AppNetworkImage(url: url, cacheWidth: 500),
       ),
     );
   }
