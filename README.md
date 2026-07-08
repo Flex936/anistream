@@ -7,7 +7,7 @@ AniStream started off from two seperate ideas from the two of us.
 1) Ease of use for torrenting animes.
 2) Automatic tracking for animes you watch.
 
-This is what the app has now became:
+This is what the app has now become:
 AniStream is an application that lets you stream anime torrents instantly without waiting for them to finish downloading completely. By combining a sequential torrent engine with mpv, you get the high quality of raw torrents with the seamless convenience of modern streaming platforms.
 
 The app is built entirely in **Flutter and Dart** (well, technically, optionally Go also). It is compatible with Windows, Linux, MacOS, Android (Android based TVs included) and iOS. Take in mind that neither of us can really test MacOS and iOS, since we do not have any device for that.
