@@ -1,6 +1,6 @@
 # AniStream
 
-**Disclaimer : until we release v1.0.0, the current releases (up to v0.3.0) are built via Wails (Svelte frontend and Go backend that is opened via your default webview). That version of the app was built with an entirely different tools, and is also far more behind in development (hence it's behind in design, compatibility, features, optimizations, bugs, everything kinda).**
+**Disclaimer : until we release v1.0.0, the current releases (up to v0.3.0) are built via Wails (Svelte frontend and Go backend that is opened via your default webview). That version of the app was built with entirely different tools, and is also far more behind in development (hence it's behind in design, compatibility, features, optimizations, bugs, everything kinda). The description below is the complete new version of the app that has not been released yet.**
 
 AniStream started off from two seperate ideas from the two of us.
 
