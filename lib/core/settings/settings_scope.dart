@@ -67,12 +67,17 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> reload() async {
     _settings = await _service.load();
+    // ── Keeps SettingsCache warm for non-context services the instant a
+    // real value is loaded from disk, not just after the first explicit
+    // save — see SettingsCache's doc comment in settings_service.dart. ──
+    SettingsCache.update(_settings);
     notifyListeners();
   }
 
   Future<void> update(AppSettings newSettings) async {
     await _service.save(newSettings);
     _settings = newSettings;
+    SettingsCache.update(_settings);
     notifyListeners();
   }
 }

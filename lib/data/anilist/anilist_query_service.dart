@@ -2,10 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:anistream/core/logging/app_logger.dart';
-import '../../core/settings/settings_service.dart';
 import 'anilist_queries.dart';
+import '../../core/settings/settings_service.dart';
 import 'models/anime.dart';
 import 'models/media_list.dart';
 
@@ -169,9 +168,16 @@ class AnilistQueryService {
     String? status,
     int? year,
   }) async {
-    final prefs = SharedPreferencesAsync();
-    final filterEcchi =
-        await prefs.getBool(SettingsService.kFilterEcchi) ?? true;
+    // ── Reads the synchronous SettingsCache snapshot instead of hitting
+    // shared_preferences directly. The old direct read used
+    // SharedPreferencesAsync while SettingsService (which the settings
+    // menu actually saves through) used the legacy SharedPreferences
+    // singleton — two different native stores for the same key, so a
+    // freshly-saved "Filter Ecchi" value was invisible here. SettingsCache
+    // is updated by SettingsController on every load/save, so this is
+    // always in sync with whatever the settings menu last saved, with no
+    // extra disk round-trip per search. ──
+    final filterEcchi = SettingsCache.current.filterEcchi;
     final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
 
     final variables = <String, dynamic>{
