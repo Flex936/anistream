@@ -8,6 +8,7 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
   final int? requestedEpisode;
   final void Function(int fileIndex) onSelect;
   final VoidCallback? onBack;
+  final bool dpadModeActive;
 
   const BatchEpisodePickerOverlay({
     super.key,
@@ -15,6 +16,7 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
     required this.onSelect,
     this.requestedEpisode,
     this.onBack,
+    this.dpadModeActive = false,
   });
 
   static String _formatSize(int bytes) {
@@ -110,7 +112,9 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
 
                       return ListTile(
                         autofocus: i == 0,
-                        focusColor: AppPalette.white.withValues(alpha: 0.1),
+                        focusColor: dpadModeActive
+                            ? AppPalette.white.withValues(alpha: 0.1)
+                            : AppPalette.transparent,
                         hoverColor: AppPalette.white.withValues(alpha: 0.1),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),

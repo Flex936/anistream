@@ -11,6 +11,8 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 import '../../core/theme/app_palette.dart';
 import '../../core/settings/settings_scope.dart';
+import '../../core/input/input_mode_scope.dart';
+import '../../core/input/input_mode_controller.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
@@ -222,19 +224,19 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
   }
 
-  // ── Keyboard ──────────────────────────────────────────────────────────────
+  // ── Keyboard / D-Pad ──────────────────────────────────────────────────────
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
-    final isShift =
-        HardwareKeyboard.instance.logicalKeysPressed.contains(
-          LogicalKeyboardKey.shiftLeft,
-        ) ||
-        HardwareKeyboard.instance.logicalKeysPressed.contains(
-          LogicalKeyboardKey.shiftRight,
-        );
 
+    // A settings/batch-picker sub-menu is its own FocusScope with its own
+    // autofocus'd content, so once it's open we only care about Escape/Back
+    // here — everything else (including arrows for its own internal
+    // navigation) is left `ignored` so it bubbles to that sub-menu's scope
+    // instead of us swallowing it. This also deliberately does NOT restart
+    // the hide-controls timer — the main control bar isn't supposed to be
+    // fighting for the same screen space as an open sub-menu.
     if (_isSettingsOpen || _torrentController.needsManualSelection) {
       if (key == LogicalKeyboardKey.escape ||
           key == LogicalKeyboardKey.goBack) {
@@ -243,6 +245,53 @@ class _TheaterScreenState extends State<TheaterScreen> {
       }
       return KeyEventResult.ignored;
     }
+
+    // Any other key, while the main control surface is what's active,
+    // counts as activity — reveal the controls even if we go on to leave
+    // the event itself unconsumed below.
+    _startHideControlsTimer();
+
+    final dpadModeActive = InputModeController.instance.dpadModeActive;
+
+    if (dpadModeActive) {
+      if (key == LogicalKeyboardKey.escape ||
+          key == LogicalKeyboardKey.goBack) {
+        if (_isFullscreen) {
+          _toggleFullscreen();
+        } else {
+          _exitTheater();
+        }
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.contextMenu) {
+        setState(() => _isSettingsOpen = !_isSettingsOpen);
+        return KeyEventResult.handled;
+      }
+
+      // ── Deliberately NOT handled here: arrows, Select, gamepad A/B.
+      // Returning `ignored` lets them bubble to the ambient Shortcuts
+      // wired in app.dart, which turn arrows into DirectionalFocusIntent
+      // and Select/A into ActivateIntent against whatever control is
+      // actually focused. THIS is the fix — the previous version of this
+      // method consumed every key unconditionally (even ones no branch
+      // matched, via an unconditional `return handled` at the bottom),
+      // which meant a D-Pad could never move focus at all inside the
+      // theater screen, and pressing Select always triggered play/pause
+      // instead of activating whatever was visibly focused. ──
+      return KeyEventResult.ignored;
+    }
+
+    // ── Non-D-Pad (desktop keyboard / mouse) mode: keep the existing
+    // power-user shortcuts exactly as they were. Arrow keys scrub/adjust
+    // volume regardless of what has focus, since there's no on-screen focus
+    // ring for a mouse user to navigate with in the first place. ──
+    final isShift =
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.shiftLeft,
+        ) ||
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.shiftRight,
+        );
 
     if (key == LogicalKeyboardKey.space ||
         key == LogicalKeyboardKey.keyK ||
@@ -297,18 +346,21 @@ class _TheaterScreenState extends State<TheaterScreen> {
       _toggleFullscreen();
     } else if (key == LogicalKeyboardKey.escape ||
         key == LogicalKeyboardKey.goBack) {
-      if (_isSettingsOpen) {
-        setState(() => _isSettingsOpen = false);
-      } else if (_isFullscreen) {
+      if (_isFullscreen) {
         _toggleFullscreen();
       } else {
         _exitTheater();
       }
     } else if (key == LogicalKeyboardKey.contextMenu) {
       setState(() => _isSettingsOpen = !_isSettingsOpen);
+    } else {
+      // Anything we don't recognize is left alone — this is the other half
+      // of the same fix: previously this fell through to an unconditional
+      // `return KeyEventResult.handled` regardless of whether any branch
+      // above matched, silently eating keys like Tab too.
+      return KeyEventResult.ignored;
     }
 
-    _startHideControlsTimer();
     return KeyEventResult.handled;
   }
 
@@ -497,6 +549,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dpadModeActive = InputModeScope.of(context).dpadModeActive;
+
     return Focus(
       focusNode: _focusNode,
       autofocus: true,
@@ -537,43 +591,54 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       duration: const Duration(milliseconds: 300),
                       child: IgnorePointer(
                         ignoring: !_showControls,
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              top: 24 + MediaQuery.paddingOf(context).top,
-                              left: 24,
-                              right: 24,
-                              child: GestureDetector(
-                                onTap: () {},
-                                child: TheaterTopBar(
-                                  episode: widget.episode,
-                                  uiPerformanceMode: _uiPerformanceMode,
-                                  onBack: _exitTheater,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              left: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: () {},
-                                child: TheaterControls(
-                                  player: _player,
-                                  chapterMetadata: _chapters,
-                                  isSettingsOpen: _isSettingsOpen,
-                                  isFullscreen: _isFullscreen,
-                                  uiPerformanceMode: _uiPerformanceMode,
-                                  onToggleFullscreen: _toggleFullscreen,
-                                  onInteract: _startHideControlsTimer,
-                                  onToggleSettings: () => setState(
-                                    () => _isSettingsOpen = !_isSettingsOpen,
+                        // ── One traversal group for the whole visible
+                        // control surface. It doesn't unmount on hide (only
+                        // opacity/IgnorePointer toggle), so whichever button
+                        // or the seekbar had focus keeps it across a
+                        // hide/show cycle — pressing D-Pad again after the
+                        // bar fades back in resumes exactly where focus was
+                        // left, it never resets to a default. ──
+                        child: FocusTraversalGroup(
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                top: 24 + MediaQuery.paddingOf(context).top,
+                                left: 24,
+                                right: 24,
+                                child: GestureDetector(
+                                  onTap: () {},
+                                  child: TheaterTopBar(
+                                    episode: widget.episode,
+                                    uiPerformanceMode: _uiPerformanceMode,
+                                    dpadModeActive: dpadModeActive,
+                                    onBack: _exitTheater,
                                   ),
-                                  onPip: _popOutToPip,
                                 ),
                               ),
-                            ),
-                          ],
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  onTap: () {},
+                                  child: TheaterControls(
+                                    player: _player,
+                                    chapterMetadata: _chapters,
+                                    isSettingsOpen: _isSettingsOpen,
+                                    isFullscreen: _isFullscreen,
+                                    uiPerformanceMode: _uiPerformanceMode,
+                                    dpadModeActive: dpadModeActive,
+                                    onToggleFullscreen: _toggleFullscreen,
+                                    onInteract: _startHideControlsTimer,
+                                    onToggleSettings: () => setState(
+                                      () => _isSettingsOpen = !_isSettingsOpen,
+                                    ),
+                                    onPip: _popOutToPip,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -585,6 +650,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       child: TheaterSettingsMenu(
                         player: _player,
                         uiPerformanceMode: _uiPerformanceMode,
+                        dpadModeActive: dpadModeActive,
                         onClose: () => setState(() => _isSettingsOpen = false),
                       ),
                     ),
@@ -601,6 +667,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                           return BatchEpisodePickerOverlay(
                             files: _torrentController.batchFiles,
                             requestedEpisode: widget.episode,
+                            dpadModeActive: dpadModeActive,
                             onSelect: _torrentController.selectBatchFile,
                           );
                         }

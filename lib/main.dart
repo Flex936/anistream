@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'core/logging/app_logger.dart';
+import 'core/input/input_mode_controller.dart';
 import 'features/pip/pip_args.dart';
 import 'features/pip/pip_player_window.dart';
 
@@ -34,6 +35,15 @@ Future<void> _bootstrap(List<String> args) async {
   // Initialize Video Player Engine
   MediaKit.ensureInitialized();
   AppLogger.i('main', 'MediaKit initialized');
+
+  // Resolve TV/D-Pad input mode before the first frame — awaited here
+  // rather than left to InputModeScope's initState so a real Android TV
+  // never renders even one frame in "pointer" mode before flipping over.
+  await InputModeController.instance.init();
+  AppLogger.i(
+    'main',
+    'Input mode resolved (isTvPlatform: ${InputModeController.instance.isTvPlatform})',
+  );
 
   final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 

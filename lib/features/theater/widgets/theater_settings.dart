@@ -11,12 +11,14 @@ class TheaterSettingsMenu extends StatefulWidget {
   final Player player;
   final VoidCallback onClose;
   final bool uiPerformanceMode;
+  final bool dpadModeActive;
 
   const TheaterSettingsMenu({
     super.key,
     required this.player,
     required this.onClose,
     this.uiPerformanceMode = false,
+    this.dpadModeActive = false,
   });
 
   @override
@@ -108,6 +110,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
           icon: Icons.subtitles_outlined,
           title: 'Subtitles',
           sub: _getSubtitlePreview(_activeSubtitle),
+          dpadModeActive: widget.dpadModeActive,
           onTap: () => setState(() => _currentPage = _MenuPage.subtitles),
           autofocus: true,
         ),
@@ -115,6 +118,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
           icon: Icons.audiotrack_outlined,
           title: 'Audio',
           sub: _getAudioPreview(_activeAudio),
+          dpadModeActive: widget.dpadModeActive,
           onTap: () => setState(() => _currentPage = _MenuPage.audio),
         ),
       ],
@@ -127,6 +131,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
       children: [
         _Back(
           onTap: () => setState(() => _currentPage = _MenuPage.main),
+          dpadModeActive: widget.dpadModeActive,
           autofocus: true,
         ),
         const Divider(color: AppPalette.border, height: 1),
@@ -139,6 +144,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
               return _TrackTile(
                 track: TrackNameParser.parseSubtitle(t),
                 selected: t.id == _activeSubtitle?.id,
+                dpadModeActive: widget.dpadModeActive,
                 onTap: () {
                   widget.player.setSubtitleTrack(t);
                   widget.onClose();
@@ -157,6 +163,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
       children: [
         _Back(
           onTap: () => setState(() => _currentPage = _MenuPage.main),
+          dpadModeActive: widget.dpadModeActive,
           autofocus: true,
         ),
         const Divider(color: AppPalette.border, height: 1),
@@ -169,6 +176,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
               return _TrackTile(
                 track: TrackNameParser.parseAudio(t),
                 selected: t.id == _activeAudio?.id,
+                dpadModeActive: widget.dpadModeActive,
                 onTap: () {
                   widget.player.setAudioTrack(t);
                   widget.onClose();
@@ -188,6 +196,7 @@ class _Tile extends StatelessWidget {
   final String sub;
   final VoidCallback onTap;
   final bool autofocus;
+  final bool dpadModeActive;
 
   const _Tile({
     required this.icon,
@@ -195,6 +204,7 @@ class _Tile extends StatelessWidget {
     required this.sub,
     required this.onTap,
     this.autofocus = false,
+    this.dpadModeActive = false,
   });
 
   @override
@@ -202,7 +212,9 @@ class _Tile extends StatelessWidget {
     return ListTile(
       mouseCursor: SystemMouseCursors.basic,
       autofocus: autofocus,
-      focusColor: AppPalette.white.withValues(alpha: 0.1),
+      focusColor: dpadModeActive
+          ? AppPalette.white.withValues(alpha: 0.1)
+          : AppPalette.transparent,
       hoverColor: AppPalette.white.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: Icon(icon, color: AppPalette.white, size: 20),
@@ -222,15 +234,22 @@ class _Tile extends StatelessWidget {
 class _Back extends StatelessWidget {
   final VoidCallback onTap;
   final bool autofocus;
+  final bool dpadModeActive;
 
-  const _Back({required this.onTap, this.autofocus = false});
+  const _Back({
+    required this.onTap,
+    this.autofocus = false,
+    this.dpadModeActive = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       mouseCursor: SystemMouseCursors.basic,
       autofocus: autofocus,
-      focusColor: AppPalette.white.withValues(alpha: 0.1),
+      focusColor: dpadModeActive
+          ? AppPalette.white.withValues(alpha: 0.1)
+          : AppPalette.transparent,
       hoverColor: AppPalette.white.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       leading: const Icon(
@@ -251,18 +270,22 @@ class _TrackTile extends StatelessWidget {
   final ParsedTrack track;
   final bool selected;
   final VoidCallback onTap;
+  final bool dpadModeActive;
 
   const _TrackTile({
     required this.track,
     required this.selected,
     required this.onTap,
+    this.dpadModeActive = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       mouseCursor: SystemMouseCursors.basic,
-      focusColor: AppPalette.white.withValues(alpha: 0.1),
+      focusColor: dpadModeActive
+          ? AppPalette.white.withValues(alpha: 0.1)
+          : AppPalette.transparent,
       hoverColor: AppPalette.white.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       title: Text(

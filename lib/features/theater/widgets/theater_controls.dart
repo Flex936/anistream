@@ -1,3 +1,4 @@
+// lib/features/theater/widgets/theater_controls.dart
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ class TheaterControls extends StatefulWidget {
   final bool isFullscreen;
   final List<Chapter> chapterMetadata;
   final bool uiPerformanceMode;
+  final bool dpadModeActive;
   final VoidCallback onPip;
 
   const TheaterControls({
@@ -30,6 +32,7 @@ class TheaterControls extends StatefulWidget {
     required this.isFullscreen,
     required this.onPip,
     this.uiPerformanceMode = false,
+    this.dpadModeActive = false,
     this.chapterMetadata = const [],
   });
 
@@ -218,6 +221,7 @@ class _TheaterControlsState extends State<TheaterControls> {
             buffer: _buffer,
             chapters: widget.chapterMetadata,
             uiPerformanceMode: widget.uiPerformanceMode,
+            dpadModeActive: widget.dpadModeActive,
             onSeek: _onSeek,
             onSeekStart: widget.onInteract,
             onSeekEnd: widget.onInteract,
@@ -226,12 +230,13 @@ class _TheaterControlsState extends State<TheaterControls> {
 
           Row(
             children: [
-              IconButton(
-                icon: Icon(
-                  _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  color: AppPalette.white,
-                  size: 34,
-                ),
+              _TheaterIconButton(
+                icon: _isPlaying
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
+                tooltip: _isPlaying ? 'Pause' : 'Play',
+                size: 34,
+                dpadModeActive: widget.dpadModeActive,
                 onPressed: () {
                   _isPlaying ? widget.player.pause() : widget.player.play();
                   widget.onInteract();
@@ -248,14 +253,12 @@ class _TheaterControlsState extends State<TheaterControls> {
                 ),
               ),
               const Spacer(),
-              IconButton(
-                icon: Icon(
-                  _volume == 0
-                      ? Icons.volume_off_rounded
-                      : Icons.volume_up_rounded,
-                  color: AppPalette.white,
-                  size: 24,
-                ),
+              _TheaterIconButton(
+                icon: _volume == 0
+                    ? Icons.volume_off_rounded
+                    : Icons.volume_up_rounded,
+                tooltip: _volume == 0 ? 'Unmute' : 'Mute',
+                dpadModeActive: widget.dpadModeActive,
                 onPressed: _toggleMute,
               ),
               SizedBox(
@@ -288,35 +291,31 @@ class _TheaterControlsState extends State<TheaterControls> {
                 ),
               ),
               const SizedBox(width: 16),
-              IconButton(
-                icon: Icon(
-                  Icons.settings_rounded,
-                  color: widget.isSettingsOpen
-                      ? AppPalette.primary
-                      : AppPalette.white,
-                  size: 26,
-                ),
+              _TheaterIconButton(
+                icon: Icons.settings_rounded,
+                tooltip: 'Settings',
+                color: widget.isSettingsOpen
+                    ? AppPalette.primary
+                    : AppPalette.white,
+                dpadModeActive: widget.dpadModeActive,
                 onPressed: widget.onToggleSettings,
               ),
 
               if (Platform.isMacOS || Platform.isLinux)
-                IconButton(
-                  icon: const Icon(
-                    Icons.picture_in_picture,
-                    color: AppPalette.white,
-                    size: 26,
-                  ),
+                _TheaterIconButton(
+                  icon: Icons.picture_in_picture,
+                  tooltip: 'Picture in Picture',
+                  dpadModeActive: widget.dpadModeActive,
                   onPressed: widget.onPip,
                 ),
 
-              IconButton(
-                icon: Icon(
-                  widget.isFullscreen
-                      ? Icons.fullscreen_exit_rounded
-                      : Icons.fullscreen_rounded,
-                  color: AppPalette.white,
-                  size: 28,
-                ),
+              _TheaterIconButton(
+                icon: widget.isFullscreen
+                    ? Icons.fullscreen_exit_rounded
+                    : Icons.fullscreen_rounded,
+                tooltip: widget.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
+                size: 28,
+                dpadModeActive: widget.dpadModeActive,
                 onPressed: widget.onToggleFullscreen,
               ),
             ],
@@ -329,13 +328,6 @@ class _TheaterControlsState extends State<TheaterControls> {
       return coreControls;
     }
 
-    // ── Note: this composes a ShaderMask (fade at the top edge) around the
-    // blur, which is a one-off shape FrostedContainer doesn't model (its
-    // simple on/off blur toggle assumes no extra masking). We still route
-    // the actual blur through FrostedContainer with uiPerformanceMode
-    // hardcoded false, since the branch above already guarantees we only
-    // get here when blur should be applied — this keeps the blur constants
-    // (sigma) defined in one place rather than a second raw BackdropFilter. ──
     return ShaderMask(
       shaderCallback: (rect) => LinearGradient(
         begin: Alignment.topCenter,
@@ -348,6 +340,86 @@ class _TheaterControlsState extends State<TheaterControls> {
         uiPerformanceMode: false,
         sigma: 30,
         child: coreControls,
+      ),
+    );
+  }
+}
+
+/// Small reusable icon button for the control bar. Wraps a plain
+/// [IconButton] — keeping Flutter's normal single FocusNode, ink, and
+/// tap-target behavior, with no extra phantom Focus node added to the
+/// traversal chain — and layers on a ring that's only ever painted while
+/// [dpadModeActive] is true, so PC/mobile pointer users never see a
+/// TV-style outline flash onto a button they merely tabbed past.
+class _TheaterIconButton extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final double size;
+  final String tooltip;
+  final VoidCallback onPressed;
+  final bool dpadModeActive;
+
+  const _TheaterIconButton({
+    required this.icon,
+    required this.onPressed,
+    required this.tooltip,
+    required this.dpadModeActive,
+    this.color = AppPalette.white,
+    this.size = 26,
+  });
+
+  @override
+  State<_TheaterIconButton> createState() => _TheaterIconButtonState();
+}
+
+class _TheaterIconButtonState extends State<_TheaterIconButton> {
+  bool _focused = false;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (mounted && _focused != _focusNode.hasFocus) {
+      setState(() => _focused = _focusNode.hasFocus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showRing = _focused && widget.dpadModeActive;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: showRing ? AppPalette.primary : AppPalette.transparent,
+          width: 2,
+        ),
+      ),
+      child: IconButton(
+        focusNode: _focusNode, // ── We pass our custom FocusNode here ──
+        icon: Icon(widget.icon, color: widget.color, size: widget.size),
+        tooltip: widget.tooltip,
+        onPressed: widget.onPressed,
+        // ── IconButton's own subtle Material overlay (hover/focus tint) is
+        // left as-is on every platform — that's a reasonable minimal
+        // affordance for plain keyboard-Tab users on desktop. Only the
+        // explicit ring above is gated to D-Pad mode, so a desktop user
+        // tabbing through never sees the loud TV-style outline; a TV user
+        // gets both. ──
       ),
     );
   }

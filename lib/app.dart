@@ -5,6 +5,7 @@ import 'core/theme/app_palette.dart';
 import 'core/router/app_router.dart';
 import 'core/logging/app_logger.dart';
 import 'core/settings/settings_scope.dart';
+import 'core/input/input_mode_scope.dart';
 
 class AniStreamApp extends StatefulWidget {
   const AniStreamApp({super.key});
@@ -52,10 +53,11 @@ class _AniStreamAppState extends State<AniStreamApp>
           brightness: Brightness.dark,
         ),
       ),
-      // ── Wraps every route (and dialogs like the settings menu) in a
-      // single shared settings source, replacing per-screen
-      // SettingsService().load() boilerplate. ──
-      builder: (context, child) => SettingsScope(child: child!),
+      // ── InputModeScope wraps SettingsScope: it's the more fundamental,
+      // truly app-wide concern (every screen's hover/focus visuals read
+      // from it via HoverFocusBuilder), so it sits outermost. ──
+      builder: (context, child) =>
+          InputModeScope(child: SettingsScope(child: child!)),
       initialRoute: AppRouter.initial,
       onGenerateRoute: AppRouter.onGenerateRoute,
     );
