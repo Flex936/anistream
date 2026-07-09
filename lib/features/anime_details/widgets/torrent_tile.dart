@@ -59,6 +59,10 @@ class TorrentTile extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
+          // ── Clip.hardEdge under Performant mode — see
+          // FrostedContainer's doc comment for the rationale. This clip
+          // wasn't routed through FrostedContainer at all previously. ──
+          clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../utils/anime_status_style.dart';
+import '../utils/perf_animations.dart';
 import '../../features/anime_details/anime_details_screen.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../core/theme/app_palette.dart';
@@ -65,6 +66,14 @@ class AnimeCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
+                // ── Clip.hardEdge under Performant mode instead of the
+                // ClipRRect default (Clip.antiAlias) — a sampled,
+                // anti-aliased clip on every single poster in every
+                // carousel/grid is exactly the "complex clipping path"
+                // cost Performant mode exists to strip. ──
+                clipBehavior: uiPerformanceMode
+                    ? Clip.hardEdge
+                    : Clip.antiAlias,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -80,6 +89,7 @@ class AnimeCard extends StatelessWidget {
                     AppNetworkImage(
                       url: anime.coverImage?.extraLarge,
                       cacheWidth: 450,
+                      uiPerformanceMode: uiPerformanceMode,
                     ),
                     Positioned(
                       left: 0,
@@ -225,13 +235,24 @@ class _HoverOverlay extends StatelessWidget {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 150),
+        // ── Zero-duration under Performant mode: the overlay still shows
+        // on hover/focus (TV remotes "hover" via D-Pad focus), it just
+        // snaps in instead of fading, which skips the saveLayer an
+        // interpolated opacity <1.0 would otherwise force every frame of
+        // the transition. ──
+        duration: perfDuration(
+          uiPerformanceMode,
+          const Duration(milliseconds: 150),
+        ),
         child: ColoredBox(
           color: AppPalette.black.withValues(alpha: 0.42),
           child: Center(
             child: AnimatedSlide(
               offset: visible ? Offset.zero : const Offset(0.0, 0.12),
-              duration: const Duration(milliseconds: 200),
+              duration: perfDuration(
+                uiPerformanceMode,
+                const Duration(milliseconds: 200),
+              ),
               curve: Curves.easeOut,
               child: Container(
                 padding: const EdgeInsets.all(11),

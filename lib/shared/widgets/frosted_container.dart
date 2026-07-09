@@ -23,12 +23,23 @@ class FrostedContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (uiPerformanceMode) {
+      // ── Clip.hardEdge instead of ClipRRect's default Clip.antiAlias:
+      // hard-edge clipping is a cheap rect/rrect stencil with no sampled
+      // edge smoothing, which is the whole point on hardware too weak to
+      // afford the blur in the first place. Anti-aliased clipping is a
+      // layer-based, sampled operation — one of the "complex clipping
+      // paths" Performant mode exists to avoid. ──
       return borderRadius == BorderRadius.zero
           ? child
-          : ClipRRect(borderRadius: borderRadius, child: child);
+          : ClipRRect(
+              borderRadius: borderRadius,
+              clipBehavior: Clip.hardEdge,
+              child: child,
+            );
     }
     return ClipRRect(
       borderRadius: borderRadius,
+      clipBehavior: Clip.antiAlias,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
         child: child,

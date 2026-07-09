@@ -206,6 +206,7 @@ class _SearchInputState extends State<SearchInput> {
                                 // renders at 32dp wide, yet was decoding
                                 // a full-resolution poster. 100 gives ~3x headroom. ──
                                 cacheWidth: 100,
+                                uiPerformanceMode: widget.uiPerformanceMode,
                               )
                             : const ColoredBox(color: AppPalette.surface),
                       ),

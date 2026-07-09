@@ -4,6 +4,7 @@ import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/app_network_image.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
+import '../../../shared/utils/perf_animations.dart';
 
 class CalendarCard extends StatelessWidget {
   final Anime anime;
@@ -61,6 +62,11 @@ class CalendarCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(9),
+                // ── Clip.hardEdge under Performant mode — see
+                // FrostedContainer's doc comment for the rationale. ──
+                clipBehavior: uiPerformanceMode
+                    ? Clip.hardEdge
+                    : Clip.antiAlias,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -70,10 +76,14 @@ class CalendarCard extends StatelessWidget {
                     AppNetworkImage(
                       url: anime.coverImage?.large,
                       cacheWidth: 400,
+                      uiPerformanceMode: uiPerformanceMode,
                     ),
                     AnimatedOpacity(
                       opacity: hovered ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 250),
+                      duration: perfDuration(
+                        uiPerformanceMode,
+                        const Duration(milliseconds: 250),
+                      ),
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(

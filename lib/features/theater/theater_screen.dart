@@ -578,10 +578,22 @@ class _TheaterScreenState extends State<TheaterScreen> {
                   AnimatedOpacity(
                     opacity: _videoInitialized ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 300),
-                    child: Video(
-                      controller: _videoController,
-                      controls: NoVideoControls,
-                      filterQuality: _getFilterQuality(),
+                    // ── RepaintBoundary: the video texture updates on
+                    // every decoded frame (dozens of times/sec) completely
+                    // independently of the controls overlay above it
+                    // (which only repaints on user interaction/position
+                    // ticks). Without a boundary here, Flutter has no
+                    // reason to treat them as separate compositor layers,
+                    // so a control-bar repaint could force the video's
+                    // layer to be re-recorded too, and vice versa. This
+                    // pins the video to its own stable, GPU-cacheable
+                    // layer. ──
+                    child: RepaintBoundary(
+                      child: Video(
+                        controller: _videoController,
+                        controls: NoVideoControls,
+                        filterQuality: _getFilterQuality(),
+                      ),
                     ),
                   ),
 
@@ -597,47 +609,59 @@ class _TheaterScreenState extends State<TheaterScreen> {
                         // or the seekbar had focus keeps it across a
                         // hide/show cycle — pressing D-Pad again after the
                         // bar fades back in resumes exactly where focus was
-                        // left, it never resets to a default. ──
-                        child: FocusTraversalGroup(
-                          child: Stack(
-                            children: [
-                              Positioned(
-                                top: 24 + MediaQuery.paddingOf(context).top,
-                                left: 24,
-                                right: 24,
-                                child: GestureDetector(
-                                  onTap: () {},
-                                  child: TheaterTopBar(
-                                    episode: widget.episode,
-                                    uiPerformanceMode: _uiPerformanceMode,
-                                    dpadModeActive: dpadModeActive,
-                                    onBack: _exitTheater,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: () {},
-                                  child: TheaterControls(
-                                    player: _player,
-                                    chapterMetadata: _chapters,
-                                    isSettingsOpen: _isSettingsOpen,
-                                    isFullscreen: _isFullscreen,
-                                    uiPerformanceMode: _uiPerformanceMode,
-                                    dpadModeActive: dpadModeActive,
-                                    onToggleFullscreen: _toggleFullscreen,
-                                    onInteract: _startHideControlsTimer,
-                                    onToggleSettings: () => setState(
-                                      () => _isSettingsOpen = !_isSettingsOpen,
+                        // left, it never resets to a default.
+                        //
+                        // RepaintBoundary: the Seekbar/timeline inside
+                        // TheaterControls repaints several times a second
+                        // during playback (see _PlaybackTimeline).
+                        // Isolating the whole control surface onto its own
+                        // layer means those ticks never force the Video
+                        // layer above to re-record, and the video's own
+                        // frequent texture updates never force this layer
+                        // to repaint either. ──
+                        child: RepaintBoundary(
+                          child: FocusTraversalGroup(
+                            child: Stack(
+                              children: [
+                                Positioned(
+                                  top: 24 + MediaQuery.paddingOf(context).top,
+                                  left: 24,
+                                  right: 24,
+                                  child: GestureDetector(
+                                    onTap: () {},
+                                    child: TheaterTopBar(
+                                      episode: widget.episode,
+                                      uiPerformanceMode: _uiPerformanceMode,
+                                      dpadModeActive: dpadModeActive,
+                                      onBack: _exitTheater,
                                     ),
-                                    onPip: _popOutToPip,
                                   ),
                                 ),
-                              ),
-                            ],
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: GestureDetector(
+                                    onTap: () {},
+                                    child: TheaterControls(
+                                      player: _player,
+                                      chapterMetadata: _chapters,
+                                      isSettingsOpen: _isSettingsOpen,
+                                      isFullscreen: _isFullscreen,
+                                      uiPerformanceMode: _uiPerformanceMode,
+                                      dpadModeActive: dpadModeActive,
+                                      onToggleFullscreen: _toggleFullscreen,
+                                      onInteract: _startHideControlsTimer,
+                                      onToggleSettings: () => setState(
+                                        () =>
+                                            _isSettingsOpen = !_isSettingsOpen,
+                                      ),
+                                      onPip: _popOutToPip,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),

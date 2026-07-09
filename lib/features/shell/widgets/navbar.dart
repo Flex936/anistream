@@ -137,50 +137,70 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.sizeOf(context).width < 600;
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0.0, end: widget.isScrolled ? 16.0 : 0.0),
+    final content = AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-      builder: (context, blurAmount, child) {
-        final navContent = AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          height: widget.preferredSize.height,
-          padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
-          decoration: BoxDecoration(
-            color: widget.isScrolled
-                ? AppPalette.base.withValues(
-                    alpha: widget.uiPerformanceMode ? 0.95 : 0.75,
-                  )
-                : AppPalette.transparent,
-            border: Border(
-              bottom: BorderSide(
-                color: AppPalette.white.withValues(
-                  alpha: widget.isScrolled ? 0.05 : 0.0,
-                ),
-                width: 1,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: isCompact && _mobileSearchActive
+          ? _buildMobileSearchMode()
+          : _buildStandardLayout(isCompact),
+    );
+
+    Widget buildFrame(double blurAmount) {
+      final navContent = AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        height: widget.preferredSize.height,
+        padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
+        decoration: BoxDecoration(
+          color: widget.isScrolled
+              ? AppPalette.base.withValues(
+                  alpha: widget.uiPerformanceMode ? 0.95 : 0.75,
+                )
+              : AppPalette.transparent,
+          border: Border(
+            bottom: BorderSide(
+              color: AppPalette.white.withValues(
+                alpha: widget.isScrolled ? 0.05 : 0.0,
               ),
+              width: 1,
             ),
           ),
-          child: child,
-        );
+        ),
+        child: content,
+      );
 
-        // ── Blur amount is animated (0 → 16), so sigma is passed through
-        // dynamically instead of the fixed value most other call sites use. ──
-        return FrostedContainer(
-          uiPerformanceMode: widget.uiPerformanceMode,
-          sigma: blurAmount,
-          child: navContent,
-        );
-      },
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        child: isCompact && _mobileSearchActive
-            ? _buildMobileSearchMode()
-            : _buildStandardLayout(isCompact),
-      ),
-    );
+      return FrostedContainer(
+        uiPerformanceMode: widget.uiPerformanceMode,
+        sigma: blurAmount,
+        child: navContent,
+      );
+    }
+
+    // ── Performant mode's FrostedContainer branch never reads `sigma` at
+    // all (it skips the blur entirely), so animating it 0 → 16 on every
+    // scroll transition was pure wasted per-frame rebuild work for a value
+    // nobody ever sees applied. Skip the tween outright and go straight to
+    // a static frame instead of paying for an animation with no visual
+    // effect. ──
+    final frame = widget.uiPerformanceMode
+        ? buildFrame(0.0)
+        : TweenAnimationBuilder<double>(
+            tween: Tween<double>(
+              begin: 0.0,
+              end: widget.isScrolled ? 16.0 : 0.0,
+            ),
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            builder: (context, blurAmount, _) => buildFrame(blurAmount),
+          );
+
+    // ── RepaintBoundary: this bar is pinned above scrolling body content
+    // (extendBodyBehindAppBar) and only repaints on its own triggers
+    // (scroll-threshold crossing, mobile search toggle) — completely
+    // independent of whatever is scrolling underneath it. Isolating it
+    // onto its own compositor layer means a scroll-driven repaint of the
+    // body never forces the nav bar to re-record, and vice versa. ──
+    return RepaintBoundary(child: frame);
   }
 
   Widget _buildMobileSearchMode() {

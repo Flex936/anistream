@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_palette.dart';
+import '../utils/perf_animations.dart';
 
 class AppNetworkImage extends StatelessWidget {
   final String? url;
   final double scale;
   final int? cacheWidth; // ── Limit physical pixel decoding in RAM ──
+  final bool uiPerformanceMode;
 
   const AppNetworkImage({
     super.key,
     this.url,
     this.scale = 1.0,
     this.cacheWidth,
+    this.uiPerformanceMode = false,
   });
 
   @override
@@ -28,7 +31,10 @@ class AppNetworkImage extends StatelessWidget {
     }
     return AnimatedScale(
       scale: scale,
-      duration: const Duration(milliseconds: 300),
+      duration: perfDuration(
+        uiPerformanceMode,
+        const Duration(milliseconds: 300),
+      ),
       curve: Curves.easeOut,
       child: Image.network(
         url!,
@@ -36,6 +42,13 @@ class AppNetworkImage extends StatelessWidget {
         width: double.infinity,
         height: double.infinity,
         cacheWidth: cacheWidth, // Tells Flutter to discard excess pixel data!
+        // ── Cheaper resampling filter on weak GPUs — the difference is
+        // basically invisible at the poster/thumbnail sizes this widget is
+        // used at, but low-quality bilinear sampling is meaningfully less
+        // GPU work per frame than the medium-quality default. ──
+        filterQuality: uiPerformanceMode
+            ? FilterQuality.low
+            : FilterQuality.medium,
         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
           if (wasSynchronouslyLoaded) return child;
 
@@ -45,9 +58,16 @@ class AppNetworkImage extends StatelessWidget {
           // — its AnimationController never stopped ticking for the rest
           // of the widget's life. Keying the child on load state means the
           // skeleton branch (and its controller) is disposed the moment
-          // AnimatedSwitcher finishes cross-fading to the loaded image. ──
+          // AnimatedSwitcher finishes cross-fading to the loaded image.
+          // Under uiPerformanceMode the cross-fade duration collapses to
+          // zero via perfDuration — the loaded image just appears on the
+          // next frame instead of dissolving in, with no saveLayer needed
+          // for the fade. ──
           return AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
+            duration: perfDuration(
+              uiPerformanceMode,
+              const Duration(milliseconds: 400),
+            ),
             layoutBuilder: (currentChild, previousChildren) => Stack(
               fit: StackFit.expand,
               children: [...previousChildren, ?currentChild],

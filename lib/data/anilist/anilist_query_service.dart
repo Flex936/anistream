@@ -16,6 +16,69 @@ class AnilistException implements Exception {
   String toString() => 'AnilistException($statusCode): $message';
 }
 
+class _AnilistCacheEntry {
+  final Map<String, dynamic> data;
+  final DateTime expiresAt;
+  const _AnilistCacheEntry(this.data, this.expiresAt);
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+}
+
+/// Tiny in-memory TTL cache for read-only, non-personalized AniList
+/// queries (trending / seasonal / all-time popular / currently airing /
+/// search). Keyed by query string + JSON-encoded variables, so distinct
+/// filter combinations (different search term, different minScore, etc.)
+/// get distinct entries automatically.
+///
+/// Fixes: `NavigationController.goHome()` builds a brand-new `HomeScreen`
+/// (and a brand-new `AnilistQueryService`) every time the user navigates
+/// Home → Details → Home, so without this, the three home carousels
+/// refetched from the network on every single trip back to Home.
+///
+/// Deliberately NOT used for `getUserWatchlist` or `getMediaProgress` —
+/// those need to reflect the viewer's live, current state, and a stale
+/// cache hit right after finishing an episode would show the wrong
+/// "up next" number or watchlist progress bar.
+abstract final class _AnilistCache {
+  static final Map<String, _AnilistCacheEntry> _entries = {};
+  static const Duration _ttl = Duration(minutes: 2);
+  static const int _maxEntries = 40;
+
+  static String _keyFor(String query, Map<String, dynamic> variables) =>
+      '$query::${jsonEncode(variables)}';
+
+  static Map<String, dynamic>? get(
+    String query,
+    Map<String, dynamic> variables,
+  ) {
+    final key = _keyFor(query, variables);
+    final entry = _entries[key];
+    if (entry == null) return null;
+    if (entry.isExpired) {
+      _entries.remove(key);
+      return null;
+    }
+    return entry.data;
+  }
+
+  static void set(
+    String query,
+    Map<String, dynamic> variables,
+    Map<String, dynamic> data,
+  ) {
+    // ── Simple bound so a long session of distinct searches can't grow
+    // this unboundedly — evict the oldest entry once over the cap rather
+    // than pull in a full LRU package for what's normally a handful of
+    // slots (3 home carousels + whatever the user has searched). ──
+    if (_entries.length >= _maxEntries) {
+      _entries.remove(_entries.keys.first);
+    }
+    _entries[_keyFor(query, variables)] = _AnilistCacheEntry(
+      data,
+      DateTime.now().add(_ttl),
+    );
+  }
+}
+
 class AnilistQueryService {
   static const String _endpoint = 'https://graphql.anilist.co';
 
@@ -92,6 +155,26 @@ class AnilistQueryService {
     }
   }
 
+  /// Same contract as [_query], but checks [_AnilistCache] first and
+  /// populates it after a real network fetch. Only used by the read-only,
+  /// non-personalized queries listed on [_AnilistCache]'s doc comment —
+  /// see there for why the rest of this service deliberately doesn't use
+  /// this wrapper.
+  Future<T> _cachedQuery<T>(
+    String query,
+    Map<String, dynamic> variables,
+    T Function(Map<String, dynamic> data) select,
+  ) {
+    final cached = _AnilistCache.get(query, variables);
+    if (cached != null) {
+      return Future.value(select(cached));
+    }
+    return _query(query, variables, (data) {
+      _AnilistCache.set(query, variables, data);
+      return select(data);
+    });
+  }
+
   void _assertResponse(http.Response response) {
     if (response.statusCode != 200) {
       throw AnilistException(
@@ -135,13 +218,13 @@ class AnilistQueryService {
   }
 
   Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) =>
-      _query(AnilistQueries.trending, {
+      _cachedQuery(AnilistQueries.trending, {
         'page': page,
         'perPage': perPage,
       }, _animeListFromPage);
 
   Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) =>
-      _query(AnilistQueries.seasonPopular, {
+      _cachedQuery(AnilistQueries.seasonPopular, {
         'page': page,
         'perPage': perPage,
         'season': _currentSeason,
@@ -149,13 +232,13 @@ class AnilistQueryService {
       }, _animeListFromPage);
 
   Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) =>
-      _query(AnilistQueries.allTimePopular, {
+      _cachedQuery(AnilistQueries.allTimePopular, {
         'page': page,
         'perPage': perPage,
       }, _animeListFromPage);
 
   Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) =>
-      _query(AnilistQueries.currentlyAiring, {
+      _cachedQuery(AnilistQueries.currentlyAiring, {
         'page': page,
         'perPage': perPage,
         'currentSeason': _currentSeason,
@@ -189,7 +272,12 @@ class AnilistQueryService {
     if (status != null && status != 'ANY') variables['status'] = status;
     if (year != null) variables['seasonYear'] = year;
 
-    return _query(AnilistQueries.search, variables, _animeListFromPage);
+    // ── Cached: bannedGenres/minScore/status/year are all part of
+    // `variables`, so different filter combinations naturally get
+    // different cache entries — re-running the exact same search (e.g.
+    // navigating back to a previous results page) within the TTL window
+    // skips the network round-trip entirely. ──
+    return _cachedQuery(AnilistQueries.search, variables, _animeListFromPage);
   }
 
   Future<({List<MediaListEntry> entries, bool hasNextPage})> getUserWatchlist({
@@ -203,6 +291,10 @@ class AnilistQueryService {
       throw const AnilistException('Could not resolve viewer ID');
     }
 
+    // ── NOT routed through _cachedQuery: this reflects the viewer's live
+    // watch progress, which the app itself mutates during a session
+    // (AnilistTrackerService commits progress mid-episode). Caching it
+    // risks showing stale progress right after finishing something. ──
     return _query(
       AnilistQueries.userWatchlistPaged,
       {'userId': viewerId, 'status': status, 'page': page, 'perPage': perPage},
@@ -222,6 +314,11 @@ class AnilistQueryService {
   Future<int?> getMediaProgress(int mediaId) async {
     if (!isLoggedIn) return null;
     try {
+      // ── NOT routed through _cachedQuery — same reasoning as
+      // getUserWatchlist above. AnimeDetailsScreen calls this again right
+      // after returning from TheaterScreen specifically to pick up a
+      // progress change that just happened; a cache hit here would show
+      // the pre-episode progress instead. ──
       return await _query(
         AnilistQueries.mediaProgress,
         {'id': mediaId},

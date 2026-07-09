@@ -1,11 +1,12 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../data/anilist/models/media_list.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/utils/anime_status_style.dart';
 import '../../../shared/utils/html_utils.dart';
+import '../../../shared/utils/perf_animations.dart';
 import '../../../shared/widgets/app_network_image.dart';
+import '../../../shared/widgets/frosted_container.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 
 class HeroCard extends StatelessWidget {
@@ -65,6 +66,9 @@ class HeroCard extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(15),
+          // ── Clip.hardEdge under Performant mode — see
+          // FrostedContainer's doc comment for the rationale. ──
+          clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -72,6 +76,7 @@ class HeroCard extends StatelessWidget {
                 url: imgUrl,
                 scale: (hovered && !uiPerformanceMode) ? 1.05 : 1.0,
                 cacheWidth: 600,
+                uiPerformanceMode: uiPerformanceMode,
               ),
               Container(
                 decoration: BoxDecoration(
@@ -206,12 +211,16 @@ class ListCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
+              // ── Clip.hardEdge under Performant mode — see
+              // FrostedContainer's doc comment for the rationale. ──
+              clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
               child: AspectRatio(
                 aspectRatio: 0.7,
                 child: AppNetworkImage(
                   url: media.coverImage?.large ?? media.coverImage?.extraLarge,
                   scale: (hovered && !uiPerformanceMode) ? 1.05 : 1.0,
                   cacheWidth: 300,
+                  uiPerformanceMode: uiPerformanceMode,
                 ),
               ),
             ),
@@ -391,6 +400,11 @@ class WatchlistCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
+                // ── Clip.hardEdge under Performant mode — see
+                // FrostedContainer's doc comment for the rationale. ──
+                clipBehavior: uiPerformanceMode
+                    ? Clip.hardEdge
+                    : Clip.antiAlias,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -400,49 +414,54 @@ class WatchlistCard extends StatelessWidget {
                           media.coverImage?.extraLarge,
                       scale: (hovered && !uiPerformanceMode) ? 1.05 : 1.0,
                       cacheWidth: 450,
+                      uiPerformanceMode: uiPerformanceMode,
                     ),
 
                     if (showProgress)
                       Positioned(
                         top: 8,
                         right: 8,
-                        child: ClipRRect(
+                        // ── Was an ungated ClipRRect + BackdropFilter
+                        // (sigma 10) regardless of uiPerformanceMode — the
+                        // one blur in this file that had slipped past the
+                        // FrostedContainer consolidation. Routed through
+                        // it now, matching every other glass surface. ──
+                        child: FrostedContainer(
+                          uiPerformanceMode: uiPerformanceMode,
+                          sigma: 10,
                           borderRadius: BorderRadius.circular(8),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppPalette.black.withValues(
+                                alpha: uiPerformanceMode ? 0.85 : 0.6,
                               ),
-                              decoration: BoxDecoration(
-                                color: AppPalette.black.withValues(alpha: 0.6),
-                                border: Border.all(
-                                  color: AppPalette.white.withValues(
-                                    alpha: 0.15,
+                              border: Border.all(
+                                color: AppPalette.white.withValues(alpha: 0.15),
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.play_arrow_rounded,
+                                  color: AppPalette.primary,
+                                  size: 12,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'EP $progress / ${media.episodes ?? "?"}',
+                                  style: const TextStyle(
+                                    color: AppPalette.textMain,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.play_arrow_rounded,
-                                    color: AppPalette.primary,
-                                    size: 12,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'EP $progress / ${media.episodes ?? "?"}',
-                                    style: const TextStyle(
-                                      color: AppPalette.textMain,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              ],
                             ),
                           ),
                         ),
@@ -536,13 +555,21 @@ class _PlayOverlay extends StatelessWidget {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 200),
+        // ── Zero-duration under Performant mode — snaps in/out instead of
+        // fading, avoiding the saveLayer an interpolated opacity forces. ──
+        duration: perfDuration(
+          uiPerformanceMode,
+          const Duration(milliseconds: 200),
+        ),
         child: ColoredBox(
           color: AppPalette.black.withValues(alpha: 0.52),
           child: Center(
             child: AnimatedSlide(
               offset: visible ? Offset.zero : const Offset(0, 0.12),
-              duration: const Duration(milliseconds: 250),
+              duration: perfDuration(
+                uiPerformanceMode,
+                const Duration(milliseconds: 250),
+              ),
               curve: Curves.easeOut,
               child: Container(
                 padding: const EdgeInsets.symmetric(

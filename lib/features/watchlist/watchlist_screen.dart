@@ -6,6 +6,7 @@ import '../../core/theme/app_palette.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../shared/widgets/hover_focus_builder.dart';
 import '../../shared/utils/responsive_grid.dart';
+import '../../shared/utils/perf_animations.dart';
 import 'controllers/watchlist_controller.dart';
 import 'widgets/watchlist_cards.dart';
 
@@ -111,7 +112,15 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 valueListenable: _hoveredBanner,
                 builder: (context, hoveredBanner, _) {
                   return AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
+                    // ── Zero-duration under Performant mode — the backdrop
+                    // swap still happens, it just snaps instead of
+                    // dissolving, avoiding the extra composited frames a
+                    // 600ms cross-fade of a full-screen image would
+                    // otherwise cost. ──
+                    duration: perfDuration(
+                      uiPerformanceMode,
+                      const Duration(milliseconds: 600),
+                    ),
                     switchInCurve: Curves.easeOut,
                     switchOutCurve: Curves.easeIn,
                     child:

@@ -37,7 +37,11 @@ class HeroBanner extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (bannerUrl != null) AppNetworkImage(url: bannerUrl),
+          if (bannerUrl != null)
+            AppNetworkImage(
+              url: bannerUrl,
+              uiPerformanceMode: uiPerformanceMode,
+            ),
 
           Container(
             decoration: BoxDecoration(
@@ -99,7 +103,10 @@ class HeroBanner extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               if (bannerUrl != null)
-                AppNetworkImage(url: bannerUrl)
+                AppNetworkImage(
+                  url: bannerUrl,
+                  uiPerformanceMode: uiPerformanceMode,
+                )
               else
                 const ColoredBox(color: AppPalette.surface),
 
@@ -183,7 +190,11 @@ class _PosterImage extends StatelessWidget {
         // cover variant) at native resolution every time the details
         // screen opened. 500 covers up to ~2.27x device pixel ratio,
         // which is enough headroom for effectively every real device. ──
-        child: AppNetworkImage(url: url, cacheWidth: 500),
+        child: AppNetworkImage(
+          url: url,
+          cacheWidth: 500,
+          uiPerformanceMode: uiPerformanceMode,
+        ),
       ),
     );
   }
