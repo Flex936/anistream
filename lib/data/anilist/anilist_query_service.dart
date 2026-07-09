@@ -115,8 +115,12 @@ class AnilistQueryService {
     _ => 'WINTER',
   };
 
-  /// Raw POST — used directly by callers (e.g. AnilistTrackerService) that
-  /// need the http.Response itself rather than a parsed model.
+  /// Single source of truth for retrieving banned genres based on user settings.
+  List<String> get _bannedGenres {
+    final filterEcchi = SettingsCache.current.filterEcchi;
+    return filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
+  }
+
   Future<http.Response> executeRaw(
     String query,
     Map<String, dynamic> variables,
@@ -221,6 +225,7 @@ class AnilistQueryService {
       _cachedQuery(AnilistQueries.trending, {
         'page': page,
         'perPage': perPage,
+        'bannedGenres': _bannedGenres,
       }, _animeListFromPage);
 
   Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) =>
@@ -229,12 +234,14 @@ class AnilistQueryService {
         'perPage': perPage,
         'season': _currentSeason,
         'seasonYear': DateTime.now().year,
+        'bannedGenres': _bannedGenres,
       }, _animeListFromPage);
 
   Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) =>
       _cachedQuery(AnilistQueries.allTimePopular, {
         'page': page,
         'perPage': perPage,
+        'bannedGenres': _bannedGenres,
       }, _animeListFromPage);
 
   Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) =>
@@ -243,6 +250,7 @@ class AnilistQueryService {
         'perPage': perPage,
         'currentSeason': _currentSeason,
         'currentYear': DateTime.now().year,
+        'bannedGenres': _bannedGenres,
       }, _animeListFromPage);
 
   Future<List<Anime>> searchAnime(
@@ -251,32 +259,15 @@ class AnilistQueryService {
     String? status,
     int? year,
   }) async {
-    // ── Reads the synchronous SettingsCache snapshot instead of hitting
-    // shared_preferences directly. The old direct read used
-    // SharedPreferencesAsync while SettingsService (which the settings
-    // menu actually saves through) used the legacy SharedPreferences
-    // singleton — two different native stores for the same key, so a
-    // freshly-saved "Filter Ecchi" value was invisible here. SettingsCache
-    // is updated by SettingsController on every load/save, so this is
-    // always in sync with whatever the settings menu last saved, with no
-    // extra disk round-trip per search. ──
-    final filterEcchi = SettingsCache.current.filterEcchi;
-    final bannedGenres = filterEcchi ? ['Hentai', 'Ecchi'] : ['Hentai'];
-
     final variables = <String, dynamic>{
       'search': query,
-      'bannedGenres': bannedGenres,
+      'bannedGenres': _bannedGenres,
     };
 
     if (minScore != null && minScore > 0) variables['minScore'] = minScore;
     if (status != null && status != 'ANY') variables['status'] = status;
     if (year != null) variables['seasonYear'] = year;
 
-    // ── Cached: bannedGenres/minScore/status/year are all part of
-    // `variables`, so different filter combinations naturally get
-    // different cache entries — re-running the exact same search (e.g.
-    // navigating back to a previous results page) within the TTL window
-    // skips the network round-trip entirely. ──
     return _cachedQuery(AnilistQueries.search, variables, _animeListFromPage);
   }
 
@@ -291,10 +282,6 @@ class AnilistQueryService {
       throw const AnilistException('Could not resolve viewer ID');
     }
 
-    // ── NOT routed through _cachedQuery: this reflects the viewer's live
-    // watch progress, which the app itself mutates during a session
-    // (AnilistTrackerService commits progress mid-episode). Caching it
-    // risks showing stale progress right after finishing something. ──
     return _query(
       AnilistQueries.userWatchlistPaged,
       {'userId': viewerId, 'status': status, 'page': page, 'perPage': perPage},
@@ -303,9 +290,23 @@ class AnilistQueryService {
         final hasNextPage =
             pageData?['pageInfo']?['hasNextPage'] as bool? ?? false;
         final rawList = pageData?['mediaList'] as List<dynamic>? ?? const [];
+
+        final banned = _bannedGenres;
+
+        // ── Since AniList does not natively allow filtering user watchlists
+        // by `genre_not_in`, we extract the genres out of the raw JSON map
+        // before converting them so we don't depend on missing parameters
+        // inside the Anime/MediaListEntry models. ──
         final entries = rawList
+            .where((r) {
+              final media = r['media'] as Map<String, dynamic>?;
+              if (media == null) return true;
+              final genres = media['genres'] as List<dynamic>? ?? [];
+              return !genres.any((g) => banned.contains(g));
+            })
             .map((r) => MediaListEntry.fromJson(r as Map<String, dynamic>))
             .toList();
+
         return (entries: entries, hasNextPage: hasNextPage);
       },
     );
@@ -314,11 +315,6 @@ class AnilistQueryService {
   Future<int?> getMediaProgress(int mediaId) async {
     if (!isLoggedIn) return null;
     try {
-      // ── NOT routed through _cachedQuery — same reasoning as
-      // getUserWatchlist above. AnimeDetailsScreen calls this again right
-      // after returning from TheaterScreen specifically to pick up a
-      // progress change that just happened; a cache hit here would show
-      // the pre-episode progress instead. ──
       return await _query(
         AnilistQueries.mediaProgress,
         {'id': mediaId},

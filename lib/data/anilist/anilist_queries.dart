@@ -23,20 +23,20 @@ abstract final class AnilistFragments {
 abstract final class AnilistQueries {
   static const String trending =
       '''
-    query GetTrendingAnime(\$page: Int, \$perPage: Int) {
-      Page(page: \$page, perPage: \$perPage) { media(sort: TRENDING_DESC, type: ANIME, isAdult: false, status_not: NOT_YET_RELEASED) { ${AnilistFragments.mediaCore} } }
+    query GetTrendingAnime(\$page: Int, \$perPage: Int, \$bannedGenres: [String]) {
+      Page(page: \$page, perPage: \$perPage) { media(sort: TRENDING_DESC, type: ANIME, isAdult: false, status_not: NOT_YET_RELEASED, genre_not_in: \$bannedGenres) { ${AnilistFragments.mediaCore} } }
     }''';
 
   static const String seasonPopular =
       '''
-    query GetSeasonPopular(\$page: Int, \$perPage: Int, \$season: MediaSeason, \$seasonYear: Int) {
-      Page(page: \$page, perPage: \$perPage) { media(season: \$season, seasonYear: \$seasonYear, sort: POPULARITY_DESC, type: ANIME, isAdult: false) { ${AnilistFragments.mediaCore} } }
+    query GetSeasonPopular(\$page: Int, \$perPage: Int, \$season: MediaSeason, \$seasonYear: Int, \$bannedGenres: [String]) {
+      Page(page: \$page, perPage: \$perPage) { media(season: \$season, seasonYear: \$seasonYear, sort: POPULARITY_DESC, type: ANIME, isAdult: false, genre_not_in: \$bannedGenres) { ${AnilistFragments.mediaCore} } }
     }''';
 
   static const String allTimePopular =
       '''
-    query GetAllTimePopular(\$page: Int, \$perPage: Int) {
-      Page(page: \$page, perPage: \$perPage) { media(sort: POPULARITY_DESC, type: ANIME, isAdult: false) { ${AnilistFragments.mediaCore} } }
+    query GetAllTimePopular(\$page: Int, \$perPage: Int, \$bannedGenres: [String]) {
+      Page(page: \$page, perPage: \$perPage) { media(sort: POPULARITY_DESC, type: ANIME, isAdult: false, genre_not_in: \$bannedGenres) { ${AnilistFragments.mediaCore} } }
     }''';
 
   static const String search =
@@ -58,8 +58,8 @@ abstract final class AnilistQueries {
     }''';
 
   static const String currentlyAiring = r'''
-    query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason, $currentYear: Int) {
-      Page(page: $page, perPage: $perPage) { media(type: ANIME, season: $currentSeason, seasonYear: $currentYear, sort: TRENDING_DESC, countryOfOrigin: "JP", isAdult: false, format_not_in: [SPECIAL, OVA, ONA, MOVIE]) { id idMal title { romaji english } synonyms coverImage { extraLarge large } bannerImage description episodes status nextAiringEpisode { episode airingAt } } }
+    query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason, $currentYear: Int, $bannedGenres: [String]) {
+      Page(page: $page, perPage: $perPage) { media(type: ANIME, season: $currentSeason, seasonYear: $currentYear, sort: TRENDING_DESC, countryOfOrigin: "JP", isAdult: false, genre_not_in: $bannedGenres, format_not_in: [SPECIAL, OVA, ONA, MOVIE]) { id idMal title { romaji english } synonyms coverImage { extraLarge large } bannerImage description episodes status nextAiringEpisode { episode airingAt } } }
     }''';
 
   static const String viewerId = 'query { Viewer { id } }';
