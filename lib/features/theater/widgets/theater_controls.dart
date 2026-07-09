@@ -1,4 +1,3 @@
-// lib/features/theater/widgets/theater_controls.dart
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
@@ -40,18 +39,28 @@ class TheaterControls extends StatefulWidget {
   State<TheaterControls> createState() => _TheaterControlsState();
 }
 
+// ── Rebuild isolation ───────────────────────────────────────────────────────
+// This State now only owns _isPlaying and _volume — both change on discrete
+// user actions (a play/pause press, a volume drag), not continuously.
+// _position/_duration/_buffer used to live here too, updated by a
+// stream.listen() that called THIS State's setState() several times a
+// second during playback. Because a setState() rebuild always cascades to
+// every child in that build() call, that one field was forcing a rebuild of
+// the play button, volume slider, and settings/PiP/fullscreen buttons on
+// every tick, even though none of them read position/duration/buffer.
+//
+// _PlaybackTimeline and _PlaybackTimeLabel below are separate StatefulWidgets
+// with their own State objects and their own stream subscriptions. Widget
+// rebuilds only ever propagate DOWN from whichever State calls setState —
+// never up to an ancestor, never sideways to a sibling — so isolating the
+// ticking fields inside their own State objects means a position tick now
+// only rebuilds those two small subtrees, not this whole control bar.
 class _TheaterControlsState extends State<TheaterControls> {
   bool _isPlaying = false;
   double _volume = 100.0;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
-  Duration _buffer = Duration.zero;
 
   late final StreamSubscription _playingSub;
-  late final StreamSubscription _positionSub;
-  late final StreamSubscription _durationSub;
   late final StreamSubscription _volumeSub;
-  late final StreamSubscription _bufferSub;
 
   final _prefs = SharedPreferencesAsync();
 
@@ -59,41 +68,21 @@ class _TheaterControlsState extends State<TheaterControls> {
   void initState() {
     super.initState();
     _isPlaying = widget.player.state.playing;
-    _position = widget.player.state.position;
-    _duration = widget.player.state.duration;
     _volume = widget.player.state.volume;
-    _buffer = widget.player.state.buffer;
 
     _playingSub = widget.player.stream.playing.listen((v) {
       if (mounted) setState(() => _isPlaying = v);
     });
-    _positionSub = widget.player.stream.position.listen((v) {
-      if (mounted) setState(() => _position = v);
-    });
-    _durationSub = widget.player.stream.duration.listen((v) {
-      if (mounted) setState(() => _duration = v);
-    });
     _volumeSub = widget.player.stream.volume.listen((v) {
       if (mounted) setState(() => _volume = v);
-    });
-    _bufferSub = widget.player.stream.buffer.listen((v) {
-      if (mounted) setState(() => _buffer = v);
     });
   }
 
   @override
   void dispose() {
     _playingSub.cancel();
-    _positionSub.cancel();
-    _durationSub.cancel();
     _volumeSub.cancel();
-    _bufferSub.cancel();
     super.dispose();
-  }
-
-  void _onSeek(Duration time) {
-    widget.player.seek(time);
-    widget.onInteract();
   }
 
   Future<void> _handleVolumeChanged(double value) async {
@@ -115,28 +104,8 @@ class _TheaterControlsState extends State<TheaterControls> {
     widget.onInteract();
   }
 
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    if (d.inHours > 0) return '${d.inHours}:$minutes:$seconds';
-    return '$minutes:$seconds';
-  }
-
-  Chapter? get _activeSkipChapter {
-    for (final c in widget.chapterMetadata) {
-      if (c.isSkippable &&
-          _position >= c.start &&
-          _position < (c.end - const Duration(seconds: 1))) {
-        return c;
-      }
-    }
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final skipTarget = _activeSkipChapter;
-
     final coreControls = Container(
       padding: const EdgeInsets.fromLTRB(32, 64, 32, 32),
       decoration: BoxDecoration(
@@ -158,73 +127,14 @@ class _TheaterControlsState extends State<TheaterControls> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: AnimatedOpacity(
-              opacity: skipTarget != null ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: AnimatedSlide(
-                offset: skipTarget != null ? Offset.zero : const Offset(0, 0.5),
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutBack,
-                child: IgnorePointer(
-                  ignoring: skipTarget == null,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Material(
-                      color: AppPalette.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () {
-                          if (skipTarget != null) {
-                            widget.player.seek(skipTarget.end);
-                            widget.onInteract();
-                          }
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                skipTarget?.skipLabel ?? 'Skip',
-                                style: const TextStyle(
-                                  color: AppPalette.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              const Icon(
-                                Icons.skip_next_rounded,
-                                color: AppPalette.white,
-                                size: 18,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          Seekbar(
-            position: _position,
-            duration: _duration,
-            buffer: _buffer,
-            chapters: widget.chapterMetadata,
+          // ── Owns _position/_duration/_buffer + the skip-chip/Seekbar
+          // visuals that depend on them. Ticks in isolation. ──
+          _PlaybackTimeline(
+            player: widget.player,
+            chapterMetadata: widget.chapterMetadata,
             uiPerformanceMode: widget.uiPerformanceMode,
             dpadModeActive: widget.dpadModeActive,
-            onSeek: _onSeek,
-            onSeekStart: widget.onInteract,
-            onSeekEnd: widget.onInteract,
+            onInteract: widget.onInteract,
           ),
           const SizedBox(height: 12),
 
@@ -243,15 +153,11 @@ class _TheaterControlsState extends State<TheaterControls> {
                 },
               ),
               const SizedBox(width: 16),
-              Text(
-                '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
-                style: const TextStyle(
-                  color: AppPalette.textMain,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
+
+              // ── Owns its own position/duration subscription, renders
+              // just the "00:00 / 00:00" text. Ticks in isolation. ──
+              _PlaybackTimeLabel(player: widget.player),
+
               const Spacer(),
               _TheaterIconButton(
                 icon: _volume == 0
@@ -267,6 +173,15 @@ class _TheaterControlsState extends State<TheaterControls> {
                   120.0,
                 ),
                 child: SliderTheme(
+                  // ── NOT const: inactiveTrackColor calls
+                  // AppPalette.white.withValues(alpha: 0.3), a method
+                  // invocation, which the compiler correctly rejects in a
+                  // const expression (const_eval_method_invocation). Only
+                  // the two shape constructors below (no method calls in
+                  // their arguments) can be const. This matches the
+                  // original, pre-refactor code exactly — the stray outer
+                  // `const` was introduced by mistake during the Tier 2
+                  // split and is removed here. ──
                   data: SliderThemeData(
                     activeTrackColor: AppPalette.white,
                     inactiveTrackColor: AppPalette.white.withValues(alpha: 0.3),
@@ -340,6 +255,225 @@ class _TheaterControlsState extends State<TheaterControls> {
         uiPerformanceMode: false,
         sigma: 30,
         child: coreControls,
+      ),
+    );
+  }
+}
+
+/// Owns [Player.stream.position]/[duration]/[buffer] and renders the
+/// skip-chip + [Seekbar] — the two things in the control bar that actually
+/// need to redraw every tick. Extracted from [_TheaterControlsState] so its
+/// setState() calls only rebuild this subtree, not the play/volume/settings
+/// buttons living alongside it in the parent's Row.
+class _PlaybackTimeline extends StatefulWidget {
+  final Player player;
+  final List<Chapter> chapterMetadata;
+  final bool uiPerformanceMode;
+  final bool dpadModeActive;
+  final VoidCallback onInteract;
+
+  const _PlaybackTimeline({
+    required this.player,
+    required this.chapterMetadata,
+    required this.uiPerformanceMode,
+    required this.dpadModeActive,
+    required this.onInteract,
+  });
+
+  @override
+  State<_PlaybackTimeline> createState() => _PlaybackTimelineState();
+}
+
+class _PlaybackTimelineState extends State<_PlaybackTimeline> {
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  Duration _buffer = Duration.zero;
+
+  late final StreamSubscription _positionSub;
+  late final StreamSubscription _durationSub;
+  late final StreamSubscription _bufferSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _position = widget.player.state.position;
+    _duration = widget.player.state.duration;
+    _buffer = widget.player.state.buffer;
+
+    _positionSub = widget.player.stream.position.listen((v) {
+      if (mounted) setState(() => _position = v);
+    });
+    _durationSub = widget.player.stream.duration.listen((v) {
+      if (mounted) setState(() => _duration = v);
+    });
+    _bufferSub = widget.player.stream.buffer.listen((v) {
+      if (mounted) setState(() => _buffer = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSub.cancel();
+    _durationSub.cancel();
+    _bufferSub.cancel();
+    super.dispose();
+  }
+
+  void _onSeek(Duration time) {
+    widget.player.seek(time);
+    widget.onInteract();
+  }
+
+  Chapter? get _activeSkipChapter {
+    for (final c in widget.chapterMetadata) {
+      if (c.isSkippable &&
+          _position >= c.start &&
+          _position < (c.end - const Duration(seconds: 1))) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skipTarget = _activeSkipChapter;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: AnimatedOpacity(
+            opacity: skipTarget != null ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 200),
+            child: AnimatedSlide(
+              offset: skipTarget != null ? Offset.zero : const Offset(0, 0.5),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutBack,
+              child: IgnorePointer(
+                ignoring: skipTarget == null,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Material(
+                    color: AppPalette.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () {
+                        if (skipTarget != null) {
+                          widget.player.seek(skipTarget.end);
+                          widget.onInteract();
+                        }
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              skipTarget?.skipLabel ?? 'Skip',
+                              style: const TextStyle(
+                                color: AppPalette.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            const Icon(
+                              Icons.skip_next_rounded,
+                              color: AppPalette.white,
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        Seekbar(
+          position: _position,
+          duration: _duration,
+          buffer: _buffer,
+          chapters: widget.chapterMetadata,
+          uiPerformanceMode: widget.uiPerformanceMode,
+          dpadModeActive: widget.dpadModeActive,
+          onSeek: _onSeek,
+          onSeekStart: widget.onInteract,
+          onSeekEnd: widget.onInteract,
+        ),
+      ],
+    );
+  }
+}
+
+/// Owns its own (duplicate, but cheap — the stream is broadcast) subscription
+/// to [Player.stream.position]/[duration] and renders just the
+/// "00:00 / 00:00" label. Kept as a separate State from [_PlaybackTimeline]
+/// so the label — which sits in the parent's icon Row, not inside the
+/// timeline's Column — ticks independently without either widget needing to
+/// reach into the other's state.
+class _PlaybackTimeLabel extends StatefulWidget {
+  final Player player;
+  const _PlaybackTimeLabel({required this.player});
+
+  @override
+  State<_PlaybackTimeLabel> createState() => _PlaybackTimeLabelState();
+}
+
+class _PlaybackTimeLabelState extends State<_PlaybackTimeLabel> {
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+
+  late final StreamSubscription _positionSub;
+  late final StreamSubscription _durationSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _position = widget.player.state.position;
+    _duration = widget.player.state.duration;
+
+    _positionSub = widget.player.stream.position.listen((v) {
+      if (mounted) setState(() => _position = v);
+    });
+    _durationSub = widget.player.stream.duration.listen((v) {
+      if (mounted) setState(() => _duration = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSub.cancel();
+    _durationSub.cancel();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    if (d.inHours > 0) return '${d.inHours}:$minutes:$seconds';
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+      style: const TextStyle(
+        color: AppPalette.textMain,
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+        fontFeatures: [FontFeature.tabularFigures()],
       ),
     );
   }

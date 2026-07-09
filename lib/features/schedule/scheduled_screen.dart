@@ -24,6 +24,17 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   DateTime _now = DateTime.now();
   final ScrollController _scrollController = ScrollController();
 
+  // ── Memoization for groupByWeekday. _animeFuture is only ever reassigned
+  // by _reload() — the once-a-minute clock tick just calls setState(() =>
+  // _now = ...), leaving _animeFuture (and therefore FutureBuilder's
+  // resolved snapshot.data instance) untouched. That means the SAME
+  // List<Anime> reference comes back on every single tick, so identical()
+  // reliably tells us "nothing to regroup" without needing to compare
+  // contents. Previously every tick re-ran a full sort+bucket over the
+  // entire airing list purely to refresh "Xh Ym left" labels. ──
+  List<Anime>? _cachedSourceList;
+  Map<String, List<Anime>>? _cachedCalendar;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +55,18 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   }
 
   void _reload() => setState(() => _animeFuture = _api.getCurrentlyAiring());
+
+  /// Returns the cached weekday grouping if [source] is the same list
+  /// instance we last grouped, otherwise regroups and caches the result.
+  Map<String, List<Anime>> _calendarFor(List<Anime> source) {
+    if (identical(source, _cachedSourceList) && _cachedCalendar != null) {
+      return _cachedCalendar!;
+    }
+    final grouped = groupByWeekday(source);
+    _cachedSourceList = source;
+    _cachedCalendar = grouped;
+    return grouped;
+  }
 
   String _formatLocalTime(int timestamp) {
     final d = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
@@ -89,7 +112,13 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
           );
         }
 
-        final calendar = groupByWeekday(snapshot.data ?? []);
+        // ── const <Anime>[] rather than a fresh [] literal: if this
+        // fallback were ever hit twice in a row, a `[]` literal would
+        // create a NEW empty list each time (never identical() to the
+        // last one), permanently defeating the cache. The const literal
+        // is canonicalized, so even this edge case stays memoized. ──
+        final sourceList = snapshot.data ?? const <Anime>[];
+        final calendar = _calendarFor(sourceList);
 
         // ── Reorder days to start with "Today" ──
         final todayIdx = _now.weekday - 1;
