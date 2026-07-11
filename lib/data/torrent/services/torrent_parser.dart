@@ -19,12 +19,45 @@ abstract final class TorrentParser {
   // per filename (not once per token), so there's no hot loop to win back
   // by removing it — see _tokenize's doc comment for the cases that *do*
   // get a manual rewrite, and why.
+  //
+  // The {2,4} digit-count floor is deliberate and load-bearing, not just a
+  // sane-length guess — DO NOT relax it to {1,4} to catch rare single-digit
+  // batch ranges (e.g. a 6-episode OVA batched as "1-6"). Doing so would
+  // also make this regex match "Series 2 - 05" — a bare sequel-cour digit
+  // baked into the title, followed by a dash then the real episode — as if
+  // it were a batch range "2-5". Confirmed by running both shapes through
+  // this pattern side-by-side: {1,4} turns "Shingeki no Kyojin 2 - 05" into
+  // a false batch classification; {2,4} correctly leaves it alone and lets
+  // the token loop below (see `episodeIsConfident`) resolve it as episode 5.
   static final _batchRangeRegex = RegExp(
     r'(?:^|[\[\(\s_.,-])(?:e|ep)?(\d{2,4})\s*[-~]\s*(?:e|ep)?(\d{2,4})(?=[\]\)\s_.,-]|$)',
   );
 
   static const _knownExtensions = {'mkv', 'mp4', 'avi', 'mp3', 'flac'};
   static const _seasonPrefixes = ['season', 'cour', 'part', 's'];
+
+  // ── Bare (unbracketed) numbers that should never be treated as episode
+  // candidates because they're almost certainly a resolution tag instead —
+  // e.g. "Show.Name.540.05.WEB-DL.mkv" from a scene-style release that
+  // skips brackets entirely. This is deliberately broader than the set
+  // _applyEnclosureResolution actually surfaces into meta.resolution: it
+  // only needs to keep these values from being *mistaken for an episode*,
+  // not to make every one of them user-visible. The original list was just
+  // {1080, 720, 480, 2160} — 360/540/576/1440/4320 sailed straight through
+  // into episode-candidate territory (a bare "540", a real if less common
+  // BD-encode height, would previously have overwritten the true episode
+  // number if it appeared before it with no dash in between). ──
+  static const _knownResolutionValues = {
+    360,
+    480,
+    540,
+    576,
+    720,
+    1080,
+    1440,
+    2160,
+    4320,
+  };
 
   static TorrentMetadata parse(String filename) {
     final meta = TorrentMetadata();
@@ -64,11 +97,30 @@ abstract final class TorrentParser {
     final stripped = _stripKnownExtension(lowerFilename);
     final tokens = _tokenize(stripped, meta);
 
-    // 5. Token Iteration — state machine, UNCHANGED in behavior from the
-    // original. Only the per-token regex matches were swapped for direct
-    // string/code-unit checks; every branch fires under exactly the same
-    // conditions as before.
+    // 5. Token Iteration — state machine.
+    //
+    // `episodeIsConfident` tracks whether the current meta.episode came
+    // from an unambiguous marker (S01E06, a bare E06/EP12 tag, or the
+    // "episode"/"ep"/"e" keyword followed by a number) as opposed to a
+    // bare, structurally-unmarked digit. Only a *confident* match is
+    // allowed to stick once something later tries to overwrite it — a bare
+    // digit is always still just a guess and can be superseded by a better
+    // signal found later in the same filename.
+    //
+    // Previously `foundDash` was tracked but never actually changed which
+    // branch ran below — both arms of the old if/else-if did the exact
+    // same `meta.episode = num` assignment, so the *first* bare digit
+    // anywhere in the filename won and could never be replaced. That meant
+    // any title with its own embedded sequel/cour digit before the real
+    // episode marker — "Shingeki no Kyojin 2 - 05", "Symphogear 2 - 12" —
+    // had its episode permanently misread as 2, not 5/12, causing the
+    // scoring engine's episode-match check to reject the correct torrent
+    // outright. `foundDash` now actually does something: a number *after*
+    // a dash overwrites a tentative pre-dash guess, since the dash is the
+    // strongest positional signal fansub naming gives us for "this is the
+    // real episode."
     bool foundDash = false;
+    bool episodeIsConfident = false;
 
     for (int i = 0; i < tokens.length; i++) {
       final t = tokens[i];
@@ -83,17 +135,24 @@ abstract final class TorrentParser {
       // FAST PATH 1: Numbers (with optional trailing version suffix e.g. "06v2")
       final num = int.tryParse(_stripVersionSuffix(t));
       if (num != null) {
-        if (num == 1080 || num == 720 || num == 480 || num == 2160) {
+        if (_knownResolutionValues.contains(num)) {
           continue;
         }
         if (num > 1980 && num < 2030) {
           continue;
         }
 
-        if (foundDash && meta.episode == -1) {
-          meta.episode = num;
-        } else if (meta.episode == -1) {
-          meta.episode = num;
+        // A bare digit is never allowed to clobber a confident match found
+        // elsewhere in the filename (S01E06, E06, "ep 06", ...).
+        if (!episodeIsConfident) {
+          if (foundDash) {
+            meta.episode = num;
+          } else if (meta.episode == -1) {
+            // Tentative: kept only in case no later, better-positioned
+            // number ever shows up (e.g. a plain "Series 05.mkv" with no
+            // dash at all).
+            meta.episode = num;
+          }
         }
         continue;
       }
@@ -110,6 +169,7 @@ abstract final class TorrentParser {
         if (se != null) {
           meta.season = se.season;
           meta.episode = se.episode;
+          episodeIsConfident = true;
           explicitSeasonFound = true;
           continue;
         }
@@ -131,13 +191,43 @@ abstract final class TorrentParser {
           }
         }
       } else if (char0 == 0x65 /* e */ ) {
+        final epNum = _matchEpisodeToken(t);
+        if (epNum != null) {
+          if (!episodeIsConfident) {
+            meta.episode = epNum;
+            episodeIsConfident = true;
+          }
+          continue;
+        }
+
         if (_isEpisodeKeyword(t) && i + 1 < tokens.length) {
           final nextNum = int.tryParse(tokens[i + 1]);
           if (nextNum != null) {
             meta.episode = nextNum;
+            episodeIsConfident = true;
             i++;
             continue;
           }
+        }
+      } else if (_isDigit(char0)) {
+        // Ordinal season prefix: "2nd"/"3rd"/"4th"/"21st" immediately
+        // followed by a literal "season" token, e.g. "Show Name 2nd
+        // Season - 05". Never caught by FAST PATH 1 above (int.tryParse
+        // rejects the "nd"/"rd"/"th"/"st" suffix), so this previously fell
+        // straight through untouched, leaving meta.season stuck at its
+        // default of 1 for any anime whose sequel season is titled this
+        // way — which AniList (and the fansub groups mirroring its
+        // titling) does very commonly. Gated on the very next token being
+        // "season" so an unrelated ordinal like "1st Anniversary Edition"
+        // is never mistaken for a season marker.
+        final ordinal = _matchOrdinalPrefix(t);
+        if (ordinal != null &&
+            i + 1 < tokens.length &&
+            tokens[i + 1] == 'season') {
+          meta.season = ordinal;
+          explicitSeasonFound = true;
+          i++;
+          continue;
         }
       }
 
@@ -289,24 +379,42 @@ abstract final class TorrentParser {
     return tokens;
   }
 
-  // ── Replaces the `_resolutionRegex` equality check against an already
-  // fully-lowercased, exact-match enclosure body. ──
+  // ── Widened from an exact-string equality check against the whole
+  // enclosure body to a per-word scan. Some releases pack multiple
+  // space/dot/dash-separated descriptors into a single bracket pair
+  // instead of one tag per bracket — e.g. "[BD 1080p FLAC]" or "[BDRip
+  // 1080p HEVC]" — and the old `switch (enc) { case '1080p': ... }` only
+  // ever matched when the enclosure's *entire* contents equaled exactly
+  // "1080p", so any compound tag silently left meta.resolution at
+  // "Unknown". Splitting on non-alphanumeric characters and checking each
+  // resulting word keeps the common single-tag case working identically
+  // (no separator inside "1080p" ⇒ one "word" ⇒ same match as before)
+  // while also catching the compound form. ──
   static void _applyEnclosureResolution(String enc, TorrentMetadata meta) {
-    switch (enc) {
-      case '1080p':
-      case '1080':
-        meta.resolution = '1080p';
-      case '720p':
-      case '720':
-        meta.resolution = '720p';
-      case '480p':
-        meta.resolution = '480p';
-      case '2160p':
-        meta.resolution = '2160p';
-      case '4k':
-        meta.resolution = '4k';
+    for (final word in enc.split(_enclosureWordSplitter)) {
+      switch (word) {
+        case '1080p':
+        case '1080':
+          meta.resolution = '1080p';
+          return;
+        case '720p':
+        case '720':
+          meta.resolution = '720p';
+          return;
+        case '480p':
+          meta.resolution = '480p';
+          return;
+        case '2160p':
+          meta.resolution = '2160p';
+          return;
+        case '4k':
+          meta.resolution = '4k';
+          return;
+      }
     }
   }
+
+  static final _enclosureWordSplitter = RegExp(r'[^a-z0-9]+');
 
   static bool _isDigit(int codeUnit) => codeUnit >= 0x30 && codeUnit <= 0x39;
 
@@ -338,7 +446,7 @@ abstract final class TorrentParser {
     if (i == epStart) return null;
     final epEnd = i; // marks the end of the bare episode digits
     // Allow an optional trailing version suffix: v<digits> (e.g. "s01e06v2")
-    if (i < len && t.codeUnitAt(i) == 0x76 /* v */) {
+    if (i < len && t.codeUnitAt(i) == 0x76 /* v */ ) {
       final vStart = i + 1;
       var j = vStart;
       while (j < len && _isDigit(t.codeUnitAt(j))) {
@@ -373,6 +481,41 @@ abstract final class TorrentParser {
   /// Replaces `^(episode|ep|e)$`.
   static bool _isEpisodeKeyword(String t) =>
       t == 'episode' || t == 'ep' || t == 'e';
+
+  /// Bare `eNN` / `epNN` with no season prefix at all — e.g. "e06", "ep12"
+  /// used as a standalone episode tag instead of either a plain number or
+  /// a full "S01E06". Previously unhandled: `_isEpisodeKeyword` only
+  /// matches the literal tokens "episode"/"ep"/"e" and expects the number
+  /// as a *separate*, following token, so "e06"/"ep12" as one fused token
+  /// matched neither that check nor `_matchSeasonEpisodeToken` (which
+  /// requires a leading `s`) — it was silently dropped, leaving
+  /// meta.episode at -1 for releases using this tagging style.
+  static int? _matchEpisodeToken(String t) {
+    if (t.length > 2 && t.startsWith('ep')) {
+      final n = int.tryParse(t.substring(2));
+      if (n != null) return n;
+    }
+    if (t.length > 1 && t.codeUnitAt(0) == 0x65 /* e */ ) {
+      final n = int.tryParse(t.substring(1));
+      if (n != null) return n;
+    }
+    return null;
+  }
+
+  /// Ordinal season prefix — "2nd", "3rd", "4th", "21st" — parsed on its
+  /// own; the caller is responsible for also checking that the *next*
+  /// token is literally "season" before treating this as a season marker,
+  /// so an unrelated ordinal like "1st Anniversary Edition" is never
+  /// mistaken for one.
+  static int? _matchOrdinalPrefix(String t) {
+    final len = t.length;
+    if (len < 3) return null;
+    final suffix = t.substring(len - 2);
+    if (suffix != 'st' && suffix != 'nd' && suffix != 'rd' && suffix != 'th') {
+      return null;
+    }
+    return int.tryParse(t.substring(0, len - 2));
+  }
 
   /// Strips a trailing version suffix of the form `v<digits>` from a token,
   /// returning the bare numeric string so that e.g. `"06v2"` → `"06"`.
