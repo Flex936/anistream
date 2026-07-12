@@ -13,7 +13,16 @@ class TorrentMirrorFetcher {
   Future<http.Response> fetch({
     required List<String> mirrors,
     required Uri Function(String baseUrl) pathBuilder,
-    Duration timeout = const Duration(seconds: 15),
+    // ── Was 15s. A mirror is either up (responds in well under a
+    // second) or fully dead/DNS-blocked (times out completely regardless
+    // of how long we wait) — there's no real middle ground where a
+    // slow-but-alive mirror actually needs 15s to answer. The old value
+    // just meant sitting on a dead first mirror for 15 wasted seconds,
+    // directly on the click → magnet-link critical path, before failing
+    // over to the next one. 7s keeps comfortable headroom over a slow
+    // connection while cutting the worst-case dead-mirror penalty by
+    // more than half. ──
+    Duration timeout = const Duration(seconds: 7),
   }) async {
     Exception? lastException;
 
