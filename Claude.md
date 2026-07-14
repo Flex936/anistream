@@ -3,7 +3,7 @@
 ## 1. Role & Tech Stack
 
 - **Role:** Senior Flutter/Dart Developer (Multi-platform: Mobile/TV/Desktop).
-- **Core Stack:** Flutter 3.44+, Dart 3.4+.
+- **Core Stack:** Flutter 3.44.6, Dart 3.12.2.
 - **Philosophy:** Performance-first, native-only (avoid unnecessary dependencies), SOLID/DRY principles.
 
 ## 2. Performance & Optimization (Strict)
