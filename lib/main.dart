@@ -13,20 +13,25 @@ import 'features/pip/pip_player_window.dart';
 
 // ── Accept CLI args to instantly intercept the sub-window ──
 void main(List<String> args) async {
-  // 1. Initialize Flutter Engine
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // 2. Initialize logging FIRST — before anything else runs — so that any
-  // boot-time crash (native window init, media_kit init, etc.) is still
-  // captured to disk. This also installs FlutterError/PlatformDispatcher
-  // hooks and desktop signal handlers (see app_logger.dart for details).
-  await AppLogger.init();
-
-  // 3. Run everything else inside a guarded zone so uncaught async errors
-  // anywhere in the app get logged (and flushed) instead of silently
-  // vanishing — this matters most in a release build with no console.
+  // Run everything — including binding initialization — inside the SAME
+  // zone that `runApp()` will later execute in. Previously
+  // `WidgetsFlutterBinding.ensureInitialized()` ran in the root zone while
+  // `runApp()` (inside `_bootstrap`) ran inside `runZonedGuarded`'s child
+  // zone, which is exactly the "Zone mismatch" Flutter warns about —
+  // zone-specific state (like the error zone used for reporting) could
+  // inconsistently reflect one zone or the other.
   runZonedGuarded(
-    () => _bootstrap(args),
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      // Initialize logging FIRST — before anything else runs — so that any
+      // boot-time crash (native window init, media_kit init, etc.) is still
+      // captured to disk. This also installs FlutterError/PlatformDispatcher
+      // hooks and desktop signal handlers (see app_logger.dart for details).
+      await AppLogger.init();
+
+      await _bootstrap(args);
+    },
     (error, stack) => AppLogger.e('main', 'Uncaught zone error', error, stack),
   );
 }
