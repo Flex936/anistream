@@ -45,7 +45,6 @@ class _AniStreamAppState extends State<AniStreamApp>
             const ActivateIntent(),
       },
       title: 'AniStream',
-      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         scaffoldBackgroundColor: AppPalette.base,
         colorScheme: ColorScheme.fromSeed(
