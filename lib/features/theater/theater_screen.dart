@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 
 import '../../core/theme/app_palette.dart';
 import '../../core/settings/settings_scope.dart';
@@ -27,7 +26,6 @@ import 'widgets/theater_player.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_settings.dart';
 import 'widgets/batch_picker.dart';
-import '../pip/pip_args.dart';
 
 class TheaterScreen extends StatefulWidget {
   final Anime anime;
@@ -60,7 +58,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _isFullscreen = true;
   Timer? _hideControlsTimer;
   bool _isClosing = false;
-  WindowController? _ownWindowController;
 
   // ── Auto-skip setting (the state machine itself now lives in
   // AutoSkipController) ──
@@ -120,10 +117,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _initPlayerAndStream();
     _startHideControlsTimer();
-
-    if (Platform.isLinux || Platform.isMacOS) {
-      _registerPipReturnHandler();
-    }
   }
 
   Future<void> _initPlayerAndStream() async {
@@ -157,7 +150,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       (_) => oldPlaceholder.dispose(),
     );
 
-    // ── Hardware decoding + streaming tuning (shared with PIP window) ──
+    // ── Hardware decoding + streaming tuning
     PlayerConfigurator.configureForTheater(_player, s);
 
     // Preserves the original quirk: fullscreen is only forced here when
@@ -444,71 +437,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     if (mounted) Navigator.pop(context);
   }
 
-  Future<void> _registerPipReturnHandler() async {
-    _ownWindowController = await WindowController.fromCurrentEngine();
-    _ownWindowController!.setWindowMethodHandler((call) async {
-      switch (call.method) {
-        case 'pip_returned':
-          final positionMs = (call.arguments as Map)['positionMs'] as int;
-          _player.seek(Duration(milliseconds: positionMs));
-          _player.play();
-          await windowManager.show();
-          await windowManager.focus();
-        case 'pip_ready':
-          await windowManager.minimize();
-      }
-      return null;
-    });
-  }
-
-  Future<WindowController?> _findExistingPipWindow() async {
-    if (Platform.isAndroid || Platform.isIOS) return null;
-
-    final all = await WindowController.getAll();
-    for (final controller in all) {
-      if (PipArgs.fromRaw(controller.arguments.toString()).isPip) {
-        return controller;
-      }
-    }
-    return null;
-  }
-
-  Future<void> _popOutToPip() async {
-    if (Platform.isAndroid || Platform.isIOS) return;
-
-    final streamUrl = _torrentController.streamUrl;
-    if (streamUrl == null || _ownWindowController == null) return;
-
-    final existing = await _findExistingPipWindow();
-    if (existing != null) {
-      await existing.invokeMethod('focus_pip');
-      await windowManager.minimize();
-      return;
-    }
-
-    final position = _player.state.position;
-    _player.pause();
-
-    final args = PipArgs.pip(
-      streamUrl: streamUrl,
-      title: widget.anime.title.display,
-      episode: widget.episode,
-      positionMs: position.inMilliseconds,
-      mainWindowId: _ownWindowController!.windowId,
-    );
-
-    final pipController = await WindowController.create(
-      WindowConfiguration(hiddenAtLaunch: true, arguments: args.toRaw()),
-    );
-    await pipController.show();
-  }
-
-  Future<void> _forceClosePip() async {
-    if (Platform.isAndroid || Platform.isIOS) return;
-    final existing = await _findExistingPipWindow();
-    await existing?.invokeMethod('force_close');
-  }
-
   @override
   void dispose() {
     if (Platform.isAndroid || Platform.isIOS) {
@@ -527,7 +455,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
-    _forceClosePip();
 
     if (!_isClosing) {
       _isClosing = true;
@@ -656,7 +583,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                         () =>
                                             _isSettingsOpen = !_isSettingsOpen,
                                       ),
-                                      onPip: _popOutToPip,
                                     ),
                                   ),
                                 ),

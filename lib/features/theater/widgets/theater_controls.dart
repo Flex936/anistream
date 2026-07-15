@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,7 +18,6 @@ class TheaterControls extends StatefulWidget {
   final List<Chapter> chapterMetadata;
   final bool uiPerformanceMode;
   final bool dpadModeActive;
-  final VoidCallback onPip;
 
   const TheaterControls({
     super.key,
@@ -29,7 +27,6 @@ class TheaterControls extends StatefulWidget {
     required this.onToggleFullscreen,
     required this.isSettingsOpen,
     required this.isFullscreen,
-    required this.onPip,
     this.uiPerformanceMode = false,
     this.dpadModeActive = false,
     this.chapterMetadata = const [],
@@ -46,8 +43,8 @@ class TheaterControls extends StatefulWidget {
 // stream.listen() that called THIS State's setState() several times a
 // second during playback. Because a setState() rebuild always cascades to
 // every child in that build() call, that one field was forcing a rebuild of
-// the play button, volume slider, and settings/PiP/fullscreen buttons on
-// every tick, even though none of them read position/duration/buffer.
+// the play button, volume slider, and settings/fullscreen buttons on every
+// tick, even though none of them read position/duration/buffer.
 //
 // _PlaybackTimeline and _PlaybackTimeLabel below are separate StatefulWidgets
 // with their own State objects and their own stream subscriptions. Widget
@@ -215,14 +212,6 @@ class _TheaterControlsState extends State<TheaterControls> {
                 dpadModeActive: widget.dpadModeActive,
                 onPressed: widget.onToggleSettings,
               ),
-
-              if (Platform.isMacOS || Platform.isLinux)
-                _TheaterIconButton(
-                  icon: Icons.picture_in_picture,
-                  tooltip: 'Picture in Picture',
-                  dpadModeActive: widget.dpadModeActive,
-                  onPressed: widget.onPip,
-                ),
 
               _TheaterIconButton(
                 icon: widget.isFullscreen

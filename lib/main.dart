@@ -8,10 +8,10 @@ import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'core/logging/app_logger.dart';
 import 'core/input/input_mode_controller.dart';
-import 'features/pip/pip_args.dart';
-import 'features/pip/pip_player_window.dart';
 
-// ── Accept CLI args to instantly intercept the sub-window ──
+// ── Accept CLI args (kept for forward compatibility with the Flutter
+// tool's own launch args; PIP's 'multi_window' interception has been
+// removed entirely — this app no longer spawns secondary windows). ──
 void main(List<String> args) async {
   // Run everything — including binding initialization — inside the SAME
   // zone that `runApp()` will later execute in. Previously
@@ -51,19 +51,6 @@ Future<void> _bootstrap(List<String> args) async {
   );
 
   final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-
-  // Intercept PIP Window Spawn (Desktop ONLY)
-  // desktop_multi_window passes 'multi_window' as the first argument when spawning a sub-window.
-  if (isDesktop && args.isNotEmpty && args.first == 'multi_window') {
-    final rawArgs = args.length > 2 ? args[2] : null;
-    final pipArgs = PipArgs.fromRaw(rawArgs);
-
-    if (pipArgs.isPip) {
-      AppLogger.i('main', 'Spawning PIP sub-window');
-      runApp(PipPlayerWindow(args: pipArgs));
-      return; // ── skip all the normal main-window setup below ──
-    }
-  }
 
   // Initialize Native Desktop Window
   if (isDesktop) {

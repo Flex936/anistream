@@ -2,12 +2,9 @@ import 'dart:io' show Platform;
 import 'package:media_kit/media_kit.dart';
 import '../../../core/settings/settings_service.dart';
 
-/// Shared mpv property configuration for both the main theater window and
-/// the detached PIP window — previously duplicated between
-/// `TheaterScreen._initPlayerAndStream` and `PipPlayerWindow._configurePlayer`.
+/// Shared mpv property configuration for the theater window — respects the
+/// user's saved hardware-decoding preference per platform.
 abstract final class PlayerConfigurator {
-  /// Full path for the main theater window — respects the user's saved
-  /// hardware-decoding preference per platform.
   static void configureForTheater(Player player, AppSettings settings) {
     final platform = player.platform;
     if (platform is! NativePlayer) return;
@@ -24,15 +21,6 @@ abstract final class PlayerConfigurator {
     } else if (hwdec != 'none') {
       platform.setProperty('hwdec', hwdec);
     }
-    _applyStreamingTuning(platform);
-  }
-
-  /// Simplified path for the detached PIP window (desktop-only, always
-  /// safe-mode hwdec, no per-platform branching).
-  static void configureForPip(Player player) {
-    final platform = player.platform;
-    if (platform is! NativePlayer) return;
-    platform.setProperty('hwdec', 'auto-safe');
     _applyStreamingTuning(platform);
   }
 
