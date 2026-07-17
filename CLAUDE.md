@@ -17,7 +17,8 @@
 
 ## 3. Code Generation Directives
 
-- UI Directive: Reference `DESIGN.md` for all visual styling, UI/UX philosophy, adaptive layouts, and TV focus rules.
+- Reference `DESIGN.md` for all visual styling, UI/UX philosophy, adaptive layouts, and TV focus rules.
+- Linter Compliance: Ensure all generated code strictly satisfies the configuration, strict type-checking, and linter rules defined in `analysis_options.yaml`.
 - Output complete, runnable files for refactors unless explicitly asked for snippets.
 - Comment the "why" behind complex logic (Regex, Focus, FFI).
 - Do not hallucinate APIs. Maintain the existing architecture (`/services`, `/models`, `/widgets`).
