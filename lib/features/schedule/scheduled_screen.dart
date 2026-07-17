@@ -256,6 +256,21 @@ class _DayShelf extends StatelessWidget {
             separatorBuilder: (_, _) => const SizedBox(width: 16),
             itemBuilder: (context, i) {
               return SizedBox(
+                // ── Stable per-anime identity across rebuilds. This
+                // screen rebuilds every 60s via _clockTimer purely to
+                // refresh "Xh Ym left" labels — without a key here,
+                // Flutter's element reconciliation had only list
+                // POSITION to go on for each slot, which is fragile the
+                // moment _calendarFor's memoized grouping returns a
+                // differently-ordered (but content-equal) list, or the
+                // day-of-week rollover reshuffles which shelf an item
+                // belongs to. That mismatch is exactly what surfaced as
+                // "erratic focus jumping" on TV: a D-Pad-focused card's
+                // underlying Element (and its FocusNode/hover state)
+                // could get silently swapped for a different anime's at
+                // the same position instead of being reconciled to the
+                // same anime it actually was. ──
+                key: ValueKey(items[i].id),
                 width: 160,
                 child: CalendarCard(
                   anime: items[i],

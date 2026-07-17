@@ -42,9 +42,23 @@ class _SearchInputState extends State<SearchInput> {
   bool _isLoading = false;
   List<Anime> _instantMatches = [];
 
+  // ── Fixed-size pool of FocusNodes for the dropdown result rows, capped
+  // at 3 to match _fetchMatches' `results.take(3)`. Pre-allocated once in
+  // initState rather than created/disposed per search so the focus-group
+  // listener below always has a stable set of nodes to watch instead of
+  // chasing a list that grows and shrinks with every keystroke. ──
+  static const int _kMaxInstantMatches = 3;
+  late final List<FocusNode> _resultFocusNodes;
+  Timer? _dismissCheckTimer;
+
   @override
   void initState() {
     super.initState();
+    _resultFocusNodes = List.generate(
+      _kMaxInstantMatches,
+      (i) => FocusNode(debugLabel: 'SearchResult$i'),
+    );
+
     _focusNode.onKeyEvent = (node, event) {
       if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
         return KeyEventResult.ignored;
@@ -72,18 +86,59 @@ class _SearchInputState extends State<SearchInput> {
       return KeyEventResult.ignored;
     };
 
-    _focusNode.addListener(() {
-      if (_focusNode.hasFocus && widget.controller.text.isNotEmpty) {
-        _showOverlay();
-      } else {
-        Future.delayed(const Duration(milliseconds: 150), _hideOverlay);
+    // ── Every node in the "search group" — the text field itself, plus
+    // each result row below — shares this one handler. Previously only
+    // _focusNode's own hasFocus was checked, so moving focus FROM the
+    // field INTO a result row (exactly what D-Pad/keyboard navigation
+    // into the dropdown looks like) was indistinguishable from the user
+    // dismissing search entirely, and the 150ms delayed _hideOverlay()
+    // tore the dropdown down out from under the very navigation trying
+    // to reach it. ──
+    _focusNode.addListener(_handleGroupFocusChange);
+    for (final node in _resultFocusNodes) {
+      node.addListener(_handleGroupFocusChange);
+    }
+  }
+
+  void _handleGroupFocusChange() {
+    // Opening stays keyed off the text field specifically — that's the
+    // only node whose focus should ever trigger showing results.
+    if (_focusNode.hasFocus && widget.controller.text.isNotEmpty) {
+      _showOverlay();
+    }
+
+    // Closing is keyed off the WHOLE group, re-checked after a short,
+    // conditional delay rather than firing an unconditional hide. When
+    // focus hops from the text field to a result row (D-Pad Down, Tab —
+    // and also a mouse tap, since InkWell requests focus on activation
+    // too), the old node's "focus lost" notification and the new node's
+    // "focus gained" notification aren't guaranteed to land in the same
+    // synchronous pass. Checking immediately risks catching that
+    // in-between instant and treating a pure focus HANDOFF within our
+    // own group as the user leaving it. 100ms is comfortably more than
+    // one frame, so the handoff has settled by the time this fires — and
+    // because the check re-reads live focus state instead of the
+    // original's bare unconditional hide, a genuinely fast focus return
+    // (e.g. Up then immediately back Down) is still caught correctly
+    // either way, since nothing here ever fires on a timer alone. ──
+    _dismissCheckTimer?.cancel();
+    _dismissCheckTimer = Timer(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
+      final stillWithinGroup =
+          _focusNode.hasFocus || _resultFocusNodes.any((n) => n.hasFocus);
+      if (!stillWithinGroup) {
+        _hideOverlay();
       }
     });
   }
 
   @override
   void dispose() {
+    _dismissCheckTimer?.cancel();
     _focusNode.dispose();
+    for (final node in _resultFocusNodes) {
+      node.dispose();
+    }
     _debounce?.cancel();
     _hideOverlay();
     _api.dispose();
@@ -177,86 +232,103 @@ class _SearchInputState extends State<SearchInput> {
     return _buildGlassContainer(
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: _instantMatches.map((anime) {
-          return Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () {
-                _hideOverlay();
-                _focusNode.unfocus();
-                widget.onSelectAnime?.call(anime);
-              },
-              hoverColor: AppPalette.white.withValues(alpha: 0.1),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+        children: [
+          for (int i = 0; i < _instantMatches.length; i++)
+            _buildResultRow(_instantMatches[i], _resultFocusNodes[i]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultRow(Anime anime, FocusNode focusNode) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        // ── Gives this row a real, externally-held FocusNode instead of
+        // InkWell's private internal one, so _handleGroupFocusChange can
+        // actually see "focus is on a result row" rather than only ever
+        // seeing _focusNode go blank. This is also what makes the row a
+        // reachable D-Pad/keyboard directional-focus target in the first
+        // place — an InkWell with no attached FocusNode isn't a valid
+        // candidate for focusInDirection(down) from the text field. ──
+        focusNode: focusNode,
+        onTap: () {
+          _hideOverlay();
+          _focusNode.unfocus();
+          widget.onSelectAnime?.call(anime);
+        },
+        hoverColor: AppPalette.white.withValues(alpha: 0.1),
+        // ── Matches hoverColor so a D-Pad/keyboard user gets the same
+        // visible feedback a mouse user already had. Without this, the
+        // race-condition fix above would work but be invisible: focus
+        // would genuinely be on the row, with nothing onscreen to show
+        // it. Full dpad-mode-gated styling (matching HoverFocusBuilder's
+        // convention elsewhere in the app) is Phase 2 scope. ──
+        focusColor: AppPalette.white.withValues(alpha: 0.1),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width: 32,
+                  height: 48,
+                  child: anime.coverImage?.display != null
+                      ? AppNetworkImage(
+                          url: anime.coverImage!.display!,
+                          // ── cacheWidth added: this thumbnail
+                          // renders at 32dp wide, yet was decoding
+                          // a full-resolution poster. 100 gives ~3x headroom. ──
+                          cacheWidth: 100,
+                          uiPerformanceMode: widget.uiPerformanceMode,
+                        )
+                      : const ColoredBox(color: AppPalette.surface),
                 ),
-                child: Row(
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: SizedBox(
-                        width: 32,
-                        height: 48,
-                        child: anime.coverImage?.display != null
-                            ? AppNetworkImage(
-                                url: anime.coverImage!.display!,
-                                // ── cacheWidth added: this thumbnail
-                                // renders at 32dp wide, yet was decoding
-                                // a full-resolution poster. 100 gives ~3x headroom. ──
-                                cacheWidth: 100,
-                                uiPerformanceMode: widget.uiPerformanceMode,
-                              )
-                            : const ColoredBox(color: AppPalette.surface),
+                    Text(
+                      anime.title.display,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppPalette.textMain,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 4),
+                    Text.rich(
+                      TextSpan(
                         children: [
-                          Text(
-                            anime.title.display,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppPalette.textMain,
-                              fontSize: 14,
+                          TextSpan(
+                            text: (anime.status ?? 'UNKNOWN').replaceAll(
+                              '_',
+                              ' ',
+                            ),
+                            style: TextStyle(
+                              color: anime.status?.statusColor,
                               fontWeight: FontWeight.w600,
+                              fontSize: 12,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: (anime.status ?? 'UNKNOWN').replaceAll(
-                                    '_',
-                                    ' ',
-                                  ),
-                                  style: TextStyle(
-                                    color: anime.status?.statusColor,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const TextSpan(
-                                  text: '  •  ',
-                                  style: TextStyle(
-                                    color: AppPalette.textMuted,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: '★ ${(anime.averageScore ?? 0) / 10}',
-                                  style: const TextStyle(
-                                    color: AppPalette.accent,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
+                          const TextSpan(
+                            text: '  •  ',
+                            style: TextStyle(
+                              color: AppPalette.textMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '★ ${(anime.averageScore ?? 0) / 10}',
+                            style: const TextStyle(
+                              color: AppPalette.accent,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
                             ),
                           ),
                         ],
@@ -265,9 +337,9 @@ class _SearchInputState extends State<SearchInput> {
                   ],
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            ],
+          ),
+        ),
       ),
     );
   }
