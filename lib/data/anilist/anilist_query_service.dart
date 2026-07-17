@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
-import 'package:anistream/core/logging/app_logger.dart';
-import 'anilist_queries.dart';
+
+import '../../core/logging/app_logger.dart';
 import '../../core/settings/settings_service.dart';
+import 'anilist_queries.dart';
 import 'models/anime.dart';
 import 'models/media_list.dart';
 
@@ -302,7 +304,7 @@ class AnilistQueryService {
               final media = r['media'] as Map<String, dynamic>?;
               if (media == null) return true;
               final genres = media['genres'] as List<dynamic>? ?? [];
-              return !genres.any((g) => banned.contains(g));
+              return !genres.any(banned.contains);
             })
             .map((r) => MediaListEntry.fromJson(r as Map<String, dynamic>))
             .toList();

@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../../data/anilist/models/anime.dart';
-import '../../data/anilist/anilist_query_service.dart';
-import '../../data/torrent/models/torrent.dart';
-import '../../data/torrent/torrent_scraper_service.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
+import '../../data/anilist/anilist_query_service.dart';
+import '../../data/anilist/models/anime.dart';
+import '../../data/torrent/models/torrent.dart';
+import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
 import '../theater/theater_screen.dart';
-
-import 'widgets/hero_banner.dart';
 import 'widgets/episode_tile.dart';
+import 'widgets/hero_banner.dart';
 
 class AnimeDetailsScreen extends StatefulWidget {
   final Anime anime;
@@ -59,7 +58,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     () => _scraper.fetchTorrents(widget.anime, ep),
   );
 
-  void _toggleEpisode(int ep) async {
+  Future<void> _toggleEpisode(int ep) async {
     if (_isFetchingSource) return;
 
     final autoPlayEnabled = SettingsScope.of(

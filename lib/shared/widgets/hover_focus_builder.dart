@@ -56,7 +56,7 @@ class _HoverFocusBuilderState extends State<HoverFocusBuilder> {
     final dpadActive = InputModeScope.of(context).dpadModeActive;
     final isVisiblyHighlighted = _hovered || (_focused && dpadActive);
 
-    Widget child = FocusableActionDetector(
+    final Widget child = FocusableActionDetector(
       autofocus: widget.autofocus,
       onShowHoverHighlight: _setHovered,
       onShowFocusHighlight: _setFocused,

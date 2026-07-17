@@ -138,7 +138,6 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
               ),
               child: Slider(
                 value: _minScore.toDouble(),
-                min: 0,
                 max: 100,
                 divisions: 100,
                 onChanged: (val) => setState(() => _minScore = val.toInt()),

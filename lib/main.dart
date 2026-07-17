@@ -6,8 +6,8 @@ import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
-import 'core/logging/app_logger.dart';
 import 'core/input/input_mode_controller.dart';
+import 'core/logging/app_logger.dart';
 
 // ── Accept CLI args (kept for forward compatibility with the Flutter
 // tool's own launch args; PIP's 'multi_window' interception has been
@@ -56,7 +56,7 @@ Future<void> _bootstrap(List<String> args) async {
   if (isDesktop) {
     await windowManager.ensureInitialized();
 
-    WindowOptions windowOptions = const WindowOptions(
+    final WindowOptions windowOptions = const WindowOptions(
       title: 'AniStream',
       minimumSize: Size(
         1000,

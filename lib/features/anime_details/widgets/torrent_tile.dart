@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../data/torrent/models/torrent.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../data/torrent/models/torrent.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 
 class TorrentTile extends StatelessWidget {

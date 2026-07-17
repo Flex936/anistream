@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../shared/widgets/app_network_image.dart';
-import '../../../shared/widgets/hover_focus_builder.dart';
-import '../../../shared/widgets/frosted_container.dart';
+import '../../../data/anilist/models/anime.dart';
 import '../../../shared/utils/anime_status_style.dart';
 import '../../../shared/utils/html_utils.dart';
+import '../../../shared/widgets/app_network_image.dart';
+import '../../../shared/widgets/frosted_container.dart';
+import '../../../shared/widgets/hover_focus_builder.dart';
 import './external_link_buttons.dart';
 
 class HeroBanner extends StatelessWidget {

@@ -100,7 +100,7 @@ class TheaterTopBar extends StatelessWidget {
             color: AppPalette.white,
             fontSize: 20,
             fontWeight: FontWeight.w700,
-            shadows: [Shadow(color: AppPalette.black, blurRadius: 8)],
+            shadows: [Shadow(blurRadius: 8)],
           ),
         ),
       ],

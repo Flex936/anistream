@@ -1,11 +1,12 @@
 import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../shared/widgets/hover_focus_builder.dart';
+import '../../../data/anilist/models/anime.dart';
 import '../../../shared/widgets/frosted_container.dart';
+import '../../../shared/widgets/hover_focus_builder.dart';
 import 'search_input.dart';
 
 class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
@@ -162,7 +163,6 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
               color: AppPalette.white.withValues(
                 alpha: widget.isScrolled ? 0.05 : 0.0,
               ),
-              width: 1,
             ),
           ),
         ),
@@ -327,7 +327,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
           _WindowButton(
             icon: Icons.remove_rounded,
             tooltip: 'Minimise',
-            onPressed: () => windowManager.minimize(),
+            onPressed: windowManager.minimize,
           ),
           _WindowButton(
             icon: _isMaximised
@@ -341,7 +341,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
             icon: Icons.close_rounded,
             tooltip: 'Quit',
             hoverColor: AppPalette.statusCancelled,
-            onPressed: () => windowManager.close(),
+            onPressed: windowManager.close,
           ),
         ],
       ],
@@ -381,7 +381,6 @@ class _MobileMenu extends StatelessWidget {
         border: Border(
           left: BorderSide(
             color: AppPalette.white.withValues(alpha: 0.1),
-            width: 1,
           ),
         ),
       ),

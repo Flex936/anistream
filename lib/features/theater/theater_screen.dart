@@ -3,29 +3,29 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
-import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_scope.dart';
-import '../../core/input/input_mode_scope.dart';
 import '../../core/input/input_mode_controller.dart';
-import '../../data/torrent/models/torrent.dart';
-import '../../data/anilist/models/anime.dart';
+import '../../core/input/input_mode_scope.dart';
+import '../../core/settings/settings_scope.dart';
+import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
+import '../../data/anilist/models/anime.dart';
+import '../../data/torrent/models/torrent.dart';
 import '../../shared/widgets/toast.dart';
-import 'services/streaming_controller_base.dart';
-import 'services/streaming_controller.dart';
-import 'services/remote_streaming_controller.dart';
-import 'services/theater_data.dart';
-import 'services/player_configurator.dart';
 import 'services/auto_skip_controller.dart';
-import 'widgets/theater_player.dart';
-import 'widgets/theater_controls.dart';
-import 'widgets/theater_settings.dart';
+import 'services/player_configurator.dart';
+import 'services/remote_streaming_controller.dart';
+import 'services/streaming_controller.dart';
+import 'services/streaming_controller_base.dart';
+import 'services/theater_data.dart';
 import 'widgets/batch_picker.dart';
+import 'widgets/theater_controls.dart';
+import 'widgets/theater_player.dart';
+import 'widgets/theater_settings.dart';
 
 class TheaterScreen extends StatefulWidget {
   final Anime anime;

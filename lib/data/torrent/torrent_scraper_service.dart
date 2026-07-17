@@ -1,8 +1,9 @@
 // lib/data/torrent/torrent_scraper_service.dart
 import 'dart:async';
-import 'package:anistream/core/logging/app_logger.dart';
+
 import 'package:http/http.dart' as http;
 
+import '../../core/logging/app_logger.dart';
 import '../anilist/models/anime.dart';
 import 'models/torrent.dart';
 import 'services/torrent_mirror_fetcher.dart';

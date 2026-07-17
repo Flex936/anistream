@@ -2,10 +2,10 @@
 import 'dart:async';
 import 'dart:isolate';
 
-import 'package:anistream/core/logging/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:xml/xml.dart';
 
+import '../../../core/logging/app_logger.dart';
 import '../models/torrent.dart';
 import 'torrent_scoring_engine.dart';
 

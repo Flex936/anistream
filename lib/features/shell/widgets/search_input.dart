@@ -1,13 +1,14 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/anime.dart';
-import '../../../core/theme/app_palette.dart';
+import '../../../shared/utils/anime_status_style.dart';
 import '../../../shared/widgets/app_network_image.dart';
 import '../../../shared/widgets/frosted_container.dart';
-import '../../../shared/utils/anime_status_style.dart';
 
 class SearchInput extends StatefulWidget {
   final TextEditingController controller;
@@ -324,7 +325,7 @@ class _SearchInputState extends State<SearchInput> {
               size: 20,
             ),
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 0),
+          prefixIconConstraints: const BoxConstraints(),
           suffixIcon: ValueListenableBuilder<TextEditingValue>(
             valueListenable: widget.controller,
             builder: (context, value, child) {

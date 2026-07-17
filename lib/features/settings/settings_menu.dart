@@ -1,12 +1,13 @@
 import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-import '../../shared/widgets/toast.dart';
-import '../../shared/widgets/frosted_container.dart';
-import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_service.dart';
 import '../../core/settings/settings_scope.dart';
+import '../../core/settings/settings_service.dart';
+import '../../core/theme/app_palette.dart';
+import '../../shared/widgets/frosted_container.dart';
+import '../../shared/widgets/toast.dart';
 import 'widgets/settings_components.dart';
 
 Future<void> showSettingsMenu(BuildContext context) {

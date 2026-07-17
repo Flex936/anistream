@@ -275,8 +275,6 @@ class _NavArrow extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: gradientColors,
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
           ),
         ),
         child: ClipRRect(

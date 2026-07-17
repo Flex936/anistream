@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:anistream/core/logging/app_logger.dart';
+
 import 'package:http/http.dart' as http;
 
+import '../../../core/logging/app_logger.dart';
 import '../../../data/torrent/services/torrent_parser.dart';
 import 'streaming_controller_base.dart';
 

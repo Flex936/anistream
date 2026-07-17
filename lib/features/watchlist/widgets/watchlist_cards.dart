@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../data/anilist/models/media_list.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../data/anilist/models/media_list.dart';
 import '../../../shared/utils/anime_status_style.dart';
 import '../../../shared/utils/html_utils.dart';
 import '../../../shared/utils/perf_animations.dart';

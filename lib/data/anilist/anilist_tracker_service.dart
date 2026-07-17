@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
-import 'anilist_query_service.dart';
+
+import '../../core/logging/app_logger.dart';
 import 'anilist_queries.dart';
-import 'package:anistream/core/logging/app_logger.dart';
+import 'anilist_query_service.dart';
 
 class AnilistTrackerService {
   final AnilistQueryService _api = AnilistQueryService();

@@ -1,7 +1,8 @@
 import 'dart:async';
-import 'package:anistream/core/logging/app_logger.dart';
+
 import 'package:libtorrent_flutter/libtorrent_flutter.dart';
 
+import '../../../core/logging/app_logger.dart';
 import '../../../data/torrent/services/torrent_parser.dart';
 import 'streaming_controller_base.dart';
 

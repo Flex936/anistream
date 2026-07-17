@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../core/settings/settings_scope.dart';
+import '../../core/theme/app_palette.dart';
+import '../../data/anilist/models/anime.dart';
+import '../../features/anime_details/anime_details_screen.dart';
 import '../utils/anime_status_style.dart';
 import '../utils/perf_animations.dart';
-import '../../features/anime_details/anime_details_screen.dart';
-import '../../data/anilist/models/anime.dart';
-import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_scope.dart';
 import 'app_network_image.dart';
 import 'frosted_container.dart';
 import 'hover_focus_builder.dart';

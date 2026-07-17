@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'core/theme/app_palette.dart';
-import 'core/router/app_router.dart';
-import 'core/logging/app_logger.dart';
-import 'core/settings/settings_scope.dart';
 import 'core/input/input_mode_scope.dart';
+import 'core/logging/app_logger.dart';
+import 'core/router/app_router.dart';
+import 'core/settings/settings_scope.dart';
+import 'core/theme/app_palette.dart';
 
 class AniStreamApp extends StatefulWidget {
   const AniStreamApp({super.key});

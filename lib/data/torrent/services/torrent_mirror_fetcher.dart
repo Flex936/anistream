@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
-import 'package:anistream/core/logging/app_logger.dart';
+
+import '../../../core/logging/app_logger.dart';
 
 /// Generic "try each mirror URL in order until one responds with 200."
 /// Extracted out of `TorrentScraperService` — the fallback logic itself has

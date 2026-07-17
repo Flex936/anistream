@@ -1,20 +1,21 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import '../../data/anilist/models/anime.dart';
-import '../../data/anilist/anilist_query_service.dart';
-import '../../core/theme/app_palette.dart';
 import '../../core/settings/settings_scope.dart';
-import 'controllers/navigation_controller.dart';
-import 'widgets/navbar.dart';
-import '../settings/settings_menu.dart';
+import '../../core/theme/app_palette.dart';
+import '../../data/anilist/anilist_auth_service.dart';
+import '../../data/anilist/anilist_query_service.dart';
+import '../../data/anilist/models/anime.dart';
+import '../../shared/widgets/mouse_back_forward_listener.dart';
 import '../anime_details/anime_details_screen.dart';
 import '../home/home_screen.dart';
-import '../search/search_results_screen.dart';
-import '../../data/anilist/anilist_auth_service.dart';
-import '../watchlist/watchlist_screen.dart';
 import '../schedule/scheduled_screen.dart';
-import '../../shared/widgets/mouse_back_forward_listener.dart';
+import '../search/search_results_screen.dart';
+import '../settings/settings_menu.dart';
+import '../watchlist/watchlist_screen.dart';
+import 'controllers/navigation_controller.dart';
+import 'widgets/navbar.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});

@@ -39,7 +39,6 @@ class FrostedContainer extends StatelessWidget {
     }
     return ClipRRect(
       borderRadius: borderRadius,
-      clipBehavior: Clip.antiAlias,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
         child: child,

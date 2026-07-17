@@ -4,10 +4,21 @@
 # The issues identified by the analyzer are surfaced in the UI of Dart-enabled
 # IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
 # invoked from the command line by running `flutter analyze`.
-
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  # Enforce rigorous static type checking
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+  # Elevate critical structural flaws to compile-time build blockers
+  errors:
+    missing_required_param: error
+    missing_return: error
+    todo: ignore
+    invalid_annotation_target: ignore
 
 linter:
   # The lint rules applied to this project can be customized in the
@@ -21,8 +32,31 @@ linter:
   # `// ignore_for_file: name_of_lint` syntax on the line or in the file
   # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # --- Strict Error Prevention & Async Safety ---
+    always_declare_return_types: true    
+    avoid_void_async: true               
+    unawaited_futures: true             
+    discarded_futures: true             
+    cancel_subscriptions: true          
+    close_sinks: true                   
+    avoid_dynamic_calls: true
+
+    # --- Code Cleanliness & Readability ---
+    require_trailing_commas: true       
+    prefer_final_locals: true           
+    prefer_final_in_for_each: true      
+    directives_ordering: true           
+    combinators_ordering: true          
+    annotate_overrides: true
+    prefer_relative_imports: true
+    avoid_redundant_argument_values: true
+    unnecessary_lambdas: true            
+
+    # --- Production Safety ---
+    avoid_print: true
+
+    # --- Custom Design Overrides ---
+    prefer_expression_function_bodies: false
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

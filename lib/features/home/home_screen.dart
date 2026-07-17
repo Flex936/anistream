@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_palette.dart';
 import '../../core/settings/settings_scope.dart';
+import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import 'widgets/anime_carousel.dart';

@@ -192,7 +192,6 @@ class _TheaterControlsState extends State<TheaterControls> {
                     ),
                   ),
                   child: Slider(
-                    min: 0,
                     max: 100,
                     value: _volume.clamp(0.0, 100.0),
                     onChanged: (v) {

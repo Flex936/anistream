@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../core/settings/settings_scope.dart';
+import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
-import '../../core/theme/app_palette.dart';
-import '../../core/settings/settings_scope.dart';
-import '../../shared/widgets/anime_card.dart';
 import '../../shared/utils/responsive_grid.dart';
+import '../../shared/widgets/anime_card.dart';
 import 'widgets/search_filter_panel.dart';
 
 class SearchResultsScreen extends StatefulWidget {

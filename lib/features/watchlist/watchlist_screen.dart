@@ -1,12 +1,13 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
-import '../../data/anilist/models/anime.dart';
-import '../../core/theme/app_palette.dart';
 import '../../core/settings/settings_scope.dart';
-import '../../shared/widgets/hover_focus_builder.dart';
-import '../../shared/utils/responsive_grid.dart';
+import '../../core/theme/app_palette.dart';
+import '../../data/anilist/models/anime.dart';
 import '../../shared/utils/perf_animations.dart';
+import '../../shared/utils/responsive_grid.dart';
+import '../../shared/widgets/hover_focus_builder.dart';
 import 'controllers/watchlist_controller.dart';
 import 'widgets/watchlist_cards.dart';
 
@@ -178,7 +179,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(32, 0, 32, 24),
                       child: Wrap(
-                        alignment: WrapAlignment.start,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         spacing: 32,
                         runSpacing: 16,
@@ -530,7 +530,6 @@ class _EmptyPane extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: AppPalette.border,
-            style: BorderStyle.solid,
           ),
         ),
         child: Column(

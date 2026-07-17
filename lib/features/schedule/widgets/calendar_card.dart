@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../data/anilist/models/anime.dart';
+import '../../../shared/utils/perf_animations.dart';
 import '../../../shared/widgets/app_network_image.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
-import '../../../shared/utils/perf_animations.dart';
 
 class CalendarCard extends StatelessWidget {
   final Anime anime;
