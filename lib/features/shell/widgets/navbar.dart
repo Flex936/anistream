@@ -1,10 +1,10 @@
 import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
+import 'package:dpad/dpad.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../../data/anilist/models/anime.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../shared/widgets/hover_focus_builder.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import 'search_input.dart';
 
@@ -179,8 +179,8 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
     // ── Performant mode's FrostedContainer branch never reads `sigma` at
     // all (it skips the blur entirely), so animating it 0 → 16 on every
     // scroll transition was pure wasted per-frame rebuild work for a value
-    // nobody ever sees applied. Skip the tween outright and go straight to
-    // a static frame instead of paying for an animation with no visual
+    // nobody ever sees applied. Skip the tween outright and go straight
+    // to a static frame instead of paying for an animation with no visual
     // effect. ──
     final frame = widget.uiPerformanceMode
         ? buildFrame(0.0)
@@ -200,7 +200,23 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
     // independent of whatever is scrolling underneath it. Isolating it
     // onto its own compositor layer means a scroll-driven repaint of the
     // body never forces the nav bar to re-record, and vice versa. ──
-    return RepaintBoundary(child: frame);
+    //
+    // ── DpadRegion: the whole toolbar is treated as ONE region (logo,
+    // search, schedule/watchlist/user/settings icons, window controls
+    // are all one visual "section," not several) with a stable memoryKey
+    // so returning here from anywhere remembers which control was last
+    // focused. No edge-behavior overrides — the default (leave, on both
+    // axes) is exactly right: Up has nothing above to find anyway (a
+    // harmless no-op, same practical result as `stop`), and — critically
+    // — Down must stay at its default so focus can actually escape
+    // DOWNWARD into the body's own DpadRegion (app_shell.dart). Setting
+    // verticalEdge to `stop` here would have blocked both directions,
+    // silently breaking navbar → body navigation while "fixing" nothing
+    // it wasn't already handling. ──
+    return DpadRegion(
+      memoryKey: 'navbar',
+      child: RepaintBoundary(child: frame),
+    );
   }
 
   Widget _buildMobileSearchMode() {
@@ -539,20 +555,25 @@ class _NavLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverFocusBuilder(
-      onTap: onTap,
-      builder: (context, hovered) => AnimatedDefaultTextStyle(
+    // ── The inner Padding+Text is genuinely focus-independent — only the
+    // wrapping AnimatedDefaultTextStyle's color depends on state.focused
+    // — so it's passed as `child` and reused across focus-state rebuilds
+    // instead of being reconstructed inside `builder` every time. ──
+    return DpadFocusable(
+      onSelect: () => onTap?.call(),
+      builder: (context, state, child) => AnimatedDefaultTextStyle(
         duration: const Duration(milliseconds: 150),
         style: TextStyle(
-          color: hovered ? AppPalette.primary : AppPalette.textMain,
+          color: state.focused ? AppPalette.primary : AppPalette.textMain,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
         ),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Text('AniStream'),
-        ),
+        child: child,
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Text('AniStream'),
       ),
     );
   }
@@ -571,18 +592,28 @@ class _NavIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverFocusBuilder(
-      tooltip: tooltip,
-      onTap: onPressed,
-      builder: (context, hovered) => Container(
-        width: 44,
-        height: 44,
-        alignment: Alignment.center,
-        child: Icon(
-          icon,
-          size: 22,
-          color: hovered ? AppPalette.primary : AppPalette.textMuted,
+    // ── Tooltip wraps DpadFocusable rather than being a param on it —
+    // dpad doesn't document a built-in tooltip option, and layering
+    // Flutter's own Tooltip outside is simple and doesn't need one. ──
+    return Tooltip(
+      message: tooltip,
+      // ── Icon's own color depends on state.focused, so — like AnimeCard
+      // — there's no focus-independent part worth hoisting into `child`;
+      // builder rebuilds the whole thing and `child` is an unused
+      // placeholder. ──
+      child: DpadFocusable(
+        onSelect: () => onPressed?.call(),
+        builder: (context, state, child) => Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            size: 22,
+            color: state.focused ? AppPalette.primary : AppPalette.textMuted,
+          ),
         ),
+        child: const SizedBox.shrink(),
       ),
     );
   }
@@ -596,26 +627,35 @@ class _UserButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverFocusBuilder(
-      tooltip: isLoggedIn ? 'Log out of AniList' : 'Log in to AniList',
-      onTap: onPressed,
-      builder: (context, hovered) {
-        Color iconColor;
-        if (isLoggedIn) {
-          iconColor = hovered
-              ? AppPalette.statusCancelled
-              : AppPalette.statusReleasing;
-        } else {
-          iconColor = hovered ? AppPalette.textMain : AppPalette.textMuted;
-        }
-        return Container(
-          width: 44,
-          height: 44,
-          color: AppPalette.transparent,
-          alignment: Alignment.center,
-          child: Icon(Icons.person_outline_rounded, color: iconColor, size: 22),
-        );
-      },
+    return Tooltip(
+      message: isLoggedIn ? 'Log out of AniList' : 'Log in to AniList',
+      child: DpadFocusable(
+        onSelect: () => onPressed?.call(),
+        builder: (context, state, child) {
+          Color iconColor;
+          if (isLoggedIn) {
+            iconColor = state.focused
+                ? AppPalette.statusCancelled
+                : AppPalette.statusReleasing;
+          } else {
+            iconColor = state.focused
+                ? AppPalette.textMain
+                : AppPalette.textMuted;
+          }
+          return Container(
+            width: 44,
+            height: 44,
+            color: AppPalette.transparent,
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.person_outline_rounded,
+              color: iconColor,
+              size: 22,
+            ),
+          );
+        },
+        child: const SizedBox.shrink(),
+      ),
     );
   }
 }
@@ -635,21 +675,24 @@ class _WindowButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverFocusBuilder(
-      tooltip: tooltip,
-      onTap: onPressed,
-      builder: (context, hovered) => Container(
-        width: 44,
-        height: 44,
-        color: AppPalette.transparent,
-        alignment: Alignment.center,
-        child: Icon(
-          icon,
-          color: hovered
-              ? (hoverColor ?? AppPalette.textMain)
-              : AppPalette.textMuted,
-          size: 20,
+    return Tooltip(
+      message: tooltip,
+      child: DpadFocusable(
+        onSelect: () => onPressed?.call(),
+        builder: (context, state, child) => Container(
+          width: 44,
+          height: 44,
+          color: AppPalette.transparent,
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            color: state.focused
+                ? (hoverColor ?? AppPalette.textMain)
+                : AppPalette.textMuted,
+            size: 20,
+          ),
         ),
+        child: const SizedBox.shrink(),
       ),
     );
   }

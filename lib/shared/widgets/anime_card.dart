@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dpad/dpad.dart';
 
 import '../utils/anime_status_style.dart';
 import '../utils/perf_animations.dart';
@@ -8,7 +9,6 @@ import '../../core/theme/app_palette.dart';
 import '../../core/settings/settings_scope.dart';
 import 'app_network_image.dart';
 import 'frosted_container.dart';
-import 'hover_focus_builder.dart';
 
 class AnimeCard extends StatelessWidget {
   final Anime anime;
@@ -30,9 +30,17 @@ class AnimeCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: HoverFocusBuilder(
+          // ── DpadFocusable replaces HoverFocusBuilder. The poster's
+          // hover overlay (_HoverOverlay) depends on the focus state, so
+          // — unlike _NavLogo — there's no focus-independent subtree
+          // worth passing through the `child` optimization param; builder
+          // rebuilds the whole visual tree each time, same shape as the
+          // old (context, hovered) => Widget callback, just keyed off
+          // state.focused instead. `child` is an unused placeholder for
+          // exactly that reason. ──
+          child: DpadFocusable(
             autofocus: autofocus,
-            onTap: () {
+            onSelect: () {
               if (onSelect != null) {
                 onSelect!(anime);
               } else {
@@ -44,17 +52,17 @@ class AnimeCard extends StatelessWidget {
                 );
               }
             },
-            builder: (context, hovered) => AnimatedContainer(
+            builder: (context, state, child) => AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOut,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: hovered
+                  color: state.focused
                       ? AppPalette.primary.withValues(alpha: 0.55)
                       : AppPalette.border,
                 ),
-                boxShadow: (hovered && !uiPerformanceMode)
+                boxShadow: (state.focused && !uiPerformanceMode)
                     ? [
                         BoxShadow(
                           color: AppPalette.primary.withValues(alpha: 0.18),
@@ -109,27 +117,34 @@ class AnimeCard extends StatelessWidget {
                       ),
                     ),
                     _HoverOverlay(
-                      visible: hovered,
+                      visible: state.focused,
                       uiPerformanceMode: uiPerformanceMode,
                     ),
                   ],
                 ),
               ),
             ),
+            child: const SizedBox.shrink(),
           ),
         ),
         const SizedBox(height: 10),
-        HoverFocusBuilder(
-          builder: (context, _) => Text(
-            anime.title.display,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppPalette.textMain,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              height: 1.35,
-            ),
+        // ── Was wrapped in a second, unused HoverFocusBuilder — it had no
+        // onTap and its builder ignored the hovered value it was handed,
+        // so it existed only as a dead, focusable stop: pressing D-Pad
+        // down from the poster landed here, showed a ring, and did
+        // nothing. That's exactly the "focus highlight on a
+        // non-interactive title" bug the original audit flagged. Plain
+        // Text now — nothing here is interactive, so nothing here should
+        // be a focus target. ──
+        Text(
+          anime.title.display,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppPalette.textMain,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            height: 1.35,
           ),
         ),
         const SizedBox(height: 4),
