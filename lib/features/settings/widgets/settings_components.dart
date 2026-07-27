@@ -1,6 +1,7 @@
+import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dpad/dpad.dart';
+
 import '../../../core/theme/app_palette.dart';
 
 class SettingsSection extends StatelessWidget {
@@ -323,7 +324,7 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
           // this field and pressing Select before typing — the TextField
           // itself already grabs focus normally for touch/mouse taps
           // and Tab, this just makes Select do the same thing. ──
-          onSelect: () => _focusNode.requestFocus(),
+          onSelect: _focusNode.requestFocus,
           child: TextField(
             controller: widget.controller,
             focusNode: _focusNode,

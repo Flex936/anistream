@@ -1,6 +1,7 @@
 import 'dart:ui';
-import 'package:flutter/material.dart';
+
 import 'package:dpad/dpad.dart';
+import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/anilist_query_service.dart';
@@ -297,9 +298,7 @@ class _NavArrow extends StatelessWidget {
         alignment: alignment,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: gradientColors,
-          ),
+          gradient: LinearGradient(colors: gradientColors),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),

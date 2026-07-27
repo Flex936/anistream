@@ -1,7 +1,9 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+
 import 'package:dpad/dpad.dart';
+import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/track_name_parser.dart';

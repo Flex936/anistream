@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:dpad/dpad.dart';
+import 'package:flutter/material.dart';
 
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';

@@ -1,7 +1,7 @@
+import 'package:dpad/dpad.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dpad/dpad.dart';
 
 import 'core/input/input_mode_scope.dart';
 import 'core/logging/app_logger.dart';
