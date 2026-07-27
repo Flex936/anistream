@@ -7,6 +7,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../data/torrent/models/torrent.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
+import '../../theater/exo_theater_screen.dart';
 import '../../theater/theater_screen.dart';
 import 'torrent_tile.dart';
 
@@ -283,18 +284,22 @@ class EpisodeTile extends StatelessWidget {
                   isRecommended: i == 0,
                   uiPerformanceMode: uiPerformanceMode,
                   onStream: () {
-                    unawaited(
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => TheaterScreen(
-                            anime: anime,
-                            episode: episodeNumber,
-                            torrent: torrents[i],
-                          ),
-                        ),
-                      ).then((_) => onReturnFromTheater?.call()),
-                    );
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => true
+                            ? ExoTheaterScreen(
+                                anime: anime,
+                                episode: episodeNumber,
+                                torrent: torrents[i],
+                              )
+                            : TheaterScreen(
+                                anime: anime,
+                                episode: episodeNumber,
+                                torrent: torrents[i],
+                              ),
+                      ),
+                    ).then((_) => onReturnFromTheater?.call());
                   },
                 ),
                 if (i < torrents.length - 1) const SizedBox(height: 8),
