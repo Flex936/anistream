@@ -79,11 +79,18 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _videoController = VideoController(_player, configuration: videoConfig);
 
     if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
+      // ── initState can't be async — SystemChrome's setters return
+      // Future<void>, so the fire-and-forget intent is made explicit
+      // instead of silently dropped (unawaited_futures). ──
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
+      );
+      unawaited(
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]),
+      );
     }
 
     _autoSkipController = AutoSkipController(
@@ -114,7 +121,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
       },
     );
 
-    _initPlayerAndStream();
+    // ── _initPlayerAndStream is Future<void> — initState can't be async,
+    // so the fire-and-forget intent is made explicit (unawaited_futures).
+    // The method itself already guards every `mounted`-sensitive step
+    // internally. ──
+    unawaited(_initPlayerAndStream());
     _startHideControlsTimer();
   }
 
@@ -149,26 +160,35 @@ class _TheaterScreenState extends State<TheaterScreen> {
       (_) => oldPlaceholder.dispose(),
     );
 
-    // ── Hardware decoding + streaming tuning
-    PlayerConfigurator.configureForTheater(_player, s);
+    // ── Hardware decoding + streaming tuning. PlayerConfigurator is now
+    // Future<void>-returning (see player_configurator.dart) rather than
+    // firing six unawaited mpv property sets, so this is awaited. ──
+    await PlayerConfigurator.configureForTheater(_player, s);
 
     // Preserves the original quirk: fullscreen is only forced here when
     // hwdec is left on "auto" and we're on a desktop platform (matches the
     // prior inline logic exactly).
     if (s.hardwareDecoding == 'auto' &&
         (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
-      windowManager.setFullScreen(true);
+      await windowManager.setFullScreen(true);
     }
 
     // ── Restore persistent volume ─────────────────────────────────────────
     final savedVolume =
         await SharedPreferencesAsync().getDouble('theater_volume') ?? 100.0;
-    _player.setVolume(savedVolume);
+    await _player.setVolume(savedVolume);
 
     // ── Start streaming ───────────────────────────────────────────────────
-    _torrentController.initialize(
-      widget.torrent.magnetLink,
-      episodeNumber: widget.episode,
+    // Deliberately NOT awaited — StreamingController/RemoteStreamingController
+    // report readiness asynchronously via notifyListeners as buffering
+    // progresses, not by this returned Future completing. Awaiting it would
+    // serialize AniList tracker init (below) behind it for no benefit, so
+    // the fire-and-forget intent is made explicit instead. ──
+    unawaited(
+      _torrentController.initialize(
+        widget.torrent.magnetLink,
+        episodeNumber: widget.episode,
+      ),
     );
 
     // ── AniList progress tracking ─────────────────────────────────────────
@@ -190,29 +210,35 @@ class _TheaterScreenState extends State<TheaterScreen> {
   void _onTorrentStateChanged() {
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
-      _player.open(Media(_torrentController.streamUrl!));
+      // ── Listener callbacks (added via addListener) are synchronous —
+      // Player.open/.play and the .then() chain below all return Futures
+      // that can't be awaited here, so each fire-and-forget is wrapped
+      // explicitly instead of silently dropped (unawaited_futures). ──
+      unawaited(_player.open(Media(_torrentController.streamUrl!)));
 
-      _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
-        _,
-      ) async {
-        final resolvedChapters = await loadChapters(_player);
+      unawaited(
+        _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
+          _,
+        ) async {
+          final resolvedChapters = await loadChapters(_player);
 
-        debugPrint('\n─── LOADED CHAPTERS ───');
-        for (int i = 0; i < resolvedChapters.length; i++) {
-          final c = resolvedChapters[i];
-          debugPrint(
-            '[$i] "${c.title}" | ${c.start} -> ${c.end} | Skippable: ${c.isSkippable}',
-          );
-        }
-        debugPrint('───────────────────────────\n');
+          debugPrint('\n─── LOADED CHAPTERS ───');
+          for (int i = 0; i < resolvedChapters.length; i++) {
+            final c = resolvedChapters[i];
+            debugPrint(
+              '[$i] "${c.title}" | ${c.start} -> ${c.end} | Skippable: ${c.isSkippable}',
+            );
+          }
+          debugPrint('───────────────────────────\n');
 
-        if (mounted) {
-          setState(() => _chapters = resolvedChapters);
-          _autoSkipController.chapters = resolvedChapters;
-        }
-      });
+          if (mounted) {
+            setState(() => _chapters = resolvedChapters);
+            _autoSkipController.chapters = resolvedChapters;
+          }
+        }),
+      );
 
-      _player.play();
+      unawaited(_player.play());
     }
   }
 
@@ -291,18 +317,20 @@ class _TheaterScreenState extends State<TheaterScreen> {
       // silently did nothing while the picker was showing). There was no
       // way to back out of a batch torrent without picking a file. Now
       // routes to the same exit used by the picker's own close button. ──
-      _exitTheater();
+      unawaited(_exitTheater());
       return;
     }
     // maybePop() walks TheaterScreen's own PopScope below, which is where
     // the actual "exit fullscreen first, then exit Theater" decision is
     // made — kept in exactly one place rather than duplicated here.
-    Navigator.maybePop(context);
+    // Navigator.maybePop returns Future<bool>; this is a synchronous
+    // shortcut callback, so the fire-and-forget intent is explicit.
+    unawaited(Navigator.maybePop(context));
   }
 
   void _togglePlayPause() {
     _startHideControlsTimer();
-    _player.playOrPause();
+    unawaited(_player.playOrPause());
   }
 
   void _seekBackward() {
@@ -324,11 +352,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
           end: Duration.zero,
         ),
       );
-      _player.seek(prevChap.start);
+      unawaited(_player.seek(prevChap.start));
       return;
     }
     final target = _player.state.position - const Duration(seconds: 10);
-    _player.seek(target.isNegative ? Duration.zero : target);
+    unawaited(_player.seek(target.isNegative ? Duration.zero : target));
   }
 
   void _seekForward() {
@@ -350,35 +378,35 @@ class _TheaterScreenState extends State<TheaterScreen> {
           end: _player.state.duration,
         ),
       );
-      _player.seek(nextChap.start);
+      unawaited(_player.seek(nextChap.start));
       return;
     }
     final target = _player.state.position + const Duration(seconds: 10);
     final duration = _player.state.duration;
-    _player.seek(target > duration ? duration : target);
+    unawaited(_player.seek(target > duration ? duration : target));
   }
 
   void _volumeUp() {
     _startHideControlsTimer();
     final newVol = (_player.state.volume + 5).clamp(0.0, 100.0);
-    _player.setVolume(newVol);
+    unawaited(_player.setVolume(newVol));
     if (newVol > 0) {
-      SharedPreferencesAsync().setDouble('theater_volume', newVol);
+      unawaited(SharedPreferencesAsync().setDouble('theater_volume', newVol));
     }
   }
 
   void _volumeDown() {
     _startHideControlsTimer();
     final newVol = (_player.state.volume - 5).clamp(0.0, 100.0);
-    _player.setVolume(newVol);
+    unawaited(_player.setVolume(newVol));
     if (newVol > 0) {
-      SharedPreferencesAsync().setDouble('theater_volume', newVol);
+      unawaited(SharedPreferencesAsync().setDouble('theater_volume', newVol));
     }
   }
 
   void _handleFullscreenShortcut() {
     _startHideControlsTimer();
-    _toggleFullscreen();
+    unawaited(_toggleFullscreen());
   }
 
   void _toggleSettingsMenu() {
@@ -444,8 +472,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _isClosing = true;
 
     if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setPreferredOrientations([
+      // ── Now awaited, matching _toggleFullscreen's existing pattern —
+      // this method is already async, so there's no reason these two
+      // calls were left unawaited while the identical pair in
+      // _toggleFullscreen was correctly awaited. ──
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
         DeviceOrientation.portraitDown,
         DeviceOrientation.landscapeLeft,
@@ -459,7 +491,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
     _hideControlsTimer?.cancel();
     _autoSkipController.dispose();
-    _posSub?.cancel();
+    await _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
     await _disposePlaybackResources();
@@ -469,24 +501,33 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   void dispose() {
     if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
+      // ── dispose() must stay synchronous (it can't become async — the
+      // required super.dispose() call has to happen in this same
+      // synchronous frame), so these fire-and-forget calls are wrapped
+      // explicitly instead of silently dropped (unawaited_futures). ──
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+      unawaited(
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]),
+      );
     }
 
     _hideControlsTimer?.cancel();
     _autoSkipController.dispose();
-    _posSub?.cancel();
+    final posSub = _posSub;
+    if (posSub != null) {
+      unawaited(posSub.cancel());
+    }
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
 
     if (!_isClosing) {
       _isClosing = true;
-      Future.microtask(_disposePlaybackResources);
+      unawaited(Future.microtask(_disposePlaybackResources));
     }
     super.dispose();
   }
@@ -519,9 +560,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (didPop) return;
         if (_isFullscreen) {
-          _toggleFullscreen();
+          unawaited(_toggleFullscreen());
         } else {
-          _exitTheater();
+          unawaited(_exitTheater());
         }
       },
       child: CallbackShortcuts(
@@ -539,7 +580,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                   if (_isSettingsOpen) {
                     setState(() => _isSettingsOpen = false);
                   } else if (_videoInitialized) {
-                    _player.playOrPause();
+                    unawaited(_player.playOrPause());
                   }
                   _startHideControlsTimer();
                 },

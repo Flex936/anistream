@@ -85,7 +85,7 @@ class _TheaterControlsState extends State<TheaterControls> {
   }
 
   Future<void> _handleVolumeChanged(double value) async {
-    widget.player.setVolume(value);
+    await widget.player.setVolume(value);
     if (value > 0) {
       await _prefs.setDouble('theater_volume', value);
     }
@@ -95,10 +95,10 @@ class _TheaterControlsState extends State<TheaterControls> {
     if (widget.player.state.volume == 0) {
       double savedVolume = await _prefs.getDouble('theater_volume') ?? 100.0;
       if (savedVolume == 0) savedVolume = 100.0;
-      widget.player.setVolume(savedVolume);
+      await widget.player.setVolume(savedVolume);
     } else {
       await _prefs.setDouble('theater_volume', widget.player.state.volume);
-      widget.player.setVolume(0.0);
+      await widget.player.setVolume(0.0);
     }
     widget.onInteract();
   }
@@ -155,7 +155,13 @@ class _TheaterControlsState extends State<TheaterControls> {
                 // restores whatever was last focused instead. ──
                 autofocus: true,
                 onPressed: () {
-                  _isPlaying ? widget.player.pause() : widget.player.play();
+                  // ── Player.pause()/play() return Future<void> —
+                  // onPressed is a synchronous VoidCallback, so the
+                  // fire-and-forget intent is made explicit rather than
+                  // silently dropped (unawaited_futures). ──
+                  unawaited(
+                    _isPlaying ? widget.player.pause() : widget.player.play(),
+                  );
                   widget.onInteract();
                 },
               ),
@@ -207,7 +213,10 @@ class _TheaterControlsState extends State<TheaterControls> {
                     max: 100,
                     value: _volume.clamp(0.0, 100.0),
                     onChanged: (v) {
-                      _handleVolumeChanged(v);
+                      // ── _handleVolumeChanged is Future<void> — onChanged
+                      // is a synchronous callback, so wrapping makes the
+                      // fire-and-forget intent explicit. ──
+                      unawaited(_handleVolumeChanged(v));
                       widget.onInteract();
                     },
                   ),
@@ -318,7 +327,10 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
   }
 
   void _onSeek(Duration time) {
-    widget.player.seek(time);
+    // ── Player.seek returns Future<void> — this is wired to Seekbar's
+    // synchronous onSeek callback, so the fire-and-forget intent is made
+    // explicit instead of silently dropped (unawaited_futures). ──
+    unawaited(widget.player.seek(time));
     widget.onInteract();
   }
 
@@ -361,7 +373,7 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
                       borderRadius: BorderRadius.circular(20),
                       onTap: () {
                         if (skipTarget != null) {
-                          widget.player.seek(skipTarget.end);
+                          unawaited(widget.player.seek(skipTarget.end));
                           widget.onInteract();
                         }
                       },

@@ -148,7 +148,11 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
                 track: TrackNameParser.parseSubtitle(t),
                 selected: t.id == _activeSubtitle?.id,
                 onTap: () {
-                  widget.player.setSubtitleTrack(t);
+                  // ── Player.setSubtitleTrack returns a Future<void> —
+                  // this onTap is a synchronous VoidCallback, so the
+                  // fire-and-forget intent is made explicit instead of
+                  // silently dropped (unawaited_futures). ──
+                  unawaited(widget.player.setSubtitleTrack(t));
                   widget.onClose();
                 },
               );
@@ -178,7 +182,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
                 track: TrackNameParser.parseAudio(t),
                 selected: t.id == _activeAudio?.id,
                 onTap: () {
-                  widget.player.setAudioTrack(t);
+                  unawaited(widget.player.setAudioTrack(t));
                   widget.onClose();
                 },
               );

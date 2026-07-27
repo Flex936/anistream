@@ -53,7 +53,11 @@ class AutoSkipController {
 
       _timer = Timer(const Duration(seconds: 2), () {
         if (_isAutoSkipping && _currentChapter == active) {
-          player.seek(active!.end);
+          // ── Timer callbacks are synchronous — `Player.seek` returns a
+          // Future<void> that can't be awaited here, so the fire-and-forget
+          // intent is made explicit instead of silently dropped
+          // (unawaited_futures). ──
+          unawaited(player.seek(active!.end));
           _isAutoSkipping = false;
         }
       });
