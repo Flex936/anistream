@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:dpad/dpad.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/streaming_controller_base.dart';
 
-class FrostedIconButton extends StatefulWidget {
+class FrostedIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
   final bool uiPerformanceMode;
-  final bool dpadModeActive;
   final String? tooltip;
 
   const FrostedIconButton({
@@ -15,56 +15,48 @@ class FrostedIconButton extends StatefulWidget {
     required this.icon,
     required this.onPressed,
     this.uiPerformanceMode = false,
-    this.dpadModeActive = false,
     this.tooltip,
   });
 
   @override
-  State<FrostedIconButton> createState() => _FrostedIconButtonState();
-}
-
-class _FrostedIconButtonState extends State<FrostedIconButton> {
-  bool _focused = false;
-
-  @override
   Widget build(BuildContext context) {
-    final showRing = _focused && widget.dpadModeActive;
-
-    final buttonContent = Material(
-      color: AppPalette.black.withValues(
-        alpha: widget.uiPerformanceMode ? 0.8 : 0.4,
-      ),
-      child: InkWell(
-        onTap: widget.onPressed,
-        onFocusChange: (f) => setState(() => _focused = f),
-        focusColor: AppPalette.white.withValues(alpha: 0.15),
-        hoverColor: AppPalette.white.withValues(alpha: 0.2),
-        child: Container(
+    // ── DpadFocusable replaces the old StatefulWidget's manual
+    // InkWell.onFocusChange + local _focused bool — the ring is now
+    // driven directly by state.focused, which dpad manages itself. No
+    // nested InkWell: DpadFocusable already provides tap + Select-key
+    // activation via onSelect, so an inner InkWell with its own onTap
+    // would just double-handle the same press. ──
+    final wrapped = FrostedContainer(
+      uiPerformanceMode: uiPerformanceMode,
+      sigma: 10,
+      borderRadius: BorderRadius.circular(24),
+      child: DpadFocusable(
+        onSelect: onPressed,
+        builder: (context, state, child) => Container(
           width: 48,
           height: 48,
           alignment: Alignment.center,
           decoration: BoxDecoration(
+            color: AppPalette.black.withValues(
+              alpha: uiPerformanceMode ? 0.8 : 0.4,
+            ),
             shape: BoxShape.circle,
             border: Border.all(
-              color: showRing ? AppPalette.primary : AppPalette.transparent,
+              color: state.focused
+                  ? AppPalette.primary
+                  : AppPalette.transparent,
               width: 2,
             ),
           ),
-          child: Icon(widget.icon, color: AppPalette.white, size: 24),
+          child: Icon(icon, color: AppPalette.white, size: 24),
         ),
+        child: const SizedBox.shrink(),
       ),
     );
 
-    final wrapped = FrostedContainer(
-      uiPerformanceMode: widget.uiPerformanceMode,
-      sigma: 10,
-      borderRadius: BorderRadius.circular(24),
-      child: buttonContent,
-    );
-
-    return widget.tooltip == null
+    return tooltip == null
         ? wrapped
-        : Tooltip(message: widget.tooltip!, child: wrapped);
+        : Tooltip(message: tooltip!, child: wrapped);
   }
 }
 
@@ -72,14 +64,12 @@ class TheaterTopBar extends StatelessWidget {
   final int episode;
   final VoidCallback onBack;
   final bool uiPerformanceMode;
-  final bool dpadModeActive;
 
   const TheaterTopBar({
     super.key,
     required this.episode,
     required this.onBack,
     this.uiPerformanceMode = false,
-    this.dpadModeActive = false,
   });
 
   @override
@@ -90,7 +80,6 @@ class TheaterTopBar extends StatelessWidget {
           icon: Icons.arrow_back_rounded,
           onPressed: onBack,
           uiPerformanceMode: uiPerformanceMode,
-          dpadModeActive: dpadModeActive,
           tooltip: 'Back',
         ),
         const SizedBox(width: 16),
