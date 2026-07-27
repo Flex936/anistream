@@ -40,7 +40,12 @@ class AnilistAuthService {
 
     final tokenCompleter = Completer<String?>();
 
-    server.listen((HttpRequest req) async {
+    // ── Captured into a local instead of left as a bare expression
+    // statement — cancel_subscriptions requires the subscription be
+    // assignable to something, and canceling it explicitly in `finally`
+    // below (alongside `server.close`) is a strict improvement over
+    // relying on the server's own teardown to implicitly stop delivery. ──
+    final serverSub = server.listen((HttpRequest req) async {
       switch (req.uri.path) {
         case _callbackPath when req.method == 'GET':
           req.response
@@ -76,6 +81,7 @@ class AnilistAuthService {
         onTimeout: () => null,
       );
     } finally {
+      await serverSub.cancel();
       await server.close(force: true);
     }
 

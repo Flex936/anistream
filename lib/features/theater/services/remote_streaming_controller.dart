@@ -102,7 +102,7 @@ class RemoteStreamingController extends BaseStreamingController {
       // Start polling for status updates.
       _pollTimer = Timer.periodic(
         const Duration(milliseconds: 500),
-        (_) => _poll(),
+        (_) => unawaited(_poll()),
       );
     } on TimeoutException {
       _setError('Server not reachable. Check the URL in Settings.');
@@ -126,21 +126,26 @@ class RemoteStreamingController extends BaseStreamingController {
     // correctly rejects (body_might_complete_normally_catch_error).
     // Wrapping in a try/catch inside a Future<void> helper sidesteps the
     // typing requirement while keeping identical "best-effort, ignore
-    // failures" behavior. ──
-    _fireAndForget(
-      _http
-          .post(
-            Uri.parse('$serverUrl/api/stream/$_sessionId/select'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'file_index': fileIndex}),
-          )
-          .timeout(const Duration(seconds: 10)),
+    // failures" behavior. The outer `unawaited()` is needed too —
+    // `_fireAndForget` itself returns a `Future<void>`, so calling it from
+    // this (necessarily synchronous) method is itself a discarded future
+    // under `unawaited_futures`. ──
+    unawaited(
+      _fireAndForget(
+        _http
+            .post(
+              Uri.parse('$serverUrl/api/stream/$_sessionId/select'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'file_index': fileIndex}),
+            )
+            .timeout(const Duration(seconds: 10)),
+      ),
     );
 
     // Re-arm the poll timer if it was somehow cancelled.
     _pollTimer ??= Timer.periodic(
       const Duration(milliseconds: 500),
-      (_) => _poll(),
+      (_) => unawaited(_poll()),
     );
   }
 
@@ -202,15 +207,21 @@ class RemoteStreamingController extends BaseStreamingController {
 
           if (!_sameRawFileList(rawFiles, _lastRawFiles)) {
             _lastRawFiles = rawFiles;
+            // ── `rawFiles` is `List<dynamic>`, so each element `f` is
+            // `dynamic` until cast — indexing straight into `f['name']`
+            // would be an index operation on a dynamic receiver
+            // (avoid_dynamic_calls). Casting once up front keeps every
+            // field access below statically typed. ──
             _batchFiles = rawFiles.map((f) {
-              final name = (f['name'] as String?) ?? '';
+              final map = f as Map<String, dynamic>;
+              final name = (map['name'] as String?) ?? '';
               // Reuse the existing Dart parser to guess the episode number
               // from the filename — no duplication of logic on the server.
               final meta = TorrentParser.parse(name);
               return BatchFileOption(
-                index: (f['index'] as num?)?.toInt() ?? 0,
+                index: (map['index'] as num?)?.toInt() ?? 0,
                 name: name,
-                size: (f['size'] as num?)?.toInt() ?? 0,
+                size: (map['size'] as num?)?.toInt() ?? 0,
                 guessedEpisode: meta.episode == -1 ? null : meta.episode,
               );
             }).toList();
@@ -285,11 +296,14 @@ class RemoteStreamingController extends BaseStreamingController {
     if (_sessionId != null) {
       // Best-effort cleanup; don't let errors bubble up during disposal.
       // See _fireAndForget's doc comment for why this isn't a chained
-      // .catchError() anymore.
-      _fireAndForget(
-        _http
-            .delete(Uri.parse('$serverUrl/api/stream/$_sessionId'))
-            .timeout(const Duration(seconds: 5)),
+      // .catchError() anymore, and unawaited()'s doc comment above in
+      // selectBatchFile for why the outer call needs wrapping too.
+      unawaited(
+        _fireAndForget(
+          _http
+              .delete(Uri.parse('$serverUrl/api/stream/$_sessionId'))
+              .timeout(const Duration(seconds: 5)),
+        ),
       );
     }
     _http.close();

@@ -192,15 +192,26 @@ class AnilistQueryService {
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded.containsKey('errors')) {
       final errors = decoded['errors'] as List<dynamic>;
-      final errorMessage = errors.isNotEmpty
-          ? errors[0]['message']
-          : 'Unknown GraphQL Error';
+      // ── Each element of a decoded `List<dynamic>` is itself `dynamic`,
+      // so `errors[0]['message']` would index straight into a dynamic
+      // receiver (avoid_dynamic_calls). Casting the element first keeps
+      // every subsequent access statically typed. ──
+      String errorMessage = 'Unknown GraphQL Error';
+      if (errors.isNotEmpty) {
+        final first = errors[0] as Map<String, dynamic>?;
+        errorMessage = first?['message'] as String? ?? errorMessage;
+      }
       throw AnilistException('GraphQL Error: $errorMessage');
     }
   }
 
   List<Anime> _animeListFromPage(Map<String, dynamic> data) {
-    final mediaList = data['Page']?['media'] as List<dynamic>? ?? const [];
+    // ── `data['Page']` is `dynamic` (the value type of a
+    // `Map<String, dynamic>`), so chaining `?['media']` straight off it
+    // would index into a dynamic receiver. Casting the intermediate hop
+    // keeps every step statically typed. ──
+    final page = data['Page'] as Map<String, dynamic>?;
+    final mediaList = page?['media'] as List<dynamic>? ?? const [];
     return mediaList
         .map((raw) => Anime.fromJson(raw as Map<String, dynamic>))
         .toList();
@@ -211,11 +222,10 @@ class AnilistQueryService {
     if (!isLoggedIn) return null;
 
     try {
-      _viewerId = await _query(
-        AnilistQueries.viewerId,
-        const {},
-        (data) => (data['Viewer']?['id'] as num?)?.toInt(),
-      );
+      _viewerId = await _query(AnilistQueries.viewerId, const {}, (data) {
+        final viewer = data['Viewer'] as Map<String, dynamic>?;
+        return (viewer?['id'] as num?)?.toInt();
+      });
       return _viewerId;
     } catch (e, st) {
       AppLogger.e('AnilistQueryService', 'Fetch viewer id error', e, st);
@@ -223,37 +233,41 @@ class AnilistQueryService {
     }
   }
 
-  Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) =>
-      _cachedQuery(AnilistQueries.trending, {
-        'page': page,
-        'perPage': perPage,
-        'bannedGenres': _bannedGenres,
-      }, _animeListFromPage);
+  Future<List<Anime>> getTrendingAnime({int page = 1, int perPage = 24}) {
+    return _cachedQuery(AnilistQueries.trending, {
+      'page': page,
+      'perPage': perPage,
+      'bannedGenres': _bannedGenres,
+    }, _animeListFromPage);
+  }
 
-  Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) =>
-      _cachedQuery(AnilistQueries.seasonPopular, {
-        'page': page,
-        'perPage': perPage,
-        'season': _currentSeason,
-        'seasonYear': DateTime.now().year,
-        'bannedGenres': _bannedGenres,
-      }, _animeListFromPage);
+  Future<List<Anime>> getPopularThisSeason({int page = 1, int perPage = 24}) {
+    return _cachedQuery(AnilistQueries.seasonPopular, {
+      'page': page,
+      'perPage': perPage,
+      'season': _currentSeason,
+      'seasonYear': DateTime.now().year,
+      'bannedGenres': _bannedGenres,
+    }, _animeListFromPage);
+  }
 
-  Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) =>
-      _cachedQuery(AnilistQueries.allTimePopular, {
-        'page': page,
-        'perPage': perPage,
-        'bannedGenres': _bannedGenres,
-      }, _animeListFromPage);
+  Future<List<Anime>> getAllTimePopular({int page = 1, int perPage = 24}) {
+    return _cachedQuery(AnilistQueries.allTimePopular, {
+      'page': page,
+      'perPage': perPage,
+      'bannedGenres': _bannedGenres,
+    }, _animeListFromPage);
+  }
 
-  Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) =>
-      _cachedQuery(AnilistQueries.currentlyAiring, {
-        'page': page,
-        'perPage': perPage,
-        'currentSeason': _currentSeason,
-        'currentYear': DateTime.now().year,
-        'bannedGenres': _bannedGenres,
-      }, _animeListFromPage);
+  Future<List<Anime>> getCurrentlyAiring({int page = 1, int perPage = 50}) {
+    return _cachedQuery(AnilistQueries.currentlyAiring, {
+      'page': page,
+      'perPage': perPage,
+      'currentSeason': _currentSeason,
+      'currentYear': DateTime.now().year,
+      'bannedGenres': _bannedGenres,
+    }, _animeListFromPage);
+  }
 
   Future<List<Anime>> searchAnime(
     String query, {
@@ -288,10 +302,16 @@ class AnilistQueryService {
       AnilistQueries.userWatchlistPaged,
       {'userId': viewerId, 'status': status, 'page': page, 'perPage': perPage},
       (data) {
-        final pageData = data['Page'];
-        final hasNextPage =
-            pageData?['pageInfo']?['hasNextPage'] as bool? ?? false;
-        final rawList = pageData?['mediaList'] as List<dynamic>? ?? const [];
+        // ── Same "cast each hop before indexing" fix as
+        // `_animeListFromPage` / `_assertResponse` above — see those for
+        // why. `rawList` is cast to `List<Map<String, dynamic>>` up front
+        // so the `.where`/`.map` callbacks below never touch a `dynamic`
+        // receiver either. ──
+        final pageData = data['Page'] as Map<String, dynamic>?;
+        final pageInfo = pageData?['pageInfo'] as Map<String, dynamic>?;
+        final hasNextPage = pageInfo?['hasNextPage'] as bool? ?? false;
+        final rawList = (pageData?['mediaList'] as List<dynamic>? ?? const [])
+            .cast<Map<String, dynamic>>();
 
         final banned = _bannedGenres;
 
@@ -306,7 +326,7 @@ class AnilistQueryService {
               final genres = media['genres'] as List<dynamic>? ?? [];
               return !genres.any(banned.contains);
             })
-            .map((r) => MediaListEntry.fromJson(r as Map<String, dynamic>))
+            .map(MediaListEntry.fromJson)
             .toList();
 
         return (entries: entries, hasNextPage: hasNextPage);
@@ -317,12 +337,13 @@ class AnilistQueryService {
   Future<int?> getMediaProgress(int mediaId) async {
     if (!isLoggedIn) return null;
     try {
-      return await _query(
-        AnilistQueries.mediaProgress,
-        {'id': mediaId},
-        (data) =>
-            (data['Media']?['mediaListEntry']?['progress'] as num?)?.toInt(),
-      );
+      return await _query(AnilistQueries.mediaProgress, {'id': mediaId}, (
+        data,
+      ) {
+        final media = data['Media'] as Map<String, dynamic>?;
+        final entry = media?['mediaListEntry'] as Map<String, dynamic>?;
+        return (entry?['progress'] as num?)?.toInt();
+      });
     } catch (e, st) {
       AppLogger.e('AnilistQueryService', 'Fetch progress error', e, st);
       return null;

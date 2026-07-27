@@ -60,6 +60,13 @@ abstract final class AppLogger {
   static bool _disposed = false;
   static LogLevel _minLevel = kReleaseMode ? LogLevel.info : LogLevel.debug;
 
+  // ── Process-lifetime signal subscriptions. Never explicitly canceled —
+  // there's no natural point to do so, since each one's only job is to run
+  // until the process exits — but cancel_subscriptions requires the
+  // subscription be captured somewhere rather than left as a bare
+  // expression statement, so they're stashed here instead of discarded. ──
+  static final List<StreamSubscription<ProcessSignal>> _signalSubs = [];
+
   /// Keep this many previous session log files around; older ones are
   /// pruned on startup so the log folder doesn't grow forever.
   static const int _maxKeptFiles = 10;
@@ -93,7 +100,7 @@ abstract final class AppLogger {
 
       _flushTimer = Timer.periodic(
         const Duration(seconds: 2),
-        (_) => _flushToDisk(),
+        (_) => unawaited(_flushToDisk()),
       );
 
       i('AppLogger', 'Logging initialized -> ${_logFile!.path}');
@@ -164,11 +171,12 @@ abstract final class AppLogger {
   }
 
   static void _listenToSignal(ProcessSignal signal) {
-    signal.watch().listen((sig) async {
+    final sub = signal.watch().listen((sig) async {
       w('AppLogger', 'Received $sig - flushing logs and exiting.');
       await dispose();
       exit(0);
     });
+    _signalSubs.add(sub);
   }
 
   /// Wire this into your root widget:

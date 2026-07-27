@@ -54,12 +54,19 @@ class AnilistTrackerService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final listData = data['data']?['Media']?['mediaListEntry'];
+        // ── Each hop off a decoded `Map<String, dynamic>` is `dynamic`
+        // until cast — chaining `?['Media']?['mediaListEntry']` straight
+        // off `decoded['data']` would index into a dynamic receiver at
+        // every step (avoid_dynamic_calls). Casting each hop keeps the
+        // whole chain statically typed. ──
+        final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+        final data = decoded['data'] as Map<String, dynamic>?;
+        final media = data?['Media'] as Map<String, dynamic>?;
+        final listData = media?['mediaListEntry'] as Map<String, dynamic>?;
 
         if (listData != null) {
-          _status = listData['status'];
-          _progress = listData['progress'] ?? 0;
+          _status = listData['status'] as String?;
+          _progress = (listData['progress'] as num?)?.toInt() ?? 0;
         } else {
           _status = 'PLANNING';
           _progress = 0;

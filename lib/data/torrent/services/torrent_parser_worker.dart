@@ -182,7 +182,7 @@ class TorrentParserWorker {
   Isolate? _isolate;
   SendPort? _workerSendPort;
   ReceivePort? _responsePort;
-  StreamSubscription? _responseSub;
+  StreamSubscription<dynamic>? _responseSub;
 
   Completer<void>? _spawning;
   bool _spawnPermanentlyFailed = false;
@@ -257,8 +257,16 @@ class TorrentParserWorker {
     }
 
     // 3. Uncaught error surfaced via onError: [errorString, stackTraceString].
-    if (message is List) {
-      final reason = message.isNotEmpty ? message.first : 'Unknown error';
+    // ── `List` (no type argument) is a raw type under strict-raw-types;
+    // `List<dynamic>` is the honest spelling of "a list of whatever
+    // Isolate.onError happened to send." `.first` off it is still
+    // `dynamic`, so it's cast to `Object?` before `.toString()` is called
+    // — strict-casts disallows the implicit dynamic→Object downcast that
+    // used to happen here for free. ──
+    if (message is List<dynamic>) {
+      final reason = message.isNotEmpty
+          ? (message.first as Object?)?.toString() ?? 'Unknown error'
+          : 'Unknown error';
       AppLogger.e('TorrentParserWorker', 'Worker isolate crashed: $reason');
       _failAllPending('Worker isolate crashed: $reason');
       _teardown();
@@ -285,7 +293,17 @@ class TorrentParserWorker {
   }
 
   void _teardown() {
-    _responseSub?.cancel();
+    // ── StreamSubscription.cancel() returns a Future<void> — dropping it
+    // here (as the previous `_responseSub?.cancel();` did) is a discarded
+    // future under unawaited_futures. `_teardown` is called from several
+    // synchronous contexts (including inside catch/finally blocks above),
+    // so it can't become `async` without cascading that through every
+    // caller — `unawaited()` documents the "this is intentionally
+    // fire-and-forget" decision instead. ──
+    final responseSub = _responseSub;
+    if (responseSub != null) {
+      unawaited(responseSub.cancel());
+    }
     _responseSub = null;
     _responsePort?.close();
     _responsePort = null;

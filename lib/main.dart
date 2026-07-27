@@ -12,7 +12,7 @@ import 'core/logging/app_logger.dart';
 // ── Accept CLI args (kept for forward compatibility with the Flutter
 // tool's own launch args; PIP's 'multi_window' interception has been
 // removed entirely — this app no longer spawns secondary windows). ──
-void main(List<String> args) async {
+void main(List<String> args) {
   // Run everything — including binding initialization — inside the SAME
   // zone that `runApp()` will later execute in. Previously
   // `WidgetsFlutterBinding.ensureInitialized()` ran in the root zone while
@@ -20,19 +20,29 @@ void main(List<String> args) async {
   // zone, which is exactly the "Zone mismatch" Flutter warns about —
   // zone-specific state (like the error zone used for reporting) could
   // inconsistently reflect one zone or the other.
-  runZonedGuarded(
-    () async {
-      WidgetsFlutterBinding.ensureInitialized();
+  //
+  // `main` itself is deliberately NOT `async` here: the zone runs for the
+  // lifetime of the app (there's nothing meaningful to await — the
+  // returned Future only completes if the zone's body itself returns,
+  // which for a running Flutter app it never does), so the call is
+  // explicitly marked `unawaited()` rather than given a `Future<void>`
+  // signature purely to satisfy avoid_void_async.
+  unawaited(
+    runZonedGuarded(
+      () async {
+        WidgetsFlutterBinding.ensureInitialized();
 
-      // Initialize logging FIRST — before anything else runs — so that any
-      // boot-time crash (native window init, media_kit init, etc.) is still
-      // captured to disk. This also installs FlutterError/PlatformDispatcher
-      // hooks and desktop signal handlers (see app_logger.dart for details).
-      await AppLogger.init();
+        // Initialize logging FIRST — before anything else runs — so that any
+        // boot-time crash (native window init, media_kit init, etc.) is still
+        // captured to disk. This also installs FlutterError/PlatformDispatcher
+        // hooks and desktop signal handlers (see app_logger.dart for details).
+        await AppLogger.init();
 
-      await _bootstrap(args);
-    },
-    (error, stack) => AppLogger.e('main', 'Uncaught zone error', error, stack),
+        await _bootstrap(args);
+      },
+      (error, stack) =>
+          AppLogger.e('main', 'Uncaught zone error', error, stack),
+    ),
   );
 }
 
@@ -66,7 +76,7 @@ Future<void> _bootstrap(List<String> args) async {
       titleBarStyle: TitleBarStyle.hidden,
     );
 
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.maximize();
       await windowManager.show();
       await windowManager.focus();
