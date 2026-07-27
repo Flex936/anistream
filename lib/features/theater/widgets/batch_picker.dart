@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dpad/dpad.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../services/streaming_controller.dart';
@@ -8,7 +9,6 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
   final int? requestedEpisode;
   final void Function(int fileIndex) onSelect;
   final VoidCallback? onBack;
-  final bool dpadModeActive;
 
   const BatchEpisodePickerOverlay({
     super.key,
@@ -16,7 +16,6 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
     required this.onSelect,
     this.requestedEpisode,
     this.onBack,
-    this.dpadModeActive = false,
   });
 
   static String _formatSize(int bytes) {
@@ -33,8 +32,8 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FocusScope(
-      autofocus: true,
+    return DpadRegion(
+      memoryKey: 'theater.batchPicker',
       child: Container(
         color: AppPalette.black.withValues(alpha: 0.85),
         child: Center(
@@ -73,15 +72,23 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                         ),
                       ),
                       if (onBack != null)
-                        IconButton(
-                          tooltip: 'Go back',
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: AppPalette.textMuted,
-                            size: 20,
+                        DpadFocusable(
+                          onSelect: onBack!,
+                          builder: (context, state, child) => Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: state.focused
+                                  ? AppPalette.white.withValues(alpha: 0.1)
+                                  : AppPalette.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              color: AppPalette.textMuted,
+                              size: 20,
+                            ),
                           ),
-                          onPressed: onBack,
-                          splashRadius: 18,
+                          child: const SizedBox.shrink(),
                         ),
                     ],
                   ),
@@ -110,75 +117,101 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                           requestedEpisode != null &&
                           f.guessedEpisode == requestedEpisode;
 
-                      return ListTile(
+                      // ── Built as a plain Container+Row instead of
+                      // wrapping ListTile, same reasoning as
+                      // theater_settings.dart's _Tile — avoids reconciling
+                      // ListTile's own internal focus/tap mechanics with
+                      // DpadFocusable's. ──
+                      return DpadFocusable(
                         autofocus: i == 0,
-                        focusColor: dpadModeActive
-                            ? AppPalette.white.withValues(alpha: 0.1)
-                            : AppPalette.transparent,
-                        hoverColor: AppPalette.white.withValues(alpha: 0.1),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        leading: CircleAvatar(
-                          radius: 16,
-                          backgroundColor: isSuggested
-                              ? AppPalette.primary.withValues(alpha: 0.2)
-                              : AppPalette.white.withValues(alpha: 0.08),
-                          child: Text(
-                            f.guessedEpisode?.toString() ?? '?',
-                            style: TextStyle(
-                              color: isSuggested
-                                  ? AppPalette.primary
-                                  : AppPalette.textMuted,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        onSelect: () => onSelect(f.index),
+                        builder: (context, state, child) => Container(
+                          decoration: BoxDecoration(
+                            color: state.focused
+                                ? AppPalette.white.withValues(alpha: 0.1)
+                                : AppPalette.transparent,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        ),
-                        title: Text(
-                          f.guessedEpisode != null
-                              ? 'Episode ${f.guessedEpisode}'
-                              : f.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppPalette.textMain,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
                           ),
-                        ),
-                        subtitle: Text(
-                          f.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppPalette.textMuted,
-                            fontSize: 11,
-                          ),
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            if (isSuggested)
-                              const Text(
-                                'Suggested',
-                                style: TextStyle(
-                                  color: AppPalette.primary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: isSuggested
+                                    ? AppPalette.primary.withValues(alpha: 0.2)
+                                    : AppPalette.white.withValues(alpha: 0.08),
+                                child: Text(
+                                  f.guessedEpisode?.toString() ?? '?',
+                                  style: TextStyle(
+                                    color: isSuggested
+                                        ? AppPalette.primary
+                                        : AppPalette.textMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
-                            Text(
-                              _formatSize(f.size),
-                              style: const TextStyle(
-                                color: AppPalette.textMuted,
-                                fontSize: 11,
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      f.guessedEpisode != null
+                                          ? 'Episode ${f.guessedEpisode}'
+                                          : f.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppPalette.textMain,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      f.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AppPalette.textMuted,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 12),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  if (isSuggested)
+                                    const Text(
+                                      'Suggested',
+                                      style: TextStyle(
+                                        color: AppPalette.primary,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  Text(
+                                    _formatSize(f.size),
+                                    style: const TextStyle(
+                                      color: AppPalette.textMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                        onTap: () => onSelect(f.index),
+                        child: const SizedBox.shrink(),
                       );
                     },
                   ),

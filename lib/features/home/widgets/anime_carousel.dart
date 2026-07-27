@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:dpad/dpad.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/anilist_query_service.dart';
@@ -14,6 +15,13 @@ class AnimeCarousel extends StatefulWidget {
   final bool autofocusFirst;
   final bool uiPerformanceMode;
 
+  /// Stable identity for this shelf's DpadRegion, e.g. `'home.trending'`.
+  /// Passed through to `DpadRegion(memoryKey: ...)` so the last-focused
+  /// card survives rebuilds — including the fresh HomeScreen instance
+  /// NavigationController.goHome() builds every time the user navigates
+  /// back to Home.
+  final String memoryKey;
+
   const AnimeCarousel({
     super.key,
     required this.title,
@@ -22,6 +30,7 @@ class AnimeCarousel extends StatefulWidget {
     required this.onRetry,
     this.autofocusFirst = false,
     this.uiPerformanceMode = false,
+    required this.memoryKey,
   });
 
   @override
@@ -165,29 +174,44 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                 onExit: (_) => setState(() => _isHovered = false),
                 child: Stack(
                   children: [
-                    ScrollConfiguration(
-                      behavior: ScrollConfiguration.of(context).copyWith(
-                        dragDevices: {
-                          PointerDeviceKind.touch,
-                          PointerDeviceKind.mouse,
-                        },
-                      ),
-                      child: ListView.separated(
-                        controller: _scrollController,
-                        padding: EdgeInsets.symmetric(horizontal: hPad),
-                        scrollDirection: Axis.horizontal,
-                        itemCount: items.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 20),
-                        itemBuilder: (context, i) {
-                          return SizedBox(
-                            width: 170,
-                            child: AnimeCard(
-                              anime: items[i],
-                              onSelect: widget.onSelectAnime,
-                              autofocus: widget.autofocusFirst && i == 0,
-                            ),
-                          );
-                        },
+                    // ── DpadRegion: this shelf is its own visual section
+                    // per dpad's "one region per section" convention.
+                    // memoryKey (widget.memoryKey) makes the last-focused
+                    // card survive not just a rebuild of THIS widget, but
+                    // a fresh HomeScreen instance entirely — goHome()
+                    // rebuilds the whole tree, and keyed memory is what
+                    // makes "leave and come back" land where you left
+                    // off, matching the same shelf on every real TV app.
+                    // No edge-behavior overrides: default `leave` on the
+                    // vertical axis is what lets Up from row 1 escape to
+                    // the navbar, and Up/Down between shelves cascade
+                    // through each other's regions the same way. ──
+                    DpadRegion(
+                      memoryKey: widget.memoryKey,
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          dragDevices: {
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                          },
+                        ),
+                        child: ListView.separated(
+                          controller: _scrollController,
+                          padding: EdgeInsets.symmetric(horizontal: hPad),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: items.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 20),
+                          itemBuilder: (context, i) {
+                            return SizedBox(
+                              width: 170,
+                              child: AnimeCard(
+                                anime: items[i],
+                                onSelect: widget.onSelectAnime,
+                                autofocus: widget.autofocusFirst && i == 0,
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
 

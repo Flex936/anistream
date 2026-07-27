@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:dpad/dpad.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../shared/widgets/hover_focus_builder.dart';
 
 class SettingsSection extends StatelessWidget {
   final String label;
@@ -113,15 +114,15 @@ class SettingRowTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverFocusBuilder(
+    return DpadFocusable(
       autofocus: autofocus,
-      onTap: () => onChanged(!value),
-      builder: (context, hovered) => AnimatedContainer(
+      onSelect: () => onChanged(!value),
+      builder: (context, state, child) => AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: hovered
+          color: state.focused
               ? AppPalette.white.withValues(alpha: 0.06)
               : AppPalette.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -136,7 +137,9 @@ class SettingRowTile extends StatelessWidget {
                   AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 150),
                     style: TextStyle(
-                      color: hovered ? AppPalette.white : AppPalette.textMain,
+                      color: state.focused
+                          ? AppPalette.white
+                          : AppPalette.textMain,
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -159,6 +162,7 @@ class SettingRowTile extends StatelessWidget {
           ],
         ),
       ),
+      child: const SizedBox.shrink(),
     );
   }
 }
@@ -177,38 +181,49 @@ class SettingsDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverFocusBuilder(
-      builder: (context, hovered) => AnimatedContainer(
+    // ── excludeChildFocus: false — DropdownButton needs to keep handling
+    // its own taps/opens internally (it manages its own overlay menu),
+    // so it can't be fully subsumed by DpadFocusable's own onSelect
+    // model the way a plain icon button can. DpadFocusable here exists
+    // purely to make this reachable via D-Pad directional navigation and
+    // to drive the border/background from state.focused; the actual
+    // dropdown interaction stays exactly as it was. The DropdownButton
+    // itself doesn't visually depend on state.focused, so it's passed
+    // through `child` rather than rebuilt inside `builder`. ──
+    return DpadFocusable(
+      excludeChildFocus: false,
+      builder: (context, state, child) => AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
-          color: hovered
+          color: state.focused
               ? AppPalette.white.withValues(alpha: 0.1)
               : AppPalette.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: hovered
+            color: state.focused
                 ? AppPalette.white.withValues(alpha: 0.2)
                 : AppPalette.white.withValues(alpha: 0.1),
           ),
         ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: value,
-            dropdownColor: AppPalette.surface,
-            icon: const Icon(
-              Icons.expand_more_rounded,
-              color: AppPalette.textMuted,
-            ),
-            isExpanded: true,
-            style: const TextStyle(
-              color: AppPalette.textMain,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-            items: items,
-            onChanged: onChanged,
+        child: child,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          dropdownColor: AppPalette.surface,
+          icon: const Icon(
+            Icons.expand_more_rounded,
+            color: AppPalette.textMuted,
           ),
+          isExpanded: true,
+          style: const TextStyle(
+            color: AppPalette.textMain,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          items: items,
+          onChanged: onChanged,
         ),
       ),
     );
@@ -216,7 +231,15 @@ class SettingsDropdown extends StatelessWidget {
 }
 
 /// A styled text field for settings values such as the server URL.
-class SettingsTextField extends StatelessWidget {
+///
+/// Rebuilt as a StatefulWidget so it can own a FocusNode with the same
+/// caret-boundary-escape logic search_input.dart already proved out —
+/// arrows move the cursor normally everywhere except the two edges, where
+/// they hand off to directional focus traversal instead. This field
+/// previously had no such logic at all, which is the whole reason it
+/// trapped focus permanently: arrows only ever moved the cursor (or did
+/// nothing), with no escape hatch in either direction.
+class SettingsTextField extends StatefulWidget {
   final TextEditingController controller;
   final String hint;
   final String? label;
@@ -233,15 +256,59 @@ class SettingsTextField extends StatelessWidget {
   });
 
   @override
+  State<SettingsTextField> createState() => _SettingsTextFieldState();
+}
+
+class _SettingsTextFieldState extends State<SettingsTextField> {
+  final FocusNode _focusNode = FocusNode(debugLabel: 'SettingsTextField');
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.onKeyEvent = (node, event) {
+      if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+        return KeyEventResult.ignored;
+      }
+
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        node.focusInDirection(TraversalDirection.up);
+        return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        node.focusInDirection(TraversalDirection.down);
+        return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+        final offset = widget.controller.selection.baseOffset;
+        if (offset == widget.controller.text.length || offset == -1) {
+          node.focusInDirection(TraversalDirection.right);
+          return KeyEventResult.handled;
+        }
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+        final offset = widget.controller.selection.baseOffset;
+        if (offset <= 0) {
+          node.focusInDirection(TraversalDirection.left);
+          return KeyEventResult.handled;
+        }
+      }
+      return KeyEventResult.ignored;
+    };
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (label != null) ...[
+        if (widget.label != null) ...[
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 6),
             child: Text(
-              label!,
+              widget.label!,
               style: const TextStyle(
                 color: AppPalette.textMuted,
                 fontSize: 12,
@@ -250,54 +317,65 @@ class SettingsTextField extends StatelessWidget {
             ),
           ),
         ],
-        TextField(
-          controller: controller,
-          enabled: enabled,
-          keyboardType: keyboardType,
-          autocorrect: false,
-          style: TextStyle(
-            color: enabled ? AppPalette.textMain : AppPalette.textMuted,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(
-              color: AppPalette.textMuted,
+        DpadFocusable(
+          excludeChildFocus: false,
+          // ── Requesting focus here covers a D-Pad user navigating onto
+          // this field and pressing Select before typing — the TextField
+          // itself already grabs focus normally for touch/mouse taps
+          // and Tab, this just makes Select do the same thing. ──
+          onSelect: () => _focusNode.requestFocus(),
+          child: TextField(
+            controller: widget.controller,
+            focusNode: _focusNode,
+            enabled: widget.enabled,
+            keyboardType: widget.keyboardType,
+            autocorrect: false,
+            style: TextStyle(
+              color: widget.enabled
+                  ? AppPalette.textMain
+                  : AppPalette.textMuted,
               fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
-            filled: true,
-            fillColor: AppPalette.white.withValues(
-              alpha: enabled ? 0.06 : 0.02,
-            ),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(
-                color: AppPalette.white.withValues(alpha: 0.1),
+            decoration: InputDecoration(
+              hintText: widget.hint,
+              hintStyle: const TextStyle(
+                color: AppPalette.textMuted,
+                fontSize: 14,
               ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(
-                color: AppPalette.white.withValues(alpha: 0.1),
+              filled: true,
+              fillColor: AppPalette.white.withValues(
+                alpha: widget.enabled ? 0.06 : 0.02,
               ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(
-                color: AppPalette.primary,
-                width: 1.5,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
               ),
-            ),
-            disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(
-                color: AppPalette.white.withValues(alpha: 0.05),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: AppPalette.white.withValues(alpha: 0.1),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: AppPalette.white.withValues(alpha: 0.1),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(
+                  color: AppPalette.primary,
+                  width: 1.5,
+                ),
+              ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: AppPalette.white.withValues(alpha: 0.05),
+                ),
               ),
             ),
           ),
@@ -313,13 +391,13 @@ class SettingsCloseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverFocusBuilder(
-      onTap: onPressed,
-      builder: (context, hovered) => AnimatedContainer(
+    return DpadFocusable(
+      onSelect: onPressed,
+      builder: (context, state, child) => AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: hovered
+          color: state.focused
               ? AppPalette.white.withValues(alpha: 0.1)
               : AppPalette.transparent,
           shape: BoxShape.circle,
@@ -327,9 +405,10 @@ class SettingsCloseButton extends StatelessWidget {
         child: Icon(
           Icons.close_rounded,
           size: 22,
-          color: hovered ? AppPalette.white : AppPalette.textMuted,
+          color: state.focused ? AppPalette.white : AppPalette.textMuted,
         ),
       ),
+      child: const SizedBox.shrink(),
     );
   }
 }

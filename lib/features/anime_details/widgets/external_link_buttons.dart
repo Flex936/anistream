@@ -36,7 +36,7 @@ class ExternalLinkButton extends StatelessWidget {
           color: color.withValues(alpha: hovered ? 0.22 : 0.12),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: color.withValues(alpha: hovered ? 0.7 : 0.30),
+            color: color.withValues(alpha: hovered ? 0.7 : 0.3),
           ),
         ),
         child: Row(

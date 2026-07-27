@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:dpad/dpad.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -125,7 +126,10 @@ class _TheaterControlsState extends State<TheaterControls> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Owns _position/_duration/_buffer + the skip-chip/Seekbar
-          // visuals that depend on them. Ticks in isolation. ──
+          // visuals that depend on them. Ticks in isolation. dpadModeActive
+          // still flows through to Seekbar, which keeps its own working
+          // Focus-based key handling — see seekbar.dart, untouched by this
+          // migration. ──
           _PlaybackTimeline(
             player: widget.player,
             chapterMetadata: widget.chapterMetadata,
@@ -143,7 +147,12 @@ class _TheaterControlsState extends State<TheaterControls> {
                     : Icons.play_arrow_rounded,
                 tooltip: _isPlaying ? 'Pause' : 'Play',
                 size: 34,
-                dpadModeActive: widget.dpadModeActive,
+                // ── The sensible default D-Pad landing spot the first
+                // time the control bar appears — matches "one autofocus
+                // per screen." Harmless on re-shows too: DpadRegion's
+                // memoryKey on the wrapping region in theater_screen.dart
+                // restores whatever was last focused instead. ──
+                autofocus: true,
                 onPressed: () {
                   _isPlaying ? widget.player.pause() : widget.player.play();
                   widget.onInteract();
@@ -161,7 +170,6 @@ class _TheaterControlsState extends State<TheaterControls> {
                     ? Icons.volume_off_rounded
                     : Icons.volume_up_rounded,
                 tooltip: _volume == 0 ? 'Unmute' : 'Mute',
-                dpadModeActive: widget.dpadModeActive,
                 onPressed: _toggleMute,
               ),
               SizedBox(
@@ -175,10 +183,7 @@ class _TheaterControlsState extends State<TheaterControls> {
                   // invocation, which the compiler correctly rejects in a
                   // const expression (const_eval_method_invocation). Only
                   // the two shape constructors below (no method calls in
-                  // their arguments) can be const. This matches the
-                  // original, pre-refactor code exactly — the stray outer
-                  // `const` was introduced by mistake during the Tier 2
-                  // split and is removed here. ──
+                  // their arguments) can be const. ──
                   data: SliderThemeData(
                     activeTrackColor: AppPalette.white,
                     inactiveTrackColor: AppPalette.white.withValues(alpha: 0.3),
@@ -191,6 +196,12 @@ class _TheaterControlsState extends State<TheaterControls> {
                       overlayRadius: 14,
                     ),
                   ),
+                  // ── Left as a plain Material Slider — it already has
+                  // its own working keyboard-arrow-when-focused behavior
+                  // as a standard Flutter form control, same reasoning as
+                  // Seekbar: a plain Focus-participating widget that
+                  // interops with dpad's traversal without needing
+                  // DpadFocusable wrapping. ──
                   child: Slider(
                     max: 100,
                     value: _volume.clamp(0.0, 100.0),
@@ -208,7 +219,6 @@ class _TheaterControlsState extends State<TheaterControls> {
                 color: widget.isSettingsOpen
                     ? AppPalette.primary
                     : AppPalette.white,
-                dpadModeActive: widget.dpadModeActive,
                 onPressed: widget.onToggleSettings,
               ),
 
@@ -218,7 +228,6 @@ class _TheaterControlsState extends State<TheaterControls> {
                     : Icons.fullscreen_rounded,
                 tooltip: widget.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
                 size: 28,
-                dpadModeActive: widget.dpadModeActive,
                 onPressed: widget.onToggleFullscreen,
               ),
             ],
@@ -467,81 +476,49 @@ class _PlaybackTimeLabelState extends State<_PlaybackTimeLabel> {
   }
 }
 
-/// Small reusable icon button for the control bar. Wraps a plain
-/// [IconButton] — keeping Flutter's normal single FocusNode, ink, and
-/// tap-target behavior, with no extra phantom Focus node added to the
-/// traversal chain — and layers on a ring that's only ever painted while
-/// [dpadModeActive] is true, so PC/mobile pointer users never see a
-/// TV-style outline flash onto a button they merely tabbed past.
-class _TheaterIconButton extends StatefulWidget {
+/// Small reusable icon button for the control bar. DpadFocusable replaces
+/// the old StatefulWidget's manual FocusNode + onFocusChange listener —
+/// state.focused drives the ring directly, with no local state of any kind
+/// left to manage here, so this is a StatelessWidget now.
+class _TheaterIconButton extends StatelessWidget {
   final IconData icon;
   final Color color;
   final double size;
   final String tooltip;
   final VoidCallback onPressed;
-  final bool dpadModeActive;
+  final bool autofocus;
 
   const _TheaterIconButton({
     required this.icon,
     required this.onPressed,
     required this.tooltip,
-    required this.dpadModeActive,
     this.color = AppPalette.white,
     this.size = 26,
+    this.autofocus = false,
   });
 
   @override
-  State<_TheaterIconButton> createState() => _TheaterIconButtonState();
-}
-
-class _TheaterIconButtonState extends State<_TheaterIconButton> {
-  bool _focused = false;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode = FocusNode();
-    _focusNode.addListener(_onFocusChange);
-  }
-
-  void _onFocusChange() {
-    if (mounted && _focused != _focusNode.hasFocus) {
-      setState(() => _focused = _focusNode.hasFocus);
-    }
-  }
-
-  @override
-  void dispose() {
-    _focusNode.removeListener(_onFocusChange);
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final showRing = _focused && widget.dpadModeActive;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: showRing ? AppPalette.primary : AppPalette.transparent,
-          width: 2,
+    return Tooltip(
+      message: tooltip,
+      child: DpadFocusable(
+        autofocus: autofocus,
+        onSelect: onPressed,
+        builder: (context, state, child) => AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: state.focused
+                  ? AppPalette.primary
+                  : AppPalette.transparent,
+              width: 2,
+            ),
+          ),
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, color: color, size: size),
         ),
-      ),
-      child: IconButton(
-        focusNode: _focusNode, // ── We pass our custom FocusNode here ──
-        icon: Icon(widget.icon, color: widget.color, size: widget.size),
-        tooltip: widget.tooltip,
-        onPressed: widget.onPressed,
-        // ── IconButton's own subtle Material overlay (hover/focus tint) is
-        // left as-is on every platform — that's a reasonable minimal
-        // affordance for plain keyboard-Tab users on desktop. Only the
-        // explicit ring above is gated to D-Pad mode, so a desktop user
-        // tabbing through never sees the loud TV-style outline; a TV user
-        // gets both. ──
+        child: const SizedBox.shrink(),
       ),
     );
   }

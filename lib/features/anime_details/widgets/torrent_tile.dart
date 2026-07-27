@@ -42,7 +42,7 @@ class TorrentTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: hovered
-                ? AppPalette.primary.withValues(alpha: 0.40)
+                ? AppPalette.primary.withValues(alpha: 0.4)
                 : isRecommended
                 ? AppPalette.primary.withValues(alpha: 0.4)
                 : AppPalette.border,
@@ -166,14 +166,14 @@ class TorrentTile extends StatelessWidget {
                         shape: BoxShape.circle,
                         color: hovered
                             ? AppPalette.primary
-                            : AppPalette.primary.withValues(alpha: 0.10),
+                            : AppPalette.primary.withValues(alpha: 0.1),
                         boxShadow:
                             (hovered &&
                                 !uiPerformanceMode) // Drop hover glow if in performance mode
                             ? [
                                 BoxShadow(
                                   color: AppPalette.primary.withValues(
-                                    alpha: 0.40,
+                                    alpha: 0.4,
                                   ),
                                   blurRadius: 14,
                                 ),

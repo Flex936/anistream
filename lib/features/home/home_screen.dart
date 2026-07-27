@@ -62,12 +62,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppPalette.base,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 48),
+        // ── Both the 96px navbar clearance (previously a leading
+        // SizedBox inside the Column) and the 48px bottom breathing room
+        // now live in the scroll view's own `padding` instead of as
+        // sibling widgets. This is dpad's documented convention for shelf
+        // layouts — scroll-into-view and scrollPadding reason about the
+        // scrollable's OWN padding as part of its content extent, so a
+        // focused card at either end can actually be scrolled flush
+        // against it, rather than stopping just short and leaving the
+        // gap permanently on screen. ──
+        padding: const EdgeInsets.only(top: 96, bottom: 48),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 96),
-
             AnimeCarousel(
               title: 'Trending Now',
               future: _trendingFuture,
@@ -75,6 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onSelectAnime: widget.onSelectAnime,
               onRetry: _loadTrending,
               autofocusFirst: true,
+              memoryKey: 'home.trending',
             ),
 
             AnimeCarousel(
@@ -83,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
               uiPerformanceMode: uiPerformanceMode,
               onSelectAnime: widget.onSelectAnime,
               onRetry: _loadSeasonPopular,
+              memoryKey: 'home.season_popular',
             ),
 
             AnimeCarousel(
@@ -91,6 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
               uiPerformanceMode: uiPerformanceMode,
               onSelectAnime: widget.onSelectAnime,
               onRetry: _loadAllTimePopular,
+              memoryKey: 'home.all_time_popular',
             ),
           ],
         ),

@@ -1,10 +1,10 @@
+import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/utils/perf_animations.dart';
 import '../../../shared/widgets/app_network_image.dart';
-import '../../../shared/widgets/hover_focus_builder.dart';
 
 class CalendarCard extends StatelessWidget {
   final Anime anime;
@@ -31,10 +31,16 @@ class CalendarCard extends StatelessWidget {
         ? 'Ep ${nextEp.episode}'
         : 'Ep ${anime.episodes ?? "?"}';
 
-    return HoverFocusBuilder(
+    // ── DpadFocusable replaces HoverFocusBuilder. Multiple nested parts
+    // (the border/shadow, the episode-label overlay's opacity, the title
+    // color) all depend on the focus state, so — same as AnimeCard —
+    // there's no focus-independent subtree worth passing through `child`;
+    // builder rebuilds the whole visual tree, keyed off state.focused
+    // instead of the old hovered bool. ──
+    return DpadFocusable(
       autofocus: autofocus,
-      onTap: onTap,
-      builder: (context, hovered) => Column(
+      onSelect: () => onTap?.call(),
+      builder: (context, state, child) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -45,10 +51,10 @@ class CalendarCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: hovered
+                  color: state.focused
                       ? AppPalette.primary.withValues(alpha: 0.80)
                       : AppPalette.border,
-                  width: hovered ? 2 : 1,
+                  width: state.focused ? 2 : 1,
                 ),
                 boxShadow: uiPerformanceMode
                     ? null
@@ -79,7 +85,7 @@ class CalendarCard extends StatelessWidget {
                       uiPerformanceMode: uiPerformanceMode,
                     ),
                     AnimatedOpacity(
-                      opacity: hovered ? 1.0 : 0.0,
+                      opacity: state.focused ? 1.0 : 0.0,
                       duration: perfDuration(
                         uiPerformanceMode,
                         const Duration(milliseconds: 250),
@@ -155,7 +161,7 @@ class CalendarCard extends StatelessWidget {
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 150),
             style: TextStyle(
-              color: hovered ? AppPalette.primary : AppPalette.textMain,
+              color: state.focused ? AppPalette.primary : AppPalette.textMain,
               fontSize: 12,
               fontWeight: FontWeight.w600,
               height: 1.2,
@@ -175,6 +181,7 @@ class CalendarCard extends StatelessWidget {
           ),
         ],
       ),
+      child: const SizedBox.shrink(),
     );
   }
 }

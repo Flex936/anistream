@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:dpad/dpad.dart';
 
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
@@ -130,11 +131,16 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
 
         return SingleChildScrollView(
           controller: _scrollController,
-          padding: const EdgeInsets.only(bottom: 64),
+          // ── Top 96px navbar clearance moved from a leading SizedBox
+          // inside the Column into the scroll view's own padding — same
+          // fix as home_screen.dart, following dpad's documented
+          // convention that shelf-layout padding needs to live inside the
+          // scrollable's own padding property to be accounted for as part
+          // of its content extent. ──
+          padding: const EdgeInsets.only(top: 96, bottom: 64),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 96),
               Padding(
                 padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 24),
                 child: const Column(
@@ -177,6 +183,16 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                     }
 
                     return _DayShelf(
+                      // ── The stable weekday name, NOT displayTitle —
+                      // "Today"/"Tomorrow" describe the SAME underlying
+                      // weekday differently depending on which day it
+                      // actually is right now, which would silently
+                      // break memory continuity across the daily
+                      // rollover (Monday's shelf would answer to
+                      // "Today" one day and "in 6 days" the next,
+                      // fragmenting its own memory key). dayName never
+                      // changes regardless of what today is. ──
+                      regionKey: dayName,
                       title: displayTitle,
                       items: items,
                       hPad: hPad,
@@ -198,6 +214,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
 
 // ── Horizontal Carousel Shelf ──
 class _DayShelf extends StatelessWidget {
+  final String regionKey;
   final String title;
   final List<Anime> items;
   final double hPad;
@@ -207,6 +224,7 @@ class _DayShelf extends StatelessWidget {
   final bool uiPerformanceMode;
 
   const _DayShelf({
+    required this.regionKey,
     required this.title,
     required this.items,
     required this.hPad,
@@ -250,23 +268,44 @@ class _DayShelf extends StatelessWidget {
         ),
         SizedBox(
           height: 300,
-          child: ListView.separated(
-            padding: EdgeInsets.symmetric(horizontal: hPad),
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 16),
-            itemBuilder: (context, i) {
-              return SizedBox(
-                width: 160,
-                child: CalendarCard(
-                  anime: items[i],
-                  formatLocalTime: formatLocalTime,
-                  getTimeRemaining: getTimeRemaining,
-                  onTap: () => onSelectAnime?.call(items[i]),
-                  uiPerformanceMode: uiPerformanceMode,
-                ),
-              );
-            },
+          // ── DpadRegion: this shelf is its own visual section, same
+          // "one region per section" convention as the Home carousels.
+          // memoryKey uses the stable regionKey (weekday name) so the
+          // last-focused card in, say, Wednesday's row survives not just
+          // the once-a-minute clock-driven rebuild but a full
+          // leave-and-return trip through Search/Watchlist/Home too. No
+          // edge-behavior overrides — default leave is what lets Up
+          // escape to the navbar from the topmost shelf, and cascades
+          // between shelves the same way Home's carousels do. ──
+          child: DpadRegion(
+            memoryKey: 'schedule.$regionKey',
+            child: ListView.separated(
+              padding: EdgeInsets.symmetric(horizontal: hPad),
+              scrollDirection: Axis.horizontal,
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 16),
+              itemBuilder: (context, i) {
+                return SizedBox(
+                  // ── Stable per-anime identity across rebuilds — kept
+                  // from the earlier fix. DpadRegion's memoryKey above
+                  // remembers WHICH INDEX was focused; this key makes
+                  // sure the CalendarCard at that index is reliably the
+                  // same anime's Element/State across a rebuild, not
+                  // just whichever happens to occupy that position. Both
+                  // are needed; they fix different layers of the same
+                  // "erratic jumping" symptom. ──
+                  key: ValueKey(items[i].id),
+                  width: 160,
+                  child: CalendarCard(
+                    anime: items[i],
+                    formatLocalTime: formatLocalTime,
+                    getTimeRemaining: getTimeRemaining,
+                    onTap: () => onSelectAnime?.call(items[i]),
+                    uiPerformanceMode: uiPerformanceMode,
+                  ),
+                );
+              },
+            ),
           ),
         ),
         const SizedBox(height: 16),
