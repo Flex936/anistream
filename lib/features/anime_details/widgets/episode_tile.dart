@@ -284,7 +284,7 @@ class EpisodeTile extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => true
+                        builder: (_) => uiPerformanceMode
                             ? ExoTheaterScreen(
                                 anime: anime,
                                 episode: episodeNumber,
