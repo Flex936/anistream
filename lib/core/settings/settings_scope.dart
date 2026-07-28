@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'settings_service.dart';
 
@@ -27,7 +29,14 @@ class _SettingsScopeState extends State<SettingsScope> {
   @override
   void initState() {
     super.initState();
-    _controller = SettingsController()..reload();
+    _controller = SettingsController();
+    // ── initState can't be async — SettingsController.reload() returns
+    // Future<void>, so the fire-and-forget intent is made explicit instead
+    // of silently dropping it via the old `..reload()` cascade
+    // (unawaited_futures). The widget still rebuilds correctly once
+    // reload() completes, via AnimatedBuilder below listening to
+    // _controller. ──
+    unawaited(_controller.reload());
   }
 
   @override

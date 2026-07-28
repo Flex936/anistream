@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/settings/settings_scope.dart';
@@ -34,7 +36,11 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchProgress();
+    // ── initState can't be async — _fetchProgress() returns Future<void>,
+    // so the fire-and-forget intent is made explicit instead of silently
+    // dropped (unawaited_futures). setState inside it already guards on
+    // `mounted`. ──
+    unawaited(_fetchProgress());
   }
 
   Future<void> _fetchProgress() async {
@@ -93,7 +99,11 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
           ),
         );
         if (mounted) {
-          _fetchProgress();
+          // ── Already inside an async method, so this is a plain await
+          // rather than an unawaited() wrap — no reason to leave it
+          // fire-and-forget when the surrounding context can just wait
+          // for it (unawaited_futures). ──
+          await _fetchProgress();
         }
       } else {
         if (mounted) setState(() => _expandedEpisode = ep);
@@ -212,8 +222,8 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         torrentFuture: _expandedEpisode == ep
                             ? _futureFor(ep)
                             : null,
-                        onToggle: () => _toggleEpisode(ep),
-                        onReturnFromTheater: _fetchProgress,
+                        onToggle: () => unawaited(_toggleEpisode(ep)),
+                        onReturnFromTheater: () => unawaited(_fetchProgress()),
                       );
                     }, childCount: _episodeCount),
                   ),

@@ -528,9 +528,7 @@ class _EmptyPane extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppPalette.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppPalette.border,
-          ),
+          border: Border.all(color: AppPalette.border),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
