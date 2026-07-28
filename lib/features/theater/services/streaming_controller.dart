@@ -34,8 +34,8 @@ class StreamingController extends BaseStreamingController {
   bool get hasError => _hasError;
 
   int? _torrentId;
-  StreamSubscription? _torrentSub;
-  StreamSubscription? _streamSub;
+  StreamSubscription<Map<int, TorrentInfo>>? _torrentSub;
+  StreamSubscription<dynamic>? _streamSub;
 
   bool _needsManualSelection = false;
   @override
@@ -65,7 +65,7 @@ class StreamingController extends BaseStreamingController {
 
       _torrentSub = engine.torrentUpdates.listen(
         (torrents) => _handleTorrentUpdate(engine, torrents),
-        onError: (e) => _handleError('Engine sync failed: $e'),
+        onError: (Object e) => _handleError('Engine sync failed: $e'),
       );
 
       _torrentId = engine.addMagnet(magnetUri);
@@ -225,8 +225,8 @@ class StreamingController extends BaseStreamingController {
 
   @override
   void dispose() {
-    _torrentSub?.cancel();
-    _streamSub?.cancel();
+    unawaited(_torrentSub?.cancel() ?? Future<void>.value());
+    unawaited(_streamSub?.cancel() ?? Future<void>.value());
 
     if (_torrentId != null) {
       try {

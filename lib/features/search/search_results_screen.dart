@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/settings/settings_scope.dart';
@@ -94,36 +96,47 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
     );
 
     if (isMobile) {
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: true,
-        builder: (_) => panel,
+      unawaited(
+        showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          isScrollControlled: true,
+          builder: (_) => panel,
+        ),
       );
     } else {
-      showGeneralDialog(
-        context: context,
-        barrierDismissible: true,
-        barrierLabel: 'Filters',
-        transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, _, _) {
-          return Align(
-            alignment: Alignment.centerRight,
-            child: SizedBox(width: 380, height: double.infinity, child: panel),
-          );
-        },
-        transitionBuilder: (context, animation, _, child) {
-          return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-                .animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
+      unawaited(
+        showGeneralDialog<void>(
+          context: context,
+          barrierDismissible: true,
+          barrierLabel: 'Filters',
+          transitionDuration: const Duration(milliseconds: 300),
+          pageBuilder: (context, _, _) {
+            return Align(
+              alignment: Alignment.centerRight,
+              child: SizedBox(
+                width: 380,
+                height: double.infinity,
+                child: panel,
+              ),
+            );
+          },
+          transitionBuilder: (context, animation, _, child) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(1, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
                   ),
-                ),
-            child: child,
-          );
-        },
+              child: child,
+            );
+          },
+        ),
       );
     }
   }

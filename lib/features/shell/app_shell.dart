@@ -40,7 +40,7 @@ class _AppShellState extends State<AppShell> {
     _nav = NavigationController(
       buildHome: () => HomeScreen(onSelectAnime: _handleSelectAnime),
     );
-    _restoreSession();
+    unawaited(_restoreSession());
   }
 
   @override

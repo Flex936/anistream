@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../core/settings/settings_scope.dart';
 import 'glass_toast_content.dart';
@@ -118,14 +120,16 @@ class _TopToastWidgetState extends State<_TopToastWidget>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
-    _controller.forward();
+    unawaited(_controller.forward());
 
-    Future.delayed(const Duration(seconds: 4), () async {
-      if (mounted) {
-        await _controller.reverse();
-        widget.onDismiss();
-      }
-    });
+    unawaited(
+      Future.delayed(const Duration(seconds: 4), () async {
+        if (mounted) {
+          await _controller.reverse();
+          widget.onDismiss();
+        }
+      }),
+    );
   }
 
   @override

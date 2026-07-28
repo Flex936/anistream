@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
@@ -44,10 +46,12 @@ class AnimeCard extends StatelessWidget {
               if (onSelect != null) {
                 onSelect!(anime);
               } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AnimeDetailsScreen(anime: anime),
+                unawaited(
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => AnimeDetailsScreen(anime: anime),
+                    ),
                   ),
                 );
               }

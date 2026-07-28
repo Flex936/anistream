@@ -90,7 +90,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (torrents.isNotEmpty) {
         await Navigator.push(
           context,
-          MaterialPageRoute(
+          MaterialPageRoute<void>(
             builder: (_) => TheaterScreen(
               anime: widget.anime,
               episode: ep,

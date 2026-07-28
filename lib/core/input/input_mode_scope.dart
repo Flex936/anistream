@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'input_mode_controller.dart';
 
@@ -28,7 +30,7 @@ class _InputModeScopeState extends State<InputModeScope> {
   @override
   void initState() {
     super.initState();
-    _controller.init();
+    unawaited(_controller.init());
   }
 
   @override

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../core/theme/app_palette.dart';
 import '../utils/perf_animations.dart';
@@ -113,7 +115,8 @@ class _SkeletonShimmerState extends State<_SkeletonShimmer>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    )..repeat();
+    );
+    unawaited(_controller.repeat());
   }
 
   @override

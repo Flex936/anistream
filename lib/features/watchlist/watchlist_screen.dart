@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -38,7 +39,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     super.initState();
     _controller = WatchlistController();
     _scrollController.addListener(_onScroll);
-    _controller.loadInitial();
+    unawaited(_controller.loadInitial());
   }
 
   @override
@@ -54,16 +55,18 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 500) {
-      _controller.fetchNextForActiveTab();
+      unawaited(_controller.fetchNextForActiveTab());
     }
   }
 
   void _scrollToTop() {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        0.0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
+      unawaited(
+        _scrollController.animateTo(
+          0.0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        ),
       );
     }
   }

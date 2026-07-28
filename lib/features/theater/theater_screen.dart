@@ -67,7 +67,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   String _videoFilterQuality = 'low';
 
   List<Chapter> _chapters = [];
-  StreamSubscription? _posSub;
+  StreamSubscription<Duration>? _posSub;
 
   @override
   void initState() {
@@ -603,7 +603,17 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       child: RepaintBoundary(
                         child: Video(
                           controller: _videoController,
-                          controls: NoVideoControls,
+                          // ── NoVideoControls is media_kit_video's `const
+                          // dynamic` sentinel for "no controls builder" —
+                          // its actual runtime value is `null`, not a
+                          // function. The parameter itself is nullable
+                          // (VideoControlsBuilder?), so the cast target
+                          // must be nullable too, or casting null throws
+                          // at runtime (confirmed via crash log:
+                          // "type 'Null' is not a subtype of type
+                          // '(VideoState) => Widget' in type cast"). ──
+                          controls:
+                              NoVideoControls as Widget Function(VideoState)?,
                           filterQuality: _getFilterQuality(),
                         ),
                       ),

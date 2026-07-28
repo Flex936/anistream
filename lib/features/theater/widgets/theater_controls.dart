@@ -58,8 +58,8 @@ class _TheaterControlsState extends State<TheaterControls> {
   bool _isPlaying = false;
   double _volume = 100.0;
 
-  late final StreamSubscription _playingSub;
-  late final StreamSubscription _volumeSub;
+  late final StreamSubscription<bool> _playingSub;
+  late final StreamSubscription<double> _volumeSub;
 
   final _prefs = SharedPreferencesAsync();
 
@@ -79,8 +79,8 @@ class _TheaterControlsState extends State<TheaterControls> {
 
   @override
   void dispose() {
-    _playingSub.cancel();
-    _volumeSub.cancel();
+    unawaited(_playingSub.cancel());
+    unawaited(_volumeSub.cancel());
     super.dispose();
   }
 
@@ -296,9 +296,9 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
   Duration _duration = Duration.zero;
   Duration _buffer = Duration.zero;
 
-  late final StreamSubscription _positionSub;
-  late final StreamSubscription _durationSub;
-  late final StreamSubscription _bufferSub;
+  late final StreamSubscription<Duration> _positionSub;
+  late final StreamSubscription<Duration> _durationSub;
+  late final StreamSubscription<Duration> _bufferSub;
 
   @override
   void initState() {
@@ -320,9 +320,9 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
 
   @override
   void dispose() {
-    _positionSub.cancel();
-    _durationSub.cancel();
-    _bufferSub.cancel();
+    unawaited(_positionSub.cancel());
+    unawaited(_durationSub.cancel());
+    unawaited(_bufferSub.cancel());
     super.dispose();
   }
 
@@ -444,8 +444,8 @@ class _PlaybackTimeLabelState extends State<_PlaybackTimeLabel> {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
 
-  late final StreamSubscription _positionSub;
-  late final StreamSubscription _durationSub;
+  late final StreamSubscription<Duration> _positionSub;
+  late final StreamSubscription<Duration> _durationSub;
 
   @override
   void initState() {
@@ -463,8 +463,8 @@ class _PlaybackTimeLabelState extends State<_PlaybackTimeLabel> {
 
   @override
   void dispose() {
-    _positionSub.cancel();
-    _durationSub.cancel();
+    unawaited(_positionSub.cancel());
+    unawaited(_durationSub.cancel());
     super.dispose();
   }
 
