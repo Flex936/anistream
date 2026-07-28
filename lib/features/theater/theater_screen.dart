@@ -603,20 +603,17 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       child: RepaintBoundary(
                         child: Video(
                           controller: _videoController,
-                          // ── NoVideoControls is declared by media_kit_video
-                          // itself as `const dynamic` (confirmed via the
-                          // package's API docs), not as a typed function —
-                          // so referencing it bare is a dynamic assignment,
-                          // and calling it is a dynamic invocation. Casting
-                          // the reference to its actual runtime shape once,
-                          // without invoking it, satisfies both
-                          // strict-casts (no implicit dynamic→Widget
-                          // downcast) and avoid_dynamic_calls (no dynamic
-                          // call at all) — Dart function types are
-                          // structural, so this cast is valid regardless of
-                          // whether VideoControlsBuilder itself is exported. ──
+                          // ── NoVideoControls is media_kit_video's `const
+                          // dynamic` sentinel for "no controls builder" —
+                          // its actual runtime value is `null`, not a
+                          // function. The parameter itself is nullable
+                          // (VideoControlsBuilder?), so the cast target
+                          // must be nullable too, or casting null throws
+                          // at runtime (confirmed via crash log:
+                          // "type 'Null' is not a subtype of type
+                          // '(VideoState) => Widget' in type cast"). ──
                           controls:
-                              NoVideoControls as Widget Function(VideoState),
+                              NoVideoControls as Widget Function(VideoState)?,
                           filterQuality: _getFilterQuality(),
                         ),
                       ),
