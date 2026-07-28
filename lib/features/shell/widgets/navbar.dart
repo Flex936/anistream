@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:dpad/dpad.dart';
@@ -61,7 +62,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
     _searchController = TextEditingController(text: widget.searchQuery);
     if (_isDesktop) {
       windowManager.addListener(this);
-      _syncMaximisedState();
+      unawaited(_syncMaximisedState());
     }
   }
 
@@ -108,28 +109,33 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
   }
 
   void _showMobileMenu() {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Menu',
-      barrierColor: AppPalette.black.withValues(alpha: 0.50),
-      transitionDuration: const Duration(milliseconds: 300),
-      transitionBuilder: (context, animation, _, child) {
-        return SlideTransition(
-          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-              .animate(
-                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-              ),
-          child: child,
-        );
-      },
-      pageBuilder: (_, _, _) => _MobileMenu(
-        isLoggedIn: widget.isLoggedIn,
-        uiPerformanceMode: widget.uiPerformanceMode,
-        onScheduled: widget.onScheduled,
-        onWatchlist: widget.onWatchlist,
-        onLogin: widget.onLogin,
-        onSettings: widget.onSettings,
+    unawaited(
+      showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Menu',
+        barrierColor: AppPalette.black.withValues(alpha: 0.50),
+        transitionDuration: const Duration(milliseconds: 300),
+        transitionBuilder: (context, animation, _, child) {
+          return SlideTransition(
+            position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
+            child: child,
+          );
+        },
+        pageBuilder: (_, _, _) => _MobileMenu(
+          isLoggedIn: widget.isLoggedIn,
+          uiPerformanceMode: widget.uiPerformanceMode,
+          onScheduled: widget.onScheduled,
+          onWatchlist: widget.onWatchlist,
+          onLogin: widget.onLogin,
+          onSettings: widget.onSettings,
+        ),
       ),
     );
   }

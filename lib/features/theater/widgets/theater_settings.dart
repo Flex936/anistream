@@ -32,8 +32,8 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
   AudioTrack? _activeAudio;
   SubtitleTrack? _activeSubtitle;
 
-  late final StreamSubscription _tracksSub;
-  late final StreamSubscription _trackSub;
+  late final StreamSubscription<Tracks> _tracksSub;
+  late final StreamSubscription<Track> _trackSub;
 
   @override
   void initState() {
@@ -57,8 +57,8 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
 
   @override
   void dispose() {
-    _tracksSub.cancel();
-    _trackSub.cancel();
+    unawaited(_tracksSub.cancel());
+    unawaited(_trackSub.cancel());
     super.dispose();
   }
 

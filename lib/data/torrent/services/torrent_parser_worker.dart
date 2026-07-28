@@ -293,17 +293,14 @@ class TorrentParserWorker {
   }
 
   void _teardown() {
-    // ── StreamSubscription.cancel() returns a Future<void> — dropping it
-    // here (as the previous `_responseSub?.cancel();` did) is a discarded
-    // future under unawaited_futures. `_teardown` is called from several
-    // synchronous contexts (including inside catch/finally blocks above),
-    // so it can't become `async` without cascading that through every
-    // caller — `unawaited()` documents the "this is intentionally
-    // fire-and-forget" decision instead. ──
-    final responseSub = _responseSub;
-    if (responseSub != null) {
-      unawaited(responseSub.cancel());
-    }
+    // ── Cancelled directly off the field (rather than via an
+    // intermediate local copy) so the analyzer's cancel_subscriptions
+    // check traces the .cancel() call back to this field unambiguously.
+    // Still wrapped in unawaited(): StreamSubscription.cancel() returns
+    // Future<void>, and _teardown() is called from several synchronous
+    // contexts (including inside catch/finally blocks above), so it
+    // can't become async without cascading that through every caller. ──
+    unawaited(_responseSub?.cancel() ?? Future<void>.value());
     _responseSub = null;
     _responsePort?.close();
     _responsePort = null;

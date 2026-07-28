@@ -118,15 +118,17 @@ Future<bool> _completesWithin(Future<List<Torrent>> future, Duration duration) {
     if (!completer.isCompleted) completer.complete(false);
   });
 
-  future.then(
-    (_) {
-      timer.cancel();
-      if (!completer.isCompleted) completer.complete(true);
-    },
-    onError: (_) {
-      timer.cancel();
-      if (!completer.isCompleted) completer.complete(true);
-    },
+  unawaited(
+    future.then(
+      (_) {
+        timer.cancel();
+        if (!completer.isCompleted) completer.complete(true);
+      },
+      onError: (_) {
+        timer.cancel();
+        if (!completer.isCompleted) completer.complete(true);
+      },
+    ),
   );
 
   return completer.future;
@@ -206,7 +208,7 @@ Future<List<Torrent>> _runQueueSearchStaggered(
           'Title "${queue[i]}" slow to resolve — starting next candidate '
               '"${queue[nextIdx]}" concurrently (batchMode: $batchMode)',
         );
-        ensureStarted(nextIdx);
+        unawaited(ensureStarted(nextIdx));
       }
     }
 

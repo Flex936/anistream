@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
@@ -311,7 +313,7 @@ class _FloatingNavBar extends StatelessWidget {
         if (onBack != null) {
           onBack!();
         } else {
-          Navigator.maybePop(context);
+          unawaited(Navigator.maybePop(context));
         }
       },
       builder: (context, hovered) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dpad/dpad.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -41,7 +43,7 @@ class _AniStreamAppState extends State<AniStreamApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    AppLogger.dispose();
+    unawaited(AppLogger.dispose());
     super.dispose();
   }
 
@@ -62,7 +64,10 @@ class _AniStreamAppState extends State<AniStreamApp>
   // nothing needed to change. There's nothing further for Dpad itself to
   // do in either case. ──
   bool _handleDpadBack() {
-    _navigatorKey.currentState?.maybePop();
+    final navigator = _navigatorKey.currentState;
+    if (navigator != null) {
+      unawaited(navigator.maybePop());
+    }
     return true;
   }
 

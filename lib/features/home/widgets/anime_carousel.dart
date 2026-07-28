@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:dpad/dpad.dart';
@@ -80,10 +81,12 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
     final double targetPosition = (_scrollController.offset + scrollAmount)
         .clamp(0.0, _scrollController.position.maxScrollExtent);
 
-    _scrollController.animateTo(
-      targetPosition,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutCubic,
+    unawaited(
+      _scrollController.animateTo(
+        targetPosition,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+      ),
     );
   }
 

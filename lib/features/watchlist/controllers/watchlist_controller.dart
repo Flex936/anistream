@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/media_list.dart';
@@ -40,7 +42,7 @@ class WatchlistController extends ChangeNotifier {
     activeStatus = status;
     notifyListeners();
     if (_tabs[status]!.entries.isEmpty && _tabs[status]!.hasNext) {
-      fetchTab(status);
+      unawaited(fetchTab(status));
     }
   }
 

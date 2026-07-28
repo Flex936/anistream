@@ -67,7 +67,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   String _videoFilterQuality = 'low';
 
   List<Chapter> _chapters = [];
-  StreamSubscription? _posSub;
+  StreamSubscription<Duration>? _posSub;
 
   @override
   void initState() {
@@ -603,7 +603,20 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       child: RepaintBoundary(
                         child: Video(
                           controller: _videoController,
-                          controls: NoVideoControls,
+                          // ── NoVideoControls is declared by media_kit_video
+                          // itself as `const dynamic` (confirmed via the
+                          // package's API docs), not as a typed function —
+                          // so referencing it bare is a dynamic assignment,
+                          // and calling it is a dynamic invocation. Casting
+                          // the reference to its actual runtime shape once,
+                          // without invoking it, satisfies both
+                          // strict-casts (no implicit dynamic→Widget
+                          // downcast) and avoid_dynamic_calls (no dynamic
+                          // call at all) — Dart function types are
+                          // structural, so this cast is valid regardless of
+                          // whether VideoControlsBuilder itself is exported. ──
+                          controls:
+                              NoVideoControls as Widget Function(VideoState),
                           filterQuality: _getFilterQuality(),
                         ),
                       ),
