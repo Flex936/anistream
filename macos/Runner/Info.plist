@@ -28,5 +28,10 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Gates any LAN-scoped activity (peer discovery, mDNS/Bonjour, uPnP port
+	     mapping) behind the macOS Local Network permission prompt. Without this
+	     string the OS denies silently instead of prompting the user. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>AniStream uses the local network to discover torrent peers and stream media to devices on your network.</string>
 </dict>
 </plist>

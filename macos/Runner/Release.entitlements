@@ -4,5 +4,14 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Outbound sockets: torrent peer connections, tracker announces (HTTP/UDP),
+	     DHT, and AniList API calls all require this even in a sandboxed Release build. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Local listening socket for the loopback torrent HTTP stream server that
+	     media_kit/mpv reads from. Required even though the bind target is 127.0.0.1 —
+	     App Sandbox does not distinguish loopback-only servers from LAN-facing ones. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
 </dict>
 </plist>

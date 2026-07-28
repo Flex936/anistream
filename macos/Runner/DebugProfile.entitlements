@@ -6,7 +6,13 @@
 	<true/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
+	<!-- Was present before; kept for the local stream server. -->
 	<key>com.apple.security.network.server</key>
+	<true/>
+	<!-- Without this, outbound peer/tracker/API connections fail
+	     even in Debug/Profile, which is why it's easy to miss in day-to-day dev
+	     if you were testing against cached/local content only. -->
+	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>
 </plist>
