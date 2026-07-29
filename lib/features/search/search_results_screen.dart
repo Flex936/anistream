@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
@@ -77,7 +78,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   void _openFilterDrawer() {
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    // ── Was MediaQuery.sizeOf(context).width < 600 inline — routed
+    // through the shared ResponsiveContext.isMobile extension
+    // (build_context_extensions.dart) instead, matching the breakpoint
+    // watchlist_screen.dart/responsive_grid.dart already standardize on.
+    // Pure mechanical swap — Breakpoints.mobile is already 600, so
+    // behavior is unchanged. ──
+    final isMobile = context.isMobile;
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
     final panel = SearchFilterPanel(

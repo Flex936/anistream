@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/torrent/models/torrent.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
@@ -26,7 +27,13 @@ class TorrentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    // ── Was MediaQuery.sizeOf(context).width < 600 inline — routed
+    // through the shared ResponsiveContext.isMobile extension
+    // (build_context_extensions.dart) instead, matching the breakpoint
+    // watchlist_screen.dart/responsive_grid.dart already standardize on.
+    // Pure mechanical swap — Breakpoints.mobile is already 600, so
+    // behavior is unchanged. ──
+    final isMobile = context.isMobile;
 
     return HoverFocusBuilder(
       onTap: onStream,
