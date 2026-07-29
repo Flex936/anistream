@@ -10,6 +10,8 @@ import 'core/logging/app_logger.dart';
 import 'core/router/app_router.dart';
 import 'core/settings/settings_scope.dart';
 import 'core/theme/app_palette.dart';
+import 'core/theme/app_radii.dart';
+import 'core/theme/app_typography.dart';
 
 class AniStreamApp extends StatefulWidget {
   const AniStreamApp({super.key});
@@ -89,6 +91,12 @@ class _AniStreamAppState extends State<AniStreamApp>
           seedColor: AppPalette.primary,
           brightness: Brightness.dark,
         ),
+        // ── Named typography + radius tokens, registered once
+        // here and read anywhere below via `context.appTypography` /
+        // `context.appRadii` (build_context_extensions.dart). See each
+        // extension's doc comment for the taxonomy and which prior
+        // hardcoded literals they replace/converge. ──
+        extensions: const [AppTypography.standard, AppRadii.standard],
       ),
       // ── Dpad.wrap() is now the outermost layer, matching its documented
       // root-install pattern (`MaterialApp(builder: Dpad.wrap())`).

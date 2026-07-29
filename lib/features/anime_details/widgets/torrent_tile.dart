@@ -27,7 +27,15 @@ class TorrentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ── Routed through the shared
+    // ResponsiveContext.isMobile extension. ──
     final isMobile = context.isMobile;
+
+    // ── Pulling both token sets once at the top of
+    // build() rather than repeating `context.appTypography`/
+    // `context.appRadii` at each call site below. ──
+    final typography = context.appTypography;
+    final radii = context.appRadii;
 
     return HoverFocusBuilder(
       onTap: onStream,
@@ -40,7 +48,11 @@ class TorrentTile extends StatelessWidget {
               : isRecommended
               ? AppPalette.primary.withValues(alpha: 0.06)
               : AppPalette.overlay,
-          borderRadius: BorderRadius.circular(12),
+          // ── Was BorderRadius.circular(12) hardcoded — matches
+          // AppRadii.small exactly (this is a card/list-item shape per
+          // DESIGN.md's own "12px for list items" rule), so this is a
+          // pure token substitution with no visual change. ──
+          borderRadius: BorderRadius.circular(radii.small),
           border: Border.all(
             color: hovered
                 ? AppPalette.primary.withValues(alpha: 0.4)
@@ -59,7 +71,7 @@ class TorrentTile extends StatelessWidget {
               : null,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(radii.small),
           // ── Clip.hardEdge under Performant mode — see
           // FrostedContainer's doc comment for the rationale. This clip
           // wasn't routed through FrostedContainer at all previously. ──
@@ -75,21 +87,23 @@ class TorrentTile extends StatelessWidget {
                     horizontal: 14,
                     vertical: 6,
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.star_rounded,
                         color: AppPalette.primary,
                         size: 12,
                       ),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
+                      // ── Was TextStyle(fontSize: 10, fontWeight: w800,
+                      // letterSpacing: 1.0) — part of the approved
+                      // badgeLabel convergence cluster. Only visual
+                      // delta: letterSpacing 1.0 -> 0.5 (badgeLabel's
+                      // converged value). Size/weight unchanged. ──
                       Text(
                         'RECOMMENDED',
-                        style: TextStyle(
+                        style: typography.badgeLabel.copyWith(
                           color: AppPalette.primary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.0,
                         ),
                       ),
                     ],
@@ -107,13 +121,15 @@ class TorrentTile extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // ── Was TextStyle(fontSize: 13, fontWeight:
+                          // w500, height: 1.4) — part of the approved
+                          // cardTitleCompact convergence cluster. Visual
+                          // delta: fontWeight w500 -> w600 (converged
+                          // value); height 1.4 -> 1.35. ──
                           Text(
                             torrent.title,
-                            style: const TextStyle(
+                            style: typography.cardTitleCompact.copyWith(
                               color: AppPalette.textMain,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              height: 1.4,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -135,6 +151,12 @@ class TorrentTile extends StatelessWidget {
                                     color: AppPalette.textMuted,
                                   ),
                                   const SizedBox(width: 4),
+                                  // ── Left as a plain literal — this is
+                                  // a muted, regular-weight 12px label,
+                                  // not a match for any identified
+                                  // duplicate cluster (metaLabel is
+                                  // w600). Forcing it into metaLabel
+                                  // would incorrectly bump its weight. ──
                                   Text(
                                     torrent.size,
                                     style: const TextStyle(
@@ -144,12 +166,13 @@ class TorrentTile extends StatelessWidget {
                                   ),
                                 ],
                               ),
+                              // ── Was TextStyle(fontSize: 12, fontWeight:
+                              // w600) inline — exact match for metaLabel,
+                              // pure token substitution, no visual change. ──
                               Text(
                                 '▲ ${torrent.seeders} Seeders',
-                                style: TextStyle(
+                                style: typography.metaLabel.copyWith(
                                   color: _seederColor(torrent.seeders),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
@@ -204,21 +227,26 @@ class _Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+    final radii = context.appRadii;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: AppPalette.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
+        // ── Was BorderRadius.circular(4) — nudged up to AppRadii.tag
+        // (6), the approved tier for small decorative badges/pills.
+        // Small, deliberate visual convergence rather than a pure
+        // refactor. ──
+        borderRadius: BorderRadius.circular(radii.tag),
         border: Border.all(color: AppPalette.primary.withValues(alpha: 0.28)),
       ),
+      // ── Was TextStyle(fontSize: 10, fontWeight: w700, letterSpacing:
+      // 0.3) — part of the approved badgeLabel convergence cluster.
+      // Visual delta: fontWeight w700 -> w800; letterSpacing 0.3 -> 0.5. ──
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppPalette.primary,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
-        ),
+        style: typography.badgeLabel.copyWith(color: AppPalette.primary),
       ),
     );
   }
