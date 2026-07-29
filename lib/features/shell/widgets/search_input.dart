@@ -35,7 +35,16 @@ class SearchInput extends StatefulWidget {
 class _SearchInputState extends State<SearchInput> {
   final FocusNode _focusNode = FocusNode();
   final LayerLink _layerLink = LayerLink();
-  OverlayEntry? _overlayEntry;
+
+  // ── replaces the manual `OverlayEntry?` field + Overlay.of
+  // (context).insert()/entry.remove() pair. OverlayPortalController ties
+  // the dropdown's mount/unmount lifecycle directly to this widget's own
+  // lifecycle — show()/hide() just flip an internal flag that the
+  // OverlayPortal below reacts to, and the portal's overlay child is torn
+  // down automatically when this State is disposed. Removes the manual
+  // leak risk of a stray `_overlayEntry` never being removed on some
+  // dispose/error path. ──
+  final OverlayPortalController _overlayController = OverlayPortalController();
 
   final AnilistQueryService _api = AnilistQueryService();
   Timer? _debounce;
@@ -92,9 +101,8 @@ class _SearchInputState extends State<SearchInput> {
     // _focusNode's own hasFocus was checked, so moving focus FROM the
     // field INTO a result row (exactly what D-Pad/keyboard navigation
     // into the dropdown looks like) was indistinguishable from the user
-    // dismissing search entirely, and the 150ms delayed _hideOverlay()
-    // tore the dropdown down out from under the very navigation trying
-    // to reach it. ──
+    // dismissing search entirely, and the delayed hide tore the dropdown
+    // down out from under the very navigation trying to reach it. ──
     _focusNode.addListener(_handleGroupFocusChange);
     for (final node in _resultFocusNodes) {
       node.addListener(_handleGroupFocusChange);
@@ -105,7 +113,7 @@ class _SearchInputState extends State<SearchInput> {
     // Opening stays keyed off the text field specifically — that's the
     // only node whose focus should ever trigger showing results.
     if (_focusNode.hasFocus && widget.controller.text.isNotEmpty) {
-      _showOverlay();
+      _overlayController.show();
     }
 
     // Closing is keyed off the WHOLE group, re-checked after a short,
@@ -128,7 +136,7 @@ class _SearchInputState extends State<SearchInput> {
       final stillWithinGroup =
           _focusNode.hasFocus || _resultFocusNodes.any((n) => n.hasFocus);
       if (!stillWithinGroup) {
-        _hideOverlay();
+        _overlayController.hide();
       }
     });
   }
@@ -141,7 +149,9 @@ class _SearchInputState extends State<SearchInput> {
       node.dispose();
     }
     _debounce?.cancel();
-    _hideOverlay();
+    // ── No explicit _overlayController.hide()/teardown needed here —
+    // unlike the old OverlayEntry, OverlayPortal's overlay child is torn
+    // down automatically as part of this State's disposal. ──
     _api.dispose();
     super.dispose();
   }
@@ -154,13 +164,19 @@ class _SearchInputState extends State<SearchInput> {
         _instantMatches.clear();
         _isLoading = false;
       });
-      _hideOverlay();
+      _overlayController.hide();
       return;
     }
 
-    _showOverlay();
+    _overlayController.show();
+    // ── setState() alone is enough to rebuild the dropdown now — the
+    // overlayChildBuilder below is part of THIS State's build output, so
+    // it rebuilds on every setState() the same as any other descendant.
+    // The old `_overlayEntry?.markNeedsBuild()` calls (here and in
+    // _fetchMatches) are gone entirely; they existed only because a bare
+    // OverlayEntry has no widget-tree connection to this State and
+    // wouldn't otherwise know to rebuild. ──
     setState(() => _isLoading = true);
-    _overlayEntry?.markNeedsBuild();
 
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), _fetchMatches);
@@ -174,41 +190,12 @@ class _SearchInputState extends State<SearchInput> {
           _instantMatches = results.take(3).toList();
           _isLoading = false;
         });
-        _overlayEntry?.markNeedsBuild();
       }
     } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _overlayEntry?.markNeedsBuild();
       }
     }
-  }
-
-  void _showOverlay() {
-    if (_overlayEntry != null) return;
-
-    _overlayEntry = OverlayEntry(
-      builder: (context) {
-        final renderBox = context.findRenderObject() as RenderBox?;
-        final width = renderBox?.size.width ?? 300.0;
-
-        return Positioned(
-          width: width,
-          child: CompositedTransformFollower(
-            link: _layerLink,
-            showWhenUnlinked: false,
-            offset: const Offset(0, 48),
-            child: _buildDropdown(),
-          ),
-        );
-      },
-    );
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  void _hideOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
   }
 
   Widget _buildDropdown() {
@@ -254,7 +241,7 @@ class _SearchInputState extends State<SearchInput> {
         // candidate for focusInDirection(down) from the text field. ──
         focusNode: focusNode,
         onTap: () {
-          _hideOverlay();
+          _overlayController.hide();
           _focusNode.unfocus();
           widget.onSelectAnime?.call(anime);
         },
@@ -377,66 +364,98 @@ class _SearchInputState extends State<SearchInput> {
 
   @override
   Widget build(BuildContext context) {
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: TextField(
-        controller: widget.controller,
-        focusNode: _focusNode,
-        autofocus: widget.autoFocus,
-        onChanged: _onTextChanged,
-        onSubmitted: widget.onSubmitted,
-        style: const TextStyle(color: AppPalette.textMain, fontSize: 14),
-        decoration: InputDecoration(
-          hintText: 'Search for anime...',
-          hintStyle: const TextStyle(color: AppPalette.textMuted, fontSize: 14),
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 14, right: 10),
-            child: Icon(
-              Icons.search_rounded,
+    // OverlayPortal replaces the old
+    // Overlay.of(context).insert(_overlayEntry!) call. The
+    // CompositedTransformTarget/CompositedTransformFollower + _layerLink
+    // pairing is UNCHANGED — only the entry lifecycle mechanism moved.
+    // overlayChildBuilder runs as part of this State's own build/rebuild
+    // cycle (rather than a detached OverlayEntry callback), which is also
+    // why `context` here — this build method's own BuildContext — can be
+    // used directly for the width lookup below, instead of the old
+    // OverlayEntry builder's own (unrelated) context.
+    return OverlayPortal(
+      controller: _overlayController,
+      overlayChildBuilder: (overlayContext) {
+        final renderBox = context.findRenderObject() as RenderBox?;
+        final width = renderBox?.size.width ?? 300.0;
+
+        return Positioned(
+          width: width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: const Offset(0, 48),
+            child: _buildDropdown(),
+          ),
+        );
+      },
+      child: CompositedTransformTarget(
+        link: _layerLink,
+        child: TextField(
+          controller: widget.controller,
+          focusNode: _focusNode,
+          autofocus: widget.autoFocus,
+          onChanged: _onTextChanged,
+          onSubmitted: widget.onSubmitted,
+          style: const TextStyle(color: AppPalette.textMain, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'Search for anime...',
+            hintStyle: const TextStyle(
               color: AppPalette.textMuted,
-              size: 20,
+              fontSize: 14,
             ),
-          ),
-          prefixIconConstraints: const BoxConstraints(),
-          suffixIcon: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: widget.controller,
-            builder: (context, value, child) {
-              if (value.text.isEmpty) return const SizedBox.shrink();
-              return IconButton(
-                icon: const Icon(
-                  Icons.cancel_rounded,
-                  color: AppPalette.textMuted,
-                  size: 18,
-                ),
-                onPressed: () {
-                  widget.controller.clear();
-                  _onTextChanged('');
-                },
-              );
-            },
-          ),
-          filled: true,
-          fillColor: AppPalette.white.withValues(alpha: 0.05),
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 11,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: BorderSide(
-              color: AppPalette.white.withValues(alpha: 0.1),
+            prefixIcon: const Padding(
+              padding: EdgeInsets.only(left: 14, right: 10),
+              child: Icon(
+                Icons.search_rounded,
+                color: AppPalette.textMuted,
+                size: 20,
+              ),
             ),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: BorderSide(
-              color: AppPalette.white.withValues(alpha: 0.1),
+            prefixIconConstraints: const BoxConstraints(),
+            suffixIcon: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: widget.controller,
+              builder: (context, value, child) {
+                if (value.text.isEmpty) return const SizedBox.shrink();
+                return IconButton(
+                  icon: const Icon(
+                    Icons.cancel_rounded,
+                    color: AppPalette.textMuted,
+                    size: 18,
+                  ),
+                  onPressed: () {
+                    widget.controller.clear();
+                    _onTextChanged('');
+                  },
+                );
+              },
             ),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+            filled: true,
+            fillColor: AppPalette.white.withValues(alpha: 0.05),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 11,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(24),
+              borderSide: BorderSide(
+                color: AppPalette.white.withValues(alpha: 0.1),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(24),
+              borderSide: BorderSide(
+                color: AppPalette.white.withValues(alpha: 0.1),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(24),
+              borderSide: const BorderSide(
+                color: AppPalette.primary,
+                width: 1.5,
+              ),
+            ),
           ),
         ),
       ),
