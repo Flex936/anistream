@@ -10,7 +10,7 @@ import '../../../shared/widgets/hover_focus_builder.dart';
 import '../../theater/theater_screen.dart';
 import 'torrent_tile.dart';
 
-class EpisodeTile extends StatelessWidget {
+class EpisodeTile extends StatefulWidget {
   final Anime anime;
   final int episodeNumber;
   final bool isExpanded;
@@ -39,21 +39,69 @@ class EpisodeTile extends StatelessWidget {
   });
 
   @override
+  State<EpisodeTile> createState() => _EpisodeTileState();
+}
+
+class _EpisodeTileState extends State<EpisodeTile> {
+  // ── Expansible requires a persistent ExpansibleController (a
+  // ChangeNotifier with its own dispose() contract) — this is the reason
+  // this widget moved from Stateless to Stateful. Expansion state itself
+  // is still NOT owned here: `widget.isExpanded` remains driven entirely
+  // by AnimeDetailsScreen's `_expandedEpisode` single-int accordion index,
+  // exactly as before. This controller exists purely to satisfy
+  // Expansible's API contract and is kept in lockstep with
+  // `widget.isExpanded` via didUpdateWidget below — it never originates a
+  // state change of its own; the header's tap still goes straight to
+  // `widget.onToggle` (the external callback), same as before. ──
+  late final ExpansibleController _expansibleController;
+
+  @override
+  void initState() {
+    super.initState();
+    _expansibleController = ExpansibleController();
+    if (widget.isExpanded) {
+      _expansibleController.expand();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant EpisodeTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isExpanded != oldWidget.isExpanded) {
+      if (widget.isExpanded) {
+        _expansibleController.expand();
+      } else {
+        _expansibleController.collapse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _expansibleController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // ── Routed through the shared ResponsiveContext.isMobile
+    // extension instead of a raw MediaQuery check. ──
     final isMobile = context.isMobile;
     final hPad = isMobile ? 16.0 : 28.0;
 
-    final isWatched = userProgress != null && episodeNumber <= userProgress!;
+    final isWatched =
+        widget.userProgress != null &&
+        widget.episodeNumber <= widget.userProgress!;
 
-    final Color numColor = isExpanded
+    final Color numColor = widget.isExpanded
         ? AppPalette.primary
-        : isUpNext
+        : widget.isUpNext
         ? AppPalette.textMain
         : isWatched
         ? AppPalette.textMuted.withValues(alpha: 0.25)
         : AppPalette.textMuted.withValues(alpha: 0.35);
 
-    final Color titleColor = isExpanded || isUpNext
+    final Color titleColor = widget.isExpanded || widget.isUpNext
         ? AppPalette.textMain
         : isWatched
         ? AppPalette.textMuted.withValues(alpha: 0.5)
@@ -62,147 +110,182 @@ class EpisodeTile extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        HoverFocusBuilder(
-          autofocus: isUpNext || (userProgress == null && episodeNumber == 1),
-          onTap: onToggle,
-          builder: (context, hovered) => AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
+        Expansible(
+          controller: _expansibleController,
+          // ── Matches the previous AnimatedRotation/AnimatedSize timing
+          // (250ms, easeOutCubic) instead of Expansible's own default
+          // (200ms, Curves.ease), so the motion feels the same as before. ──
+          animationStyle: const AnimationStyle(
+            duration: Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
-            padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 15),
-            decoration: BoxDecoration(
-              color: isExpanded
-                  ? AppPalette.primary.withValues(alpha: 0.06)
-                  : hovered
-                  ? AppPalette.white.withValues(alpha: 0.025)
-                  : AppPalette.transparent,
-              border: Border(
-                left: BorderSide(
-                  color: isExpanded
-                      ? AppPalette.primary
-                      : isUpNext
-                      ? AppPalette.primary.withValues(alpha: 0.3)
-                      : AppPalette.transparent,
-                  width: 3,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: isMobile ? 26 : 34,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      episodeNumber.toString().padLeft(2, '0'),
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: numColor,
-                        fontSize: isMobile ? 16 : 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Row(
-                    children: [
-                      Text(
-                        'Episode $episodeNumber',
-                        style: TextStyle(
-                          color: titleColor,
-                          fontSize: 14,
-                          fontWeight: isExpanded || isUpNext
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                        ),
-                      ),
-                      if (isUpNext) ...[
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppPalette.primary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'UP NEXT',
-                            style: TextStyle(
-                              color: AppPalette.primary,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                      if (isWatched) ...[
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.check_rounded,
-                          size: 14,
-                          color: AppPalette.textMuted.withValues(alpha: 0.5),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (isCurrentlyLoading)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppPalette.primary,
-                      ),
-                    ),
-                  )
-                else if (isAutoPlayEnabled)
-                  Icon(
-                    Icons.play_arrow_rounded,
-                    size: 24,
-                    color: hovered
-                        ? AppPalette.primary
-                        : AppPalette.textMuted.withValues(alpha: 0.5),
-                  )
-                else
-                  AnimatedRotation(
-                    turns: isExpanded ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 22,
-                      color: isExpanded
-                          ? AppPalette.primary
-                          : AppPalette.textMuted.withValues(alpha: 0.5),
-                    ),
-                  ),
-              ],
-            ),
           ),
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: isExpanded
-              ? _buildTorrentContent(context, hPad)
-              : const SizedBox.shrink(),
+          headerBuilder: (context, animation) => _buildHeader(
+            animation: animation,
+            hPad: hPad,
+            isMobile: isMobile,
+            numColor: numColor,
+            titleColor: titleColor,
+            isWatched: isWatched,
+          ),
+          // ── The Divider stays OUTSIDE Expansible entirely (see below) —
+          // it was always visible regardless of expand state in the
+          // original, never part of the collapsible AnimatedSize. ──
+          bodyBuilder: (context, animation) =>
+              _buildTorrentContent(context, hPad),
         ),
         const Divider(height: 1, thickness: 1, color: AppPalette.border),
       ],
     );
   }
 
+  Widget _buildHeader({
+    required Animation<double> animation,
+    required double hPad,
+    required bool isMobile,
+    required Color numColor,
+    required Color titleColor,
+    required bool isWatched,
+  }) {
+    return HoverFocusBuilder(
+      autofocus:
+          widget.isUpNext ||
+          (widget.userProgress == null && widget.episodeNumber == 1),
+      onTap: widget.onToggle,
+      builder: (context, hovered) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 15),
+        decoration: BoxDecoration(
+          color: widget.isExpanded
+              ? AppPalette.primary.withValues(alpha: 0.06)
+              : hovered
+              ? AppPalette.white.withValues(alpha: 0.025)
+              : AppPalette.transparent,
+          border: Border(
+            left: BorderSide(
+              color: widget.isExpanded
+                  ? AppPalette.primary
+                  : widget.isUpNext
+                  ? AppPalette.primary.withValues(alpha: 0.3)
+                  : AppPalette.transparent,
+              width: 3,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: isMobile ? 26 : 34,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  widget.episodeNumber.toString().padLeft(2, '0'),
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: numColor,
+                    fontSize: isMobile ? 16 : 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Row(
+                children: [
+                  Text(
+                    'Episode ${widget.episodeNumber}',
+                    style: TextStyle(
+                      color: titleColor,
+                      fontSize: 14,
+                      fontWeight: widget.isExpanded || widget.isUpNext
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                    ),
+                  ),
+                  if (widget.isUpNext) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppPalette.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'UP NEXT',
+                        style: TextStyle(
+                          color: AppPalette.primary,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (isWatched) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.check_rounded,
+                      size: 14,
+                      color: AppPalette.textMuted.withValues(alpha: 0.5),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (widget.isCurrentlyLoading)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppPalette.primary),
+                ),
+              )
+            else if (widget.isAutoPlayEnabled)
+              Icon(
+                Icons.play_arrow_rounded,
+                size: 24,
+                color: hovered
+                    ? AppPalette.primary
+                    : AppPalette.textMuted.withValues(alpha: 0.5),
+              )
+            else
+              // ── Was AnimatedRotation(turns: isExpanded ? 0.5 : 0.0,
+              // duration: 250ms, curve: easeOutCubic, ...) driven by a
+              // manually-tracked bool. Now a RotationTransition driven
+              // directly off Expansible's own animation (0 -> 1 as it
+              // expands/collapses), scaled to a half turn via a Tween —
+              // same 0 -> 180° sweep, same curve/duration (set via
+              // animationStyle above), just sourced from the single
+              // shared Expansible animation instead of a second,
+              // independently-timed AnimatedRotation. Icon color is
+              // still a plain immediate switch on widget.isExpanded, not
+              // animated — matches the original exactly (only the
+              // rotation was ever animated, never the color). ──
+              RotationTransition(
+                turns: Tween<double>(begin: 0.0, end: 0.5).animate(animation),
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 22,
+                  color: widget.isExpanded
+                      ? AppPalette.primary
+                      : AppPalette.textMuted.withValues(alpha: 0.5),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTorrentContent(BuildContext context, double hPad) {
-    final future = torrentFuture;
+    final future = widget.torrentFuture;
     if (future == null) return const SizedBox.shrink();
 
     return Padding(
@@ -281,19 +364,19 @@ class EpisodeTile extends StatelessWidget {
                 TorrentTile(
                   torrent: torrents[i],
                   isRecommended: i == 0,
-                  uiPerformanceMode: uiPerformanceMode,
+                  uiPerformanceMode: widget.uiPerformanceMode,
                   onStream: () {
                     unawaited(
                       Navigator.push(
                         context,
                         MaterialPageRoute<void>(
                           builder: (_) => TheaterScreen(
-                            anime: anime,
-                            episode: episodeNumber,
+                            anime: widget.anime,
+                            episode: widget.episodeNumber,
                             torrent: torrents[i],
                           ),
                         ),
-                      ).then((_) => onReturnFromTheater?.call()),
+                      ).then((_) => widget.onReturnFromTheater?.call()),
                     );
                   },
                 ),
