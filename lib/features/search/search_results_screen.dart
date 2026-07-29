@@ -78,12 +78,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   void _openFilterDrawer() {
-    // ── Was MediaQuery.sizeOf(context).width < 600 inline — routed
-    // through the shared ResponsiveContext.isMobile extension
-    // (build_context_extensions.dart) instead, matching the breakpoint
-    // watchlist_screen.dart/responsive_grid.dart already standardize on.
-    // Pure mechanical swap — Breakpoints.mobile is already 600, so
-    // behavior is unchanged. ──
     final isMobile = context.isMobile;
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
