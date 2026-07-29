@@ -14,7 +14,7 @@
 | [API.md](API.md) | AniList & Nyaa.si integrations, scraping, caching | …touch networking, scraping, or tracking |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | PR process, checklist, Code of Conduct | …submit a change |
 
-AniStream started off from two seperate ideas from the two of us.
+AniStream started off from two separate ideas from the two of us.
 
 1) Ease of use for torrenting animes.
 2) Automatic tracking for animes you watch.
@@ -214,7 +214,7 @@ Contributions are welcome — bug reports, features, design work, and documentat
 
 ## License
 
-AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)**. Add a `LICENSE` file with the full GPLv3 text (available at [gnu.org/licenses/gpl-3.0.txt](https://www.gnu.org/licenses/gpl-3.0.txt)) at the repository root if it isn't there yet. By contributing, you agree your contributions are made available under the same license — see [CONTRIBUTING.md](CONTRIBUTING.md).
+AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)** — see the [`LICENSE`](LICENSE) file at the repository root for the full text. By contributing, you agree your contributions are made available under the same license — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

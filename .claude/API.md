@@ -69,6 +69,8 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 
 ## Caching
 
+Caching is a codebase-wide concern, not limited to the AniList/Nyaa integrations covered above — this table is the single authoritative list of every cache in the app, regardless of which subsystem owns it. CLAUDE.md § 4's Living Documentation Rule routes "new cache, or a changed TTL" here for exactly this reason, so add a row here even if the new cache lives outside `data/`.
+
 | Cache | TTL | Cap | Scope |
 |---|---|---|---|
 | `_AnilistCache` | 2 min | 40 entries | Read-only, non-personalized queries only (trending, season/all-time popular, currently airing, search). **Never** used for the watchlist or progress queries — those must always reflect live state. |
@@ -77,4 +79,4 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 | Image decoding | N/A | — | Not a persistent disk cache — `Image.network` calls are capped with a `cacheWidth` matched to the widget's actual rendered size, so Flutter's in-memory image cache never holds a full-resolution decode of a thumbnail-sized poster. |
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Added a query, a data source, or a cache? Update this file — see CLAUDE.md's Living Documentation Rule (§4).*
+*Last reviewed against the codebase: 2026-07-28. Added a query, a data source, or a cache? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*

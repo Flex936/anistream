@@ -10,7 +10,7 @@ Thanks for considering a contribution — AniStream is maintained by a small tea
 - **Bug reports** — open an issue with repro steps, your platform (Windows/Linux/macOS/Android/Android TV/iOS), and logs if you have them (see `AppLogger`'s output directory, printed at startup).
 - **Feature requests** — open an issue describing the use case before writing code; for anything non-trivial, a short discussion up front avoids a PR that doesn't fit the architecture.
 - **Design work** — proposals for new UI should be framed against [DESIGN.md](DESIGN.md)'s existing tokens and TV/D-pad rules, not introduced ad hoc in a single widget.
-- **Documentation** — this project treats its six `.md` files as living documents (see [CLAUDE.md](CLAUDE.md)'s Living Documentation Rule). Doc-only PRs that correct drift between the docs and the code are genuinely welcome.
+- **Documentation** — this project treats its docs — six at the root, plus [`anistream_server/README.md`](anistream_server/README.md) — as living documents (see [CLAUDE.md](CLAUDE.md)'s Living Documentation Rule). Doc-only PRs that correct drift between the docs and the code are genuinely welcome.
 - **Code** — see below.
 
 ## Getting Set Up
@@ -19,14 +19,17 @@ Follow [README.md](README.md)'s **Developer & System Setup** and **Getting Start
 
 ## Coding Standards
 
-- All generated and hand-written Dart code is held to the same bar: [CLAUDE.md](CLAUDE.md)'s performance rules (`const` constructors, `ListView.builder`/`GridView.builder` only, `StatelessWidget` by default, `InheritedNotifier` for app-wide state, heavy parsing offloaded to `compute()`/`Isolate.run()`) and the linter configuration in `analysis_options.yaml` (strict casts/inference/raw-types, mandatory trailing commas, no `avoid_print`, etc.) are non-negotiable, not style suggestions.
-- Run `flutter analyze` before opening a PR — it should come back clean. If you believe a specific lint should be suppressed for a good reason, use a scoped `// ignore: <rule>` with a comment explaining why, not a blanket rule change in `analysis_options.yaml`.
-- New code goes where [ARCHITECTURE.md](ARCHITECTURE.md)'s folder-placement rule says it goes (`core/` vs `data/` vs `shared/` vs `features/<name>/`) — don't introduce a new top-level folder without discussing it first.
+Every PR is held to [CLAUDE.md](CLAUDE.md) §§ 2–3 and the lint configuration in `analysis_options.yaml` in full — both are non-negotiable, not style suggestions, and neither is restated here.
+
+- Run `flutter analyze` before opening a PR — it should come back clean. Note that `analyze` only mechanically enforces part of CLAUDE.md § 2 (see that section for exactly which rule and which are review-only); this is why the checklist below has a separate line for the rest.
+- If you believe a specific lint should be suppressed for a good reason, use a scoped `// ignore: <rule>` with a comment explaining why, not a blanket rule change in `analysis_options.yaml`.
+- New code goes where [ARCHITECTURE.md](ARCHITECTURE.md) § 2's folder-placement rule says it goes — don't introduce a new top-level folder without discussing it first.
 - **This project is Flutter/Dart only for the purposes of this file.** If you're contributing to the companion Go server (`anistream_server/`), its own conventions live in [`anistream_server/README.md`](anistream_server/README.md), not here.
 
 ## UI/Design Contributions
 
-- Follow [DESIGN.md](DESIGN.md): colors only from `app_palette.dart`, no hardcoded font sizes, blur/clipping/animation/image rules from its Performance UI Mode checklist, and the D-pad/focus conventions in its § 4.
+Every UI change is held to [DESIGN.md](DESIGN.md) in full — not restated here.
+
 - [DESIGN.md](DESIGN.md) § 5 documents a handful of known blur-sigma and border-radius inconsistencies. **Please don't "fix" these incidentally inside an unrelated PR** — if you want to formalize new design tokens, open a dedicated design-system issue/PR so the change (and its visual impact across every affected screen) can be reviewed on its own.
 
 ## Documentation Updates
@@ -36,6 +39,7 @@ If your change matches a trigger in [CLAUDE.md](CLAUDE.md)'s Living Documentatio
 ## Pull Request Checklist
 
 - [ ] `flutter analyze` passes with no new warnings/errors
+- [ ] Widgets/state also follow CLAUDE.md § 2's review-only conventions (collection rendering, `StatelessWidget`-by-default, `InheritedNotifier`-only state, offloaded parsing) — these aren't caught by `analyze`, so check them manually
 - [ ] New/changed widgets follow [DESIGN.md](DESIGN.md) (colors, radii, blur, D-pad focus rules as applicable)
 - [ ] New files are placed per [ARCHITECTURE.md](ARCHITECTURE.md)'s folder rule
 - [ ] Any networking/scraping change is reflected in [API.md](API.md)

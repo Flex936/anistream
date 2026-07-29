@@ -8,8 +8,8 @@
 - Execute a premium, Apple/Spotify-inspired UI/UX. Prioritize clean layouts, deep contrasts, and seamless transitions.
 - Source all colors strictly from `lib/core/theme/app_palette.dart`. Extend this palette logically if new shades are required. NEVER hardcode color values in widget files.
 - Enforce a strictly scaled typography system. Avoid hardcoded font sizes.
-- Standardize border radiuses: **~12px** for list/grid item cards (`AnimeCard`, `TorrentTile`, the watchlist grid's `WatchlistCard`), **~24px** for large slide-in panels (`SettingsMenu`, `SearchFilterPanel`, the mobile nav drawer). See §5 for current outliers to this rule.
-- Utilize Glassmorphism heavily for overlays, toasts, and floating elements using `BackdropFilter` — always routed through the shared `FrostedContainer` widget, never a bare `BackdropFilter` call (see §2).
+- Standardize border radiuses: **~12px** for list/grid item cards (`AnimeCard`, `TorrentTile`, the watchlist grid's `WatchlistCard`), **~24px** for large slide-in panels (`SettingsMenu`, `SearchFilterPanel`, the mobile nav drawer). See § 5 for current outliers to this rule.
+- Utilize Glassmorphism heavily for overlays, toasts, and floating elements using `BackdropFilter` — always routed through the shared `FrostedContainer` widget, never a bare `BackdropFilter` call (see § 2).
 
 ## 2. Performance UI Mode
 
@@ -38,9 +38,9 @@
 - Manage spatial navigation strictly via `FocusNode` and `FocusTraversalGroup` (in practice, via the `dpad` package's `DpadRegion`/`DpadFocusable`, which wrap these).
 - Display visual focus rings ONLY when `dpadModeActive` is true.
 
-**How `dpadModeActive` is actually resolved** (`InputModeController`) — two independent signals, either of which can turn it on:
+**How `dpadModeActive` is resolved** (`InputModeController`) — two independent signals, either of which can turn it on. Native bridge specifics (channel name, method, platform) live in [ARCHITECTURE.md](ARCHITECTURE.md) § 4; the design-relevant behavior is:
 
-1. **`isTvPlatform`** — a one-time native check on boot (`MethodChannel('anistream/device_mode')`, method `isTelevision`, Android only). Sticky for the process lifetime — a TV's remote is its only input, so there's nothing to detect "switching away" from.
+1. **A one-time platform check on boot**, sticky for the process lifetime — a TV's remote is its only input, so there's nothing to detect "switching away" from.
 2. **Live input sniffing** — the moment a D-pad-shaped key is observed (arrow keys, select, a gamepad face button, the TV back key), `dpadModeActive` flips on; the moment a pointer-down event is observed, it flips back off. This is what lets a desktop with a connected gamepad, or a phone paired with a Bluetooth remote, get the same treatment as a real TV, and what lets a TV box with a mouse attached fall back to pointer-style UI.
 
 This deliberately does **not** reuse Flutter's own `FocusManager.instance.highlightMode`, which defaults to "traditional" (rings visible) on desktop from the very first frame — exactly the "D-pad UI bleeding onto PC" bug this mechanism exists to prevent. `dpadModeActive` starts `false` everywhere except a confirmed TV, and only turns on after D-pad-shaped input is actually observed.
@@ -57,11 +57,11 @@ This deliberately does **not** reuse Flutter's own `FocusManager.instance.highli
 These are documented as-is per the Living Documentation Rule — **do not silently rename, resize, or "fix" these as a side effect of an unrelated PR.** Raise a dedicated design-system issue/PR if you want to formalize new tiers.
 
 - **Blur sigma has no named tiers.** Values in use today range from `10` (small icon buttons and badges — `FrostedIconButton`, the watchlist progress badge) to `50` (`SettingsMenu`'s full panel), with `12`, `16`, `20` (the `FrostedContainer` default), `30`, and `40` also in use across different components. The rough pattern is "bigger surface → higher sigma," but it isn't formalized into e.g. `BlurTier.small/medium/large` constants.
-- **Border radius outliers to the "12px items / 24px panels" rule in §1:**
+- **Border radius outliers to the "12px items / 24px panels" rule in § 1:**
   - `CalendarCard` uses 10px/9px (outer/inner), not 12px.
   - The watchlist screen's `ListCard` (list-view row) and `HeroCard` (featured "Watching" card) use 16px/15px, not 12px.
   - `BatchEpisodePickerOverlay` (a genuine modal) uses 16px, not 24px.
   - `TheaterSettingsMenu` (a floating popup, arguably closer to the 12px "item" category despite being a menu) uses 12px.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see CLAUDE.md's Living Documentation Rule (§4).*
+*Last reviewed against the codebase: 2026-07-28. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*

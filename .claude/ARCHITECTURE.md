@@ -1,6 +1,8 @@
 > 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · **ARCHITECTURE.md** · [API.md](API.md) · [README.md](README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** the `lib/` folder structure, state-management pattern, native platform layer, and how the optional Go server fits in. **See also:** [CLAUDE.md](CLAUDE.md) for the rules that assume this structure, [DESIGN.md](DESIGN.md) for the UI layer this hosts, [API.md](API.md) for what the data layer talks to.
 
+**In this file:** [System Overview](#1-system-overview) · [Flutter App Structure](#2-flutter-app-structure) · [State Management](#3-state-management) · [Native Platform Layer](#4-native-platform-layer) · [Streaming Pipeline](#5-streaming-pipeline) · [AniStream Server (Go)](#6-anistream-server-go) · [Known Issues](#7-known-issues)
+
 # AniStream Architecture
 
 ## 1. System Overview
@@ -93,7 +95,7 @@ lib/
 | …calls an external API (AniList, Nyaa) | `data/<domain>/services/`, with its wire model in `data/<domain>/models/` |
 | …is app-wide infrastructure (logging, theming, routing, settings, input-mode detection) | `core/` |
 
-`playback_session_controller.dart` currently exists in the repo as an empty stub with nothing importing it anywhere in the app. It's slated for removal and is intentionally omitted from the tree above — don't build on it.
+`playback_session_controller.dart` currently exists in the repo as an empty stub with nothing importing it anywhere in the app — see § 7.
 
 ## 3. State Management
 
@@ -114,7 +116,7 @@ There is no Provider, Riverpod, Bloc, or Redux dependency in `pubspec.yaml` — 
 
 Two distinct native-integration mechanisms are in use — new performance-sensitive native work should extend the second, not add more of the first:
 
-1. **A single `MethodChannel`** (`anistream/device_mode`, method `isTelevision`) — used exactly once, by `InputModeController`, to ask the native Android side a one-time yes/no question at boot. Fails safe to `false` (not a TV) if the platform channel isn't implemented, so a build without the native handler wired up simply never activates TV mode rather than crashing.
+1. **A single `MethodChannel`** (`anistream/device_mode`, method `isTelevision`) — used exactly once, by `InputModeController`, to ask the native Android side a one-time yes/no question at boot. Fails safe to `false` (not a TV) if the platform channel isn't implemented, so a build without the native handler wired up simply never activates TV mode rather than crashing. This is only one of two signals feeding `dpadModeActive` — the other (live D-pad/pointer input sniffing) is pure Dart, has no native bridge of its own, and is documented in [DESIGN.md](DESIGN.md) § 4.
 2. **FFI plugins** — `libtorrent_flutter` (the torrent engine, all platforms) and its supporting `jni` / `jni_flutter` / `objective_c` packages (cross-platform native interop — not Android-only despite the `jni` name). This is the mechanism for anything performance-critical; the app deliberately keeps custom `MethodChannel` surface area to the single case above.
 
 ### Android
@@ -177,7 +179,11 @@ any state ──(3 min metadata timeout / no video files / stream failure)──
 - CORS is fully open (`Access-Control-Allow-Origin: *`) since it's meant to be reachable from any device on the LAN.
 - `RemoteStreamingController` (§5) is the only Dart-side consumer of this API.
 
-**Doc-sync flag:** `go.mod` declares `go 1.23`; [`anistream_server/README.md`](anistream_server/README.md)'s stated prerequisite is "Go 1.22 or later." Worth reconciling the next time either file is touched — noted here per the Living Documentation Rule in [CLAUDE.md](CLAUDE.md).
+## 7. Known Issues
+
+Documented per the Living Documentation Rule (CLAUDE.md § 4) rather than silently patched around or left for a reader to rediscover — mirrors the same pattern DESIGN.md § 5 uses for design debt.
+
+- **`playback_session_controller.dart` is a dead stub.** It exists in the repo as an empty file with nothing importing it anywhere in the app (already omitted from the folder tree in § 2). It's slated for removal — don't build on it, and don't be misled by its presence into thinking it's load-bearing.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§4).*
+*Last reviewed against the codebase: 2026-07-28. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
