@@ -1,7 +1,7 @@
+# AniStream Design System & UI Specs
+
 > 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · **DESIGN.md** · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · [README.md](README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** visual language, performance-mode rules, responsive layout, and TV/D-pad spatial navigation. **See also:** [CLAUDE.md](CLAUDE.md) for how these rules are enforced when generating code, [ARCHITECTURE.md](ARCHITECTURE.md) for where the widgets implementing them live.
-
-# AniStream Design System & UI Specs
 
 ## 1. UI/UX Philosophy & Visual Language
 

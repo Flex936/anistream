@@ -1,13 +1,13 @@
-> 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · **README.md** · [CONTRIBUTING.md](CONTRIBUTING.md)
-
 # AniStream
+
+> 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · **README.md** · [CONTRIBUTING.md](CONTRIBUTING.md)
 
 **Disclaimer : until we release v1.0.0, the current releases (up to v0.3.0) are built via Wails (Svelte frontend and Go backend that is opened via your default webview). That version of the app was built with entirely different tools, and is also far more behind in development (hence it's behind in design, compatibility, features, optimizations, bugs, everything kinda). The description below is the complete new version of the app that has not been released yet.**
 
 ## Documentation Index
 
 | Doc | Purpose | Start here if you want to… |
-|---|---|---|
+| --- | --- | --- |
 | [CLAUDE.md](CLAUDE.md) | AI/human coding rules, performance constraints, linter compliance | …know what a PR or an AI-generated change needs to satisfy |
 | [DESIGN.md](DESIGN.md) | Visual language, design tokens, TV/D-pad rules | …build or review UI |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | `lib/` folder structure, native platform layer, the optional Go server | …know where a file belongs, or how a platform-specific piece works |

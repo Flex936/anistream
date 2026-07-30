@@ -1,7 +1,7 @@
+# AniStream Project Rules
+
 > 📚 **AniStream Docs:** **CLAUDE.md** · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · [README.md](README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** AI/human coding rules, performance constraints, linter compliance, and the rule that keeps this whole doc suite in sync. **See also:** [DESIGN.md](DESIGN.md) for visual rules, [ARCHITECTURE.md](ARCHITECTURE.md) for where code lives.
-
-# AniStream Project Rules
 
 ## 1. Role & Tech Stack
 
@@ -38,7 +38,7 @@ This project maintains six cross-referencing docs at the repository root: this f
 **The rule:** whenever a change to the codebase matches one of the triggers below, proactively name the affected doc(s) and propose the specific edit before or alongside the code change. Don't wait to be asked, and don't silently rewrite documentation without flagging it — the same "plan first, then get approval" discipline in § 3 applies to doc changes, not just code.
 
 | Change | Docs to check |
-|---|---|
+| --- | --- |
 | New/removed dependency in `pubspec.yaml` | [ARCHITECTURE.md](ARCHITECTURE.md); [API.md](API.md) if it's a new data source; this file if it conflicts with the dependency-rejection or `InheritedNotifier`-only rules above |
 | New top-level `lib/` folder, or a new `features/<name>/` module | [ARCHITECTURE.md](ARCHITECTURE.md)'s folder tree |
 | New/changed `MethodChannel`, FFI binding, or platform-specific native behavior | [ARCHITECTURE.md](ARCHITECTURE.md) § Native Platform Layer |

@@ -1,14 +1,14 @@
+# AniStream Server
+
 > 📚 **Part of the AniStream docs.** Main suite: [CLAUDE.md](../CLAUDE.md) · [DESIGN.md](../DESIGN.md) · [ARCHITECTURE.md](../ARCHITECTURE.md) · [API.md](../API.md) · [README.md](../README.md) · [CONTRIBUTING.md](../CONTRIBUTING.md)
 > **Covers:** building, running, and the REST API of the standalone Go server that offloads torrenting from thin clients. **See also:** [ARCHITECTURE.md](../ARCHITECTURE.md) § 6 for the condensed architecture summary (session state diagram, which Dart controller talks to this server) — that section links back here for the full reference.
-
-# AniStream Server
 
 A lightweight Go binary that handles BitTorrent downloading and HTTP streaming
 so thin clients (Android TV, phones, weak laptops) don't have to.
 
 ## How it fits in
 
-```
+```text
 [Flutter app on TV]  ──POST magnet──►  [AniStream Server on PC / NAS]
                      ◄──stream URL───   (anacrolix/torrent does the work)
 
@@ -49,10 +49,10 @@ GOOS=windows GOARCH=amd64 go build -o anistream-server.exe .
 ./anistream-server -port 7878 -data /mnt/media/anistream
 ```
 
-| Flag    | Default                        | Description                        |
-|---------|--------------------------------|------------------------------------|
-| `-port` | `7878`                         | TCP port to listen on              |
-| `-data` | `$TMPDIR/anistream-server`     | Directory for downloaded pieces    |
+| Flag | Default | Description |
+| --- | --- | --- |
+| `-port` | `7878` | TCP port to listen on |
+| `-data` | `$TMPDIR/anistream-server` | Directory for downloaded pieces |
 
 The server prints its address on startup. Copy that IP into the Flutter app's
 Settings → Remote Server → Server URL field.
@@ -87,14 +87,14 @@ sudo systemctl enable --now anistream-server
 
 ## API reference
 
-| Method | Path                        | Body / Response                          |
-|--------|-----------------------------|------------------------------------------|
-| GET    | `/api/health`               | `{"name":"AniStream Server","status":"ok","version":"1.0.0"}` |
-| POST   | `/api/stream`               | `{magnet, episode_number?}` → `{session_id}` |
-| GET    | `/api/stream/:id`           | `StatusResponse` (see below)             |
-| POST   | `/api/stream/:id/select`    | `{file_index}` → `{ok:true}`             |
-| GET    | `/api/stream/:id/video`     | HTTP range-request video stream (for MPV)|
-| DELETE | `/api/stream/:id`           | 204 No Content                           |
+| Method | Path | Body / Response |
+| --- | --- | --- |
+| GET | `/api/health` | `{"name":"AniStream Server","status":"ok","version":"1.0.0"}` |
+| POST | `/api/stream` | `{magnet, episode_number?}` → `{session_id}` |
+| GET | `/api/stream/:id` | `StatusResponse` (see below) |
+| POST | `/api/stream/:id/select` | `{file_index}` → `{ok:true}` |
+| GET | `/api/stream/:id/video` | HTTP range-request video stream (for MPV) |
+| DELETE | `/api/stream/:id` | 204 No Content |
 
 ### StatusResponse
 

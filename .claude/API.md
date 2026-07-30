@@ -1,12 +1,12 @@
+# AniStream Data Layer
+
 > 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · **API.md** · [README.md](README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** the AniList and Nyaa.si integrations, torrent scraping/scoring, and caching. **See also:** [ARCHITECTURE.md](ARCHITECTURE.md) for where these services live and how the two streaming paths (on-device vs. remote server) differ.
-
-# AniStream Data Layer
 
 ## Overview
 
 | Source | Role | Auth |
-|---|---|---|
+| --- | --- | --- |
 | **AniList** | Primary metadata (titles, covers, scores, airing schedule), user authentication, and watch-progress tracking | OAuth2 (implicit grant), read+write |
 | **Nyaa.si** | Torrent discovery via RSS scraping | None (unauthenticated read) |
 | **MyAnimeList** | **Passive link-out only** — a button on the details screen that opens `myanimelist.net/anime/<id>` in the system browser | N/A — no API calls are made to MAL from this app |
@@ -20,7 +20,7 @@ The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, L
 **Endpoint:** a single GraphQL endpoint, `https://graphql.anilist.co`, POSTed to via `AnilistQueryService.executeRaw`. Every specific query lives in `anilist_queries.dart`:
 
 | Query/Mutation | Used for |
-|---|---|
+| --- | --- |
 | `trending` | Home screen — "Trending Now" |
 | `seasonPopular` | Home screen — "Popular This Season" |
 | `allTimePopular` | Home screen — "All Time Popular" |
@@ -50,7 +50,7 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 **Scoring** (`TorrentScoringEngine`, starts at 100 points):
 
 | Signal | Effect |
-|---|---|
+| --- | --- |
 | Batch mode: not actually a batch, or wrong season | Rejected outright |
 | Batch mode: covers episode 1 through the anime's full episode count | +20 |
 | Batch/season match (either mode) | ±100 |
@@ -72,7 +72,7 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 Caching is a codebase-wide concern, not limited to the AniList/Nyaa integrations covered above — this table is the single authoritative list of every cache in the app, regardless of which subsystem owns it. CLAUDE.md § 4's Living Documentation Rule routes "new cache, or a changed TTL" here for exactly this reason, so add a row here even if the new cache lives outside `data/`.
 
 | Cache | TTL | Cap | Scope |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `_AnilistCache` | 2 min | 40 entries | Read-only, non-personalized queries only (trending, season/all-time popular, currently airing, search). **Never** used for the watchlist or progress queries — those must always reflect live state. |
 | `_TorrentSearchCache` | 5 min | 60 entries | Keyed by `animeId:episodeNumber`. Only a successful, non-empty result is cached — a "no seeded torrents found" outcome is never cached, so a transient scrape failure doesn't get stuck. |
 | `SettingsCache` | N/A (sync mirror, not TTL-based) | — | An in-memory copy of the current `AppSettings`, kept live by `SettingsController` — see [ARCHITECTURE.md](ARCHITECTURE.md) § State Management. |

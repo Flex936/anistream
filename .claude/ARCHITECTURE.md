@@ -1,9 +1,9 @@
+# AniStream Architecture
+
 > 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · **ARCHITECTURE.md** · [API.md](API.md) · [README.md](README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** the `lib/` folder structure, state-management pattern, native platform layer, and how the optional Go server fits in. **See also:** [CLAUDE.md](CLAUDE.md) for the rules that assume this structure, [DESIGN.md](DESIGN.md) for the UI layer this hosts, [API.md](API.md) for what the data layer talks to.
 
 **In this file:** [System Overview](#1-system-overview) · [Flutter App Structure](#2-flutter-app-structure) · [State Management](#3-state-management) · [Native Platform Layer](#4-native-platform-layer) · [Streaming Pipeline](#5-streaming-pipeline) · [AniStream Server (Go)](#6-anistream-server-go) · [Known Issues](#7-known-issues)
-
-# AniStream Architecture
 
 ## 1. System Overview
 
@@ -14,7 +14,7 @@ AniStream is a single Flutter/Dart codebase producing native apps for Windows, L
 
 Metadata and tracking come from AniList's GraphQL API; torrent discovery comes from scraping Nyaa.si's RSS feeds. Both are covered in [API.md](API.md), not here.
 
-```
+```text
 ┌──────────────┐      GraphQL      ┌──────────────┐
 │  AniList API │◄─────────────────►│              │
 └──────────────┘                   │              │
@@ -32,7 +32,7 @@ Metadata and tracking come from AniList's GraphQL API; torrent discovery comes f
 
 ## 2. Flutter App Structure
 
-```
+```text
 lib/
 ├── main.dart                  # Entry point: zone setup, AppLogger.init(), MediaKit.ensureInitialized(),
 │                               # InputModeController.instance.init(), desktop window bootstrap, runApp()
@@ -89,7 +89,7 @@ lib/
 **Where does new code go?**
 
 | The code… | Goes in |
-|---|---|
+| --- | --- |
 | …is only ever used by one screen/flow | `features/<name>/widgets/` (or `services/`, `controllers/`, `utils/` as needed) |
 | …is a widget or util reused by 2+ features | `shared/widgets/` or `shared/utils/` |
 | …calls an external API (AniList, Nyaa) | `data/<domain>/services/`, with its wire model in `data/<domain>/models/` |
@@ -148,7 +148,7 @@ Two distinct native-integration mechanisms are in use — new performance-sensit
 `TheaterScreen` depends only on the `BaseStreamingController` interface (`streaming_controller_base.dart`) — `statusText`, `streamUrl`, `isReadyToPlay`, `hasError`, `needsManualSelection`, `batchFiles`, `initialize()`, `selectBatchFile()`. Two implementations satisfy it, chosen once per session by `AppSettings.serverMode`:
 
 | | `StreamingController` | `RemoteStreamingController` |
-|---|---|---|
+| --- | --- | --- |
 | Torrent engine | On-device, `libtorrent_flutter` (FFI) | Delegated to the Go server over LAN (§6) |
 | Transport to player | Local HTTP server (loopback) | Server's `/api/stream/:id/video` endpoint |
 | "Ready" threshold | 0.1% sequential buffer downloaded | 5.0% sequential buffer downloaded (server-side `bufferThreshold`) |
@@ -164,7 +164,7 @@ Optional, standalone companion for thin clients (Android TV boxes, phones, weak 
 
 **Session state machine** (one session per active magnet link):
 
-```
+```text
 loading_metadata
     │
     ├── single video file found ──────────────┐
