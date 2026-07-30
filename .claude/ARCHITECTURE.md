@@ -1,6 +1,6 @@
 # AniStream Architecture
 
-> 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · **ARCHITECTURE.md** · [API.md](API.md) · [README.md](README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
+> 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · **ARCHITECTURE.md** · [API.md](API.md) · [README.md](../README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** the `lib/` folder structure, state-management pattern, native platform layer, and how the optional Go server fits in. **See also:** [CLAUDE.md](CLAUDE.md) for the rules that assume this structure, [DESIGN.md](DESIGN.md) for the UI layer this hosts, [API.md](API.md) for what the data layer talks to.
 
 **In this file:** [System Overview](#1-system-overview) · [Flutter App Structure](#2-flutter-app-structure) · [State Management](#3-state-management) · [Native Platform Layer](#4-native-platform-layer) · [Streaming Pipeline](#5-streaming-pipeline) · [AniStream Server (Go)](#6-anistream-server-go) · [Known Issues](#7-known-issues)
@@ -125,23 +125,23 @@ Two distinct native-integration mechanisms are in use — new performance-sensit
 - `android:usesCleartextTraffic="true"` is required because both local streaming paths are plain HTTP: `libtorrent_flutter`'s local streaming server, and (if `serverMode` is on) the LAN-only Go server.
 - `android:enableOnBackInvokedCallback="true"` enables predictive back gestures, matching the app's own `PopScope`-based back handling (`AppShell`, `TheaterScreen`).
 - `androidHwDec` setting distinguishes `mediacodec` (zero-copy, phones) from `mediacodec-copy` (safer, recommended for TV — see `settings_menu.dart`'s help text). Build tooling: AGP `9.0.1`, Kotlin `2.3.20`, JVM target 17.
-- **Known limitation** (carried from [README.md](README.md)): Android TV builds don't yet use the TV's own decode unit, so weak-GPU TV hardware may struggle with 1080p.
+- **Known limitation** (carried from [README.md](../README.md)): Android TV builds don't yet use the TV's own decode unit, so weak-GPU TV hardware may struggle with 1080p.
 
 ### macOS / iOS
 
 - Standard `FlutterAppDelegate` / `FlutterViewController` embedding; the one behavioral customization is `applicationShouldTerminateAfterLastWindowClosed` returning `true` (quits on last-window-close, matching desktop-app rather than menu-bar-app conventions).
 - `Release.entitlements` declares only `com.apple.security.app-sandbox`; `DebugProfile.entitlements` additionally declares `com.apple.security.cs.allow-jit` and `com.apple.security.network.server`. **Worth verifying:** if AniList OAuth (which opens a loopback HTTP server on port 3456) or on-device torrenting stop working specifically in signed/notarized Release builds on macOS, check whether Release needs `com.apple.security.network.client`/`.server` added too — this hasn't been confirmed broken, just flagged as an untested gap between the two entitlement files.
-- Per [README.md](README.md), neither maintainer has a Mac or iOS device to test on — treat this platform as best-effort/community-verified rather than actively maintained.
+- Per [README.md](../README.md), neither maintainer has a Mac or iOS device to test on — treat this platform as best-effort/community-verified rather than actively maintained.
 
 ### Linux
 
 - GTK3 embedding via CMake; the one native customization is setting the GTK window's background to solid black (`#000000`) before the first Flutter frame, avoiding a white flash on a dark-themed app.
-- System dependencies: `mpv` (the underlying decode/render library `media_kit` wraps), GTK3 dev headers, standard C++ build tools — see [README.md](README.md)'s install instructions.
+- System dependencies: `mpv` (the underlying decode/render library `media_kit` wraps), GTK3 dev headers, standard C++ build tools — see [README.md](../README.md)'s install instructions.
 
 ### Windows
 
 - Win32 embedding via CMake/MSVC; window chrome is fully custom (`window_manager` package, `titleBarStyle: TitleBarStyle.hidden` in `main.dart`), with `dwmapi` used natively for dark-mode title-bar theming.
-- Requires the Visual Studio 2022 Build Tools "Desktop development with C++" workload — see [README.md](README.md).
+- Requires the Visual Studio 2022 Build Tools "Desktop development with C++" workload — see [README.md](../README.md).
 
 ## 5. Streaming Pipeline
 
@@ -158,7 +158,7 @@ Both implementations parse candidate filenames with the same `TorrentParser` (se
 
 ## 6. AniStream Server (Go)
 
-Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, single external dependency `github.com/anacrolix/torrent`. Full build/run/API instructions live in [`anistream_server/README.md`](anistream_server/README.md) — this section is the condensed architectural summary; that file is authoritative for the actual command-line flags and endpoint reference.
+Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, single external dependency `github.com/anacrolix/torrent`. Full build/run/API instructions live in [`anistream_server/README.md`](../anistream_server/README.md) — this section is the condensed architectural summary; that file is authoritative for the actual command-line flags and endpoint reference.
 
 **Flow:** the Flutter app POSTs a magnet link to the server; the server does all torrenting and exposes the result as an HTTP range-request video stream (`http.ServeContent` over a `torrent.Reader`, which implements `io.ReadSeeker` — this is what makes MPV's seeking work against the server with no special-casing).
 
@@ -175,7 +175,7 @@ any state ──(3 min metadata timeout / no video files / stream failure)──
 ```
 
 - Sessions idle for 30+ minutes are dropped automatically (`reap()`, checked every 5 minutes).
-- No authentication — the server is designed for trusted-LAN use only (see [`anistream_server/README.md`](anistream_server/README.md)'s own notes on this).
+- No authentication — the server is designed for trusted-LAN use only (see [`anistream_server/README.md`](../anistream_server/README.md)'s own notes on this).
 - CORS is fully open (`Access-Control-Allow-Origin: *`) since it's meant to be reachable from any device on the LAN.
 - `RemoteStreamingController` (§5) is the only Dart-side consumer of this API.
 

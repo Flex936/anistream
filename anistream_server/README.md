@@ -1,7 +1,7 @@
 # AniStream Server
 
-> 📚 **Part of the AniStream docs.** Main suite: [CLAUDE.md](../CLAUDE.md) · [DESIGN.md](../DESIGN.md) · [ARCHITECTURE.md](../ARCHITECTURE.md) · [API.md](../API.md) · [README.md](../README.md) · [CONTRIBUTING.md](../CONTRIBUTING.md)
-> **Covers:** building, running, and the REST API of the standalone Go server that offloads torrenting from thin clients. **See also:** [ARCHITECTURE.md](../ARCHITECTURE.md) § 6 for the condensed architecture summary (session state diagram, which Dart controller talks to this server) — that section links back here for the full reference.
+> 📚 **Part of the AniStream docs.** Main suite: [CLAUDE.md](../.claude/CLAUDE.md) · [DESIGN.md](../.claude/DESIGN.md) · [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) · [API.md](../.claude/API.md) · [README.md](../README.md) · [CONTRIBUTING.md](../.claude/CONTRIBUTING.md)
+> **Covers:** building, running, and the REST API of the standalone Go server that offloads torrenting from thin clients. **See also:** [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) § 6 for the condensed architecture summary (session state diagram, which Dart controller talks to this server) — that section links back here for the full reference.
 
 A lightweight Go binary that handles BitTorrent downloading and HTTP streaming
 so thin clients (Android TV, phones, weak laptops) don't have to.

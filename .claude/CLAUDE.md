@@ -1,6 +1,6 @@
 # AniStream Project Rules
 
-> 📚 **AniStream Docs:** **CLAUDE.md** · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · [README.md](README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
+> 📚 **AniStream Docs:** **CLAUDE.md** · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · [README.md](../README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** AI/human coding rules, performance constraints, linter compliance, and the rule that keeps this whole doc suite in sync. **See also:** [DESIGN.md](DESIGN.md) for visual rules, [ARCHITECTURE.md](ARCHITECTURE.md) for where code lives.
 
 ## 1. Role & Tech Stack
@@ -28,12 +28,12 @@
 - Comment the "why" behind complex logic (Regex, Focus, FFI).
 - Do not hallucinate APIs. Maintain the existing architecture — see [ARCHITECTURE.md](ARCHITECTURE.md) for the full `lib/` folder tree (`core/`, `data/`, `shared/`, `features/<name>/`) and the rule for where new code belongs.
 - Draft an architectural plan for all non-trivial tasks. If you are unsure or if there are multiple viable approaches, present the options and ask clarifying questions so I can choose the best path. Wait for explicit user approval before generating code.
-- This project is Flutter/Dart only for the purposes of this file. The optional companion server (`anistream_server/`) is a separate Go codebase with its own conventions in [`anistream_server/README.md`](anistream_server/README.md) — do not apply the Dart-specific rules above to it, and do not fold Go coding standards into this file.
+- This project is Flutter/Dart only for the purposes of this file. The optional companion server (`anistream_server/`) is a separate Go codebase with its own conventions in [`anistream_server/README.md`](../anistream_server/README.md) — do not apply the Dart-specific rules above to it, and do not fold Go coding standards into this file.
 - Before considering any non-trivial change finished, check it against § 4's Living Documentation Rule below — a change that adds a dependency, a folder, a cache, a native bridge, or a design token isn't done until the matching doc is updated (or flagged) alongside it.
 
 ## 4. Documentation & the Living Documentation Rule
 
-This project maintains six cross-referencing docs at the repository root: this file, [DESIGN.md](DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [API.md](API.md), [README.md](README.md), and [CONTRIBUTING.md](CONTRIBUTING.md) — plus a seventh, narrower-scope doc, [`anistream_server/README.md`](anistream_server/README.md), covering the standalone Go server in isolation (it doesn't share the root docs' cross-linking nav bar, but is governed by the same rule below). All seven are treated as **living documents** — they describe the codebase as it actually is today, not as it was designed to be or will eventually become.
+This project maintains six cross-referencing docs: this file, [DESIGN.md](DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [API.md](API.md), and [CONTRIBUTING.md](CONTRIBUTING.md) live together in `.claude/`, while [README.md](../README.md) lives at the repository root — plus a seventh, narrower-scope doc, [`anistream_server/README.md`](../anistream_server/README.md), covering the standalone Go server in isolation (it doesn't share the other six docs' cross-linking nav bar, but is governed by the same rule below). All seven are treated as **living documents** — they describe the codebase as it actually is today, not as it was designed to be or will eventually become.
 
 **The rule:** whenever a change to the codebase matches one of the triggers below, proactively name the affected doc(s) and propose the specific edit before or alongside the code change. Don't wait to be asked, and don't silently rewrite documentation without flagging it — the same "plan first, then get approval" discipline in § 3 applies to doc changes, not just code.
 
@@ -44,7 +44,7 @@ This project maintains six cross-referencing docs at the repository root: this f
 | New/changed `MethodChannel`, FFI binding, or platform-specific native behavior | [ARCHITECTURE.md](ARCHITECTURE.md) § Native Platform Layer |
 | New/changed rule in `analysis_options.yaml` | This file's § 2–3, [CONTRIBUTING.md](CONTRIBUTING.md)'s PR checklist |
 | New external data source, or a changed GraphQL/RSS contract | [API.md](API.md) |
-| Changes to the Go server's REST surface or session states | [`anistream_server/README.md`](anistream_server/README.md), and the condensed summary in [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Changes to the Go server's REST surface or session states | [`anistream_server/README.md`](../anistream_server/README.md), and the condensed summary in [ARCHITECTURE.md](ARCHITECTURE.md) |
 | New design token (palette color, radius/blur value, animation timing) or D-pad/focus pattern | [DESIGN.md](DESIGN.md) |
 | Changes to `InputModeController` / TV-detection contract | [DESIGN.md](DESIGN.md) § 4, [ARCHITECTURE.md](ARCHITECTURE.md) § Native Platform Layer (Android) |
 | New cache, or a changed TTL | [API.md](API.md) § Caching |

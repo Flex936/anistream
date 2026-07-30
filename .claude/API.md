@@ -1,6 +1,6 @@
 # AniStream Data Layer
 
-> 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · **API.md** · [README.md](README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
+> 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · **API.md** · [README.md](../README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** the AniList and Nyaa.si integrations, torrent scraping/scoring, and caching. **See also:** [ARCHITECTURE.md](ARCHITECTURE.md) for where these services live and how the two streaming paths (on-device vs. remote server) differ.
 
 ## Overview
@@ -11,7 +11,7 @@
 | **Nyaa.si** | Torrent discovery via RSS scraping | None (unauthenticated read) |
 | **MyAnimeList** | **Passive link-out only** — a button on the details screen that opens `myanimelist.net/anime/<id>` in the system browser | N/A — no API calls are made to MAL from this app |
 
-The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, LAN-local API this app talks to for remote torrenting — it isn't a data source in the sense above, and is documented in [`anistream_server/README.md`](anistream_server/README.md) and [ARCHITECTURE.md](ARCHITECTURE.md) § 6, not here.
+The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, LAN-local API this app talks to for remote torrenting — it isn't a data source in the sense above, and is documented in [`anistream_server/README.md`](../anistream_server/README.md) and [ARCHITECTURE.md](ARCHITECTURE.md) § 6, not here.
 
 ## AniList
 
