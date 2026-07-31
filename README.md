@@ -1,10 +1,10 @@
 # AniStream
 
 > 📚 **AniStream Docs:** [CLAUDE.md — overview & index](.claude/CLAUDE.md) · [CODING_RULES.md — tech constraints](.claude/CODING_RULES.md) · [DESIGN.md — UI/UX rules](.claude/DESIGN.md) · [ARCHITECTURE.md — structure & platform](.claude/ARCHITECTURE.md) · [API.md — data & caching](.claude/API.md) · **README.md — project intro** · [CONTRIBUTING.md — PR process](.claude/CONTRIBUTING.md)
+> **Covers:** project introduction, feature overview, developer setup/build instructions, and licensing. **See also:** [CLAUDE.md](.claude/CLAUDE.md) for the doc suite's own index and AI/human working norms, [ARCHITECTURE.md](.claude/ARCHITECTURE.md) for the `lib/` folder structure and the optional Go server, [CONTRIBUTING.md](.claude/CONTRIBUTING.md) for the PR process.
+> **Disclaimer:** Until we release v1.0.0, the current releases (up to v0.3.0) are built via Wails (a Svelte frontend with a Go backend, opened via your default webview). That version was built with entirely different tools and is also far more behind in development — in design, compatibility, features, optimizations, and general polish. The description below covers the complete new version of the app, which has not been released yet.
 
-**Disclaimer : until we release v1.0.0, the current releases (up to v0.3.0) are built via Wails (Svelte frontend and Go backend that is opened via your default webview). That version of the app was built with entirely different tools, and is also far more behind in development (hence it's behind in design, compatibility, features, optimizations, bugs, everything kinda). The description below is the complete new version of the app that has not been released yet.**
-
-## Documentation Index
+## 1. Documentation Index
 
 | Doc | Purpose | Start here if you want to… |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ The app is built entirely in **Flutter and Dart** (well, technically, optionally
 
 ---
 
-## Features
+## 2. Features
 
 * **P2P Playback:** Click on an episode, and streaming begins within seconds. The app utilizes a high-performance C++ torrent engine (`libtorrent`) with time-critical piece deadlines to stream data sequentially.
 * **Progress Tracker:** You can log in via OAuth2 into your AniList account. Watching an episode past the **90% mark** triggers an automated progress update to your AniList account/library.
@@ -37,15 +37,15 @@ The app is built entirely in **Flutter and Dart** (well, technically, optionally
 
 ---
 
-## How It Works
+## 3. How It Works
 
 1. **The Scraper:** When you select an episode, a background Dart isolate queries **Nyaa.si RSS feeds**, cross-references it with the AniList GraphQL metadata, and assigns a weighted quality score to find the absolute best torrent. *(Full scoring rubric and query details: [API.md](.claude/API.md).)*
-2. **The Streaming Pipeline:** The chosen magnet link is fed into `libtorrent_flutter`. Instead of downloading randomly, the engine creates a highly optimized local HTTP streaming server and requests sequential piece deadlines from peers. *(Or, optionally, offloaded to the companion Go server — see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § AniStream Server.)*
+2. **The Streaming Pipeline:** The chosen magnet link is fed into `libtorrent_flutter`. Instead of downloading randomly, the engine creates a highly optimized local HTTP streaming server and requests sequential piece deadlines from peers. *(Or, optionally, offloaded to the companion Go server — see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § 6.)*
 3. **The Native Player:** The local stream URL is passed directly to `media_kit`. Because Flutter renders UI using its own 2D graphics engine (Impeller), the video frames and the UI overlays are composited onto the exact same native OS window simultaneously, entirely eliminating Z-index bugs and OS rendering conflicts.
 
 ---
 
-## Developer & System Setup
+## 4. Developer & System Setup
 
 If you want to compile AniStream from source, modify components, or run a local development build, follow the setup instructions for your operating system below. For the project's folder structure and where new code belongs, see [ARCHITECTURE.md](.claude/ARCHITECTURE.md).
 
@@ -126,7 +126,7 @@ After restarting, run `flutter doctor` again to confirm all Windows requirements
 
 ---
 
-## Getting Started (Development)
+## 5. Getting Started (Development)
 
 Once your Flutter environment is ready, navigate to the project directory to launch the application.
 
@@ -162,7 +162,7 @@ flutter run -d macos
 
 ---
 
-## Production Builds
+## 6. Production Builds
 
 To compile a highly optimized, production-ready, standalone binary utilizing the AOT (Ahead-of-Time) compiler, execute:
 
@@ -199,29 +199,29 @@ These commands strip debug symbols, aggressively tree-shake unused code, and out
 > Note: AndroidTV currently doesn't use your TV's built in DPU, so if your TV model has a weak GPU it most likely won't run 1080p footage well.
 ---
 
-## AniStream Remote Server
+## 7. AniStream Remote Server
 
 AniStream ships an optional companion **Go server** (`anistream_server/`) designed for thin clients — Android TV boxes, phones, or weak laptops — that lack the hardware muscle to run a full BitTorrent engine locally. Instead of seeding and downloading on-device, the Flutter app sends a magnet link to the server over the LAN. The server (running on a PC, NAS, or Raspberry Pi) handles all torrent activity and exposes the resulting video as an HTTP range-request stream that MPV opens directly, giving you remote-playback quality without any of the client-side overhead.
 
-For full setup instructions, CLI flags, the REST API reference, and systemd service configuration, see the **[AniStream Server README](anistream_server/README.md)**. For how this fits into the rest of the app's architecture, see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § AniStream Server.
+For full setup instructions, CLI flags, the REST API reference, and systemd service configuration, see the **[AniStream Server README](anistream_server/README.md)**. For how this fits into the rest of the app's architecture, see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § 6.
 
 ---
 
-## Contributing
+## 8. Contributing
 
-Contributions are welcome — bug reports, features, design work, and documentation fixes alike. Please read [CONTRIBUTING.md](.claude/CONTRIBUTING.md) before opening a PR; it covers the coding standards ([CLAUDE.md](.claude/CLAUDE.md)), the design system ([DESIGN.md](.claude/DESIGN.md)), and the PR checklist.
-
----
-
-## License
-
-AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)** — see the [`LICENSE`](LICENSE) file at the repository root. By contributing, you agree your contributions are made available under the same license — see [CONTRIBUTING.md](.claude/CONTRIBUTING.md).
+Contributions are welcome — bug reports, features, design work, and documentation fixes alike. Please read [CONTRIBUTING.md](.claude/CONTRIBUTING.md) before opening a PR; it covers the coding standards ([CODING_RULES.md](.claude/CODING_RULES.md)), the design system ([DESIGN.md](.claude/DESIGN.md)), and the PR checklist (CONTRIBUTING.md § 6).
 
 ---
 
-## Legal Disclaimer
+## 9. License
+
+AniStream is intended to be licensed under the **GNU General Public License v3.0 (GPLv3)**; a [`LICENSE`](LICENSE) file is expected at the repository root, though its presence there is currently pending verification. By contributing, you agree your contributions are made available under the same license — see [CONTRIBUTING.md](.claude/CONTRIBUTING.md) § 8.
+
+---
+
+## 10. Legal Disclaimer
 
 AniStream is an open-source architectural proof-of-concept designed as a personal utility. Users assume complete liability for the metadata aggregation parameters, torrent tracking hashes, and compliance with local legal frameworks governing peer-to-peer data transfers. No copyright-infringing media files are hosted, stored, or distributed on this codebase. However, while you are streaming, you will become a seeder for that duration.
 
 ---
-*Documentation last reviewed against the codebase: 2026-07-28. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index and relevant section too.*
+*Last reviewed against the codebase: 2026-07-28. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*
