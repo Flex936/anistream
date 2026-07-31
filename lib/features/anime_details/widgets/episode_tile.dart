@@ -284,22 +284,24 @@ class EpisodeTile extends StatelessWidget {
                   isRecommended: i == 0,
                   uiPerformanceMode: uiPerformanceMode,
                   onStream: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => uiPerformanceMode
-                            ? ExoTheaterScreen(
-                                anime: anime,
-                                episode: episodeNumber,
-                                torrent: torrents[i],
-                              )
-                            : TheaterScreen(
-                                anime: anime,
-                                episode: episodeNumber,
-                                torrent: torrents[i],
-                              ),
-                      ),
-                    ).then((_) => onReturnFromTheater?.call());
+                    unawaited(
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => uiPerformanceMode
+                              ? ExoTheaterScreen(
+                                  anime: anime,
+                                  episode: episodeNumber,
+                                  torrent: torrents[i],
+                                )
+                              : TheaterScreen(
+                                  anime: anime,
+                                  episode: episodeNumber,
+                                  torrent: torrents[i],
+                                ),
+                        ),
+                      ).then((_) => onReturnFromTheater?.call()),
+                    );
                   },
                 ),
                 if (i < torrents.length - 1) const SizedBox(height: 8),
