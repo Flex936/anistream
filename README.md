@@ -1,8 +1,20 @@
 # AniStream
 
+> 📚 **AniStream Docs:** [CLAUDE.md](.claude/CLAUDE.md) · [DESIGN.md](.claude/DESIGN.md) · [ARCHITECTURE.md](.claude/ARCHITECTURE.md) · [API.md](.claude/API.md) · **README.md** · [CONTRIBUTING.md](.claude/CONTRIBUTING.md)
+
 **Disclaimer : until we release v1.0.0, the current releases (up to v0.3.0) are built via Wails (Svelte frontend and Go backend that is opened via your default webview). That version of the app was built with entirely different tools, and is also far more behind in development (hence it's behind in design, compatibility, features, optimizations, bugs, everything kinda). The description below is the complete new version of the app that has not been released yet.**
 
-AniStream started off from two seperate ideas from the two of us.
+## Documentation Index
+
+| Doc | Purpose | Start here if you want to… |
+| --- | --- | --- |
+| [CLAUDE.md](.claude/CLAUDE.md) | AI/human coding rules, performance constraints, linter compliance | …know what a PR or an AI-generated change needs to satisfy |
+| [DESIGN.md](.claude/DESIGN.md) | Visual language, design tokens, TV/D-pad rules | …build or review UI |
+| [ARCHITECTURE.md](.claude/ARCHITECTURE.md) | `lib/` folder structure, native platform layer, the optional Go server | …know where a file belongs, or how a platform-specific piece works |
+| [API.md](.claude/API.md) | AniList & Nyaa.si integrations, scraping, caching | …touch networking, scraping, or tracking |
+| [CONTRIBUTING.md](.claude/CONTRIBUTING.md) | PR process, checklist, Code of Conduct | …submit a change |
+
+AniStream started off from two separate ideas from the two of us.
 
 1) Ease of use for torrenting animes.
 2) Automatic tracking for animes you watch.
@@ -26,15 +38,15 @@ The app is built entirely in **Flutter and Dart** (well, technically, optionally
 
 ## How It Works
 
-1. **The Scraper:** When you select an episode, a background Dart isolate queries **Nyaa.si RSS feeds**, cross-references it with the AniList GraphQL metadata, and assigns a weighted quality score to find the absolute best torrent.
-2. **The Streaming Pipeline:** The chosen magnet link is fed into `libtorrent_flutter`. Instead of downloading randomly, the engine creates a highly optimized local HTTP streaming server and requests sequential piece deadlines from peers.
+1. **The Scraper:** When you select an episode, a background Dart isolate queries **Nyaa.si RSS feeds**, cross-references it with the AniList GraphQL metadata, and assigns a weighted quality score to find the absolute best torrent. *(Full scoring rubric and query details: [API.md](.claude/API.md).)*
+2. **The Streaming Pipeline:** The chosen magnet link is fed into `libtorrent_flutter`. Instead of downloading randomly, the engine creates a highly optimized local HTTP streaming server and requests sequential piece deadlines from peers. *(Or, optionally, offloaded to the companion Go server — see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § AniStream Server.)*
 3. **The Native Player:** The local stream URL is passed directly to `media_kit`. Because Flutter renders UI using its own 2D graphics engine (Impeller), the video frames and the UI overlays are composited onto the exact same native OS window simultaneously, entirely eliminating Z-index bugs and OS rendering conflicts.
 
 ---
 
 ## Developer & System Setup
 
-If you want to compile AniStream from source, modify components, or run a local development build, follow the setup instructions for your operating system below.
+If you want to compile AniStream from source, modify components, or run a local development build, follow the setup instructions for your operating system below. For the project's folder structure and where new code belongs, see [ARCHITECTURE.md](.claude/ARCHITECTURE.md).
 
 ---
 
@@ -190,10 +202,25 @@ These commands strip debug symbols, aggressively tree-shake unused code, and out
 
 AniStream ships an optional companion **Go server** (`anistream_server/`) designed for thin clients — Android TV boxes, phones, or weak laptops — that lack the hardware muscle to run a full BitTorrent engine locally. Instead of seeding and downloading on-device, the Flutter app sends a magnet link to the server over the LAN. The server (running on a PC, NAS, or Raspberry Pi) handles all torrent activity and exposes the resulting video as an HTTP range-request stream that MPV opens directly, giving you remote-playback quality without any of the client-side overhead.
 
-For full setup instructions, CLI flags, the REST API reference, and systemd service configuration, see the **[AniStream Server README](anistream_server/README.md)**.
+For full setup instructions, CLI flags, the REST API reference, and systemd service configuration, see the **[AniStream Server README](anistream_server/README.md)**. For how this fits into the rest of the app's architecture, see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § AniStream Server.
+
+---
+
+## Contributing
+
+Contributions are welcome — bug reports, features, design work, and documentation fixes alike. Please read [CONTRIBUTING.md](.claude/CONTRIBUTING.md) before opening a PR; it covers the coding standards ([CLAUDE.md](.claude/CLAUDE.md)), the design system ([DESIGN.md](.claude/DESIGN.md)), and the PR checklist.
+
+---
+
+## License
+
+AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)** — see the [`LICENSE`](LICENSE) file at the repository root. By contributing, you agree your contributions are made available under the same license — see [CONTRIBUTING.md](.claude/CONTRIBUTING.md).
 
 ---
 
 ## Legal Disclaimer
 
 AniStream is an open-source architectural proof-of-concept designed as a personal utility. Users assume complete liability for the metadata aggregation parameters, torrent tracking hashes, and compliance with local legal frameworks governing peer-to-peer data transfers. No copyright-infringing media files are hosted, stored, or distributed on this codebase. However, while you are streaming, you will become a seeder for that duration.
+
+---
+*Documentation last reviewed against the codebase: 2026-07-28. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index and relevant section too.*
