@@ -1,6 +1,6 @@
 # AniStream Data Layer
 
-> 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · **API.md** · [README.md](../README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
+> 📚 **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · **API.md — data & caching** · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
 > **Covers:** the AniList and Nyaa.si integrations, torrent scraping/scoring, and caching. **See also:** [ARCHITECTURE.md](ARCHITECTURE.md) for where these services live and how the two streaming paths (on-device vs. remote server) differ.
 
 ## Overview
@@ -31,7 +31,7 @@ The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, L
 | `mediaListEntryStatus` / `mediaProgress` | Reads the viewer's existing status/progress for one anime |
 | `saveMediaListEntry` | Writes progress back to AniList (see auto-tracking, below) |
 
-Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for their field selection. `currentlyAiring` is the one exception — it inlines its own near-identical field list instead of reusing the fragment. Functionally harmless today (the two lists happen to match), but worth folding into the shared fragment next time that query is touched, per CLAUDE.md's DRY directive.
+Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for their field selection. `currentlyAiring` is the one exception — it inlines its own near-identical field list instead of reusing the fragment. Functionally harmless today (the two lists happen to match), but worth folding into the shared fragment next time that query is touched, per CODING_RULES.md's DRY directive.
 
 **Content filtering asymmetry:** `_bannedGenres` is `['Hentai', 'Ecchi']` when the user's "Filter Ecchi" setting is on, else just `['Hentai']`. For `trending` / `seasonPopular` / `allTimePopular` / `search` / `currentlyAiring`, this is passed server-side as AniList's own `genre_not_in` GraphQL variable. The personal watchlist query (`userWatchlistPaged`) has no such parameter — AniList's `mediaList` field doesn't expose a genre filter — so filtering there happens **client-side**, after the response is decoded, by inspecting each entry's `media.genres` and dropping any that intersect the banned set.
 
@@ -69,7 +69,7 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 
 ## Caching
 
-Caching is a codebase-wide concern, not limited to the AniList/Nyaa integrations covered above — this table is the single authoritative list of every cache in the app, regardless of which subsystem owns it. CLAUDE.md § 4's Living Documentation Rule routes "new cache, or a changed TTL" here for exactly this reason, so add a row here even if the new cache lives outside `data/`.
+Caching is a codebase-wide concern, not limited to the AniList/Nyaa integrations covered above — this table is the single authoritative list of every cache in the app, regardless of which subsystem owns it. CLAUDE.md § 2's Living Documentation Rule routes "new cache, or a changed TTL" here for exactly this reason, so add a row here even if the new cache lives outside `data/`.
 
 | Cache | TTL | Cap | Scope |
 | --- | --- | --- | --- |
@@ -79,4 +79,4 @@ Caching is a codebase-wide concern, not limited to the AniList/Nyaa integrations
 | Image decoding | N/A | — | Not a persistent disk cache — `Image.network` calls are capped with a `cacheWidth` matched to the widget's actual rendered size, so Flutter's in-memory image cache never holds a full-resolution decode of a thumbnail-sized poster. |
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Added a query, a data source, or a cache? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
+*Last reviewed against the codebase: 2026-07-28. Added a query, a data source, or a cache? Update this file — see CLAUDE.md's Living Documentation Rule (§ 2).*

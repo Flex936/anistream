@@ -1,7 +1,7 @@
 # AniStream Design System & UI Specs
 
-> 📚 **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · **DESIGN.md** · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · [README.md](../README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
-> **Covers:** visual language, performance-mode rules, responsive layout, and TV/D-pad spatial navigation. **See also:** [CLAUDE.md](CLAUDE.md) for how these rules are enforced when generating code, [ARCHITECTURE.md](ARCHITECTURE.md) for where the widgets implementing them live.
+> 📚 **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · [CODING_RULES.md — tech constraints](CODING_RULES.md) · **DESIGN.md — UI/UX rules** · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
+> **Covers:** visual language, performance-mode rules, responsive layout, and TV/D-pad spatial navigation. **See also:** [CODING_RULES.md](CODING_RULES.md) for how these rules are enforced when generating code, [ARCHITECTURE.md](ARCHITECTURE.md) for where the widgets implementing them live.
 
 ## 1. UI/UX Philosophy & Visual Language
 
@@ -64,4 +64,4 @@ These are documented as-is per the Living Documentation Rule — **do not silent
   - `TheaterSettingsMenu` (a floating popup, arguably closer to the 12px "item" category despite being a menu) uses 12px.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
+*Last reviewed against the codebase: 2026-07-28. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see CLAUDE.md's Living Documentation Rule (§ 2).*

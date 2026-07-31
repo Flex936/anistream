@@ -1,6 +1,6 @@
 # AniStream Server
 
-> 📚 **Part of the AniStream docs.** Main suite: [CLAUDE.md](../.claude/CLAUDE.md) · [DESIGN.md](../.claude/DESIGN.md) · [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) · [API.md](../.claude/API.md) · [README.md](../README.md) · [CONTRIBUTING.md](../.claude/CONTRIBUTING.md)
+> 📚 **Part of the AniStream docs.** Main suite: [CLAUDE.md — overview & index](../.claude/CLAUDE.md) · [CODING_RULES.md — tech constraints](../.claude/CODING_RULES.md) · [DESIGN.md — UI/UX rules](../.claude/DESIGN.md) · [ARCHITECTURE.md — structure & platform](../.claude/ARCHITECTURE.md) · [API.md — data & caching](../.claude/API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](../.claude/CONTRIBUTING.md)
 > **Covers:** building, running, and the REST API of the standalone Go server that offloads torrenting from thin clients. **See also:** [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) § 6 for the condensed architecture summary (session state diagram, which Dart controller talks to this server) — that section links back here for the full reference.
 
 A lightweight Go binary that handles BitTorrent downloading and HTTP streaming
@@ -147,4 +147,4 @@ sudo systemctl enable --now anistream-server
 - **No authentication and fully open CORS** (`Access-Control-Allow-Origin: *`, needed so any device on the LAN can reach it) — intended for trusted LAN use only. Use a firewall or VPN if you expose it to the internet; don't treat the CORS policy as a security boundary, since it isn't one here.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 4).*
+*Last reviewed against the codebase: 2026-07-28. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*

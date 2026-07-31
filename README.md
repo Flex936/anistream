@@ -1,6 +1,6 @@
 # AniStream
 
-> 📚 **AniStream Docs:** [CLAUDE.md](.claude/CLAUDE.md) · [DESIGN.md](.claude/DESIGN.md) · [ARCHITECTURE.md](.claude/ARCHITECTURE.md) · [API.md](.claude/API.md) · **README.md** · [CONTRIBUTING.md](.claude/CONTRIBUTING.md)
+> 📚 **AniStream Docs:** [CLAUDE.md — overview & index](.claude/CLAUDE.md) · [CODING_RULES.md — tech constraints](.claude/CODING_RULES.md) · [DESIGN.md — UI/UX rules](.claude/DESIGN.md) · [ARCHITECTURE.md — structure & platform](.claude/ARCHITECTURE.md) · [API.md — data & caching](.claude/API.md) · **README.md — project intro** · [CONTRIBUTING.md — PR process](.claude/CONTRIBUTING.md)
 
 **Disclaimer : until we release v1.0.0, the current releases (up to v0.3.0) are built via Wails (Svelte frontend and Go backend that is opened via your default webview). That version of the app was built with entirely different tools, and is also far more behind in development (hence it's behind in design, compatibility, features, optimizations, bugs, everything kinda). The description below is the complete new version of the app that has not been released yet.**
 
@@ -8,7 +8,8 @@
 
 | Doc | Purpose | Start here if you want to… |
 | --- | --- | --- |
-| [CLAUDE.md](.claude/CLAUDE.md) | AI/human coding rules, performance constraints, linter compliance | …know what a PR or an AI-generated change needs to satisfy |
+| [CLAUDE.md](.claude/CLAUDE.md) | Project overview, AI/human working norms, and the index tying the whole doc suite together | …get oriented, or find which doc covers what |
+| [CODING_RULES.md](.claude/CODING_RULES.md) | Strict, enforced coding rules — performance, state management, caching, linter compliance | …know what a PR or an AI-generated change needs to satisfy |
 | [DESIGN.md](.claude/DESIGN.md) | Visual language, design tokens, TV/D-pad rules | …build or review UI |
 | [ARCHITECTURE.md](.claude/ARCHITECTURE.md) | `lib/` folder structure, native platform layer, the optional Go server | …know where a file belongs, or how a platform-specific piece works |
 | [API.md](.claude/API.md) | AniList & Nyaa.si integrations, scraping, caching | …touch networking, scraping, or tracking |
