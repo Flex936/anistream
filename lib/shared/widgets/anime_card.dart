@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
@@ -27,6 +28,10 @@ class AnimeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
+
+    // ── Pulled once at the top of build() ──
+    final typography = context.appTypography;
+    final radii = context.appRadii;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,7 +65,7 @@ class AnimeCard extends StatelessWidget {
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOut,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(radii.small),
                 border: Border.all(
                   color: state.focused
                       ? AppPalette.primary.withValues(alpha: 0.55)
@@ -77,7 +82,7 @@ class AnimeCard extends StatelessWidget {
                     : const [],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(radii.small),
                 // ── Clip.hardEdge under Performant mode instead of the
                 // ClipRRect default (Clip.antiAlias) — a sampled,
                 // anti-aliased clip on every single poster in every
@@ -144,11 +149,8 @@ class AnimeCard extends StatelessWidget {
           anime.title.display,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: typography.cardTitleCompact.copyWith(
             color: AppPalette.textMain,
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            height: 1.35,
           ),
         ),
         const SizedBox(height: 4),
@@ -189,6 +191,9 @@ class _PosterGradient extends StatelessWidget {
         children: [
           const Icon(Icons.star_rounded, color: AppPalette.accent, size: 14),
           const SizedBox(width: 3),
+          // ── Left as a plain literal (fontSize: 12, fontWeight: w700) —
+          // doesn't match metaLabel (12/w600); forcing it in would
+          // incorrectly lighten this rating badge's weight. ──
           Text(
             (score! / 10).toStringAsFixed(1),
             style: const TextStyle(
@@ -216,28 +221,23 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+    final radii = context.appRadii;
+
     return FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
       sigma: 6,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(radii.tag),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: AppPalette.black.withValues(
             alpha: uiPerformanceMode ? 0.85 : 0.58,
           ),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(radii.tag),
           border: Border.all(color: color.withValues(alpha: 0.40)),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
-        ),
+        child: Text(label, style: typography.badgeLabel.copyWith(color: color)),
       ),
     );
   }

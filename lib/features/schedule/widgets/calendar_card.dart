@@ -1,6 +1,7 @@
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/utils/perf_animations.dart';
@@ -31,6 +32,10 @@ class CalendarCard extends StatelessWidget {
         ? 'Ep ${nextEp.episode}'
         : 'Ep ${anime.episodes ?? "?"}';
 
+    // ── Pulled once at the top of build() ──
+    final typography = context.appTypography;
+    final radii = context.appRadii;
+
     // ── DpadFocusable replaces HoverFocusBuilder. Multiple nested parts
     // (the border/shadow, the episode-label overlay's opacity, the title
     // color) all depend on the focus state, so — same as AnimeCard —
@@ -49,7 +54,7 @@ class CalendarCard extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(radii.small),
                 border: Border.all(
                   color: state.focused
                       ? AppPalette.primary.withValues(alpha: 0.80)
@@ -67,7 +72,7 @@ class CalendarCard extends StatelessWidget {
                       ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(9),
+                borderRadius: BorderRadius.circular(radii.small),
                 // ── Clip.hardEdge under Performant mode — see
                 // FrostedContainer's doc comment for the rationale. ──
                 clipBehavior: uiPerformanceMode
@@ -110,14 +115,20 @@ class CalendarCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: AppPalette.primary,
+                            // ── Deliberately LEFT as a plain literal, not
+                            // routed through AppRadii. This is a
+                            // fully-rounded stadium/pill badge — 20
+                            // exceeds half this small container's height
+                            // specifically to guarantee a full pill curve,
+                            // the same "stadium" pattern flagged in
+                            // watchlist_cards.dart's _PlayOverlay. None of
+                            // tag/small/large are a semantic match. ──
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             epLabel,
-                            style: const TextStyle(
+                            style: typography.badgeLabel.copyWith(
                               color: AppPalette.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
@@ -135,7 +146,7 @@ class CalendarCard extends StatelessWidget {
                           color: AppPalette.black.withValues(
                             alpha: uiPerformanceMode ? 0.9 : 0.72,
                           ),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(radii.tag),
                           border: Border.all(
                             color: AppPalette.statusReleasing.withValues(
                               alpha: 0.40,
@@ -144,10 +155,8 @@ class CalendarCard extends StatelessWidget {
                         ),
                         child: Text(
                           formatLocalTime(nextEp.airingAt),
-                          style: const TextStyle(
+                          style: typography.badgeLabel.copyWith(
                             color: AppPalette.statusReleasing,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -160,11 +169,8 @@ class CalendarCard extends StatelessWidget {
           const SizedBox(height: 8),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 150),
-            style: TextStyle(
+            style: typography.cardTitleCompact.copyWith(
               color: state.focused ? AppPalette.primary : AppPalette.textMain,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              height: 1.2,
             ),
             child: Text(
               anime.title.romaji ?? anime.title.english ?? 'Unknown',
@@ -173,6 +179,8 @@ class CalendarCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
+          // ── Left as a plain literal (fontSize: 10, no weight set) —
+          // doesn't match any identified cluster. ──
           Text(
             getTimeRemaining(nextEp.airingAt),
             maxLines: 1,

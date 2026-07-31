@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/media_list.dart';
 import '../../../shared/utils/anime_status_style.dart';
@@ -30,6 +31,10 @@ class HeroCard extends StatelessWidget {
     final media = entry.media;
     final progress = entry.progress;
 
+    // ── Pulled once at the top of build() ──
+    final typography = context.appTypography;
+    final radii = context.appRadii;
+
     final imgUrl =
         media.bannerImage ??
         media.coverImage?.large ??
@@ -49,7 +54,7 @@ class HeroCard extends StatelessWidget {
       builder: (context, hovered) => AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(radii.small),
           border: Border.all(
             color: hovered
                 ? AppPalette.primary.withValues(alpha: 0.5)
@@ -65,7 +70,10 @@ class HeroCard extends StatelessWidget {
               : null,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(15),
+          // ── Both outer and inner now share AppRadii.small (12),
+          // matching the established pattern from torrent_tile.dart's
+          // pilot of using the same token value for both. ──
+          borderRadius: BorderRadius.circular(radii.small),
           // ── Clip.hardEdge under Performant mode — see
           // FrostedContainer's doc comment for the rationale. ──
           clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
@@ -119,18 +127,19 @@ class HeroCard extends StatelessWidget {
                       media.title.display,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: typography.cardTitleProminent.copyWith(
                         color: AppPalette.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 4),
+                    // ── fontSize/weight are an exact
+                    // match for tileSubtitle (12/w400); the token's
+                    // height: 1.4 is inconsequential here since this is a
+                    // single line of text. ──
                     Text(
                       'Next: Episode ${progress + 1}',
-                      style: const TextStyle(
+                      style: typography.tileSubtitle.copyWith(
                         color: AppPalette.textLight,
-                        fontSize: 12,
                       ),
                     ),
                   ],
@@ -186,7 +195,10 @@ class ListCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = entry.media;
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final isMobile = context.isMobile;
+
+    final typography = context.appTypography;
+    final radii = context.appRadii;
 
     return HoverFocusBuilder(
       autofocus: autofocus,
@@ -200,7 +212,7 @@ class ListCard extends StatelessWidget {
           color: hovered
               ? AppPalette.surface.withValues(alpha: 0.8)
               : AppPalette.surface.withValues(alpha: 0.4),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(radii.small),
           border: Border.all(
             color: hovered
                 ? AppPalette.primary.withValues(alpha: 0.5)
@@ -210,7 +222,10 @@ class ListCard extends StatelessWidget {
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              // ── Converged to AppRadii.tag (6), matching the already-consistent
+              // small-thumbnail radius search_input.dart uses for its
+              // own 32x48 result-row cover art. Visual delta: 8 -> 6. ──
+              borderRadius: BorderRadius.circular(radii.tag),
               // ── Clip.hardEdge under Performant mode — see
               // FrostedContainer's doc comment for the rationale. ──
               clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
@@ -233,29 +248,34 @@ class ListCard extends StatelessWidget {
                     media.title.display,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: typography.cardTitleProminent.copyWith(
                       color: AppPalette.textMain,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text.rich(
                     TextSpan(
                       children: [
+                        // ── metaLabel deliberately sets no `height`,
+                        // so mixing it into this Text.rich alongside the
+                        // plain-literal spans below can't introduce any
+                        // per-span line-height mismatch. ──
                         TextSpan(
                           text: (media.status ?? 'UNKNOWN').replaceAll(
                             '_',
                             ' ',
                           ),
-                          style: TextStyle(
+                          style: typography.metaLabel.copyWith(
                             color:
                                 media.status?.statusColor ??
                                 AppPalette.statusDefault,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
                           ),
                         ),
+                        // ── Left as plain literals (separator + score +
+                        // EPS suffix): these are 12/w400 (no weight set),
+                        // which doesn't match metaLabel (12/w600) —
+                        // forcing them in would incorrectly bump their
+                        // weight. ──
                         const TextSpan(
                           text: '  •  ',
                           style: TextStyle(
@@ -265,10 +285,8 @@ class ListCard extends StatelessWidget {
                         ),
                         TextSpan(
                           text: '★ ${(media.averageScore ?? 0) / 10}',
-                          style: const TextStyle(
+                          style: typography.metaLabel.copyWith(
                             color: AppPalette.accent,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
                           ),
                         ),
                         TextSpan(
@@ -290,6 +308,10 @@ class ListCard extends StatelessWidget {
                       child: ClipRect(
                         child: Wrap(
                           spacing: 8,
+                          // ── Left as a plain literal (fontSize: 11) —
+                          // 11pt doesn't belong to any identified
+                          // cluster; the nearest tokens (metaLabel/
+                          // badgeLabel) are both a different size. ──
                           children: media.genres!
                               .take(3)
                               .map(
@@ -311,15 +333,11 @@ class ListCard extends StatelessWidget {
                   ],
                   Expanded(
                     child: Text(
-                      // ── Was a locally-defined _stripHtml; now shared
-                      // via stripAnilistHtml (single-line summary form). ──
                       stripAnilistHtml(media.description),
                       maxLines: isMobile ? 3 : 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: typography.cardSummary.copyWith(
                         color: AppPalette.textMuted,
-                        fontSize: 13,
-                        height: 1.4,
                       ),
                     ),
                   ),
@@ -365,6 +383,9 @@ class WatchlistCard extends StatelessWidget {
     final progress = entry.progress;
     final nextEp = media.nextAiringEpisode;
 
+    final typography = context.appTypography;
+    final radii = context.appRadii;
+
     double percent = 0.0;
     if (media.episodes != null && media.episodes! > 0) {
       percent = progress / media.episodes!;
@@ -383,7 +404,7 @@ class WatchlistCard extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(radii.small),
                 border: Border.all(
                   color: hovered
                       ? AppPalette.primary.withValues(alpha: 0.55)
@@ -399,7 +420,7 @@ class WatchlistCard extends StatelessWidget {
                     : null,
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(11),
+                borderRadius: BorderRadius.circular(radii.small),
                 // ── Clip.hardEdge under Performant mode — see
                 // FrostedContainer's doc comment for the rationale. ──
                 clipBehavior: uiPerformanceMode
@@ -421,15 +442,10 @@ class WatchlistCard extends StatelessWidget {
                       Positioned(
                         top: 8,
                         right: 8,
-                        // ── Was an ungated ClipRRect + BackdropFilter
-                        // (sigma 10) regardless of uiPerformanceMode — the
-                        // one blur in this file that had slipped past the
-                        // FrostedContainer consolidation. Routed through
-                        // it now, matching every other glass surface. ──
                         child: FrostedContainer(
                           uiPerformanceMode: uiPerformanceMode,
                           sigma: 10,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(radii.tag),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -442,7 +458,7 @@ class WatchlistCard extends StatelessWidget {
                               border: Border.all(
                                 color: AppPalette.white.withValues(alpha: 0.15),
                               ),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(radii.tag),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -455,10 +471,8 @@ class WatchlistCard extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 Text(
                                   'EP $progress / ${media.episodes ?? "?"}',
-                                  style: const TextStyle(
+                                  style: typography.badgeLabel.copyWith(
                                     color: AppPalette.textMain,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ],
@@ -506,11 +520,8 @@ class WatchlistCard extends StatelessWidget {
           const SizedBox(height: 10),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
-            style: TextStyle(
+            style: typography.cardTitleCompact.copyWith(
               color: hovered ? AppPalette.primary : AppPalette.textMain,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
             ),
             child: Text(
               media.title.display,
@@ -578,6 +589,17 @@ class _PlayOverlay extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: AppPalette.primary,
+                  // ── Deliberately LEFT as a plain literal, not routed
+                  // through AppRadii. This is a fully-rounded stadium/pill
+                  // button — 24 exceeds half this container's height
+                  // specifically to guarantee a full pill curve
+                  // regardless of exact size, which is a different visual
+                  // role than any of the three approved tiers (tag =
+                  // small badges, small = cards/list items, large =
+                  // modals/panels). Forcing it onto `large` would be a
+                  // coincidental numeric match, not a semantic one —
+                  // flagging this as a possible future 4th "pill" tier
+                  // rather than silently reusing `large` here. ──
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: uiPerformanceMode
                       ? null
@@ -590,6 +612,10 @@ class _PlayOverlay extends StatelessWidget {
                 ),
                 child: Text(
                   label,
+                  // ── Left as a plain literal (12/w700/0.2 spacing) —
+                  // doesn't match metaLabel (12/w600, no spacing) or
+                  // badgeLabel (10/w800/0.5 spacing); a distinct
+                  // combination not covered by any approved cluster. ──
                   style: const TextStyle(
                     color: AppPalette.white,
                     fontSize: 12,
