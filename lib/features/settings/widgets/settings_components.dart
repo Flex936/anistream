@@ -1,4 +1,5 @@
 import 'package:dpad/dpad.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -52,48 +53,54 @@ class SettingsSection extends StatelessWidget {
   }
 }
 
+/// Visual-only iOS-style toggle, driven entirely by [value].
+///
+/// ── Previously a hand-drawn AnimatedContainer + AnimatedAlign thumb.
+/// Replaced with CupertinoSwitch — a plain, non-overlay SDK leaf widget,
+/// so this carries zero TV/D-Pad focus risk. Two non-obvious
+/// things this preserves from the original:
+///
+/// 1. Non-interactivity: [SettingRowTile] wraps the ENTIRE row (title +
+///    subtitle + this switch) in a single DpadFocusable whose onSelect
+///    toggles the value — the switch itself has never had its own tap
+///    handler. CupertinoSwitch, unlike the old plain Container, wants to
+///    be interactive by default. Wrapping it in IgnorePointer keeps it
+///    exactly as decorative as before, so a tap anywhere on the row still
+///    resolves to exactly one toggle via the parent's DpadFocusable,
+///    instead of two competing gesture handlers racing over the same tap.
+/// 2. Always-full-strength color rendering: CupertinoSwitch renders a
+///    dimmed/disabled look when `onChanged` is null. Since IgnorePointer
+///    already blocks every real interaction, `onChanged` is given a
+///    harmless no-op instead of null purely to keep the switch's ON/OFF
+///    colors at full strength, matching the old widget's behavior.
+///
+/// SizedBox + FittedBox pins this to the exact same 44x24 footprint the
+/// old AnimatedContainer used, regardless of CupertinoSwitch's own
+/// intrinsic size, so surrounding row layout in [SettingRowTile] is
+/// unaffected.
+///
+/// Accepted visual delta (documented per DESIGN.md § 5's convention for
+/// deliberate design debt, rather than silently dropped): the old 1px
+/// border (primary/faint-white depending on state) has no CupertinoSwitch
+/// equivalent and is omitted.
 class ToggleSwitch extends StatelessWidget {
   final bool value;
   const ToggleSwitch({super.key, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
+    return SizedBox(
       width: 44,
       height: 24,
-      decoration: BoxDecoration(
-        color: value
-            ? AppPalette.primary
-            : AppPalette.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: value
-              ? AppPalette.primary
-              : AppPalette.white.withValues(alpha: 0.05),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(2),
-        child: AnimatedAlign(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(
-              color: AppPalette.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppPalette.black.withValues(alpha: 0.2),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
+      child: FittedBox(
+        fit: BoxFit.fill,
+        child: IgnorePointer(
+          child: CupertinoSwitch(
+            value: value,
+            onChanged: (_) {},
+            activeTrackColor: AppPalette.primary,
+            inactiveTrackColor: AppPalette.white.withValues(alpha: 0.1),
+            thumbColor: AppPalette.white,
           ),
         ),
       ),
