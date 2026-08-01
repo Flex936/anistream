@@ -93,7 +93,6 @@ class ToggleSwitch extends StatelessWidget {
       width: 44,
       height: 24,
       child: FittedBox(
-        fit: BoxFit.fill,
         child: IgnorePointer(
           child: CupertinoSwitch(
             value: value,
