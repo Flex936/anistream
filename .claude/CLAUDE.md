@@ -1,6 +1,6 @@
 # AniStream Project Rules
 
-> 📚 **AniStream Docs:** **CLAUDE.md — overview & index** · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
+> **AniStream Docs:** **CLAUDE.md — overview & index** · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
 > **Covers:** project orientation for AI/human contributors, the code-generation workflow norms (plan-first, complete-file output), and the rule that keeps this whole doc suite in sync. **See also:** [CODING_RULES.md](CODING_RULES.md) for the strict, enforced technical constraints on generated code, [DESIGN.md](DESIGN.md) for visual rules, [ARCHITECTURE.md](ARCHITECTURE.md) for where code lives.
 
 ## 1. Project Overview & Working Norms
@@ -10,6 +10,7 @@
 - This repo is Flutter/Dart at its core, plus an optional companion Go server (`anistream_server/`) for thin clients — see [ARCHITECTURE.md](ARCHITECTURE.md) § 6 and [`anistream_server/README.md`](../anistream_server/README.md). The Go codebase has its own conventions; [CODING_RULES.md](CODING_RULES.md) is Dart-only and doesn't apply to it.
 - Draft an architectural plan for all non-trivial tasks. If you are unsure or if there are multiple viable approaches, present the options and ask clarifying questions so I can choose the best path. Wait for explicit user approval before generating code.
 - Output complete, runnable files for refactors unless explicitly asked for snippets.
+- Documentation content describes the codebase and product as they stand today — never the conversational or approval process that produced an edit. Avoid phrasing like "per Track B" or "as agreed in an earlier pass"; state what changed and why it matters to a reader, not which internal editing step produced the change. (Legitimate change-history notes — e.g., [DESIGN.md](DESIGN.md) § 5 marking a design-debt item as resolved — are a different, acceptable thing: they describe resolved *product* debt, not the *editing session* that resolved it.)
 - For the strict, tool- and review-enforced technical rules every generated change must satisfy — performance, state management, caching, linter compliance — see [CODING_RULES.md](CODING_RULES.md) in full; they aren't restated here.
 
 ## 2. Documentation & the Living Documentation Rule

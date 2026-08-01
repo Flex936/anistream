@@ -1,6 +1,6 @@
 # AniStream Coding Rules
 
-> 📚 **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · **CODING_RULES.md — tech constraints** · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
+> **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · **CODING_RULES.md — tech constraints** · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
 > **Covers:** the strict, enforced technical constraints on all Flutter/Dart code in this repo — performance, state management, caching, and code-generation quality standards. **See also:** [CLAUDE.md](CLAUDE.md) § 1 for project overview and working norms; [ARCHITECTURE.md](ARCHITECTURE.md) § 2 for where code implementing these rules lives; [DESIGN.md](DESIGN.md) for the UI/UX rules these performance constraints support.
 
 ## 1. Performance & State (Strict)

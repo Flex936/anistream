@@ -1,6 +1,6 @@
 # AniStream Architecture
 
-> 📚 **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · **ARCHITECTURE.md — structure & platform** · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
+> **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · **ARCHITECTURE.md — structure & platform** · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
 > **Covers:** the `lib/` folder structure, state-management pattern, native platform layer, and how the optional Go server fits in. **See also:** [CODING_RULES.md](CODING_RULES.md) for the rules that assume this structure, [DESIGN.md](DESIGN.md) for the UI layer this hosts, [API.md](API.md) for what the data layer talks to.
 
 **In this file:** [System Overview](#1-system-overview) · [Flutter App Structure](#2-flutter-app-structure) · [State Management](#3-state-management) · [Native Platform Layer](#4-native-platform-layer) · [Streaming Pipeline](#5-streaming-pipeline) · [AniStream Server (Go)](#6-anistream-server-go) · [Known Issues](#7-known-issues)
