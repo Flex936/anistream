@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/anime.dart';
@@ -36,7 +37,7 @@ class _SearchInputState extends State<SearchInput> {
   final FocusNode _focusNode = FocusNode();
   final LayerLink _layerLink = LayerLink();
 
-  // ── replaces the manual `OverlayEntry?` field + Overlay.of
+  // ── Replaces the manual `OverlayEntry?` field + Overlay.of
   // (context).insert()/entry.remove() pair. OverlayPortalController ties
   // the dropdown's mount/unmount lifecycle directly to this widget's own
   // lifecycle — show()/hide() just flip an internal flag that the
@@ -279,14 +280,18 @@ class _SearchInputState extends State<SearchInput> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Was TextStyle(fontSize: 14, fontWeight: w600) —
+                    // now compactHeading.
+                    // Exact match, zero visual delta. context here is
+                    // this State's own context (no BuildContext param on
+                    // _buildResultRow), which still resolves the same
+                    // Theme/ThemeExtension as any descendant would. ──
                     Text(
                       anime.title.display,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: context.appTypography.compactHeading.copyWith(
                         color: AppPalette.textMain,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -364,7 +369,7 @@ class _SearchInputState extends State<SearchInput> {
 
   @override
   Widget build(BuildContext context) {
-    // OverlayPortal replaces the old
+    // ── OverlayPortal replaces the old
     // Overlay.of(context).insert(_overlayEntry!) call. The
     // CompositedTransformTarget/CompositedTransformFollower + _layerLink
     // pairing is UNCHANGED — only the entry lifecycle mechanism moved.
@@ -372,7 +377,7 @@ class _SearchInputState extends State<SearchInput> {
     // cycle (rather than a detached OverlayEntry callback), which is also
     // why `context` here — this build method's own BuildContext — can be
     // used directly for the width lookup below, instead of the old
-    // OverlayEntry builder's own (unrelated) context.
+    // OverlayEntry builder's own (unrelated) context. ──
     return OverlayPortal(
       controller: _overlayController,
       overlayChildBuilder: (overlayContext) {

@@ -2,6 +2,7 @@ import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 
 class SettingsSection extends StatelessWidget {
@@ -18,6 +19,8 @@ class SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -30,13 +33,14 @@ class SettingsSection extends StatelessWidget {
         ],
         Padding(
           padding: const EdgeInsets.only(left: 4),
+          // ── Was TextStyle(fontSize: 11, fontWeight: w700,
+          // letterSpacing: 1.2) — this uppercase "eyebrow" section header
+          // got its own token, sectionEyebrow. Exact
+          // match, zero visual delta. ──
           child: Text(
             label.toUpperCase(),
-            style: const TextStyle(
+            style: typography.sectionEyebrow.copyWith(
               color: AppPalette.textMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
             ),
           ),
         ),
@@ -115,6 +119,8 @@ class SettingRowTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return DpadFocusable(
       autofocus: autofocus,
       onSelect: () => onChanged(!value),
@@ -135,24 +141,25 @@ class SettingRowTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Was TextStyle(fontSize: 14, fontWeight: w600) —
+                  // now compactHeading. Exact match, zero visual delta. ──
                   AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 150),
-                    style: TextStyle(
+                    style: typography.compactHeading.copyWith(
                       color: state.focused
                           ? AppPalette.white
                           : AppPalette.textMain,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
                     ),
                     child: Text(title),
                   ),
                   const SizedBox(height: 4),
+                  // ── Was TextStyle(fontSize: 12, height: 1.4) (no
+                  // explicit weight) — exact match for tileSubtitle, zero
+                  // visual delta. ──
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: typography.tileSubtitle.copyWith(
                       color: AppPalette.textMuted,
-                      fontSize: 12,
-                      height: 1.4,
                     ),
                   ),
                 ],
@@ -218,6 +225,10 @@ class SettingsDropdown extends StatelessWidget {
             color: AppPalette.textMuted,
           ),
           isExpanded: true,
+          // ── Left as a plain literal (14/w500) — distinct from
+          // compactHeading (14/w600); the weight difference is
+          // deliberate here (a dropdown's own selected-value text vs. a
+          // heading), not an oversight. ──
           style: const TextStyle(
             color: AppPalette.textMain,
             fontSize: 14,
@@ -308,6 +319,10 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
         if (widget.label != null) ...[
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 6),
+            // ── Left as a plain literal (12/w500) — sits between
+            // tileSubtitle (12/w400) and metaLabel (12/w600); forcing
+            // either direction would be a real weight change on a form
+            // field label, not a caption. ──
             child: Text(
               widget.label!,
               style: const TextStyle(
@@ -331,6 +346,9 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
             enabled: widget.enabled,
             keyboardType: widget.keyboardType,
             autocorrect: false,
+            // ── Left as a plain literal (14/w500) — same reasoning as
+            // SettingsDropdown's style above: distinct from
+            // compactHeading (14/w600) on purpose. ──
             style: TextStyle(
               color: widget.enabled
                   ? AppPalette.textMain

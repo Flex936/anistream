@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/settings/settings_service.dart';
 import '../../core/theme/app_palette.dart';
@@ -172,7 +173,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final isMobile = context.isMobile;
+
+    // ── Pulled once at the top of build(), same convention established ──
+    final typography = context.appTypography;
 
     return Align(
       alignment: Alignment.centerRight,
@@ -222,13 +226,15 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        // ── Was TextStyle(fontSize: 26, fontWeight: bold,
+                        // letterSpacing: -0.5) — converged to panelHeader
+                        // (24/w700/-0.5) per the approved standardize-on-24
+                        // decision (vs. navbar.dart's mobile menu header,
+                        // already 24). Visual delta: 26 -> 24. ──
+                        Text(
                           'Settings',
-                          style: TextStyle(
+                          style: typography.panelHeader.copyWith(
                             color: AppPalette.textMain,
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
                           ),
                         ),
                         SettingsCloseButton(
@@ -289,26 +295,38 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                   setState(() => _uiPerformanceMode = v),
                             ),
                             const SizedBox(height: 16),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // ── Was TextStyle(fontSize: 14,
+                                  // fontWeight: w600) — this recurring
+                                  // pattern (also settings_menu.dart's
+                                  // other sub-headers below, plus
+                                  // settings_components.dart's
+                                  // SettingRowTile.title and
+                                  // search_input.dart's dropdown row
+                                  // title) got its own token,
+                                  // compactHeading.
+                                  // Exact match, zero visual delta. ──
                                   Text(
                                     'Video Scaling Quality',
-                                    style: TextStyle(
+                                    style: typography.compactHeading.copyWith(
                                       color: AppPalette.textMain,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  SizedBox(height: 4),
+                                  const SizedBox(height: 4),
+                                  // ── Was TextStyle(fontSize: 12, height:
+                                  // 1.4) (no explicit weight, i.e.
+                                  // regular/w400) — exact match for
+                                  // tileSubtitle, zero visual delta. ──
                                   Text(
                                     'Determines how the GPU scales video frames. Set to "None" if 1080p stutters on your TV.',
-                                    style: TextStyle(
+                                    style: typography.tileSubtitle.copyWith(
                                       color: AppPalette.textMuted,
-                                      fontSize: 12,
-                                      height: 1.4,
                                     ),
                                   ),
                                 ],
@@ -429,6 +447,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
+                                          // ── Left as a plain literal
+                                          // (11/height 1.5) — 11pt doesn't
+                                          // belong to any identified
+                                          // cluster, and the height differs
+                                          // from tileSubtitle's 1.4 as well. ──
                                           Text(
                                             'Run anistream-server on any PC, NAS, or Raspberry Pi on your LAN. '
                                             'See anistream_server/README.md for build instructions.',
@@ -452,26 +475,29 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             label: 'Desktop Playback Engine',
                             showDividerAbove: true,
                             children: [
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // ── Same compactHeading token as
+                                    // "Video Scaling Quality" above —
+                                    // exact match, zero visual delta. ──
                                     Text(
                                       'Hardware Decoding',
-                                      style: TextStyle(
+                                      style: typography.compactHeading.copyWith(
                                         color: AppPalette.textMain,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    SizedBox(height: 4),
+                                    const SizedBox(height: 4),
+                                    // ── Exact match for tileSubtitle,
+                                    // same as above. ──
                                     Text(
                                       'Use your GPU to decode video streams for vastly improved performance and lower battery usage.',
-                                      style: TextStyle(
+                                      style: typography.tileSubtitle.copyWith(
                                         color: AppPalette.textMuted,
-                                        fontSize: 12,
-                                        height: 1.4,
                                       ),
                                     ),
                                   ],
@@ -523,26 +549,28 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             label: 'Android Playback Engine',
                             showDividerAbove: true,
                             children: [
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // ── Same compactHeading token as
+                                    // above — exact match, zero visual
+                                    // delta. ──
                                     Text(
                                       'Hardware Decoding (Android)',
-                                      style: TextStyle(
+                                      style: typography.compactHeading.copyWith(
                                         color: AppPalette.textMain,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    SizedBox(height: 4),
+                                    const SizedBox(height: 4),
+                                    // ── Exact match for tileSubtitle. ──
                                     Text(
                                       'Phones run best on "mediacodec" (Zero-Copy). Android TVs with weak drivers may crash and require "mediacodec-copy".',
-                                      style: TextStyle(
+                                      style: typography.tileSubtitle.copyWith(
                                         color: AppPalette.textMuted,
-                                        fontSize: 12,
-                                        height: 1.4,
                                       ),
                                     ),
                                   ],
@@ -615,6 +643,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 ),
                               ),
                             )
+                          // ── Left as a plain literal (15/w600/0.2
+                          // spacing) — a near-miss on toastMessage
+                          // (14/w600/0.2), but 1pt off on a primary CTA
+                          // button felt riskier to silently accept than
+                          // the caption-text convergences elsewhere. ──
                           : const Text(
                               'Save Changes',
                               style: TextStyle(
