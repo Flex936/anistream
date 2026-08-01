@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 
@@ -30,11 +31,31 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
   late String _selectedStatus;
   late double _selectedYear;
 
-  // Segmented status control replaces the old Wrap of ChoiceChips.
-  // A single control needs a single FocusNode (rather than one
-  //autofocus-able target per chip) — this is also what folds the
-  // "three ChoiceChips each had autofocus: true" bug into the fix rather than needing a separate patch.
+  // Segmented status control focus node.
   late final FocusNode _statusFocusNode;
+
+  // Bug fix: Material's stock Slider binds
+  // ALL FOUR arrow keys internally via its own Shortcuts/Actions
+  // (Up/Right = increase, Down/Left = decrease) and always returns
+  // `handled` — there's no boundary case where it lets an event bubble,
+  // unlike TextField's cursor-position-gated key handling. That made
+  // Up/Down permanently "stick" on whichever slider first received
+  // keyboard/D-Pad focus, since no ancestor Focus.onKeyEvent ever got a
+  // turn — the Slider itself was the focused node, not an ancestor of it.
+  // `Seekbar` (the theater scrubber) sidesteps this entirely by not using
+  // Slider at all — a fully custom Focus + GestureDetector with
+  // Left/Right-only key handling. Rebuilding two sliders from scratch for
+  // this simpler panel isn't warranted, so instead: each Slider gets its
+  // own FocusNode with canRequestFocus: false, removing it from
+  // keyboard/D-Pad focus entirely (mouse/touch drag is untouched — that's
+  // pointer-based, not focus-based). A thin outer Focus becomes the real
+  // reachable target, handling Left/Right locally and ignoring everything
+  // else so Up/Down bubble past this slider instead of being swallowed —
+  // same shape as _handleStatusKey below.
+  late final FocusNode _minScoreFocusNode;
+  late final FocusNode _minScoreSliderInternalFocusNode;
+  late final FocusNode _yearFocusNode;
+  late final FocusNode _yearSliderInternalFocusNode;
 
   static const List<String> _statusOptions = ['ANY', 'RELEASING', 'FINISHED'];
 
@@ -44,25 +65,44 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
     _minScore = widget.initialMinScore;
     _selectedStatus = widget.initialStatus;
     _selectedYear = widget.initialYear;
-    _statusFocusNode = FocusNode(debugLabel: 'StatusSegmentedControl');
-    _statusFocusNode.onKeyEvent = _handleStatusKey;
+
+    _statusFocusNode = FocusNode(debugLabel: 'StatusSegmentedControl')
+      ..onKeyEvent = _handleStatusKey;
+
+    _minScoreFocusNode = FocusNode(debugLabel: 'MinScoreSlider')
+      ..onKeyEvent = _handleMinScoreKey;
+    _minScoreSliderInternalFocusNode = FocusNode(
+      debugLabel: 'MinScoreSliderInternal',
+      canRequestFocus: false,
+      skipTraversal: true,
+    );
+
+    _yearFocusNode = FocusNode(debugLabel: 'YearSlider')
+      ..onKeyEvent = _handleYearKey;
+    _yearSliderInternalFocusNode = FocusNode(
+      debugLabel: 'YearSliderInternal',
+      canRequestFocus: false,
+      skipTraversal: true,
+    );
   }
 
   @override
   void dispose() {
     _statusFocusNode.dispose();
+    _minScoreFocusNode.dispose();
+    _minScoreSliderInternalFocusNode.dispose();
+    _yearFocusNode.dispose();
+    _yearSliderInternalFocusNode.dispose();
     super.dispose();
   }
 
-  // ── Left/Right always move the segment selection, even at the first/
+  // Left/Right always move the segment selection, even at the first/
   // last option — unlike SettingsTextField's cursor-position boundary
   // check, a 3-item enumerated control has no "content" to keep moving
   // through, so there's no case where handing off to spatial traversal on
-  // this axis makes sense. Up/Down are always ignored, letting dpad's own
-  // focusInDirection move focus to the Minimum Score slider above or
-  // Release Year slider below — same "local axis vs. escape axis" split
-  // DESIGN.md documents for SettingsTextField, just with fixed rather
-  // than position-dependent axes. ──
+  // this axis makes sense. Up/Down are always ignored, letting the
+  // ambient FocusTraversalPolicy move focus to the Minimum Score slider
+  // below.
   KeyEventResult _handleStatusKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -85,10 +125,56 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
     return KeyEventResult.ignored;
   }
 
+  // Left/Right nudge the score by 1, clamped to [0, 100] — the same
+  // step Slider's own divisions: 100 would produce via drag. Up/Down are
+  // ignored, so they bubble past this slider entirely instead of being
+  // swallowed the way stock Slider's internal Shortcuts used to.
+  KeyEventResult _handleMinScoreKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      setState(() => _minScore = (_minScore - 1).clamp(0, 100));
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      setState(() => _minScore = (_minScore + 1).clamp(0, 100));
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  // Same pattern as _handleMinScoreKey — nudges by 1 year, clamped to
+  // [1980, currentYear + 1], matching the slider's own
+  // divisions: (currentYear + 1) - 1980 step.
+  KeyEventResult _handleYearKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final maxYear = DateTime.now().year.toDouble() + 1;
+
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      setState(
+        () => _selectedYear = (_selectedYear - 1).clamp(1980.0, maxYear),
+      );
+      return KeyEventResult.handled;
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      setState(
+        () => _selectedYear = (_selectedYear + 1).clamp(1980.0, maxYear),
+      );
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentYear = DateTime.now().year;
     final isAnyYear = _selectedYear > currentYear;
+    final radii = context.appRadii;
 
     final panelContent = Material(
       color: AppPalette.base.withValues(
@@ -134,15 +220,6 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                 backgroundColor: AppPalette.surface,
                 thumbColor: AppPalette.primary,
                 groupValue: _selectedStatus,
-                // ── Static AppPalette.textMain for every segment
-                // regardless of selection — CupertinoSlidingSegmentedControl
-                // takes plain child widgets per segment, not a
-                // per-selection builder the way ChoiceChip's labelStyle
-                // callback allowed. Near-white reads fine against both
-                // AppPalette.surface (track) and AppPalette.primary
-                // (thumb), so this is a legibility-neutral simplification,
-                // flagged per DESIGN.md § 5's design-debt convention
-                // rather than silently dropped. ──
                 children: {
                   for (final status in _statusOptions)
                     status: Padding(
@@ -184,17 +261,37 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                 ),
               ],
             ),
-            SliderTheme(
-              data: const SliderThemeData(
-                activeTrackColor: AppPalette.primary,
-                thumbColor: AppPalette.primary,
-                inactiveTrackColor: AppPalette.border,
+            AnimatedBuilder(
+              animation: _minScoreFocusNode,
+              builder: (context, child) => Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(radii.small),
+                  border: Border.all(
+                    color: _minScoreFocusNode.hasFocus
+                        ? AppPalette.primary
+                        : AppPalette.transparent,
+                    width: 2,
+                  ),
+                ),
+                child: child,
               ),
-              child: Slider(
-                value: _minScore.toDouble(),
-                max: 100,
-                divisions: 100,
-                onChanged: (val) => setState(() => _minScore = val.toInt()),
+              child: Focus(
+                focusNode: _minScoreFocusNode,
+                child: SliderTheme(
+                  data: const SliderThemeData(
+                    activeTrackColor: AppPalette.primary,
+                    thumbColor: AppPalette.primary,
+                    inactiveTrackColor: AppPalette.border,
+                  ),
+                  child: Slider(
+                    focusNode: _minScoreSliderInternalFocusNode,
+                    value: _minScore.toDouble(),
+                    max: 100,
+                    divisions: 100,
+                    onChanged: (val) => setState(() => _minScore = val.toInt()),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 32),
@@ -219,18 +316,38 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
                 ),
               ],
             ),
-            SliderTheme(
-              data: const SliderThemeData(
-                activeTrackColor: AppPalette.primary,
-                thumbColor: AppPalette.primary,
-                inactiveTrackColor: AppPalette.border,
+            AnimatedBuilder(
+              animation: _yearFocusNode,
+              builder: (context, child) => Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(radii.small),
+                  border: Border.all(
+                    color: _yearFocusNode.hasFocus
+                        ? AppPalette.primary
+                        : AppPalette.transparent,
+                    width: 2,
+                  ),
+                ),
+                child: child,
               ),
-              child: Slider(
-                value: _selectedYear,
-                min: 1980,
-                max: currentYear.toDouble() + 1,
-                divisions: (currentYear + 1) - 1980,
-                onChanged: (val) => setState(() => _selectedYear = val),
+              child: Focus(
+                focusNode: _yearFocusNode,
+                child: SliderTheme(
+                  data: const SliderThemeData(
+                    activeTrackColor: AppPalette.primary,
+                    thumbColor: AppPalette.primary,
+                    inactiveTrackColor: AppPalette.border,
+                  ),
+                  child: Slider(
+                    focusNode: _yearSliderInternalFocusNode,
+                    value: _selectedYear,
+                    min: 1980,
+                    max: currentYear.toDouble() + 1,
+                    divisions: (currentYear + 1) - 1980,
+                    onChanged: (val) => setState(() => _selectedYear = val),
+                  ),
+                ),
               ),
             ),
 
