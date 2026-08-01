@@ -9,12 +9,12 @@
 
 AniStream is a single Flutter/Dart codebase producing native apps for Windows, Linux, macOS, Android (phone + TV), and iOS. Two things are pluggable behind a shared interface:
 
-- **Torrenting** — either on-device (`libtorrent_flutter`, an FFI binding to `libtorrent`) or offloaded to the optional companion Go server over LAN (§6). The app never runs both at once for a single session — `AppSettings.serverMode` picks one `BaseStreamingController` implementation for the whole session (§5).
+- **Torrenting** — either on-device (`libtorrent_flutter`, an FFI binding to `libtorrent`) or offloaded to the optional companion Go server over LAN (§ 6). The app never runs both at once for a single session — `AppSettings.serverMode` picks one `BaseStreamingController` implementation for the whole session (§ 5).
 - **Playback** — always local, via `media_kit`, which hands frames to Flutter's own Impeller renderer so video and UI overlays composite on the same native surface with no separate video-view Z-index problems.
 
 Metadata and tracking come from AniList's GraphQL API; torrent discovery comes from scraping Nyaa.si's RSS feeds. Both are covered in [API.md](API.md), not here.
 
-```text
+`````text
 ┌──────────────┐      GraphQL      ┌──────────────┐
 │  AniList API │◄─────────────────►│              │
 └──────────────┘                   │              │
@@ -28,11 +28,11 @@ Metadata and tracking come from AniList's GraphQL API; torrent discovery comes f
                                   ┌────────▼────────┐
                                   │ AniStream Server │  (Go, § 6)
                                   └─────────────────┘
-```
+`````
 
 ## 2. Flutter App Structure
 
-```text
+`````text
 lib/
 ├── main.dart                  # Entry point: zone setup, AppLogger.init(), MediaKit.ensureInitialized(),
 │                               # InputModeController.instance.init(), desktop window bootstrap, runApp()
@@ -44,7 +44,7 @@ lib/
 │   ├── logging/                    app_logger.dart
 │   ├── router/                     app_router.dart
 │   ├── settings/                   settings_service.dart, settings_scope.dart
-│   └── theme/                      app_palette.dart
+│   └── theme/                      app_palette.dart, app_radii.dart, app_typography.dart
 │
 ├── data/                       # External-API clients + their models. No UI.
 │   ├── anilist/
@@ -84,7 +84,7 @@ lib/
     │                                 theater_settings, batch_picker}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
-```
+`````
 
 **Where does new code go?**
 
@@ -125,12 +125,12 @@ Two distinct native-integration mechanisms are in use — new performance-sensit
 - `android:usesCleartextTraffic="true"` is required because both local streaming paths are plain HTTP: `libtorrent_flutter`'s local streaming server, and (if `serverMode` is on) the LAN-only Go server.
 - `android:enableOnBackInvokedCallback="true"` enables predictive back gestures, matching the app's own `PopScope`-based back handling (`AppShell`, `TheaterScreen`).
 - `androidHwDec` setting distinguishes `mediacodec` (zero-copy, phones) from `mediacodec-copy` (safer, recommended for TV — see `settings_menu.dart`'s help text). Build tooling: AGP `9.0.1`, Kotlin `2.3.20`, JVM target 17.
-- **Known limitation** (carried from [README.md](../README.md)): Android TV builds don't yet use the TV's own decode unit, so weak-GPU TV hardware may struggle with 1080p.
+- **Known limitation** (carried from [README.md](../README.md) § 6): Android TV builds don't yet use the TV's own decode unit, so weak-GPU TV hardware may struggle with 1080p.
 
 ### macOS / iOS
 
 - Standard `FlutterAppDelegate` / `FlutterViewController` embedding; the one behavioral customization is `applicationShouldTerminateAfterLastWindowClosed` returning `true` (quits on last-window-close, matching desktop-app rather than menu-bar-app conventions).
-- `Release.entitlements` declares only `com.apple.security.app-sandbox`; `DebugProfile.entitlements` additionally declares `com.apple.security.cs.allow-jit` and `com.apple.security.network.server`. **Worth verifying:** if AniList OAuth (which opens a loopback HTTP server on port 3456) or on-device torrenting stop working specifically in signed/notarized Release builds on macOS, check whether Release needs `com.apple.security.network.client`/`.server` added too — this hasn't been confirmed broken, just flagged as an untested gap between the two entitlement files.
+- `Release.entitlements` declares only `com.apple.security.app-sandbox`; `DebugProfile.entitlements` additionally declares `com.apple.security.cs.allow-jit` and `com.apple.security.network.server`. **Worth verifying:** if AniList OAuth (which opens a loopback HTTP server on port 3456) or on-device torrenting stop working specifically in signed/notarized Release builds on macOS, check whether Release needs `com.apple.security.network.client`/`.server` added too — this hasn't been confirmed broken, just flagged as an untested gap between the two entitlement files. *(Logged as an open item in § 7.)*
 - Per [README.md](../README.md), neither maintainer has a Mac or iOS device to test on — treat this platform as best-effort/community-verified rather than actively maintained.
 
 ### Linux
@@ -149,12 +149,12 @@ Two distinct native-integration mechanisms are in use — new performance-sensit
 
 | | `StreamingController` | `RemoteStreamingController` |
 | --- | --- | --- |
-| Torrent engine | On-device, `libtorrent_flutter` (FFI) | Delegated to the Go server over LAN (§6) |
+| Torrent engine | On-device, `libtorrent_flutter` (FFI) | Delegated to the Go server over LAN (§ 6) |
 | Transport to player | Local HTTP server (loopback) | Server's `/api/stream/:id/video` endpoint |
 | "Ready" threshold | 0.1% sequential buffer downloaded | 5.0% sequential buffer downloaded (server-side `bufferThreshold`) |
 | Batch-file selection | In-process, via `libtorrent_flutter`'s file list | Polled from the server's `needs_selection` state, POSTed back via `/select` |
 
-Both implementations parse candidate filenames with the same `TorrentParser` (see [API.md](API.md)) to guess episode numbers inside a batch torrent — this logic is intentionally not duplicated between the on-device and remote paths.
+Both implementations parse candidate filenames with the same `TorrentParser` (see [API.md](API.md) § 3) to guess episode numbers inside a batch torrent — this logic is intentionally not duplicated between the on-device and remote paths.
 
 ## 6. AniStream Server (Go)
 
@@ -164,7 +164,7 @@ Optional, standalone companion for thin clients (Android TV boxes, phones, weak 
 
 **Session state machine** (one session per active magnet link):
 
-```text
+`````text
 loading_metadata
     │
     ├── single video file found ──────────────┐
@@ -172,18 +172,19 @@ loading_metadata
     └── multiple video files ──► needs_selection ──(POST /select)──► buffering ──(≥5% downloaded)──► ready
 
 any state ──(3 min metadata timeout / no video files / stream failure)──► error
-```
+`````
 
 - Sessions idle for 30+ minutes are dropped automatically (`reap()`, checked every 5 minutes).
 - No authentication — the server is designed for trusted-LAN use only (see [`anistream_server/README.md`](../anistream_server/README.md)'s own notes on this).
 - CORS is fully open (`Access-Control-Allow-Origin: *`) since it's meant to be reachable from any device on the LAN.
-- `RemoteStreamingController` (§5) is the only Dart-side consumer of this API.
+- `RemoteStreamingController` (§ 5) is the only Dart-side consumer of this API.
 
 ## 7. Known Issues
 
-Documented per the Living Documentation Rule (CLAUDE.md § 2) rather than silently patched around or left for a reader to rediscover — mirrors the same pattern DESIGN.md § 5 uses for design debt.
+Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rather than silently patched around or left for a reader to rediscover — mirrors the same pattern [DESIGN.md](DESIGN.md) § 5 uses for design debt.
 
 - **`playback_session_controller.dart` is a dead stub.** It exists in the repo as an empty file with nothing importing it anywhere in the app (already omitted from the folder tree in § 2). It's slated for removal — don't build on it, and don't be misled by its presence into thinking it's load-bearing.
+- **macOS/iOS Release entitlements are an unconfirmed gap, not a fix.** § 4 (macOS / iOS) flags that `Release.entitlements` may be missing `com.apple.security.network.client`/`.server` relative to `DebugProfile.entitlements` — unconfirmed whether this actually breaks AniList OAuth's loopback server or on-device torrenting in signed/notarized Release builds, just noted as an untested gap. Cross-referenced here so this section remains the complete index of open items.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 2).*
+*Last reviewed against the codebase: 2026-07-28. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
