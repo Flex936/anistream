@@ -14,8 +14,14 @@ import 'package:flutter/material.dart';
 /// Several fields below are deliberate CONVERGENCES of previously
 /// near-duplicate literals scattered across the codebase (see each
 /// field's comment for the specific call sites and values it replaces) —
-/// approved during the Track A1 taxonomy review rather than silently
-/// picked.
+///
+/// Some tokens are also reused across call sites whose *names* don't
+/// quite describe every place they end up applied (e.g.
+/// `cardTitleCompact` also drives `watchlist_screen.dart`'s tab labels,
+/// `cardTitleProminent` also drives its `_EmptyPane` title) — sizes/
+/// weights matched closely enough to converge, but the token names
+/// haven't been revisited to match. Left as a known follow-up rather
+/// than renamed mid-pass.
 ///
 /// Accessed via `context.appTypography` (see build_context_extensions.dart).
 @immutable
@@ -34,6 +40,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
   final TextStyle panelHeader;
   final TextStyle cardSummary;
   final TextStyle heroSynopsis;
+  final TextStyle compactHeading;
+  final TextStyle sectionEyebrow;
 
   const AppTypography({
     required this.screenTitle,
@@ -50,6 +58,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
     required this.panelHeader,
     required this.cardSummary,
     required this.heroSynopsis,
+    required this.compactHeading,
+    required this.sectionEyebrow,
   });
 
   static const AppTypography standard = AppTypography(
@@ -90,7 +100,9 @@ class AppTypography extends ThemeExtension<AppTypography> {
     // watchlist_cards.dart WatchlistCard (was 13/w600/h1.35),
     // anime_card.dart (was 13/w500/h1.35), calendar_card.dart (was
     // 12/w600/h1.2) — four near-duplicate "compact card title" variants
-    // collapsed into one. ──
+    // collapsed into one. Also reused for
+    // watchlist_screen.dart's tab labels (13/w600 exact numeric match) —
+    // see the class-level doc comment re: token-name drift. ──
     cardTitleCompact: TextStyle(
       fontSize: 13,
       fontWeight: FontWeight.w600,
@@ -98,7 +110,9 @@ class AppTypography extends ThemeExtension<AppTypography> {
     ),
     // ── watchlist_cards.dart HeroCard (was
     // 14/w700), watchlist_cards.dart ListCard (was 16/bold) — the two
-    // "prominent" (larger-surface) card titles collapsed into one. ──
+    // "prominent" (larger-surface) card titles collapsed into one. Also
+    // reused for watchlist_screen.dart's _EmptyPane title
+    // (was 16/w600 — one step lighter than this token's w700). ──
     cardTitleProminent: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
     // settings_components.dart SettingRowTile.subtitle,
     // settings_menu.dart section descriptions — exact match.
@@ -108,13 +122,18 @@ class AppTypography extends ThemeExtension<AppTypography> {
       height: 1.4,
     ),
     // Status/score inline TextSpans across watchlist_cards.dart,
-    // search_input.dart result rows — dominant value in this cluster.
+    // search_input.dart result rows. Also applied to
+    // hero_banner.dart's _MetaChip (was 12/w700 — one step heavier than
+    // this token's w600; the only other nearby candidate was badgeLabel,
+    // whose fontSize (10) was a worse fit).
     metaLabel: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
     // ── torrent_tile.dart "RECOMMENDED" banner
     // (was 10/w800/1.0 spacing), torrent_tile.dart _Pill (was
     // 10/w700/0.3 spacing), episode_tile.dart "UP NEXT" (was 9/w800/0.5
-    // spacing) — five-ish near-duplicate badge/pill variants collapsed
-    // into one. ──
+    // spacing), plus WatchlistCard's progress badge,
+    // anime_card._StatusBadge, and calendar_card's episode/time pills —
+    // a wider badge/pill cluster than originally scoped, all
+    // collapsed into one. ──
     badgeLabel: TextStyle(
       fontSize: 10,
       fontWeight: FontWeight.w800,
@@ -141,6 +160,25 @@ class AppTypography extends ThemeExtension<AppTypography> {
     // hero_banner.dart multi-paragraph synopsis — kept distinct from
     // cardSummary above.
     heroSynopsis: TextStyle(fontSize: 14, height: 1.6),
+    // ── Recurring 14/w600 cluster that wasn't an
+    // original scope: settings_menu.dart's "Video Scaling Quality" /
+    // "Hardware Decoding" / "Hardware Decoding (Android)" sub-headers,
+    // settings_components.dart's SettingRowTile.title, and
+    // search_input.dart's dropdown result-row title — all exact matches,
+    // zero visual delta at every call site. ──
+    compactHeading: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+    // ── settings_components.dart's SettingsSection
+    // label — the small uppercase "CONTENT PREFERENCES" / "PLAYBACK
+    // PREFERENCES" eyebrow headers. Exact match, zero visual delta.
+    // Deliberately kept separate from badgeLabel despite both being
+    // small/bold/spaced-out: badgeLabel's spacing (0.5) is less than
+    // half of this token's (1.2), and collapsing them would have
+    // visibly compressed the eyebrow's distinct letter-spacing. ──
+    sectionEyebrow: TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 1.2,
+    ),
   );
 
   @override
@@ -159,6 +197,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
     TextStyle? panelHeader,
     TextStyle? cardSummary,
     TextStyle? heroSynopsis,
+    TextStyle? compactHeading,
+    TextStyle? sectionEyebrow,
   }) {
     return AppTypography(
       screenTitle: screenTitle ?? this.screenTitle,
@@ -175,6 +215,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
       panelHeader: panelHeader ?? this.panelHeader,
       cardSummary: cardSummary ?? this.cardSummary,
       heroSynopsis: heroSynopsis ?? this.heroSynopsis,
+      compactHeading: compactHeading ?? this.compactHeading,
+      sectionEyebrow: sectionEyebrow ?? this.sectionEyebrow,
     );
   }
 
@@ -212,6 +254,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
       panelHeader: TextStyle.lerp(panelHeader, other.panelHeader, t)!,
       cardSummary: TextStyle.lerp(cardSummary, other.cardSummary, t)!,
       heroSynopsis: TextStyle.lerp(heroSynopsis, other.heroSynopsis, t)!,
+      compactHeading: TextStyle.lerp(compactHeading, other.compactHeading, t)!,
+      sectionEyebrow: TextStyle.lerp(sectionEyebrow, other.sectionEyebrow, t)!,
     );
   }
 }

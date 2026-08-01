@@ -78,6 +78,12 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   void _openFilterDrawer() {
+    // ── Was MediaQuery.sizeOf(context).width < 600 inline — routed
+    // through the shared ResponsiveContext.isMobile extension
+    // (build_context_extensions.dart) instead, matching the breakpoint
+    // watchlist_screen.dart/responsive_grid.dart already standardize on.
+    // Pure mechanical swap — Breakpoints.mobile is already 600, so
+    // behavior is unchanged. ──
     final isMobile = context.isMobile;
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
@@ -146,6 +152,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   Widget build(BuildContext context) {
     if (widget.query.trim().isEmpty) return const SizedBox.shrink();
 
+    // ── Pulled once at the top of build() ──
+    final typography = context.appTypography;
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,13 +165,14 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
             child: Row(
               children: [
+                // ── Was TextStyle(fontSize: 24, fontWeight: w600,
+                // letterSpacing: -0.4) — exact match for sectionTitle,
+                // zero visual delta. Same token also used by
+                // watchlist_screen.dart's "My Library" title. ──
                 Text(
                   'Results for "${widget.query}"',
-                  style: const TextStyle(
+                  style: typography.sectionTitle.copyWith(
                     color: AppPalette.textMain,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.4,
                   ),
                 ),
                 const SizedBox(width: 16),

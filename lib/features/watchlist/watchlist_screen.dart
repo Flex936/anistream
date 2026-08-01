@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
@@ -103,6 +104,9 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
+    // ── Pulled once at the top of build() ──
+    final typography = context.appTypography;
+
     return ListenableBuilder(
       listenable: _controller,
       builder: (context, _) {
@@ -186,13 +190,15 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                         spacing: 32,
                         runSpacing: 16,
                         children: [
-                          const Text(
+                          // ── Was TextStyle(fontSize: 24, fontWeight: w600,
+                          // letterSpacing: -0.4) — exact match for
+                          // sectionTitle, zero visual delta. Same token
+                          // also used by search_results_screen.dart's
+                          // "Results for..." title. ──
+                          Text(
                             'My Library',
-                            style: TextStyle(
+                            style: typography.sectionTitle.copyWith(
                               color: AppPalette.textMain,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: -0.4,
                             ),
                           ),
                           Wrap(
@@ -450,6 +456,8 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return HoverFocusBuilder(
       onTap: onTap,
       builder: (context, hovered) {
@@ -483,12 +491,16 @@ class _TabButton extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: contentColor),
               const SizedBox(width: 6),
+              // ── Was TextStyle(fontSize: 13, fontWeight: w600) — an
+              // exact numeric match for cardTitleCompact (13/w600); the
+              // token's height: 1.35 is inconsequential here since this
+              // is a single line of text. Reusing a "card title" token
+              // for a tab label is a naming mismatch, not a visual one —
+              // see app_typography.dart's class doc comment. ──
               Text(
                 label,
-                style: TextStyle(
+                style: typography.cardTitleCompact.copyWith(
                   color: contentColor,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -523,6 +535,8 @@ class _EmptyPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return Center(
       child: Container(
         width: double.infinity,
@@ -538,15 +552,23 @@ class _EmptyPane extends StatelessWidget {
           children: [
             Icon(icon, color: AppPalette.textMuted, size: 48),
             const SizedBox(height: 16),
+            // ── Was TextStyle(fontSize: 16, fontWeight: w600) —
+            // converged to cardTitleProminent (16/w700), one step
+            // heavier. Reusing a "card title" token here is a naming
+            // mismatch, not a visual one — see app_typography.dart's
+            // class doc comment. ──
             Text(
               title,
-              style: const TextStyle(
+              style: typography.cardTitleProminent.copyWith(
                 color: AppPalette.textMain,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 6),
+            // ── Left as a plain literal (13, no height set) — this
+            // subtitle can wrap depending on content/screen width;
+            // cardSummary's fontSize matches but its height: 1.4 would
+            // be a visible line-spacing change on wrapped text, the same
+            // caution applied to scheduled_screen.dart's _ErrorPane. ──
             Text(
               subtitle,
               style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
@@ -575,6 +597,8 @@ class _ErrorPane extends StatelessWidget {
             size: 52,
           ),
           const SizedBox(height: 16),
+          // ── Left as a plain literal (17/w600) — same unclustered
+          // 17pt pattern as scheduled_screen.dart's _ErrorPane title. ──
           const Text(
             'Could not load watchlist',
             style: TextStyle(
@@ -586,6 +610,9 @@ class _ErrorPane extends StatelessWidget {
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
+            // ── Left as a plain literal (13, no height set) — this is a
+            // dynamic, potentially long error message; same multi-line
+            // height caution as scheduled_screen.dart's _ErrorPane. ──
             child: Text(
               message,
               textAlign: TextAlign.center,

@@ -26,6 +26,12 @@ class HeroBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ── Was MediaQuery.sizeOf(context).width < 600 inline — routed
+    // through the shared ResponsiveContext.isMobile extension
+    // (build_context_extensions.dart) instead, matching the breakpoint
+    // watchlist_screen.dart/responsive_grid.dart already standardize on.
+    // Pure mechanical swap — Breakpoints.mobile is already 600, so
+    // behavior is unchanged. ──
     final isMobile = context.isMobile;
     return isMobile ? _buildMobileLayout() : _buildDesktopLayout();
   }
@@ -171,11 +177,16 @@ class _PosterImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radii = context.appRadii;
+
     return Container(
       width: 220,
       height: 330,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        // ── Was BorderRadius.circular(16) — converged to AppRadii.small
+        // (12) per the approved 3-tier decision; this is a poster/card
+        // shape, which `small` explicitly covers. Visual delta: 16 -> 12. ──
+        borderRadius: BorderRadius.circular(radii.small),
         boxShadow: uiPerformanceMode
             ? null
             : [
@@ -187,7 +198,7 @@ class _PosterImage extends StatelessWidget {
               ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(radii.small),
         // ── cacheWidth added: this poster always renders at a fixed
         // 220dp width, but was decoding `extraLarge` (AniList's biggest
         // cover variant) at native resolution every time the details
@@ -210,26 +221,34 @@ class _AnimeTextInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return Column(
       crossAxisAlignment: isMobile
           ? CrossAxisAlignment.center
           : CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        // ── Was TextStyle(fontSize: isMobile ? 32 : 48, fontWeight: w800,
+        // height: 1.1, letterSpacing: -1.0) — exact match for
+        // heroTitleMobile/heroTitleDesktop, zero visual delta. The
+        // responsive fontSize switch is preserved by picking between the
+        // two tokens instead of flattening to one. ──
         Text(
           anime.title.display,
           textAlign: isMobile ? TextAlign.center : TextAlign.left,
-          style: TextStyle(
-            color: AppPalette.textMain,
-            fontSize: isMobile ? 32 : 48,
-            fontWeight: FontWeight.w800,
-            height: 1.1,
-            letterSpacing: -1.0,
-          ),
+          style:
+              (isMobile
+                      ? typography.heroTitleMobile
+                      : typography.heroTitleDesktop)
+                  .copyWith(color: AppPalette.textMain),
         ),
         if (anime.title.english != null &&
             anime.title.english != anime.title.romaji) ...[
           const SizedBox(height: 8),
+          // ── Left as a plain literal (16/w500) — the only nearby token
+          // is cardTitleProminent (16/w700), a 2-step weight jump that's
+          // larger than any other convergence accepted in this pass. ──
           Text(
             anime.title.english!,
             textAlign: isMobile ? TextAlign.center : TextAlign.left,
@@ -291,11 +310,9 @@ class _AnimeTextInfo extends StatelessWidget {
           maxLines: isMobile ? 5 : 4,
           textAlign: isMobile ? TextAlign.center : TextAlign.left,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AppPalette.textMuted,
-            fontSize: 14,
-            height: 1.6,
-          ),
+          // ── Was TextStyle(fontSize: 14, height: 1.6) — exact match for
+          // heroSynopsis, zero visual delta. ──
+          style: typography.heroSynopsis.copyWith(color: AppPalette.textMuted),
         ),
       ],
     );
@@ -309,6 +326,8 @@ class _FloatingNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return HoverFocusBuilder(
       onTap: () {
         if (onBack != null) {
@@ -328,6 +347,11 @@ class _FloatingNavBar extends StatelessWidget {
                 : AppPalette.black.withValues(
                     alpha: uiPerformanceMode ? 0.8 : 0.4,
                   ),
+            // ── Deliberately LEFT as a plain literal, not routed through
+            // AppRadii — same fully-rounded stadium/pill pattern flagged
+            // in watchlist_cards.dart's _PlayOverlay and elsewhere: 30
+            // exceeds half this pill's height to guarantee a full curve,
+            // which isn't a semantic match for tag/small/large. ──
             borderRadius: BorderRadius.circular(30),
             border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
           ),
@@ -345,12 +369,15 @@ class _FloatingNavBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Text(
+              // ── Was TextStyle(fontSize: 14, fontWeight: w600) — now
+              // compactHeading, the same token applied to
+              // settings_menu.dart/settings_components.dart's headers
+              // and search_input.dart's dropdown title. Exact match,
+              // zero visual delta. ──
+              Text(
                 'Back',
-                style: TextStyle(
+                style: typography.compactHeading.copyWith(
                   color: AppPalette.textMain,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -375,21 +402,27 @@ class _MetaChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
+        // ── Deliberately LEFT as a plain literal, not routed through
+        // AppRadii — same fully-rounded stadium/pill pattern as
+        // _FloatingNavBar above; 20 exceeds half this chip's height to
+        // guarantee a full curve. ──
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      // ── Was TextStyle(fontSize: 12, fontWeight: w700) — converged to
+      // metaLabel (12/w600) per explicit direction: the only other
+      // nearby candidate, badgeLabel, has a smaller fontSize (10), a
+      // worse fit than metaLabel's exact fontSize match. Visual delta:
+      // fontWeight w700 -> w600 — NOTE this is one step LIGHTER, the
+      // opposite direction from every other weight convergence in this
+      // pass (which all went heavier by one step). ──
+      child: Text(label, style: typography.metaLabel.copyWith(color: color)),
     );
   }
 }

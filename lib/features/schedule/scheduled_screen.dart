@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
@@ -96,6 +97,9 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
     final hPad = isMobile ? 16.0 : 32.0;
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
+    // ── Pulled once at the top of build() ──
+    final typography = context.appTypography;
+
     return FutureBuilder<List<Anime>>(
       future: _animeFuture,
       builder: (context, snapshot) {
@@ -143,20 +147,23 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 24),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Was TextStyle(fontSize: 32, fontWeight: w800,
+                    // letterSpacing: -1.0) — exact match for screenTitle,
+                    // zero visual delta. ──
                     Text(
                       'Schedule',
-                      style: TextStyle(
+                      style: typography.screenTitle.copyWith(
                         color: AppPalette.textMain,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1.0,
                       ),
                     ),
-                    SizedBox(height: 4),
-                    Text(
+                    const SizedBox(height: 4),
+                    // ── Left as a plain literal (14, no weight set) —
+                    // 14/w400 doesn't match tileSubtitle (12/w400,
+                    // different size). ──
+                    const Text(
                       'Automatically adjusted to your local timezone.',
                       style: TextStyle(
                         color: AppPalette.textMuted,
@@ -236,6 +243,8 @@ class _DayShelf extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -245,22 +254,22 @@ class _DayShelf extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
+              // ── Was TextStyle(fontSize: 20, fontWeight: w700,
+              // letterSpacing: -0.5) — exact match for dayShelfTitle,
+              // zero visual delta. ──
               Text(
                 title,
-                style: const TextStyle(
+                style: typography.dayShelfTitle.copyWith(
                   color: AppPalette.textMain,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(width: 12),
+              // ── Was TextStyle(fontSize: 12, fontWeight: w600) — exact
+              // match for metaLabel, zero visual delta. ──
               Text(
                 '${items.length} releases',
-                style: const TextStyle(
+                style: typography.metaLabel.copyWith(
                   color: AppPalette.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -331,6 +340,8 @@ class _ErrorPane extends StatelessWidget {
           size: 52,
         ),
         const SizedBox(height: 16),
+        // ── Left as a plain literal (17/w600) — 17pt doesn't belong to
+        // any identified cluster. ──
         const Text(
           'Could not load schedule',
           style: TextStyle(
@@ -342,6 +353,12 @@ class _ErrorPane extends StatelessWidget {
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 48),
+          // ── Left as a plain literal (13, no height set) — this text
+          // can wrap up to 3 lines (maxLines: 3). cardSummary's fontSize
+          // matches but its height: 1.4 would be a visible line-spacing
+          // change on wrapped text here, unlike the single-line captions
+          // converged elsewhere in this pass — not accepted without a
+          // deliberate visual review. ──
           child: Text(
             error.toString(),
             textAlign: TextAlign.center,
