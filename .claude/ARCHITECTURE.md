@@ -67,7 +67,8 @@ lib/
 │                                    perf_animations.dart
 │
 └── features/                   # One folder per screen/flow. Each owns its own widgets/services/controllers.
-    ├── anime_details/                anime_details_screen.dart, widgets/{episode_tile, hero_banner,
+├── anime_details/                anime_details_screen.dart, widgets/{episode_tile, hero_banner,
+    │                                 hero_header_delegate, hero_header_compact, anime_synopsis_section,
     │                                 torrent_tile, external_link_buttons}.dart
     ├── home/                         home_screen.dart, widgets/anime_carousel.dart
     ├── schedule/                     scheduled_screen.dart, utils/schedule_grouping.dart,

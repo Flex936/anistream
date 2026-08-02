@@ -6,12 +6,22 @@ import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/utils/anime_status_style.dart';
-import '../../../shared/utils/html_utils.dart';
 import '../../../shared/widgets/app_network_image.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
-import './external_link_buttons.dart';
 
+/// The "full" (expanded, shrinkOffset == 0) state of the collapsing hero
+/// header — see [HeroHeaderDelegate]. Narrowed down from its previous,
+/// free-scrolling-sliver-child form: the synopsis and external-link row
+/// used to live here too, but neither fits inside a
+/// SliverPersistentHeader's bounded [minExtent, maxExtent] box, so they've
+/// moved to [AnimeSynopsisSection], an ordinary sliver sibling placed
+/// directly below the pinned header.
+///
+/// Also collapses the previous separate mobile/desktop layouts into one —
+/// at header-appropriate heights there isn't room for two visually
+/// distinct treatments, matching the same call already made for
+/// [HeroHeaderCompact].
 class HeroBanner extends StatelessWidget {
   final Anime anime;
   final VoidCallback? onBack;
@@ -26,142 +36,55 @@ class HeroBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── Was MediaQuery.sizeOf(context).width < 600 inline — routed
-    // through the shared ResponsiveContext.isMobile extension
-    // (build_context_extensions.dart) instead, matching the breakpoint
-    // watchlist_screen.dart/responsive_grid.dart already standardize on.
-    // Pure mechanical swap — Breakpoints.mobile is already 600, so
-    // behavior is unchanged. ──
-    final isMobile = context.isMobile;
-    return isMobile ? _buildMobileLayout() : _buildDesktopLayout();
-  }
+    final String? bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
+    final String? posterUrl = anime.coverImage?.extraLarge;
 
-  Widget _buildDesktopLayout() {
-    final bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
-    final posterUrl = anime.coverImage?.extraLarge;
-
-    return SizedBox(
-      width: double.infinity,
-      height: 600,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (bannerUrl != null)
-            AppNetworkImage(
-              url: bannerUrl,
-              uiPerformanceMode: uiPerformanceMode,
-            ),
-
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppPalette.base.withValues(alpha: 0.1),
-                  AppPalette.base.withValues(alpha: 0.7),
-                  AppPalette.base,
-                ],
-                stops: const [0.0, 0.5, 1.0],
-              ),
-            ),
-          ),
-
-          Positioned(
-            top: 96,
-            left: 48,
-            child: _FloatingNavBar(
-              onBack: onBack,
-              uiPerformanceMode: uiPerformanceMode,
-            ),
-          ),
-
-          Positioned(
-            bottom: 24,
-            left: 48,
-            right: 48,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (posterUrl != null)
-                  _PosterImage(
-                    url: posterUrl,
-                    uiPerformanceMode: uiPerformanceMode,
-                  ),
-                const SizedBox(width: 48),
-                Expanded(child: _AnimeTextInfo(anime: anime, isMobile: false)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMobileLayout() {
-    final bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
-    final posterUrl = anime.coverImage?.extraLarge;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        SizedBox(
-          height: 250,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (bannerUrl != null)
-                AppNetworkImage(
-                  url: bannerUrl,
-                  uiPerformanceMode: uiPerformanceMode,
-                )
-              else
-                const ColoredBox(color: AppPalette.surface),
+        if (bannerUrl != null)
+          AppNetworkImage(url: bannerUrl, uiPerformanceMode: uiPerformanceMode)
+        else
+          const ColoredBox(color: AppPalette.surface),
 
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppPalette.base.withValues(alpha: 0.3),
-                      AppPalette.base.withValues(alpha: 0.9),
-                      AppPalette.base,
-                    ],
-                  ),
-                ),
-              ),
-
-              SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 24, left: 16),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: _FloatingNavBar(
-                      onBack: onBack,
-                      uiPerformanceMode: uiPerformanceMode,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppPalette.base.withValues(alpha: 0.2),
+                AppPalette.base.withValues(alpha: 0.75),
+                AppPalette.base,
+              ],
+              stops: const [0.0, 0.6, 1.0],
+            ),
           ),
         ),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, -80, 24, 0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        Positioned(
+          top: 16,
+          left: 16,
+          child: _FloatingBackButton(
+            onBack: onBack,
+            uiPerformanceMode: uiPerformanceMode,
+          ),
+        ),
+
+        Positioned(
+          bottom: 16,
+          left: 16,
+          right: 16,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (posterUrl != null)
-                _PosterImage(
+                _PosterThumb(
                   url: posterUrl,
                   uiPerformanceMode: uiPerformanceMode,
                 ),
-              const SizedBox(height: 32),
-              _AnimeTextInfo(anime: anime, isMobile: true),
+              const SizedBox(width: 16),
+              Expanded(child: _AnimeTextInfo(anime: anime)),
             ],
           ),
         ),
@@ -170,43 +93,36 @@ class HeroBanner extends StatelessWidget {
   }
 }
 
-class _PosterImage extends StatelessWidget {
+class _PosterThumb extends StatelessWidget {
   final String url;
   final bool uiPerformanceMode;
-  const _PosterImage({required this.url, this.uiPerformanceMode = false});
+  const _PosterThumb({required this.url, this.uiPerformanceMode = false});
 
   @override
   Widget build(BuildContext context) {
     final radii = context.appRadii;
 
     return Container(
-      width: 220,
-      height: 330,
+      width: 76,
+      height: 114,
       decoration: BoxDecoration(
-        // ── Was BorderRadius.circular(16) — converged to AppRadii.small
-        // (12) per the approved 3-tier decision; this is a poster/card
-        // shape, which `small` explicitly covers. Visual delta: 16 -> 12. ──
         borderRadius: BorderRadius.circular(radii.small),
         boxShadow: uiPerformanceMode
             ? null
             : [
                 BoxShadow(
-                  color: AppPalette.black.withValues(alpha: 0.6),
-                  blurRadius: 40,
-                  offset: const Offset(0, 20),
+                  color: AppPalette.black.withValues(alpha: 0.5),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radii.small),
-        // ── cacheWidth added: this poster always renders at a fixed
-        // 220dp width, but was decoding `extraLarge` (AniList's biggest
-        // cover variant) at native resolution every time the details
-        // screen opened. 500 covers up to ~2.27x device pixel ratio,
-        // which is enough headroom for effectively every real device. ──
+        clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
         child: AppNetworkImage(
           url: url,
-          cacheWidth: 500,
+          cacheWidth: 200,
           uiPerformanceMode: uiPerformanceMode,
         ),
       ),
@@ -216,54 +132,29 @@ class _PosterImage extends StatelessWidget {
 
 class _AnimeTextInfo extends StatelessWidget {
   final Anime anime;
-  final bool isMobile;
-  const _AnimeTextInfo({required this.anime, required this.isMobile});
+  const _AnimeTextInfo({required this.anime});
 
   @override
   Widget build(BuildContext context) {
     final typography = context.appTypography;
 
     return Column(
-      crossAxisAlignment: isMobile
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // ── Was TextStyle(fontSize: isMobile ? 32 : 48, fontWeight: w800,
-        // height: 1.1, letterSpacing: -1.0) — exact match for
-        // heroTitleMobile/heroTitleDesktop, zero visual delta. The
-        // responsive fontSize switch is preserved by picking between the
-        // two tokens instead of flattening to one. ──
         Text(
           anime.title.display,
-          textAlign: isMobile ? TextAlign.center : TextAlign.left,
-          style:
-              (isMobile
-                      ? typography.heroTitleMobile
-                      : typography.heroTitleDesktop)
-                  .copyWith(color: AppPalette.textMain),
-        ),
-        if (anime.title.english != null &&
-            anime.title.english != anime.title.romaji) ...[
-          const SizedBox(height: 8),
-          // ── Left as a plain literal (16/w500) — the only nearby token
-          // is cardTitleProminent (16/w700), a 2-step weight jump that's
-          // larger than any other convergence accepted in this pass. ──
-          Text(
-            anime.title.english!,
-            textAlign: isMobile ? TextAlign.center : TextAlign.left,
-            style: const TextStyle(
-              color: AppPalette.textMuted,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: typography.cardTitleProminent.copyWith(
+            color: AppPalette.textMain,
+            fontSize: 20,
           ),
-        ],
-        const SizedBox(height: 24),
+        ),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
-          runSpacing: 8,
-          alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
+          runSpacing: 6,
           children: [
             _MetaChip(
               label: anime.status?.statusLabel ?? 'UNKNOWN',
@@ -274,120 +165,57 @@ class _AnimeTextInfo extends StatelessWidget {
                 label: '${anime.episodes} Episodes',
                 color: AppPalette.textLight,
               ),
-            if (anime.averageScore != null)
-              _MetaChip(
-                label:
-                    '★ ${(anime.averageScore! / 10).toStringAsFixed(1)} Score',
-                color: AppPalette.accent,
-              ),
           ],
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          alignment: isMobile ? WrapAlignment.center : WrapAlignment.start,
-          children: [
-            ExternalLinkButton(
-              label: 'AniList',
-              url: 'https://anilist.co/anime/${anime.id}',
-              color: const Color(0xFF3DB4F2),
-            ),
-            if (anime.idMal != null)
-              ExternalLinkButton(
-                label: 'MyAnimeList',
-                url: 'https://myanimelist.net/anime/${anime.idMal}',
-                color: const Color(0xFF2E51A2),
-              ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Text(
-          // ── Was a locally-defined _stripHtml; now shared with
-          // watchlist_cards.dart via stripAnilistHtml. This screen wants
-          // multi-paragraph line breaks preserved, unlike the card summary. ──
-          stripAnilistHtml(anime.description, preserveLineBreaks: true),
-          maxLines: isMobile ? 5 : 4,
-          textAlign: isMobile ? TextAlign.center : TextAlign.left,
-          overflow: TextOverflow.ellipsis,
-          // ── Was TextStyle(fontSize: 14, height: 1.6) — exact match for
-          // heroSynopsis, zero visual delta. ──
-          style: typography.heroSynopsis.copyWith(color: AppPalette.textMuted),
         ),
       ],
     );
   }
 }
 
-class _FloatingNavBar extends StatelessWidget {
+class _FloatingBackButton extends StatelessWidget {
   final VoidCallback? onBack;
   final bool uiPerformanceMode;
-  const _FloatingNavBar({this.onBack, this.uiPerformanceMode = false});
+  const _FloatingBackButton({this.onBack, this.uiPerformanceMode = false});
+
+  void _handleTap(BuildContext context) {
+    if (onBack != null) {
+      onBack!();
+    } else {
+      unawaited(Navigator.maybePop(context));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final typography = context.appTypography;
-
     return HoverFocusBuilder(
-      onTap: () {
-        if (onBack != null) {
-          onBack!();
-        } else {
-          unawaited(Navigator.maybePop(context));
-        }
-      },
+      onTap: () => _handleTap(context),
       builder: (context, hovered) {
         final content = AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: hovered
                 ? AppPalette.white.withValues(alpha: 0.15)
                 : AppPalette.black.withValues(
                     alpha: uiPerformanceMode ? 0.8 : 0.4,
                   ),
-            // ── Deliberately LEFT as a plain literal, not routed through
-            // AppRadii — same fully-rounded stadium/pill pattern flagged
-            // in watchlist_cards.dart's _PlayOverlay and elsewhere: 30
-            // exceeds half this pill's height to guarantee a full curve,
-            // which isn't a semantic match for tag/small/large. ──
-            borderRadius: BorderRadius.circular(30),
+            shape: BoxShape.circle,
             border: Border.all(color: AppPalette.white.withValues(alpha: 0.1)),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedSlide(
-                offset: hovered ? const Offset(-0.15, 0) : Offset.zero,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                child: const Icon(
-                  Icons.arrow_back_rounded,
-                  size: 18,
-                  color: AppPalette.textMain,
-                ),
-              ),
-              const SizedBox(width: 8),
-              // ── Was TextStyle(fontSize: 14, fontWeight: w600) — now
-              // compactHeading, the same token applied to
-              // settings_menu.dart/settings_components.dart's headers
-              // and search_input.dart's dropdown title. Exact match,
-              // zero visual delta. ──
-              Text(
-                'Back',
-                style: typography.compactHeading.copyWith(
-                  color: AppPalette.textMain,
-                ),
-              ),
-            ],
+          child: const Icon(
+            Icons.arrow_back_rounded,
+            size: 18,
+            color: AppPalette.textMain,
           ),
         );
 
         return FrostedContainer(
           uiPerformanceMode: uiPerformanceMode,
           sigma: 12,
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(20),
           child: content,
         );
       },
@@ -405,23 +233,12 @@ class _MetaChip extends StatelessWidget {
     final typography = context.appTypography;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
-        // ── Deliberately LEFT as a plain literal, not routed through
-        // AppRadii — same fully-rounded stadium/pill pattern as
-        // _FloatingNavBar above; 20 exceeds half this chip's height to
-        // guarantee a full curve. ──
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
-      // ── Was TextStyle(fontSize: 12, fontWeight: w700) — converged to
-      // metaLabel (12/w600) per explicit direction: the only other
-      // nearby candidate, badgeLabel, has a smaller fontSize (10), a
-      // worse fit than metaLabel's exact fontSize match. Visual delta:
-      // fontWeight w700 -> w600 — NOTE this is one step LIGHTER, the
-      // opposite direction from every other weight convergence in this
-      // pass (which all went heavier by one step). ──
       child: Text(label, style: typography.metaLabel.copyWith(color: color)),
     );
   }

@@ -10,8 +10,9 @@ import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
 import '../theater/theater_screen.dart';
+import 'widgets/anime_synopsis_section.dart';
 import 'widgets/episode_tile.dart';
-import 'widgets/hero_banner.dart';
+import 'widgets/hero_header_delegate.dart';
 
 class AnimeDetailsScreen extends StatefulWidget {
   final Anime anime;
@@ -36,10 +37,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    // ── initState can't be async — _fetchProgress() returns Future<void>,
-    // so the fire-and-forget intent is made explicit instead of silently
-    // dropped (unawaited_futures). setState inside it already guards on
-    // `mounted`. ──
     unawaited(_fetchProgress());
   }
 
@@ -99,10 +96,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
           ),
         );
         if (mounted) {
-          // ── Already inside an async method, so this is a plain await
-          // rather than an unawaited() wrap — no reason to leave it
-          // fire-and-forget when the surrounding context can just wait
-          // for it (unawaited_futures). ──
           await _fetchProgress();
         }
       } else {
@@ -132,11 +125,11 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
-    final hPad = isMobile ? 24.0 : 48.0;
+    final bool isMobile = MediaQuery.sizeOf(context).width < 600;
+    final double hPad = isMobile ? 24.0 : 48.0;
     final settings = SettingsScope.of(context).settings;
-    final autoPlayEnabled = settings.autoPlayEnabled;
-    final uiPerformanceMode = settings.uiPerformanceMode;
+    final bool autoPlayEnabled = settings.autoPlayEnabled;
+    final bool uiPerformanceMode = settings.uiPerformanceMode;
 
     return Scaffold(
       backgroundColor: AppPalette.base,
@@ -144,12 +137,16 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         children: [
           CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(
-                child: HeroBanner(
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: HeroHeaderDelegate(
                   anime: widget.anime,
                   onBack: widget.onBack,
                   uiPerformanceMode: uiPerformanceMode,
                 ),
+              ),
+              SliverToBoxAdapter(
+                child: AnimeSynopsisSection(anime: widget.anime),
               ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 16),
