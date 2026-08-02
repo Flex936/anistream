@@ -93,8 +93,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
       );
     }
 
-    _autoSkipController = AutoSkipController(
-      player: _player,
+    /*_autoSkipController = AutoSkipController(
+
       isEnabled: () => _autoSkip,
       onSkipArmed: (skipLabel) {
         if (mounted) {
@@ -106,7 +106,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
           );
         }
       },
-    );
+    );*/
 
     _tracker = AnilistTrackerService(
       onSuccess: () {

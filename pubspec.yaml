@@ -43,6 +43,11 @@ dependencies:
   xml: ^7.0.1
   dpad: ^3.0.0
   video_player: ^2.13.0
+  pro_video_player:
+    git:
+      url: https://github.com/vitormf/pro_video_player.git
+      path: pro_video_player
+      ref: main
 
 dev_dependencies:
   flutter_test:
