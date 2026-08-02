@@ -13,6 +13,7 @@ import '../theater/theater_screen.dart';
 import 'widgets/anime_synopsis_section.dart';
 import 'widgets/episode_tile.dart';
 import 'widgets/hero_header_delegate.dart';
+import 'widgets/torrent_search_modal.dart';
 
 class AnimeDetailsScreen extends StatefulWidget {
   final Anime anime;
@@ -29,7 +30,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   final Map<int, Future<List<Torrent>>> _torrentFutures = {};
 
   int? _userProgress;
-  int _expandedEpisode = -1;
 
   bool _isFetchingSource = false;
   int _autoPlayTargetEpisode = -1;
@@ -61,23 +61,31 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     () => _scraper.fetchTorrents(widget.anime, ep),
   );
 
-  Future<void> _toggleEpisode(int ep) async {
+  /// Tap entry point for an episode row. Autoplay off -> always opens
+  /// [TorrentSearchModal] (no more inline expand — see episode_tile.dart's
+  /// class doc). Autoplay on -> silently tries the top result first,
+  /// falling back to the SAME modal on either an empty result or a
+  /// thrown exception, rather than the old inline-expand fallback.
+  void _toggleEpisode(int ep) {
     if (_isFetchingSource) return;
 
-    final autoPlayEnabled = SettingsScope.of(
+    final bool autoPlayEnabled = SettingsScope.of(
       context,
       listen: false,
     ).settings.autoPlayEnabled;
 
     if (!autoPlayEnabled) {
-      setState(() => _expandedEpisode = _expandedEpisode == ep ? -1 : ep);
+      _openTorrentModal(ep);
       return;
     }
 
+    unawaited(_autoPlayEpisode(ep));
+  }
+
+  Future<void> _autoPlayEpisode(int ep) async {
     setState(() {
       _isFetchingSource = true;
       _autoPlayTargetEpisode = ep;
-      _expandedEpisode = -1;
     });
 
     try {
@@ -85,24 +93,12 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (!mounted) return;
 
       if (torrents.isNotEmpty) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (_) => TheaterScreen(
-              anime: widget.anime,
-              episode: ep,
-              torrent: torrents.first,
-            ),
-          ),
-        );
-        if (mounted) {
-          await _fetchProgress();
-        }
-      } else {
-        if (mounted) setState(() => _expandedEpisode = ep);
+        await _streamTorrent(ep, torrents.first);
+      } else if (mounted) {
+        _openTorrentModal(ep);
       }
     } catch (_) {
-      if (mounted) setState(() => _expandedEpisode = ep);
+      if (mounted) _openTorrentModal(ep);
     } finally {
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -114,6 +110,53 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
           }
         });
       }
+    }
+  }
+
+  /// Opens [TorrentSearchModal] for [ep], reusing the SAME memoized
+  /// [Future] `_futureFor` already produces — including one that's
+  /// already settled by the time this is called (e.g. autoplay's
+  /// fallback path), so the modal never triggers a second network
+  /// request for a search that already ran.
+  void _openTorrentModal(int ep) {
+    final bool uiPerformanceMode = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.uiPerformanceMode;
+
+    unawaited(
+      TorrentSearchModal.show(
+        context: context,
+        episodeNumber: ep,
+        torrentsFuture: _futureFor(ep),
+        uiPerformanceMode: uiPerformanceMode,
+        onSelectTorrent: (torrent) {
+          // Closes the modal itself — see the note above _streamTorrent
+          // for why that responsibility lives here and not there.
+          Navigator.of(context).pop();
+          unawaited(_streamTorrent(ep, torrent));
+        },
+      ),
+    );
+  }
+
+  /// Pushes TheaterScreen and refreshes AniList progress on return.
+  /// Deliberately does NOT pop anything itself — it's called both from
+  /// [_openTorrentModal]'s onSelectTorrent (which pops the modal before
+  /// calling this) AND from [_autoPlayEpisode]'s direct success path
+  /// (where no modal was ever opened). Popping unconditionally here
+  /// would incorrectly pop AnimeDetailsScreen itself off the stack on a
+  /// successful autoplay stream.
+  Future<void> _streamTorrent(int ep, Torrent torrent) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            TheaterScreen(anime: widget.anime, episode: ep, torrent: torrent),
+      ),
+    );
+    if (mounted) {
+      await _fetchProgress();
     }
   }
 
@@ -207,20 +250,14 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
                       return EpisodeTile(
                         key: ValueKey(ep),
-                        anime: widget.anime,
                         episodeNumber: ep,
-                        isExpanded: _expandedEpisode == ep,
                         userProgress: _userProgress,
                         isUpNext: isUpNext,
                         isAutoPlayEnabled: autoPlayEnabled,
                         isCurrentlyLoading:
                             _isFetchingSource && _autoPlayTargetEpisode == ep,
                         uiPerformanceMode: uiPerformanceMode,
-                        torrentFuture: _expandedEpisode == ep
-                            ? _futureFor(ep)
-                            : null,
-                        onToggle: () => unawaited(_toggleEpisode(ep)),
-                        onReturnFromTheater: () => unawaited(_fetchProgress()),
+                        onToggle: () => _toggleEpisode(ep),
                       );
                     }, childCount: _episodeCount),
                   ),
