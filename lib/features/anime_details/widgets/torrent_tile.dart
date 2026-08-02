@@ -9,6 +9,7 @@ class TorrentTile extends StatelessWidget {
   final Torrent torrent;
   final bool isRecommended;
   final bool uiPerformanceMode;
+  final bool autofocus;
   final VoidCallback onStream;
 
   const TorrentTile({
@@ -16,6 +17,7 @@ class TorrentTile extends StatelessWidget {
     required this.torrent,
     this.isRecommended = false,
     this.uiPerformanceMode = false,
+    this.autofocus = false,
     required this.onStream,
   });
 
@@ -38,6 +40,7 @@ class TorrentTile extends StatelessWidget {
     final radii = context.appRadii;
 
     return HoverFocusBuilder(
+      autofocus: autofocus,
       onTap: onStream,
       builder: (context, hovered) => AnimatedContainer(
         duration: const Duration(milliseconds: 150),
