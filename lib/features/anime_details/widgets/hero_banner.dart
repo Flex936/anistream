@@ -7,11 +7,8 @@ import '../../../shared/utils/anime_status_style.dart';
 import '../../../shared/widgets/app_network_image.dart';
 
 /// The background art layer of the collapsing hero header — banner image
-/// + darkening gradient only. Everything else that used to live here
-/// (back button, poster thumbnail, title) is now owned by
-/// HeroHeaderDelegate directly, or by HeroBannerPosterAndChips /
-/// HeroHeaderBackButton — see hero_header_delegate.dart's class doc for
-/// why splitting these apart fixes the double-title ghosting bug.
+/// + darkening gradient only. Everything else lives in HeroHeaderDelegate
+/// directly, or in HeroBannerStatusChips / HeroHeaderBackButton below.
 class HeroBanner extends StatelessWidget {
   final Anime anime;
   final bool uiPerformanceMode;
@@ -24,7 +21,8 @@ class HeroBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
+    final String? bannerUrl =
+        anime.bannerImage ?? anime.coverImage?.extraLarge;
 
     return Stack(
       fit: StackFit.expand,
@@ -39,10 +37,6 @@ class HeroBanner extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                // Bumped from 0.2 -> 0.35 at the top stop specifically so
-                // the back button/status area stays legible against
-                // bright artwork before the navbar's own scroll-driven
-                // backdrop (AppShell._isScrolled) has kicked in.
                 AppPalette.base.withValues(alpha: 0.35),
                 AppPalette.base.withValues(alpha: 0.75),
                 AppPalette.base,
@@ -56,84 +50,33 @@ class HeroBanner extends StatelessWidget {
   }
 }
 
-/// Poster thumbnail + status chips — the part of the old full-state hero
-/// that still makes sense as a straightforward opacity fade (there's no
-/// sensible "morphed" position for a poster thumbnail to migrate to,
-/// unlike the title). Positioned by HeroHeaderDelegate, not by itself.
-class HeroBannerPosterAndChips extends StatelessWidget {
+/// Status/episode-count chips only — the poster thumbnail previously
+/// rendered alongside these has been removed entirely: it duplicated the
+/// poster already shown wherever the user navigated here from
+/// (AnimeCard, WatchlistCard, CalendarCard), and its removal is what
+/// frees up the room the title now uses. This also fixes the
+/// title/chip overlap bug — see HeroHeaderDelegate's class doc — by no
+/// longer needing to share a horizontal row with anything else.
+class HeroBannerStatusChips extends StatelessWidget {
   final Anime anime;
-  final bool uiPerformanceMode;
-
-  const HeroBannerPosterAndChips({
-    super.key,
-    required this.anime,
-    this.uiPerformanceMode = false,
-  });
+  const HeroBannerStatusChips({super.key, required this.anime});
 
   @override
   Widget build(BuildContext context) {
-    final String? posterUrl = anime.coverImage?.extraLarge;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
       children: [
-        if (posterUrl != null)
-          _PosterThumb(url: posterUrl, uiPerformanceMode: uiPerformanceMode),
-        const SizedBox(width: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            _MetaChip(
-              label: anime.status?.statusLabel ?? 'UNKNOWN',
-              color: anime.status?.statusColor ?? AppPalette.statusDefault,
-            ),
-            if (anime.episodes != null)
-              _MetaChip(
-                label: '${anime.episodes} Episodes',
-                color: AppPalette.textLight,
-              ),
-          ],
+        _MetaChip(
+          label: anime.status?.statusLabel ?? 'UNKNOWN',
+          color: anime.status?.statusColor ?? AppPalette.statusDefault,
         ),
+        if (anime.episodes != null)
+          _MetaChip(
+            label: '${anime.episodes} Episodes',
+            color: AppPalette.textLight,
+          ),
       ],
-    );
-  }
-}
-
-class _PosterThumb extends StatelessWidget {
-  final String url;
-  final bool uiPerformanceMode;
-  const _PosterThumb({required this.url, this.uiPerformanceMode = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final radii = context.appRadii;
-
-    return Container(
-      width: 76,
-      height: 114,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radii.small),
-        boxShadow: uiPerformanceMode
-            ? null
-            : [
-                BoxShadow(
-                  color: AppPalette.black.withValues(alpha: 0.5),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(radii.small),
-        clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
-        child: AppNetworkImage(
-          url: url,
-          cacheWidth: 200,
-          uiPerformanceMode: uiPerformanceMode,
-        ),
-      ),
     );
   }
 }

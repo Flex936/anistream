@@ -106,17 +106,48 @@ class _AnimeSynopsisSectionState extends State<AnimeSynopsisSection> {
                     ),
                     curve: Curves.easeOutCubic,
                     alignment: Alignment.topCenter,
-                    child: Text(
-                      synopsis,
-                      maxLines: _expanded ? null : _collapsedMaxLines,
-                      overflow: _expanded
-                          ? TextOverflow.visible
-                          : TextOverflow.ellipsis,
-                      style: synopsisStyle,
+                    // Stack instead of a bare Text: the gradient fade
+                    // below sits INSIDE this box (sized to the Text,
+                    // since it's the one non-Positioned child) rather
+                    // than adding height — that's what removes the
+                    // double-padding stack (line-height slack + an
+                    // explicit SizedBox) the old version had.
+                    child: Stack(
+                      children: [
+                        Text(
+                          synopsis,
+                          maxLines: _expanded ? null : _collapsedMaxLines,
+                          overflow: _expanded
+                              ? TextOverflow.visible
+                              : TextOverflow.ellipsis,
+                          style: synopsisStyle,
+                        ),
+                        if (!_expanded && isOverflowing)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: IgnorePointer(
+                              child: Container(
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      AppPalette.base.withValues(alpha: 0),
+                                      AppPalette.base,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   if (isOverflowing) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     HoverFocusBuilder(
                       onTap: () => setState(() => _expanded = !_expanded),
                       builder: (context, hovered) => Text(
