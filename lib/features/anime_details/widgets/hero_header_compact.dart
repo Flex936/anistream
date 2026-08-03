@@ -3,16 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
-import '../../../data/anilist/models/anime.dart';
-import '../../../shared/utils/anime_status_style.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 
-/// Small, static building blocks for the collapsed/chrome layer of the
-/// hero header — the back button and the status dot. Both are positioned
-/// directly by HeroHeaderDelegate and don't change position across the
-/// collapse (unlike the title, which HeroHeaderDelegate morphs between a
-/// full and compact Rect itself).
+/// Small, static building block for the back button — positioned
+/// directly by HeroHeaderDelegate and, unlike the title or the status
+/// indicator, doesn't change position across the collapse. Kept as the
+/// LAST child in HeroHeaderDelegate's Stack (topmost paint/hit-test
+/// priority) as one of two structural fixes for the back-button-stops-
+/// working bug — see that file's class doc for the other half (IgnorePointer
+/// on every fading interactive sibling).
 class HeroHeaderBackButton extends StatelessWidget {
   final VoidCallback? onBack;
   final bool uiPerformanceMode;
@@ -69,21 +69,67 @@ class HeroHeaderBackButton extends StatelessWidget {
   }
 }
 
-/// Small colored status dot shown next to the title once it's finished
-/// migrating into the compact row — a lightweight stand-in for the full
-/// state's text status chip, which doesn't fit a single-line compact bar.
-class HeroHeaderStatusDot extends StatelessWidget {
-  final Anime anime;
-  const HeroHeaderStatusDot({super.key, required this.anime});
+/// Replaces the old HeroHeaderStatusDot — now renders EITHER a bare dot
+/// or a dot+label pill depending on [labelOpacity], instead of always
+/// just a dot. HeroHeaderDelegate morphs this between a full-state pill
+/// position and a compact-state dot position via the same Rect/size lerp
+/// mechanism the title already uses, while [labelOpacity] fades the label
+/// text out on its own, faster timeline — by roughly a third of the way
+/// through the collapse — so only the bare dot survives into the fully
+/// collapsed state. This is the closest a continuous position-lerp can
+/// get to "morphing" a labeled pill into an unlabeled dot: the dot itself
+/// genuinely moves across the whole transition; the label can only ever
+/// fade, since there's no continuous interpolation between "text visible"
+/// and "text gone."
+class HeroStatusIndicator extends StatelessWidget {
+  final Color color;
+  final String label;
+  final double labelOpacity;
+
+  const HeroStatusIndicator({
+    super.key,
+    required this.color,
+    required this.label,
+    required this.labelOpacity,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 8,
-      height: 8,
+      padding: EdgeInsets.symmetric(
+        horizontal: 10 * labelOpacity,
+        vertical: 4 * labelOpacity,
+      ),
       decoration: BoxDecoration(
-        color: anime.status?.statusColor ?? AppPalette.statusDefault,
-        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.12 * labelOpacity),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.25 * labelOpacity)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          if (labelOpacity > 0) ...[
+            const SizedBox(width: 8),
+            Opacity(
+              opacity: labelOpacity,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

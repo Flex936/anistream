@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
-import '../../../shared/utils/anime_status_style.dart';
 import '../../../shared/widgets/app_network_image.dart';
+import 'external_link_buttons.dart';
 
 /// The background art layer of the collapsing hero header — banner image
-/// + darkening gradient only. Everything else lives in HeroHeaderDelegate
-/// directly, or in HeroBannerStatusChips / HeroHeaderBackButton below.
+/// + darkening gradient only. Unchanged from the previous round; the
+/// enlarged banner height is a maxExtentValue change owned by
+/// HeroHeaderDelegate, not this widget, since HeroBanner just fills
+/// whatever height a Stack.expand parent hands it.
 class HeroBanner extends StatelessWidget {
   final Anime anime;
   final bool uiPerformanceMode;
@@ -21,8 +23,7 @@ class HeroBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String? bannerUrl =
-        anime.bannerImage ?? anime.coverImage?.extraLarge;
+    final String? bannerUrl = anime.bannerImage ?? anime.coverImage?.extraLarge;
 
     return Stack(
       fit: StackFit.expand,
@@ -50,32 +51,88 @@ class HeroBanner extends StatelessWidget {
   }
 }
 
-/// Status/episode-count chips only — the poster thumbnail previously
-/// rendered alongside these has been removed entirely: it duplicated the
-/// poster already shown wherever the user navigated here from
-/// (AnimeCard, WatchlistCard, CalendarCard), and its removal is what
-/// frees up the room the title now uses. This also fixes the
-/// title/chip overlap bug — see HeroHeaderDelegate's class doc — by no
-/// longer needing to share a horizontal row with anything else.
-class HeroBannerStatusChips extends StatelessWidget {
+/// The full-state metadata group that sits below the (delegate-owned,
+/// title-morphing) title block: the English subtitle, the episode-count
+/// chip, and the AniList/MyAnimeList link row. Fades in place as a single
+/// unit — no motion of its own, unlike the title or the status indicator
+/// (HeroStatusIndicator), which both interpolate position across the
+/// scroll instead of just opacity.
+///
+/// The status pill itself is deliberately NOT rendered here — it's owned
+/// directly by HeroHeaderDelegate as an independently-positioned,
+/// continuously-morphing widget (full pill -> bare dot next to the
+/// title), the same way the title itself already works. [leadingGap]
+/// reserves the horizontal space that pill occupies in its full-state
+/// position, so this block's own row lines up beside it rather than
+/// overlapping it.
+///
+/// The AniList/MyAnimeList buttons are moved here from
+/// AnimeSynopsisSection, which still renders its own copy of them until
+/// that file is updated in a later phase — expect a brief duplicate
+/// AniList/MyAnimeList row on screen until then.
+class HeroBannerMetaBlock extends StatelessWidget {
   final Anime anime;
-  const HeroBannerStatusChips({super.key, required this.anime});
+  final double leadingGap;
+
+  const HeroBannerMetaBlock({
+    super.key,
+    required this.anime,
+    this.leadingGap = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
+    final bool hasEnglishSubtitle =
+        anime.title.english != null &&
+        anime.title.english != anime.title.romaji;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _MetaChip(
-          label: anime.status?.statusLabel ?? 'UNKNOWN',
-          color: anime.status?.statusColor ?? AppPalette.statusDefault,
-        ),
-        if (anime.episodes != null)
-          _MetaChip(
-            label: '${anime.episodes} Episodes',
-            color: AppPalette.textLight,
+        if (hasEnglishSubtitle) ...[
+          Text(
+            anime.title.english!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppPalette.textMuted,
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
           ),
+          const SizedBox(height: 12),
+        ],
+        Row(
+          children: [
+            SizedBox(width: leadingGap),
+            Expanded(
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (anime.episodes != null)
+                    _MetaChip(
+                      label: '${anime.episodes} Episodes',
+                      color: AppPalette.textLight,
+                    ),
+                  ExternalLinkButton(
+                    label: 'AniList',
+                    url: 'https://anilist.co/anime/${anime.id}',
+                    color: const Color(0xFF3DB4F2),
+                  ),
+                  if (anime.idMal != null)
+                    ExternalLinkButton(
+                      label: 'MyAnimeList',
+                      url: 'https://myanimelist.net/anime/${anime.idMal}',
+                      color: const Color(0xFF2E51A2),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
