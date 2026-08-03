@@ -1,8 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 
+/// A pill-shaped external link button — used for the AniList/MyAnimeList
+/// row inside HeroBannerMetaBlock.
+///
+/// Restyled to a single, shared neutral/muted chrome (same
+/// background/border treatment `SettingsDropdown` already establishes
+/// elsewhere in the app: `AppPalette.white` at low alpha, no per-instance
+/// tint) rather than each instance carrying its own saturated,
+/// independently-colored background and border. [color] — the calling
+/// site's brand color (AniList blue, MyAnimeList navy) — now drives
+/// ONLY the icon, the one place a small brand accent still reads as
+/// intentional rather than as three unrelated colored badges sitting in
+/// a row. Per DESIGN.md § 1.3's Apple-inspired-restraint principle:
+/// color should be meaningful, not decorative — a status pill's color
+/// encodes real state (RELEASING vs. FINISHED); a link button's brand
+/// color doesn't encode anything the icon+label text don't already say,
+/// so it doesn't need to dominate the whole chip.
 class ExternalLinkButton extends StatelessWidget {
   final String label;
   final String url;
@@ -33,10 +50,10 @@ class ExternalLinkButton extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: hovered ? 0.22 : 0.12),
+          color: AppPalette.white.withValues(alpha: hovered ? 0.1 : 0.05),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: color.withValues(alpha: hovered ? 0.7 : 0.3),
+            color: AppPalette.white.withValues(alpha: hovered ? 0.2 : 0.1),
           ),
         ),
         child: Row(
@@ -47,7 +64,7 @@ class ExternalLinkButton extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: color,
+                color: hovered ? AppPalette.textMain : AppPalette.textLight,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
