@@ -31,8 +31,9 @@ Visual restraint, typographic rhythm, and motion quality, in the spirit of Apple
 ### 1.4 Accent — translucent materials
 
 - A translucent-materials system provides depth and hierarchy on floating/overlay surfaces (toasts, popups, panels) — the same idea other platforms formalize as Acrylic/Mica or Liquid Glass, without committing to either name.
-- Today this is `BackdropFilter` blur, always routed through the shared `FrostedContainer` widget rather than a bare `BackdropFilter` call (see § 2). A pre-existing exception is tracked in § 5.4.
-- This is the lowest-priority layer of the four — a desktop-leaning enhancement, not something Mobile or TV correctness ever depends on. Named blur tiers (replacing today's per-call-site sigma values) are the concrete piece of unfinished work here; see § 5.4.
+- This is `BackdropFilter` blur, always routed through the shared `FrostedContainer` widget rather than a bare `BackdropFilter` call (see § 2) — including `anime_carousel.dart`'s `_NavArrow`, previously the one exception to this.
+- Blur sigma is drawn from three named tiers defined in `lib/core/theme/app_materials.dart` (`AppMaterials`), accessed via `context.appMaterials`, matching the same `ThemeExtension` pattern as `AppRadii`/`AppTypography`: **`.subtle` (10px)** for small controls (badges, icon buttons, floating pill buttons), **`.standard` (16px)** for content surfaces (dropdowns, popups, menus, full-screen loading overlays), and **`.prominent` (40px)** for large panels (side drawers, control bars, toasts).
+- This is the lowest-priority layer of the four — a desktop-leaning enhancement, not something Mobile or TV correctness ever depends on.
 
 ## 2. Performance UI Mode
 
@@ -106,8 +107,7 @@ These are documented as-is per the Living Documentation Rule — **do not silent
 
 ### 5.4 Accent
 
-- **Blur sigma has no named tiers.** Values in use today range from `10` (small icon buttons and badges — `FrostedIconButton`, the watchlist progress badge) to `50` (`SettingsMenu`'s full panel), with `12`, `16`, `20` (the `FrostedContainer` default), `30`, and `40` also in use across different components. The rough pattern is "bigger surface → higher sigma," but it isn't formalized into named tiers — the concrete unfinished work behind § 1.4.
-- **`anime_carousel.dart`'s `_NavArrow`** calls `BackdropFilter` directly instead of routing through `FrostedContainer` (§ 2's Blur rule), and its `ClipRRect` doesn't gate `clipBehavior` on `uiPerformanceMode` (§ 2's Clipping rule) either. Both gaps live in the same widget; not yet migrated.
+*(Formerly tracked two items here — "blur sigma has no named tiers" and `anime_carousel.dart`'s `_NavArrow` bypassing `FrostedContainer` — both resolved via the `AppMaterials` tiers introduced in `core/theme/app_materials.dart`; see § 1.4. Removed from this list accordingly.)*
 
 ---
-*Last reviewed against the codebase: 2026-08-02. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-03. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

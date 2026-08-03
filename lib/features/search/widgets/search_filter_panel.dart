@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 
@@ -210,7 +211,7 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
 
     return FrostedContainer(
       uiPerformanceMode: widget.uiPerformanceMode,
-      sigma: 30,
+      sigma: context.appMaterials.prominent,
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(24),
         bottomLeft: Radius.circular(24),

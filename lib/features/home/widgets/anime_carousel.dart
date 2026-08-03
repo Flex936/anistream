@@ -4,10 +4,12 @@ import 'dart:ui';
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/widgets/anime_card.dart';
+import '../../../shared/widgets/frosted_container.dart';
 
 class AnimeCarousel extends StatefulWidget {
   final String title;
@@ -303,14 +305,17 @@ class _NavArrow extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: gradientColors),
         ),
-        child: ClipRRect(
+        // ── Routed through FrostedContainer instead of a hand-rolled
+        // uiPerformanceMode ? ... : BackdropFilter(...) branch — this is
+        // also what fixes the clipBehavior gap DESIGN.md § 5.4 flagged:
+        // FrostedContainer already switches between Clip.hardEdge
+        // (performance mode) and the anti-aliased default internally,
+        // which this widget's own bare ClipRRect never did. ──
+        child: FrostedContainer(
+          uiPerformanceMode: uiPerformanceMode,
+          sigma: context.appMaterials.subtle,
           borderRadius: BorderRadius.circular(24),
-          child: uiPerformanceMode
-              ? arrowContent // Return without blur
-              : BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: arrowContent, // Return with frosted glass
-                ),
+          child: arrowContent,
         ),
       ),
     );

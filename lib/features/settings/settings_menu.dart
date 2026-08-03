@@ -177,6 +177,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
     // ── Pulled once at the top of build(), same convention established ──
     final typography = context.appTypography;
+    final materials = context.appMaterials;
 
     return Align(
       alignment: Alignment.centerRight,
@@ -192,7 +193,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           // is on (and updates live as the user flips the switch below, before even saving). ──
           child: FrostedContainer(
             uiPerformanceMode: _uiPerformanceMode,
-            sigma: 50,
+            sigma: materials.prominent,
             borderRadius: isMobile
                 ? BorderRadius.zero
                 : const BorderRadius.only(

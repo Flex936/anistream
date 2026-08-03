@@ -327,6 +327,7 @@ class _FloatingNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final typography = context.appTypography;
+    final materials = context.appMaterials;
 
     return HoverFocusBuilder(
       onTap: () {
@@ -386,7 +387,7 @@ class _FloatingNavBar extends StatelessWidget {
 
         return FrostedContainer(
           uiPerformanceMode: uiPerformanceMode,
-          sigma: 12,
+          sigma: materials.subtle,
           borderRadius: BorderRadius.circular(30),
           child: content,
         );

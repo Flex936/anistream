@@ -44,7 +44,8 @@ lib/
 │   ├── logging/                    app_logger.dart
 │   ├── router/                     app_router.dart
 │   ├── settings/                   settings_service.dart, settings_scope.dart
-│   └── theme/                      app_palette.dart, app_radii.dart, app_typography.dart
+│   └── theme/                      app_palette.dart, app_radii.dart, app_typography.dart,
+│                                   app_materials.dart
 │
 ├── data/                       # External-API clients + their models. No UI.
 │   ├── anilist/
@@ -187,4 +188,4 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
 - **macOS/iOS Release entitlements are an unconfirmed gap, not a fix.** § 4 (macOS / iOS) flags that `Release.entitlements` may be missing `com.apple.security.network.client`/`.server` relative to `DebugProfile.entitlements` — unconfirmed whether this actually breaks AniList OAuth's loopback server or on-device torrenting in signed/notarized Release builds, just noted as an untested gap. Cross-referenced here so this section remains the complete index of open items.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-03. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/theater_data.dart';
@@ -260,7 +261,7 @@ class _TheaterControlsState extends State<TheaterControls> {
       blendMode: BlendMode.dstIn,
       child: FrostedContainer(
         uiPerformanceMode: false,
-        sigma: 30,
+        sigma: context.appMaterials.prominent,
         child: coreControls,
       ),
     );
