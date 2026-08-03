@@ -1,6 +1,7 @@
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/torrent/models/torrent.dart';
 import '../../../shared/widgets/frosted_container.dart';
@@ -94,7 +95,7 @@ class TorrentSearchModal extends StatelessWidget {
             onTap: () => Navigator.of(context).pop(),
             child: FrostedContainer(
               uiPerformanceMode: uiPerformanceMode,
-              sigma: 40,
+              sigma: context.appMaterials.prominent,
               child: Container(
                 color: AppPalette.black.withValues(
                   alpha: uiPerformanceMode ? 0.85 : 0.55,
@@ -109,7 +110,7 @@ class TorrentSearchModal extends StatelessWidget {
           child: Center(
             child: FrostedContainer(
               uiPerformanceMode: uiPerformanceMode,
-              sigma: 16,
+              sigma: context.appMaterials.standard,
               borderRadius: BorderRadius.circular(16),
               child: Container(
                 // Widened + heightened (440x480 -> 520x560) per the
