@@ -171,7 +171,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     final bool isMobile = MediaQuery.sizeOf(context).width < 600;
     final double hPad = isMobile ? 24.0 : 48.0;
     final settings = SettingsScope.of(context).settings;
-    final bool autoPlayEnabled = settings.autoPlayEnabled;
     final bool uiPerformanceMode = settings.uiPerformanceMode;
 
     return Scaffold(
@@ -253,7 +252,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         episodeNumber: ep,
                         userProgress: _userProgress,
                         isUpNext: isUpNext,
-                        isAutoPlayEnabled: autoPlayEnabled,
                         isCurrentlyLoading:
                             _isFetchingSource && _autoPlayTargetEpisode == ep,
                         uiPerformanceMode: uiPerformanceMode,

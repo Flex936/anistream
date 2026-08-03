@@ -5,25 +5,11 @@ import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 
 /// A single row in AnimeDetailsScreen's episode list.
-///
-/// Back to a plain StatelessWidget — the Expansible/ExpansibleController
-/// machinery this used to own existed only to inline-expand a torrent
-/// list beneath the row, which is what [TorrentSearchModal] replaces
-/// entirely. Tapping a row (via [onToggle]) now always opens that modal
-/// instead of unfolding in place, regardless of autoplay setting — see
-/// AnimeDetailsScreen's `_toggleEpisode` for the branching that used to
-/// live partly here.
-///
-/// The trailing icon keeps the same three-state priority order it always
-/// had — loading spinner, then the auto-play indicator, then a plain
-/// chevron — just without the rotation animation, since there's no more
-/// expand/collapse state for it to track.
 class EpisodeTile extends StatelessWidget {
   final int episodeNumber;
   final int? userProgress;
   final bool isUpNext;
   final VoidCallback onToggle;
-  final bool isAutoPlayEnabled;
   final bool isCurrentlyLoading;
   final bool uiPerformanceMode;
 
@@ -33,7 +19,6 @@ class EpisodeTile extends StatelessWidget {
     this.userProgress,
     this.isUpNext = false,
     required this.onToggle,
-    this.isAutoPlayEnabled = false,
     this.isCurrentlyLoading = false,
     this.uiPerformanceMode = false,
   });
@@ -157,19 +142,13 @@ class EpisodeTile extends StatelessWidget {
                       ),
                     ),
                   )
-                else if (isAutoPlayEnabled)
+                else
                   Icon(
                     Icons.play_arrow_rounded,
                     size: 24,
                     color: hovered
                         ? AppPalette.primary
                         : AppPalette.textMuted.withValues(alpha: 0.5),
-                  )
-                else
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 22,
-                    color: AppPalette.textMuted.withValues(alpha: 0.5),
                   ),
               ],
             ),
