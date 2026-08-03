@@ -76,20 +76,6 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 
 ---
 
-### 5. Decision: top nav bar vs. left navigation rail for Android TV
-
-**Priority:** Medium · **Size:** Small (decision only) · **Type:** Spike/decision · **Ref:** `DESIGN.md` § 5.2
-
-**Context:** `AniStreamNavBar` is a persistent top bar today, which avoids "menu disappears on scroll," but a left-hand rail is the more common convention for the dedicated 10-foot TV case.
-
-**Acceptance criteria:**
-
-- [ ] Decision recorded: keep the top bar as-is, or design a TV-specific left-rail variant
-- [ ] If a rail is chosen, file a separate implementation issue
-- [ ] `DESIGN.md` § 5.2 updated to reflect the decision either way
-
----
-
 ### 6. Add genre/mood-based shelves to Home
 
 **Priority:** Low · **Size:** Medium · **Ref:** `DESIGN.md` § 5.2
