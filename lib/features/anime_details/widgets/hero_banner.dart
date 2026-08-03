@@ -65,11 +65,6 @@ class HeroBanner extends StatelessWidget {
 /// reserves the horizontal space that pill occupies in its full-state
 /// position, so this block's own row lines up beside it rather than
 /// overlapping it.
-///
-/// The AniList/MyAnimeList buttons are moved here from
-/// AnimeSynopsisSection, which still renders its own copy of them until
-/// that file is updated in a later phase — expect a brief duplicate
-/// AniList/MyAnimeList row on screen until then.
 class HeroBannerMetaBlock extends StatelessWidget {
   final Anime anime;
   final double leadingGap;

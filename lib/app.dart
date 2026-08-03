@@ -9,6 +9,7 @@ import 'core/input/input_mode_scope.dart';
 import 'core/logging/app_logger.dart';
 import 'core/router/app_router.dart';
 import 'core/settings/settings_scope.dart';
+import 'core/theme/app_materials.dart';
 import 'core/theme/app_palette.dart';
 import 'core/theme/app_radii.dart';
 import 'core/theme/app_typography.dart';
@@ -96,7 +97,11 @@ class _AniStreamAppState extends State<AniStreamApp>
         // `context.appRadii` (build_context_extensions.dart). See each
         // extension's doc comment for the taxonomy and which prior
         // hardcoded literals they replace/converge. ──
-        extensions: const [AppTypography.standard, AppRadii.standard],
+        extensions: const [
+          AppTypography.standard,
+          AppRadii.standard,
+          AppMaterials.standardTiers,
+        ],
       ),
       // ── Dpad.wrap() is now the outermost layer, matching its documented
       // root-install pattern (`MaterialApp(builder: Dpad.wrap())`).

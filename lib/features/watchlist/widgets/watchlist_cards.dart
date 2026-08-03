@@ -385,6 +385,7 @@ class WatchlistCard extends StatelessWidget {
 
     final typography = context.appTypography;
     final radii = context.appRadii;
+    final materials = context.appMaterials;
 
     double percent = 0.0;
     if (media.episodes != null && media.episodes! > 0) {
@@ -444,7 +445,7 @@ class WatchlistCard extends StatelessWidget {
                         right: 8,
                         child: FrostedContainer(
                           uiPerformanceMode: uiPerformanceMode,
-                          sigma: 10,
+                          sigma: materials.subtle,
                           borderRadius: BorderRadius.circular(radii.tag),
                           child: Container(
                             padding: const EdgeInsets.symmetric(

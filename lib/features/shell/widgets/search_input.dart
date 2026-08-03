@@ -361,7 +361,7 @@ class _SearchInputState extends State<SearchInput> {
 
     return FrostedContainer(
       uiPerformanceMode: widget.uiPerformanceMode,
-      sigma: 16,
+      sigma: context.appMaterials.standard,
       borderRadius: BorderRadius.circular(16),
       child: content,
     );

@@ -5,6 +5,7 @@ import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/widgets/frosted_container.dart';
@@ -193,7 +194,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
         : TweenAnimationBuilder<double>(
             tween: Tween<double>(
               begin: 0.0,
-              end: widget.isScrolled ? 16.0 : 0.0,
+              end: widget.isScrolled ? context.appMaterials.standard : 0.0,
             ),
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOut,
@@ -475,7 +476,7 @@ class _MobileMenu extends StatelessWidget {
           height: double.infinity,
           child: FrostedContainer(
             uiPerformanceMode: uiPerformanceMode,
-            sigma: 40,
+            sigma: context.appMaterials.prominent,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(24),
               bottomLeft: Radius.circular(24),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
@@ -172,6 +173,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     final double hPad = isMobile ? 24.0 : 48.0;
     final settings = SettingsScope.of(context).settings;
     final bool uiPerformanceMode = settings.uiPerformanceMode;
+    final materials = context.appMaterials;
 
     return Scaffold(
       backgroundColor: AppPalette.base,
@@ -273,7 +275,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                 builder: (context, opacity, child) {
                   final overlayContent = FrostedContainer(
                     uiPerformanceMode: uiPerformanceMode,
-                    sigma: 12,
+                    sigma: materials.standard,
                     child: Container(
                       color: AppPalette.base.withValues(
                         alpha: uiPerformanceMode ? 0.95 : 0.75,

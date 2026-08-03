@@ -23,10 +23,11 @@ class GlassToastContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final typography = context.appTypography;
+    final materials = context.appMaterials;
 
     return FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
-      sigma: 30,
+      sigma: materials.prominent,
       // ── Both radii here are LEFT as plain literals, not routed through
       // AppRadii. This is a fully-rounded capsule/stadium toast — 50
       // exceeds half this container's height specifically to guarantee a

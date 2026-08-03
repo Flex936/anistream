@@ -1,6 +1,7 @@
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/streaming_controller_base.dart';
@@ -29,7 +30,7 @@ class FrostedIconButton extends StatelessWidget {
     // would just double-handle the same press. ──
     final wrapped = FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
-      sigma: 10,
+      sigma: context.appMaterials.subtle,
       borderRadius: BorderRadius.circular(24),
       child: DpadFocusable(
         onSelect: onPressed,

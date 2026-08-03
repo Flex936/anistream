@@ -223,10 +223,11 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final typography = context.appTypography;
     final radii = context.appRadii;
+    final materials = context.appMaterials;
 
     return FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
-      sigma: 6,
+      sigma: materials.subtle,
       borderRadius: BorderRadius.circular(radii.tag),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
