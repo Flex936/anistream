@@ -21,6 +21,15 @@ import 'streaming_controller_base.dart';
 ///     /video endpoint. MPV opens that URL directly; all range requests
 ///     (seeking) are handled server-side via http.ServeContent.
 ///  4. On dispose, DELETE /api/stream/:id frees server resources.
+///
+/// Subtitles (added)
+/// ──────────────────
+/// A separate, slower poll starts once step 3 completes, checking
+/// subtitles_available independently — that flag needs the WHOLE file
+/// downloaded (not just the 5% buffer threshold that unlocks playback),
+/// so it can flip true well after the main poll loop above has already
+/// stopped for good reason (stream_url never changes again). See
+/// _startSubtitleAvailabilityPoll.
 class RemoteStreamingController extends BaseStreamingController {
   final String serverUrl; // e.g. "http://192.168.1.5:7878"
   final http.Client _http;
@@ -45,6 +54,12 @@ class RemoteStreamingController extends BaseStreamingController {
   String? _sessionId;
   Timer? _pollTimer;
 
+  // ── Subtitles (added) ──────────────────────────────────────────────────
+  bool _subtitlesAvailable = false;
+  List<RemoteSubtitleTrack> _subtitleTracks = [];
+  bool _fetchingSubtitleTracks = false;
+  Timer? _subtitlePollTimer;
+
   RemoteStreamingController({required this.serverUrl}) : _http = http.Client();
 
   @override
@@ -59,6 +74,10 @@ class RemoteStreamingController extends BaseStreamingController {
   bool get needsManualSelection => _needsManualSelection;
   @override
   List<BatchFileOption> get batchFiles => _batchFiles;
+  @override
+  bool get subtitlesAvailable => _subtitlesAvailable;
+  @override
+  List<RemoteSubtitleTrack> get subtitleTracks => _subtitleTracks;
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
@@ -147,6 +166,91 @@ class RemoteStreamingController extends BaseStreamingController {
       const Duration(milliseconds: 500),
       (_) => unawaited(_poll()),
     );
+  }
+
+  // ── Subtitles (added) ─────────────────────────────────────────────────────
+
+  @override
+  Future<void> fetchSubtitleTracks() async {
+    if (!_subtitlesAvailable ||
+        _subtitleTracks.isNotEmpty ||
+        _fetchingSubtitleTracks ||
+        _sessionId == null) {
+      return;
+    }
+    _fetchingSubtitleTracks = true;
+    try {
+      final resp = await _http
+          .get(Uri.parse('$serverUrl/api/stream/$_sessionId/subtitles'))
+          .timeout(const Duration(seconds: 10));
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final rawTracks = data['tracks'] as List<dynamic>? ?? [];
+        _subtitleTracks = rawTracks
+            .map(
+              (t) => RemoteSubtitleTrack.fromJson(t as Map<String, dynamic>),
+            )
+            .toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      AppLogger.w(
+        'RemoteStreamingController',
+        'Failed to fetch subtitle tracks: $e',
+      );
+      // Best-effort — leave _subtitleTracks empty; the caller (the
+      // theater screen) can call fetchSubtitleTracks() again later,
+      // since the guard above only skips while tracks are still empty.
+    } finally {
+      _fetchingSubtitleTracks = false;
+    }
+  }
+
+  @override
+  String? subtitleUrlFor(int streamIndex) {
+    if (_sessionId == null) return null;
+    return '$serverUrl/api/stream/$_sessionId/subtitles/$streamIndex';
+  }
+
+  /// Starts a slow (5s), self-stopping poll purely for subtitles_available.
+  /// Deliberately separate from the main 500ms _pollTimer above, which
+  /// intentionally stops once state first reaches "ready" — stream_url
+  /// never changes after that, so there's nothing left for it to watch.
+  /// subtitles_available is different: the server can't confirm it until
+  /// the WHOLE file has downloaded, which routinely happens well after
+  /// playback has already started off the 5% buffer threshold. Idempotent
+  /// — safe to call more than once, only ever arms one timer.
+  void _startSubtitleAvailabilityPoll() {
+    _subtitlePollTimer ??= Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => unawaited(_pollSubtitleAvailability()),
+    );
+  }
+
+  Future<void> _pollSubtitleAvailability() async {
+    if (_sessionId == null || _subtitlesAvailable) {
+      _subtitlePollTimer?.cancel();
+      _subtitlePollTimer = null;
+      return;
+    }
+    try {
+      final resp = await _http
+          .get(Uri.parse('$serverUrl/api/stream/$_sessionId'))
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return; // transient — retry next tick
+
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final available = data['subtitles_available'] as bool? ?? false;
+      if (available) {
+        _subtitlesAvailable = true;
+        _subtitlePollTimer?.cancel();
+        _subtitlePollTimer = null;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Transient — try again next tick.
+    }
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
@@ -238,6 +342,15 @@ class RemoteStreamingController extends BaseStreamingController {
             // Stop polling — the stream URL won't change again.
             _pollTimer?.cancel();
             _pollTimer = null;
+            // ── Subtitles (added): subtitles_available can still flip
+            // true much later than this — it needs the whole file, not
+            // just the 5% buffer threshold that got us here. Handed off
+            // to its own slower, self-stopping poll rather than keeping
+            // this 500ms loop alive for a value that's usually still
+            // false at exactly this moment. ──
+            if (!_subtitlesAvailable) {
+              _startSubtitleAvailabilityPoll();
+            }
           }
 
         case 'error':
@@ -286,6 +399,8 @@ class RemoteStreamingController extends BaseStreamingController {
     _statusText = msg;
     _pollTimer?.cancel();
     _pollTimer = null;
+    _subtitlePollTimer?.cancel();
+    _subtitlePollTimer = null;
     notifyListeners();
     AppLogger.e('RemoteStreamingController', msg);
   }
@@ -293,6 +408,7 @@ class RemoteStreamingController extends BaseStreamingController {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _subtitlePollTimer?.cancel();
     if (_sessionId != null) {
       // Best-effort cleanup; don't let errors bubble up during disposal.
       // See _fireAndForget's doc comment for why this isn't a chained

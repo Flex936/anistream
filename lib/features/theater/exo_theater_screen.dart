@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 
 import '../../core/settings/settings_scope.dart';
@@ -18,10 +21,9 @@ import 'widgets/theater_player.dart';
 // discussion: does swapping the actual decode/render engine fix the
 // stutter/crashes we see on weak Android TV boxes? Deliberately NOT a
 // feature-complete TheaterScreen replacement — no chapters, no auto-skip,
-// no AniList tracking, no subtitle/audio track menu, no keyboard
-// shortcuts, no fullscreen chrome handling. Those are all orthogonal to
-// the thing being tested and would multiply the diff for zero
-// diagnostic value on THIS question.
+// no AniList tracking, no keyboard shortcuts, no fullscreen chrome
+// handling. Those are all orthogonal to the thing being tested and would
+// multiply the diff for zero diagnostic value on THIS question.
 //
 // What IS reused, deliberately, because it's unrelated to the hypothesis
 // and already works: the real torrent/server streaming flow
@@ -49,6 +51,11 @@ import 'widgets/theater_player.dart';
 // than the reported bug — but go into Stage 2 knowing you're flipping on
 // something the Flutter team itself is still shaking out, not something
 // we're doing wrong if it glitches.
+//
+// Testing (Stage 1 alone) already confirmed the actual fix: real,
+// measured VO-stage frame drops on the media_kit path, decoder-stage
+// drops at zero. Stage 2 was never touched to get that result — nothing
+// here currently exercises the hardware-overlay path, on purpose.
 const bool kUseHardwareOverlay = false;
 
 class ExoTheaterScreen extends StatefulWidget {
@@ -71,6 +78,13 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   BaseStreamingController _torrentController = StreamingController();
   VideoPlayerController? _videoController;
 
+  // ── Subtitles (added) — separate small HTTP client just for fetching
+  // raw .vtt bodies. Deliberately not reusing _torrentController's own
+  // http.Client (RemoteStreamingController's is private to that class,
+  // and StreamingController — local mode — has no HTTP client at all
+  // since libtorrent_flutter isn't network-request-based the same way). ──
+  final http.Client _httpClient = http.Client();
+
   bool _videoInitialized = false;
   String? _playerError;
 
@@ -78,10 +92,18 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   Duration _duration = Duration.zero;
   Duration _buffer = Duration.zero;
 
+  // ── Subtitles (added) ────────────────────────────────────────────────
+  int? _selectedSubtitleIndex;
+  bool _subtitleFetchTriggered = false;
+  bool _subtitleAutoApplied = false;
+
   @override
   void initState() {
     super.initState();
-    _initStreamAndPlayer();
+    // ── initState can't be async — _initStreamAndPlayer() returns
+    // Future<void>, so the fire-and-forget intent is made explicit
+    // instead of silently dropped (unawaited_futures). ──
+    unawaited(_initStreamAndPlayer());
   }
 
   // ── Mirrors TheaterScreen._initPlayerAndStream's controller-selection
@@ -114,6 +136,27 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     if (_torrentController.isReadyToPlay && _videoController == null) {
       _openVideoPlayer(_torrentController.streamUrl!);
     }
+
+    // ── Subtitles (added). Both guards below are one-shot triggers —
+    // _onTorrentStateChanged fires on every unrelated change too (buffer
+    // percentage ticks, etc.), so without _subtitleFetchTriggered /
+    // _subtitleAutoApplied this would re-call fetchSubtitleTracks() or
+    // re-apply the first track on every single notification once the
+    // relevant condition is first met. ──
+    if (_torrentController.subtitlesAvailable &&
+        _torrentController.subtitleTracks.isEmpty &&
+        !_subtitleFetchTriggered) {
+      _subtitleFetchTriggered = true;
+      unawaited(_torrentController.fetchSubtitleTracks());
+    }
+    if (_torrentController.subtitleTracks.isNotEmpty &&
+        !_subtitleAutoApplied) {
+      _subtitleAutoApplied = true;
+      unawaited(
+        _applySubtitleTrack(_torrentController.subtitleTracks.first.streamIndex),
+      );
+    }
+
     if (mounted) setState(() {});
   }
 
@@ -168,12 +211,89 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     });
   }
 
+  // ── Subtitles (added) ────────────────────────────────────────────────
+  //
+  // Fetches one track's raw WebVTT body and hands it to the ALREADY-
+  // PLAYING controller via setClosedCaptionFile — confirmed directly
+  // against video_player's own source that this is a real, callable-
+  // after-initialize method, not just a constructor-time option, so
+  // there's no need to dispose/recreate the controller (and cause a
+  // visible reload) just to turn captions on or switch tracks.
+  //
+  // streamIndex == null means "Off": video_player doesn't expose an
+  // explicit "clear captions" call, so an empty (header-only) WebVTT
+  // file is fed in instead — ClosedCaption then simply has nothing to
+  // ever show, which is the practical equivalent.
+  Future<void> _applySubtitleTrack(int? streamIndex) async {
+    final controller = _videoController;
+    if (controller == null) return;
+
+    setState(() => _selectedSubtitleIndex = streamIndex);
+
+    if (streamIndex == null) {
+      await controller.setClosedCaptionFile(
+        Future.value(WebVTTCaptionFile('WEBVTT\n')),
+      );
+      return;
+    }
+
+    final url = _torrentController.subtitleUrlFor(streamIndex);
+    if (url == null) return;
+
+    try {
+      final resp = await _httpClient
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 15));
+      if (resp.statusCode == 200 && _videoController != null) {
+        await _videoController!.setClosedCaptionFile(
+          Future.value(WebVTTCaptionFile(resp.body)),
+        );
+      }
+    } catch (e) {
+      debugPrint('[ExoTheaterScreen] Failed to load subtitle track $streamIndex: $e');
+    }
+  }
+
+  Widget _buildSubtitleButton() {
+    final tracks = _torrentController.subtitleTracks;
+    if (tracks.isEmpty) return const SizedBox.shrink();
+
+    return Material(
+      color: AppPalette.black.withValues(alpha: 0.4),
+      shape: const CircleBorder(),
+      child: PopupMenuButton<int?>(
+        tooltip: 'Subtitles',
+        icon: Icon(
+          _selectedSubtitleIndex == null
+              ? Icons.subtitles_off_outlined
+              : Icons.subtitles_outlined,
+          color: AppPalette.white,
+        ),
+        onSelected: (streamIndex) => unawaited(_applySubtitleTrack(streamIndex)),
+        itemBuilder: (context) => [
+          CheckedPopupMenuItem<int?>(
+            value: null,
+            checked: _selectedSubtitleIndex == null,
+            child: const Text('Off'),
+          ),
+          for (final t in tracks)
+            CheckedPopupMenuItem<int?>(
+              value: t.streamIndex,
+              checked: _selectedSubtitleIndex == t.streamIndex,
+              child: Text(t.label),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _torrentController.removeListener(_onTorrentStateChanged);
     _torrentController.dispose();
     _videoController?.removeListener(_onVideoTick);
     _videoController?.dispose();
+    _httpClient.close();
     super.dispose();
   }
 
@@ -195,6 +315,29 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
                 child: AspectRatio(
                   aspectRatio: videoController.value.aspectRatio,
                   child: VideoPlayer(videoController),
+                ),
+              ),
+            ),
+
+          // ── Subtitles (added): ClosedCaption is video_player's own
+          // prebuilt widget — it reads value.caption.text itself, no
+          // manual timing/lookup logic needed here. Wrapped in its own
+          // ValueListenableBuilder (VideoPlayerController IS a
+          // ValueNotifier<VideoPlayerValue>) so only this small subtree
+          // rebuilds as captions change, not the whole screen. ──
+          if (_videoInitialized && videoController != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 110,
+              child: ValueListenableBuilder<VideoPlayerValue>(
+                valueListenable: videoController,
+                builder: (context, value, _) => ClosedCaption(
+                  text: value.caption.text,
+                  textStyle: const TextStyle(
+                    fontSize: 18,
+                    color: AppPalette.white,
+                  ),
                 ),
               ),
             ),
@@ -238,6 +381,19 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
             child: TheaterTopBar(
               episode: widget.episode,
               onBack: () => Navigator.of(context).pop(),
+            ),
+          ),
+
+          // ── Subtitles (added): only appears once at least one track
+          // has actually been fetched — ListenableBuilder so it shows up
+          // live the moment fetchSubtitleTracks() resolves, without
+          // needing its own separate state tracking here. ──
+          Positioned(
+            top: 24 + MediaQuery.paddingOf(context).top,
+            right: 24,
+            child: ListenableBuilder(
+              listenable: _torrentController,
+              builder: (context, _) => _buildSubtitleButton(),
             ),
           ),
 
