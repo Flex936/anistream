@@ -59,23 +59,6 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 
 ---
 
-### 4. Add a "Continue Watching" shelf to Home
-
-**Priority:** High · **Size:** Medium · **Ref:** `DESIGN.md` § 5.2
-
-**Context:** The data already exists via `getUserWatchlist(status: 'CURRENT')`; it's currently reachable only inside `WatchlistScreen`'s `CURRENT` tab.
-
-**Acceptance criteria:**
-
-- [ ] New shelf appears near the top of `HomeScreen` when `isLoggedIn` is true (mirror the navbar's existing gating)
-- [ ] Hidden entirely when logged out
-- [ ] Reuses `HeroCard`/`WatchlistCard` visuals (progress bar, "Next: Episode X") rather than a new card design
-- [ ] Follows the existing per-tab caching/pagination pattern already used elsewhere
-
-**Affected files:** `home_screen.dart`, possibly a thin wrapper around existing watchlist widgets
-
----
-
 ### 6. Add genre/mood-based shelves to Home
 
 **Priority:** Low · **Size:** Medium · **Ref:** `DESIGN.md` § 5.2
