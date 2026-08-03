@@ -6,25 +6,24 @@ import '../../../data/torrent/models/torrent.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import 'torrent_tile.dart';
 
-/// Centered-card modal showing torrent search results for one episode —
-/// the sibling pattern to [BatchEpisodePickerOverlay], but routed via
-/// [showGeneralDialog] (same mechanism as [SettingsMenu]/
-/// [SearchFilterPanel]) rather than an inline Stack overlay, since it
-/// doesn't need BatchEpisodePickerOverlay's manual onBack wiring — D-pad
-/// Back, Escape, and the system back gesture all dismiss it for free
-/// through the Navigator/PopScope chain already threaded through app.dart.
+/// Centered-card modal showing torrent search results for one episode.
 ///
-/// Takes the SAME [Future] [AnimeDetailsScreen] already memoizes per
-/// episode rather than starting its own search — including one that's
-/// already settled by the time this opens, which is what lets autoplay's
-/// silent failure surface here immediately (no duplicate network request)
-/// instead of falling back to an inline expansion the way it used to.
+/// The full-screen glassmorphic backdrop lives INSIDE this widget's own
+/// build() now, rather than relying on showGeneralDialog's `barrierColor`
+/// — that's what makes it possible to route it through FrostedContainer
+/// (blur in normal mode, flat scrim under uiPerformanceMode, matching
+/// every other glass surface in the app) instead of a plain color scrim.
 ///
-/// [torrentsFuture] failing OR resolving to a defensively-empty list are
-/// both routed through the same error UI — see [_ErrorState] — so there
-/// is exactly one place in this screen that ever shows a "search didn't
-/// work out" message, and it's always this modal, never inline in a list
-/// item.
+/// One consequence worth calling out: because this backdrop is a real,
+/// opaque widget painted IN FRONT of the actual (now-transparent)
+/// ModalBarrier, tapping it can no longer rely on barrierDismissible's
+/// own built-in gesture handling — that gesture lives on the barrier
+/// BEHIND our backdrop, which our backdrop would otherwise silently
+/// intercept. The backdrop below carries its own onTap-to-dismiss
+/// instead. The centered card is a Stack sibling painted AFTER (on top
+/// of) the backdrop, so a tap on the card itself is consumed by the
+/// card's own opaque decoration first and never reaches the backdrop's
+/// dismiss handler underneath.
 class TorrentSearchModal extends StatelessWidget {
   final int episodeNumber;
   final Future<List<Torrent>> torrentsFuture;
@@ -50,7 +49,11 @@ class TorrentSearchModal extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Episode $episodeNumber sources',
-      barrierColor: AppPalette.black.withValues(alpha: 0.50),
+      // Transparent — the darkening now lives entirely in this widget's
+      // own full-screen backdrop below, via FrostedContainer, instead of
+      // being layered here AND there. See class doc for why the actual
+      // dismiss gesture also had to move alongside it.
+      barrierColor: AppPalette.transparent,
       transitionBuilder: (context, animation, _, child) {
         final curved = CurvedAnimation(
           parent: animation,
@@ -81,69 +84,98 @@ class TorrentSearchModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DpadRegion(
-      memoryKey: 'animeDetails.torrentModal.$episodeNumber',
-      child: Center(
-        child: FrostedContainer(
-          uiPerformanceMode: uiPerformanceMode,
-          sigma: 16,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: 440,
-            constraints: const BoxConstraints(maxHeight: 480),
-            decoration: BoxDecoration(
-              color: AppPalette.surface.withValues(
-                alpha: uiPerformanceMode ? 0.98 : 0.90,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppPalette.white.withValues(alpha: 0.1),
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Header(episodeNumber: episodeNumber),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  child: Text(
-                    'Choose a release to stream, sorted by best match.',
-                    style: TextStyle(color: AppPalette.textMuted, fontSize: 13),
-                  ),
+    return Stack(
+      children: [
+        // Full-screen glassmorphic backdrop — see class doc for both the
+        // blur-mode rationale and the tap-to-dismiss handoff.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.of(context).pop(),
+            child: FrostedContainer(
+              uiPerformanceMode: uiPerformanceMode,
+              sigma: 40,
+              child: Container(
+                color: AppPalette.black.withValues(
+                  alpha: uiPerformanceMode ? 0.85 : 0.55,
                 ),
-                const Divider(color: AppPalette.border, height: 1),
-                Flexible(
-                  child: FutureBuilder<List<Torrent>>(
-                    future: torrentsFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const _LoadingState();
-                      }
-                      if (snapshot.hasError) {
-                        return _ErrorState(
-                          message: _messageFor(snapshot.error),
-                        );
-                      }
-                      final torrents = snapshot.data ?? const <Torrent>[];
-                      if (torrents.isEmpty) {
-                        return const _ErrorState(
-                          message: 'No seeded torrents found for this episode.',
-                        );
-                      }
-                      return _ResultsList(
-                        torrents: torrents,
-                        uiPerformanceMode: uiPerformanceMode,
-                        onSelectTorrent: onSelectTorrent,
-                      );
-                    },
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+
+        DpadRegion(
+          memoryKey: 'animeDetails.torrentModal.$episodeNumber',
+          child: Center(
+            child: FrostedContainer(
+              uiPerformanceMode: uiPerformanceMode,
+              sigma: 16,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                // Widened + heightened (440x480 -> 520x560) per the
+                // "slightly wider and higher" request.
+                width: 520,
+                constraints: const BoxConstraints(maxHeight: 560),
+                decoration: BoxDecoration(
+                  color: AppPalette.surface.withValues(
+                    alpha: uiPerformanceMode ? 0.98 : 0.90,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppPalette.white.withValues(alpha: 0.1),
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Header(episodeNumber: episodeNumber),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: Text(
+                        'Choose a release to stream, sorted by best match.',
+                        style: TextStyle(
+                          color: AppPalette.textMuted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const Divider(color: AppPalette.border, height: 1),
+                    Flexible(
+                      child: FutureBuilder<List<Torrent>>(
+                        future: torrentsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState !=
+                              ConnectionState.done) {
+                            return const _LoadingState();
+                          }
+                          if (snapshot.hasError) {
+                            return _ErrorState(
+                              message: _messageFor(snapshot.error),
+                            );
+                          }
+                          final torrents = snapshot.data ?? const <Torrent>[];
+                          if (torrents.isEmpty) {
+                            return const _ErrorState(
+                              message:
+                                  'No seeded torrents found for this episode.',
+                            );
+                          }
+                          return _ResultsList(
+                            torrents: torrents,
+                            uiPerformanceMode: uiPerformanceMode,
+                            onSelectTorrent: onSelectTorrent,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -223,9 +255,6 @@ class _LoadingState extends StatelessWidget {
   }
 }
 
-/// Covers BOTH a thrown [Exception] from the scraper AND a defensively
-/// empty (but non-throwing) result list under one rendering path — see
-/// [TorrentSearchModal]'s class doc for why that consolidation matters.
 class _ErrorState extends StatelessWidget {
   final String message;
   const _ErrorState({required this.message});
@@ -249,8 +278,6 @@ class _ErrorState extends StatelessWidget {
             style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
           ),
           const SizedBox(height: 24),
-          // ── Autofocused — the state's single interactive target, same
-          // convention as BatchEpisodePickerOverlay's first-row autofocus. ──
           DpadFocusable(
             autofocus: true,
             onSelect: () => Navigator.of(context).pop(),
