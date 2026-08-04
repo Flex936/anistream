@@ -170,10 +170,16 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
       contentMaxWidth,
       titlePainter.height,
     );
+    // Was a hardcoded 172 — unrelated to the compact dot's actual size,
+    // which is what left the huge dead gap in the screenshot. Now
+    // derived from the dot's real position + its fixed 8px diameter +
+    // a 12px breathing gap, the same "measure it, don't guess"
+    // principle already applied to the full-state leadingGap.
+    final double compactTitleLeft = compactStatusOffset.dx + 8 + 12;
     final Rect compactTitleRect = Rect.fromLTWH(
-      172,
+      compactTitleLeft,
       compactBandCenterY - 16,
-      screenSize.width - 172 - 16,
+      screenSize.width - compactTitleLeft - 16,
       32,
     );
     final Rect titleRect = uiPerformanceMode
