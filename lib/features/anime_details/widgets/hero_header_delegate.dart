@@ -85,8 +85,7 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   double get minExtent => minExtentValue;
-
-  static const double _kAtRestFadeRange = 0.08;
+  static const double _kAtRestFadeRange = 0.00;
 
   static const double _kMetaRowHeight = 32;
 
@@ -149,17 +148,21 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         ? (t >= 0.35 ? 0.0 : 1.0)
         : 1.0 - labelT;
 
-    // ── Sequential title crossfade — see class doc. `half` splits
-    // `_kAtRestFadeRange` into a "fade out the at-rest layer" phase
-    // followed by a "fade in the lerp layer" phase, rather than both
-    // running across the same window at once. ──
-    final double half = _kAtRestFadeRange / 2;
+    // ── Title crossfade — genuinely simultaneous again (opacities sum
+    // to exactly 1 throughout), not the sequential fade-out-then-fade-in
+    // split from the previous round. That split was only needed because
+    // the two layers used to disagree on height/alignment; now that
+    // fullTitleRect uses the real measured titlePainter.height and both
+    // layers share a common alignment strategy (see titleAlignment
+    // below), a plain crossfade dissolves cleanly instead of doubling
+    // or blinking to nothing at the midpoint. ──
+    final double crossfadeT = (t / _kAtRestFadeRange).clamp(0.0, 1.0);
     final double atRestOpacity = uiPerformanceMode
         ? (t > 0 ? 0.0 : 1.0)
-        : 1.0 - (t / half).clamp(0.0, 1.0);
+        : 1.0 - crossfadeT;
     final double lerpOpacity = uiPerformanceMode
         ? (t > 0 ? 1.0 : 0.0)
-        : ((t - half) / half).clamp(0.0, 1.0);
+        : crossfadeT;
 
     // Height now matches the at-rest layer's ACTUAL measured content
     // (titlePainter.height — 1 or 2 lines, whatever this title needs)
@@ -188,6 +191,18 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
     final double titleFontSize = uiPerformanceMode
         ? (t >= 0.5 ? 17.0 : 32.0)
         : lerpDouble(32.0, 17.0, t)!;
+
+    // 0 for the entire crossfade window (topLeft — matches the at-rest
+    // layer's own anchor), then eases to 1 (centerLeft) across the rest
+    // of the scroll range as t continues toward full collapse.
+    final double titleAlignmentT = uiPerformanceMode
+        ? (t >= 0.5 ? 1.0 : 0.0)
+        : ((t - _kAtRestFadeRange) / (1.0 - _kAtRestFadeRange)).clamp(0.0, 1.0);
+    final Alignment titleAlignment = Alignment.lerp(
+      Alignment.topLeft,
+      Alignment.centerLeft,
+      titleAlignmentT,
+    )!;
 
     return ClipRect(
       child: Stack(
@@ -230,13 +245,19 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
               rect: titleRect,
               child: Opacity(
                 opacity: lerpOpacity,
-                // Was Alignment.centerLeft — now topLeft, so this
-                // layer's text starts at the same vertical position the
-                // at-rest layer's first line did, instead of centering
-                // inside a box of a different height than what it's
-                // handing off from.
+                // Lerps topLeft -> centerLeft across the remaining scroll
+                // range AFTER the crossfade completes (not during it —
+                // titleAlignmentT stays 0 until crossfadeT reaches 1).
+                // topLeft is what makes the crossfade dissolve cleanly
+                // against the at-rest layer's own top-anchored text;
+                // centerLeft is what makes the fully-collapsed title
+                // line up against compactTitleRect's back-button/dot
+                // vertical center. A fixed topLeft throughout was
+                // correct for the former and wrong for the latter —
+                // this fixes the off-center look without reintroducing
+                // the crossfade-time mismatch the fixed value fixed.
                 child: Align(
-                  alignment: Alignment.topLeft,
+                  alignment: titleAlignment,
                   child: Text(
                     anime.title.display,
                     maxLines: 1,
