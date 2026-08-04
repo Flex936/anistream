@@ -11,11 +11,10 @@ import 'hero_header_compact.dart';
 const double kHeroHeaderNavBarClearance = 96;
 
 /// Precisely measured (not guessed) geometry for the full-state status
-/// pill — see class doc below for why this exists at all. Deterministic:
-/// given the same label text and the fixed style constants
-/// HeroStatusIndicator renders with, this always returns the exact same
-/// size HeroStatusIndicator would actually occupy at labelOpacity == 1,
-/// without needing a RenderBox/post-frame round-trip to find out.
+/// pill. Deterministic: given the same label text and the fixed style
+/// constants HeroStatusIndicator renders with, this always returns the
+/// exact size HeroStatusIndicator would actually occupy at
+/// labelOpacity == 1, without needing a RenderBox/post-frame round-trip.
 typedef _PillMetrics = ({double width, double height});
 
 _PillMetrics _measureStatusPill(String label, BuildContext context) {
@@ -29,7 +28,6 @@ _PillMetrics _measureStatusPill(String label, BuildContext context) {
     maxLines: 1,
   )..layout();
 
-  // Matches HeroStatusIndicator's Row exactly: 8px dot, 8px gap, label.
   const double dotSize = 8;
   const double gapAfterDot = 8;
   const double hPad = 10;
@@ -45,30 +43,28 @@ _PillMetrics _measureStatusPill(String label, BuildContext context) {
 
 /// Pinned, shrink-driven hero header for AnimeDetailsScreen.
 ///
-/// The title has TWO representations that crossfade near t = 0, rather
-/// than one continuous geometric lerp covering the whole scroll range
-/// like the rest of this header:
-///  - At rest (the crossfade's 0 end): a normal flow Text, maxLines: 2,
-///    softWrap enabled — long titles wrap instead of truncating.
-///  - Scrolling (the crossfade's 1 end): the existing single-line
-///    Rect/fontSize lerp mechanism, unchanged in kind from earlier
-///    rounds.
-/// This split exists because Flutter has no way to continuously
-/// interpolate a wrapped 2-line text block into a 1-line one —
-/// maxLines is discrete, not lerpable — so a title long enough to need
-/// 2 lines can only ever hand off between the two representations, not
-/// smoothly morph. The crossfade (over `_kAtRestFadeRange` of the
-/// scroll range) is what keeps that handoff from being a hard, jarring
-/// pop the instant scrolling starts.
+/// The title has TWO representations that hand off near t = 0 via a
+/// SEQUENTIAL fade — the at-rest (wrap-enabled, up to 2 lines) layer
+/// fades fully to 0 over the FIRST half of `_kAtRestFadeRange`, then
+/// only once it's gone does the scrolling (single-line, Rect/fontSize-
+/// lerped) layer fade 0 -> 1 over the second half. The two are never
+/// both partially visible at once.
 ///
-/// The status pill does NOT need this split — HeroStatusIndicator's own
-/// full-state size is precisely computable via `_measureStatusPill`
-/// (see its doc comment), so a single continuous Offset lerp from that
-/// EXACT computed position to the compact dot position is both correct
-/// at t = 0 and smooth throughout — no discrete jump to paper over. That
-/// same measurement is also what HeroBannerMetaBlock's `leadingGap` uses
-/// now, instead of a previously-guessed constant that broke the moment
-/// a status label longer than "FINISHED" showed up.
+/// This replaces an earlier version that faded both layers
+/// SIMULTANEOUSLY over the same window, which produced a doubled/
+/// smeared "cut off" look wherever both were partially opaque at once —
+/// made worse by two consistency bugs fixed alongside this one:
+///  - `fullTitleRect`'s height used to be a hardcoded single-line value
+///    (44) even while the at-rest layer above it could genuinely be 2
+///    lines tall (via `titlePainter.height`, already computed for
+///    `metaContainerTop`'s sake) — so the lerp layer's box was shorter
+///    than what it was overlapping.
+///  - The lerp layer used to vertically CENTER its text inside that box
+///    (`Alignment.centerLeft`), while the at-rest layer's text simply
+///    started at the top of its own unconstrained-height box — two
+///    different vertical anchors for what's supposed to read as the
+///    same title. Now both anchor to `Alignment.topLeft`, so the
+///    handoff lands exactly where the at-rest title's first line was.
 class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Anime anime;
   final VoidCallback? onBack;
@@ -80,8 +76,6 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.anime,
     this.onBack,
     this.uiPerformanceMode = false,
-    // Bumped 344 -> 360 to comfortably fit a 2-line title at rest
-    // without the meta row crowding the bottom edge.
     this.maxExtentValue = 360,
     this.minExtentValue = kHeroHeaderNavBarClearance + 56,
   });
@@ -92,14 +86,8 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   double get minExtent => minExtentValue;
 
-  // How much of the scroll range the at-rest -> lerp title crossfade
-  // spans — short and near-instant, but not an instant hard cut.
   static const double _kAtRestFadeRange = 0.08;
 
-  // Matches ExternalLinkButton's current rendered height — the tallest
-  // item in HeroBannerMetaBlock's row today, used to vertically center
-  // the status pill against it. Revisit once external_link_buttons.dart
-  // gets its own restyle pass.
   static const double _kMetaRowHeight = 32;
 
   @override
@@ -132,12 +120,6 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         anime.title.english != null &&
         anime.title.english != anime.title.romaji;
 
-    // ── At-rest title measurement — how tall the wrap-enabled title
-    // ACTUALLY renders at this width, for this specific anime's title
-    // text, rather than assuming a fixed 1- or 2-line height. This is
-    // what lets everything below the title (subtitle, status pill, meta
-    // row) position itself correctly regardless of whether a given
-    // title happens to wrap to 1 or 2 lines. ──
     const double atRestTop = 168;
     final TextPainter titlePainter = TextPainter(
       text: TextSpan(
@@ -153,15 +135,8 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
     )..layout(maxWidth: contentMaxWidth);
 
     final double metaContainerTop = atRestTop + titlePainter.height + 12;
-    // Subtitle's own height isn't individually measured — it's always
-    // single-line (no wrap bug reported for it), so a close constant is
-    // fine here without the same precision the title needed.
     final double metaRowTop = metaContainerTop + (hasEnglishSubtitle ? 35 : 0);
 
-    // ── Status pill — single continuous Offset lerp, correct at both
-    // ends now: fullStatusOffset centers the pill against
-    // _kMetaRowHeight instead of just top-aligning it (fix for #2), and
-    // compactStatusOffset is unchanged from before. ──
     final Offset fullStatusOffset = Offset(
       20,
       metaRowTop + (_kMetaRowHeight - pillMetrics.height) / 2,
@@ -174,19 +149,26 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         ? (t >= 0.35 ? 0.0 : 1.0)
         : 1.0 - labelT;
 
-    // ── Title crossfade — see class doc. ──
+    // ── Sequential title crossfade — see class doc. `half` splits
+    // `_kAtRestFadeRange` into a "fade out the at-rest layer" phase
+    // followed by a "fade in the lerp layer" phase, rather than both
+    // running across the same window at once. ──
+    final double half = _kAtRestFadeRange / 2;
     final double atRestOpacity = uiPerformanceMode
         ? (t > 0 ? 0.0 : 1.0)
-        : 1.0 - (t / _kAtRestFadeRange).clamp(0.0, 1.0);
+        : 1.0 - (t / half).clamp(0.0, 1.0);
     final double lerpOpacity = uiPerformanceMode
         ? (t > 0 ? 1.0 : 0.0)
-        : (t / _kAtRestFadeRange).clamp(0.0, 1.0);
+        : ((t - half) / half).clamp(0.0, 1.0);
 
+    // Height now matches the at-rest layer's ACTUAL measured content
+    // (titlePainter.height — 1 or 2 lines, whatever this title needs)
+    // instead of a hardcoded single-line value.
     final Rect fullTitleRect = Rect.fromLTWH(
       20,
       atRestTop,
       contentMaxWidth,
-      44,
+      titlePainter.height,
     );
     final Rect compactTitleRect = Rect.fromLTWH(
       172,
@@ -215,8 +197,6 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
 
-          // At-rest title — wrap-enabled, only built while it could
-          // plausibly be visible.
           if (atRestOpacity > 0)
             Positioned(
               left: 20,
@@ -239,15 +219,18 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
               ),
             ),
 
-          // Scrolling title — single-line Rect/fontSize lerp, unchanged
-          // mechanism from earlier rounds.
           if (lerpOpacity > 0)
             Positioned.fromRect(
               rect: titleRect,
               child: Opacity(
                 opacity: lerpOpacity,
+                // Was Alignment.centerLeft — now topLeft, so this
+                // layer's text starts at the same vertical position the
+                // at-rest layer's first line did, instead of centering
+                // inside a box of a different height than what it's
+                // handing off from.
                 child: Align(
-                  alignment: Alignment.centerLeft,
+                  alignment: Alignment.topLeft,
                   child: Text(
                     anime.title.display,
                     maxLines: 1,
