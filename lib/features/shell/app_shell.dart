@@ -125,9 +125,7 @@ class _AppShellState extends State<AppShell> {
           if (didPop) return;
           _nav.goBack();
         },
-        // ── Rebuilds whenever NavigationController's history changes,
-        // replacing the old setState()-driven _history/_forwardStack
-        // fields that used to live directly on this State. ──
+        // Rebuilds whenever NavigationController's history changes.
         child: ListenableBuilder(
           listenable: _nav,
           builder: (context, _) {
@@ -150,9 +148,7 @@ class _AppShellState extends State<AppShell> {
                   WatchlistScreen(onSelectAnime: _handleSelectAnime),
                 ),
                 onLogin: _handleLogin,
-                // ── SettingsScope propagates saved changes automatically,
-                // so there's no need to manually reload settings after the
-                // menu closes anymore. ──
+                // SettingsScope propagates saved changes automatically.
                 onSettings: () => showSettingsMenu(context),
               ),
               body: GestureDetector(
@@ -170,19 +166,19 @@ class _AppShellState extends State<AppShell> {
                     }
                     return false;
                   },
-                  // ── Bare DpadRegion — default leave/leave edge behavior
-                  // on both axes is exactly what's wanted here: Up from
-                  // the top of whichever screen is showing escapes this
-                  // region entirely and lands on the best candidate
-                  // outside it (AniStreamNavBar's own region, wrapped in
-                  // navbar.dart), while Down/Left/Right with nothing
-                  // beyond this region to find just no-op harmlessly. No
-                  // memoryKey: _nav.current is a completely different
-                  // widget subtree per section (Home's carousels vs.
-                  // Watchlist's grid vs. Schedule's shelves), so a single
-                  // "remembered position" at this outer level wouldn't
-                  // mean anything — that memory belongs inside each
-                  // screen's own regions instead (see HomeScreen). ──
+                  // Bare DpadRegion — default leave/leave edge behavior on
+                  // both axes is what's wanted here: Up from the top of
+                  // whichever screen is showing escapes this region
+                  // entirely and lands on the best candidate outside it
+                  // (AniStreamNavBar's own region, wrapped in navbar.dart),
+                  // while Down/Left/Right with nothing beyond this region
+                  // to find just no-op harmlessly. No memoryKey: _nav.current
+                  // is a completely different widget subtree per section
+                  // (Home's carousels vs. Watchlist's grid vs. Schedule's
+                  // shelves), so a single "remembered position" at this
+                  // outer level wouldn't mean anything — that memory
+                  // belongs inside each screen's own regions instead (see
+                  // HomeScreen).
                   child: DpadRegion(child: _nav.current),
                 ),
               ),

@@ -12,7 +12,6 @@ class AnilistAuthService {
   static const String _storePath = '/store';
   static const String _prefKey = 'anilist_access_token';
 
-  // ── Reusable SharedPreferencesAsync instance ──
   final _prefs = SharedPreferencesAsync();
 
   Future<String?> getStoredToken() async {
@@ -40,11 +39,9 @@ class AnilistAuthService {
 
     final tokenCompleter = Completer<String?>();
 
-    // ── Captured into a local instead of left as a bare expression
-    // statement — cancel_subscriptions requires the subscription be
-    // assignable to something, and canceling it explicitly in `finally`
-    // below (alongside `server.close`) is a strict improvement over
-    // relying on the server's own teardown to implicitly stop delivery. ──
+    // Captured into a local so it can be canceled explicitly in `finally`
+    // below (alongside `server.close`) rather than relying on the
+    // server's own teardown to implicitly stop delivery.
     final serverSub = server.listen((HttpRequest req) async {
       switch (req.uri.path) {
         case _callbackPath when req.method == 'GET':

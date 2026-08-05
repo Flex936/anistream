@@ -30,12 +30,11 @@ class _SettingsScopeState extends State<SettingsScope> {
   void initState() {
     super.initState();
     _controller = SettingsController();
-    // ── initState can't be async — SettingsController.reload() returns
-    // Future<void>, so the fire-and-forget intent is made explicit instead
-    // of silently dropping it via the old `..reload()` cascade
+    // initState can't be async — SettingsController.reload() returns
+    // Future<void>, so the fire-and-forget intent is made explicit
     // (unawaited_futures). The widget still rebuilds correctly once
     // reload() completes, via AnimatedBuilder below listening to
-    // _controller. ──
+    // _controller.
     unawaited(_controller.reload());
   }
 
@@ -76,9 +75,9 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> reload() async {
     _settings = await _service.load();
-    // ── Keeps SettingsCache warm for non-context services the instant a
-    // real value is loaded from disk, not just after the first explicit
-    // save — see SettingsCache's doc comment in settings_service.dart. ──
+    // Keeps SettingsCache warm for non-context services the instant a
+    // real value is loaded from disk — see SettingsCache's doc comment
+    // in settings_service.dart.
     SettingsCache.update(_settings);
     notifyListeners();
   }

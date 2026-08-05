@@ -1,8 +1,6 @@
 /// Single source of truth for every AniList GraphQL fragment/query/mutation
-/// string. Previously `AnilistTrackerService` hand-wrote its own ad hoc
-/// query/mutation text duplicating fields already defined for
-/// `AnilistQueryService` — a schema change could silently break one and not
-/// the other.
+/// string used by `AnilistQueryService` and `AnilistTrackerService`, so a
+/// schema change is made in exactly one place.
 abstract final class AnilistFragments {
   static const String mediaCore = r'''
     id

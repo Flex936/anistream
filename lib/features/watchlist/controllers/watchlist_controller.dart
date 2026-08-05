@@ -12,9 +12,8 @@ class _TabState {
   String? error;
 }
 
-/// Extracted from `_WatchlistScreenState`: owns the CURRENT/PLANNING/
-/// COMPLETED tab data, pagination, and dedup-by-id fetch logic that used to
-/// live as three parallel `Map<String, ...>` fields on the State.
+/// Owns the CURRENT/PLANNING/COMPLETED tab data, pagination, and
+/// dedup-by-id fetch logic for `WatchlistScreen`.
 class WatchlistController extends ChangeNotifier {
   final AnilistQueryService _api;
   WatchlistController({AnilistQueryService? api})

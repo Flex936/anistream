@@ -28,11 +28,10 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
   bool _isListView = false;
 
-  // ── Was a plain `String? _hoveredBanner` field driven by setState() on
-  // this entire State — hovering any single card in a 36-item grid was
-  // rebuilding the whole screen, including the CustomScrollView's slivers.
-  // As a ValueNotifier, only the small ValueListenableBuilder wrapping the
-  // background image below rebuilds on hover; the grid/list never does. ──
+  // A ValueNotifier rather than plain State, so hovering a single card in
+  // a 36-item grid only rebuilds the small ValueListenableBuilder wrapping
+  // the background image below, not the whole screen (including the
+  // CustomScrollView's slivers).
   final ValueNotifier<String?> _hoveredBanner = ValueNotifier<String?>(null);
 
   @override
@@ -104,7 +103,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
-    // ── Pulled once at the top of build() ──
     final typography = context.appTypography;
 
     return ListenableBuilder(
@@ -112,19 +110,19 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       builder: (context, _) {
         return Stack(
           children: [
-            // ── Hover-driven background: isolated behind a
-            // ValueListenableBuilder so hovering a card only rebuilds this
-            // small subtree, never the grid/list below it. ──
+            // Hover-driven background, isolated behind a
+            // ValueListenableBuilder so hovering a card only rebuilds
+            // this small subtree, never the grid/list below it.
             Positioned.fill(
               child: ValueListenableBuilder<String?>(
                 valueListenable: _hoveredBanner,
                 builder: (context, hoveredBanner, _) {
                   return AnimatedSwitcher(
-                    // ── Zero-duration under Performant mode — the backdrop
+                    // Zero-duration under Performant mode — the backdrop
                     // swap still happens, it just snaps instead of
                     // dissolving, avoiding the extra composited frames a
                     // 600ms cross-fade of a full-screen image would
-                    // otherwise cost. ──
+                    // otherwise cost.
                     duration: perfDuration(
                       uiPerformanceMode,
                       const Duration(milliseconds: 600),
@@ -141,11 +139,11 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                               Image.network(
                                 hoveredBanner,
                                 fit: BoxFit.cover,
-                                // ── cacheWidth added: this is a
-                                // full-screen backdrop that's immediately
-                                // heavily blurred (or fully covered in
-                                // performance mode) — decoding it at full
-                                // network resolution bought nothing. ──
+                                // A full-screen backdrop that's
+                                // immediately heavily blurred (or fully
+                                // covered in performance mode), so
+                                // decoding at full network resolution
+                                // buys nothing.
                                 cacheWidth: 400,
                                 errorBuilder: (context, error, stackTrace) =>
                                     const ColoredBox(color: AppPalette.base),
@@ -190,11 +188,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                         spacing: 32,
                         runSpacing: 16,
                         children: [
-                          // ── Was TextStyle(fontSize: 24, fontWeight: w600,
-                          // letterSpacing: -0.4) — exact match for
-                          // sectionTitle, zero visual delta. Same token
-                          // also used by search_results_screen.dart's
-                          // "Results for..." title. ──
                           Text(
                             'My Library',
                             style: typography.sectionTitle.copyWith(
@@ -491,12 +484,10 @@ class _TabButton extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: contentColor),
               const SizedBox(width: 6),
-              // ── Was TextStyle(fontSize: 13, fontWeight: w600) — an
-              // exact numeric match for cardTitleCompact (13/w600); the
-              // token's height: 1.35 is inconsequential here since this
-              // is a single line of text. Reusing a "card title" token
-              // for a tab label is a naming mismatch, not a visual one —
-              // see app_typography.dart's class doc comment. ──
+              // cardTitleCompact (13/w600) is reused here for the tab
+              // label — the token's height is inconsequential for a
+              // single line of text; see app_typography.dart's class doc
+              // comment on token-name drift.
               Text(
                 label,
                 style: typography.cardTitleCompact.copyWith(
@@ -552,11 +543,8 @@ class _EmptyPane extends StatelessWidget {
           children: [
             Icon(icon, color: AppPalette.textMuted, size: 48),
             const SizedBox(height: 16),
-            // ── Was TextStyle(fontSize: 16, fontWeight: w600) —
-            // converged to cardTitleProminent (16/w700), one step
-            // heavier. Reusing a "card title" token here is a naming
-            // mismatch, not a visual one — see app_typography.dart's
-            // class doc comment. ──
+            // cardTitleProminent is reused here — see
+            // app_typography.dart's class doc comment on token-name drift.
             Text(
               title,
               style: typography.cardTitleProminent.copyWith(
@@ -564,11 +552,9 @@ class _EmptyPane extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            // ── Left as a plain literal (13, no height set) — this
-            // subtitle can wrap depending on content/screen width;
-            // cardSummary's fontSize matches but its height: 1.4 would
-            // be a visible line-spacing change on wrapped text, the same
-            // caution applied to scheduled_screen.dart's _ErrorPane. ──
+            // This subtitle can wrap depending on content/screen width;
+            // cardSummary's height would visibly change line-spacing on
+            // wrapped text, so it's left as a plain literal.
             Text(
               subtitle,
               style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
@@ -597,8 +583,6 @@ class _ErrorPane extends StatelessWidget {
             size: 52,
           ),
           const SizedBox(height: 16),
-          // ── Left as a plain literal (17/w600) — same unclustered
-          // 17pt pattern as scheduled_screen.dart's _ErrorPane title. ──
           const Text(
             'Could not load watchlist',
             style: TextStyle(
@@ -610,9 +594,9 @@ class _ErrorPane extends StatelessWidget {
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
-            // ── Left as a plain literal (13, no height set) — this is a
-            // dynamic, potentially long error message; same multi-line
-            // height caution as scheduled_screen.dart's _ErrorPane. ──
+            // A dynamic, potentially long error message — same
+            // multi-line height caution as scheduled_screen.dart's
+            // _ErrorPane.
             child: Text(
               message,
               textAlign: TextAlign.center,

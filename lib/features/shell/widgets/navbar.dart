@@ -183,12 +183,9 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
       );
     }
 
-    // ── Performant mode's FrostedContainer branch never reads `sigma` at
-    // all (it skips the blur entirely), so animating it 0 → 16 on every
-    // scroll transition was pure wasted per-frame rebuild work for a value
-    // nobody ever sees applied. Skip the tween outright and go straight
-    // to a static frame instead of paying for an animation with no visual
-    // effect. ──
+    // Under Performant mode, FrostedContainer skips the blur entirely
+    // and never reads `sigma` — so the tween is skipped outright rather
+    // than animating a value that has no visual effect.
     final frame = widget.uiPerformanceMode
         ? buildFrame(0.0)
         : TweenAnimationBuilder<double>(
@@ -201,25 +198,21 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
             builder: (context, blurAmount, _) => buildFrame(blurAmount),
           );
 
-    // ── RepaintBoundary: this bar is pinned above scrolling body content
+    // RepaintBoundary: this bar is pinned above scrolling body content
     // (extendBodyBehindAppBar) and only repaints on its own triggers
-    // (scroll-threshold crossing, mobile search toggle) — completely
-    // independent of whatever is scrolling underneath it. Isolating it
-    // onto its own compositor layer means a scroll-driven repaint of the
-    // body never forces the nav bar to re-record, and vice versa. ──
+    // (scroll-threshold crossing, mobile search toggle) — independent of
+    // whatever is scrolling underneath it. Isolating it onto its own
+    // compositor layer means a scroll-driven repaint of the body never
+    // forces the nav bar to re-record, and vice versa.
     //
-    // ── DpadRegion: the whole toolbar is treated as ONE region (logo,
-    // search, schedule/watchlist/user/settings icons, window controls
-    // are all one visual "section," not several) with a stable memoryKey
-    // so returning here from anywhere remembers which control was last
+    // DpadRegion: the whole toolbar is one region (logo, search,
+    // schedule/watchlist/user/settings icons, window controls are all
+    // one visual section, not several) with a stable memoryKey so
+    // returning here from anywhere remembers which control was last
     // focused. No edge-behavior overrides — the default (leave, on both
-    // axes) is exactly right: Up has nothing above to find anyway (a
-    // harmless no-op, same practical result as `stop`), and — critically
-    // — Down must stay at its default so focus can actually escape
-    // DOWNWARD into the body's own DpadRegion (app_shell.dart). Setting
-    // verticalEdge to `stop` here would have blocked both directions,
-    // silently breaking navbar → body navigation while "fixing" nothing
-    // it wasn't already handling. ──
+    // axes) is right: Up has nothing above to find anyway, and Down must
+    // stay at its default so focus can escape downward into the body's
+    // own DpadRegion (app_shell.dart).
     return DpadRegion(
       memoryKey: 'navbar',
       child: RepaintBoundary(child: frame),
@@ -559,10 +552,10 @@ class _NavLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── The inner Padding+Text is genuinely focus-independent — only the
-    // wrapping AnimatedDefaultTextStyle's color depends on state.focused
-    // — so it's passed as `child` and reused across focus-state rebuilds
-    // instead of being reconstructed inside `builder` every time. ──
+    // The inner Padding+Text is focus-independent — only the wrapping
+    // AnimatedDefaultTextStyle's color depends on state.focused — so it's
+    // passed as `child` and reused across focus-state rebuilds instead
+    // of being reconstructed inside `builder` every time.
     return DpadFocusable(
       onSelect: () => onTap?.call(),
       builder: (context, state, child) => AnimatedDefaultTextStyle(
@@ -596,15 +589,14 @@ class _NavIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── Tooltip wraps DpadFocusable rather than being a param on it —
-    // dpad doesn't document a built-in tooltip option, and layering
-    // Flutter's own Tooltip outside is simple and doesn't need one. ──
+    // Tooltip wraps DpadFocusable rather than being a param on it — dpad
+    // doesn't expose a built-in tooltip option, so layering Flutter's
+    // own Tooltip outside is simplest.
     return Tooltip(
       message: tooltip,
-      // ── Icon's own color depends on state.focused, so — like AnimeCard
-      // — there's no focus-independent part worth hoisting into `child`;
-      // builder rebuilds the whole thing and `child` is an unused
-      // placeholder. ──
+      // Icon color depends on state.focused, so — like AnimeCard —
+      // there's no focus-independent part worth hoisting into `child`;
+      // builder rebuilds the whole thing.
       child: DpadFocusable(
         onSelect: () => onPressed?.call(),
         builder: (context, state, child) => Container(

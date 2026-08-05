@@ -7,11 +7,11 @@ class AppSettings {
   final bool autoPlayEnabled;
   final bool autoSkip;
 
-  // ── PERFORMANCE ──
+  // Performance
   final bool uiPerformanceMode;
   final String videoFilterQuality;
 
-  // ── REMOTE SERVER ──
+  // Remote server
   /// When true, [TheaterScreen] uses [RemoteStreamingController] instead of
   /// the on-device libtorrent engine.
   final bool serverMode;
@@ -37,20 +37,19 @@ class AppSettings {
 /// Services with no [BuildContext] — [AnilistQueryService] is instantiated
 /// fresh in `HomeScreen`, `SearchResultsScreen`, `WatchlistController`,
 /// `ScheduledScreen`, etc., none of which have an ambient widget tree to
-/// walk up to [SettingsScope] — previously worked around this by re-reading
-/// `shared_preferences` directly on every call. That direct read is what
-/// caused the "Filter Ecchi" bug: it went through `SharedPreferencesAsync`,
-/// a *different* underlying native store than [SettingsService] wrote
-/// through (`SharedPreferences.getInstance()`, the legacy singleton API).
-/// As of shared_preferences 2.3+, those two APIs are not guaranteed to
-/// share a backend — the setting looked saved, but nothing that read it
-/// through the other API ever saw the new value.
+/// walk up to [SettingsScope] — need a way to read a setting (currently
+/// just `filterEcchi`) without a `BuildContext`.
 ///
-/// [SettingsCache] fixes this at the root: [SettingsController] is the only
-/// writer (on both [SettingsController.reload] and [SettingsController.update]),
-/// so any non-widget service reads the exact same in-memory value a widget
-/// under [SettingsScope] would — no second disk round-trip, no second store
-/// to silently drift out of sync with the first.
+/// [SettingsController] is the only writer (on both
+/// [SettingsController.reload] and [SettingsController.update]), so any
+/// non-widget service reads the exact same in-memory value a widget under
+/// [SettingsScope] would. This matters specifically because
+/// `shared_preferences`' `SharedPreferencesAsync` API and its legacy
+/// `SharedPreferences.getInstance()` singleton are not guaranteed to share
+/// a backend as of shared_preferences 2.3+ — reading a setting through a
+/// different API than it was written through can silently return a stale
+/// value. Routing every read through this single in-memory cache sidesteps
+/// that entirely: there is only one store, and only one writer.
 abstract final class SettingsCache {
   static AppSettings _current = const AppSettings();
   static AppSettings get current => _current;
@@ -75,11 +74,10 @@ class SettingsService {
   /// per install, not on every cold start.
   static const String _kMigrationDoneKey = 'settings_migrated_to_async_v1';
 
-  // ── Every read/write in this service now goes through the SAME
-  // shared_preferences API the rest of the app already standardized on
-  // (AnilistAuthService's token, TheaterControls' saved volume). Mixing the
-  // legacy singleton API with this new one was the actual bug — see
-  // SettingsCache's doc comment above. ──
+  // Every read/write in this service goes through the same
+  // shared_preferences API the rest of the app standardizes on
+  // (AnilistAuthService's token, TheaterControls' saved volume) — see
+  // SettingsCache's doc comment above for why mixing APIs is unsafe.
   final SharedPreferencesAsync _prefs;
 
   SettingsService({SharedPreferencesAsync? prefs})
@@ -103,9 +101,9 @@ class SettingsService {
   }
 
   Future<void> save(AppSettings settings) async {
-    // ── Fired concurrently — these are independent keys, so there's no
+    // Fired concurrently — these are independent keys, so there's no
     // ordering dependency between them, and the settings menu shouldn't
-    // block on 9 sequential awaits just to close the dialog. ──
+    // block on 9 sequential awaits just to close the dialog.
     await Future.wait([
       _prefs.setBool(kFilterEcchi, settings.filterEcchi),
       _prefs.setString(kHwDec, settings.hardwareDecoding),
@@ -123,7 +121,7 @@ class SettingsService {
   /// `SharedPreferences.getInstance()` API into the async store this class
   /// now reads/writes exclusively, so upgrading users don't silently lose
   /// settings they'd already configured (Filter Ecchi being the one that
-  /// actually mattered, since it's the only key another service also read
+  /// actually matters, since it's the only key another service also reads
   /// independently — but every key is migrated for safety).
   Future<void> _migrateLegacyPrefsIfNeeded() async {
     final alreadyMigrated = await _prefs.getBool(_kMigrationDoneKey) ?? false;

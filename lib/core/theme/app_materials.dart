@@ -3,36 +3,30 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 /// Design-system translucent-material tiers for `FrostedContainer`'s
-/// `sigma` parameter. Replaces the arbitrary per-call-site blur values
-/// (6/10/12/16/20/30/40/50) that used to be scattered across the codebase
-/// with three named tiers, following the same "bigger surface -> higher
-/// blur" pattern DESIGN.md § 1.4 describes.
+/// `sigma` parameter. Three named tiers, following the "bigger surface ->
+/// higher blur" pattern DESIGN.md § 1.4 describes.
 ///
 /// Accessed via `context.appMaterials` (see build_context_extensions.dart).
 @immutable
 class AppMaterials extends ThemeExtension<AppMaterials> {
-  /// Small controls — badges, icon buttons, floating pill buttons.
-  /// Converges `anime_card.dart`'s `_StatusBadge` (was 6),
-  /// `theater_player.dart`'s `FrostedIconButton` (was 10, exact match),
-  /// `watchlist_cards.dart`'s `WatchlistCard` badge (was 10, exact match),
-  /// `anime_carousel.dart`'s `_NavArrow` (was a raw BackdropFilter at 10,
-  /// exact match), and `hero_banner.dart`'s `_FloatingNavBar` (was 12).
+  /// Small controls — badges, icon buttons, floating pill buttons. Used by
+  /// `anime_card.dart`'s `_StatusBadge`, `theater_player.dart`'s
+  /// `FrostedIconButton`, `watchlist_cards.dart`'s `WatchlistCard` badge,
+  /// `anime_carousel.dart`'s `_NavArrow`, and `hero_banner.dart`'s
+  /// `_FloatingNavBar`.
   final double subtle;
 
   /// Content surfaces — dropdowns, popups, menus, full-screen loading
-  /// overlays. Converges `search_input.dart`'s dropdown (was 16, exact
-  /// match), `theater_settings.dart`'s `TheaterSettingsMenu` (was 16,
-  /// exact match), `anime_details_screen.dart`'s loading overlay (was 12),
-  /// and is the target ceiling for `navbar.dart`'s scroll-driven animated
-  /// blur (was a literal 16.0, exact match).
+  /// overlays. Used by `search_input.dart`'s dropdown,
+  /// `theater_settings.dart`'s `TheaterSettingsMenu`,
+  /// `anime_details_screen.dart`'s loading overlay, and `navbar.dart`'s
+  /// scroll-driven animated blur.
   final double standard;
 
-  /// Large panels — side drawers, control bars. Converges
-  /// `search_filter_panel.dart` (was 30), `theater_controls.dart`'s
-  /// control bar (was 30), `navbar.dart`'s `_MobileMenu` (was 40, exact
-  /// match), `settings_menu.dart` (was 50), and
-  /// `glass_toast_content.dart`'s toast (was 30 despite being a small
-  /// pill — converged here rather than left as an outlier).
+  /// Large panels — side drawers, control bars. Used by
+  /// `search_filter_panel.dart`, `theater_controls.dart`'s control bar,
+  /// `navbar.dart`'s `_MobileMenu`, `settings_menu.dart`, and
+  /// `glass_toast_content.dart`'s toast.
   final double prominent;
 
   const AppMaterials({

@@ -5,9 +5,9 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/logging/app_logger.dart';
 
-/// Generic "try each mirror URL in order until one responds with 200."
-/// Extracted out of `TorrentScraperService` — the fallback logic itself has
-/// nothing to do with Nyaa RSS; it's reusable for any multi-mirror fetch.
+/// Tries each mirror URL in order until one responds with 200. Generic
+/// over any multi-mirror fetch — the fallback logic itself has nothing to
+/// do with Nyaa RSS specifically.
 class TorrentMirrorFetcher {
   final http.Client _client;
   TorrentMirrorFetcher(this._client);
@@ -15,15 +15,12 @@ class TorrentMirrorFetcher {
   Future<http.Response> fetch({
     required List<String> mirrors,
     required Uri Function(String baseUrl) pathBuilder,
-    // ── Was 15s. A mirror is either up (responds in well under a
-    // second) or fully dead/DNS-blocked (times out completely regardless
-    // of how long we wait) — there's no real middle ground where a
-    // slow-but-alive mirror actually needs 15s to answer. The old value
-    // just meant sitting on a dead first mirror for 15 wasted seconds,
-    // directly on the click → magnet-link critical path, before failing
-    // over to the next one. 7s keeps comfortable headroom over a slow
-    // connection while cutting the worst-case dead-mirror penalty by
-    // more than half. ──
+    // A mirror is either up (responds in well under a second) or fully
+    // dead/DNS-blocked (times out completely regardless of how long we
+    // wait) — there's no real middle ground where a slow-but-alive mirror
+    // needs longer to answer. 7s keeps comfortable headroom over a slow
+    // connection while keeping the worst-case dead-mirror penalty low,
+    // since this sits directly on the click → magnet-link critical path.
     Duration timeout = const Duration(seconds: 7),
   }) async {
     Exception? lastException;

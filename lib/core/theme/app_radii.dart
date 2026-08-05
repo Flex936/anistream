@@ -5,11 +5,10 @@ import 'package:flutter/material.dart';
 /// Design-system radius tiers. `small`/`large` match DESIGN.md's
 /// documented scale exactly ("12px for list items, 24px for
 /// modals/bottom sheets"). `tag` is a third tier DESIGN.md doesn't
-/// explicitly call out, added for small decorative badges/pills
-/// (release-group tags, status badges, "UP NEXT" labels) that the
-/// codebase already used fairly consistently (4-8px) but never named —
-/// same spirit as DESIGN.md's own "extend the palette logically if new
-/// shades are required" clause, applied to radii instead of color.
+/// explicitly call out, for small decorative badges/pills (release-group
+/// tags, status badges, "UP NEXT" labels) — same spirit as DESIGN.md's own
+/// "extend the palette logically if new shades are required" clause,
+/// applied to radii instead of color.
 ///
 /// Accessed via `context.appRadii` (see build_context_extensions.dart).
 @immutable

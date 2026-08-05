@@ -62,15 +62,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppPalette.base,
       body: SingleChildScrollView(
-        // ── Both the 96px navbar clearance (previously a leading
-        // SizedBox inside the Column) and the 48px bottom breathing room
-        // now live in the scroll view's own `padding` instead of as
-        // sibling widgets. This is dpad's documented convention for shelf
-        // layouts — scroll-into-view and scrollPadding reason about the
-        // scrollable's OWN padding as part of its content extent, so a
-        // focused card at either end can actually be scrolled flush
-        // against it, rather than stopping just short and leaving the
-        // gap permanently on screen. ──
+        // Both the 96px navbar clearance and the 48px bottom breathing
+        // room live in the scroll view's own `padding` rather than as
+        // sibling widgets — dpad's shelf-layout convention treats
+        // scroll-into-view and scrollPadding as part of the scrollable's
+        // own content extent, so a focused card at either end can be
+        // scrolled flush against it instead of stopping just short.
         padding: const EdgeInsets.only(top: 96, bottom: 48),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

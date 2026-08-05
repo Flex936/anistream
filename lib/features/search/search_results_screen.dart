@@ -78,12 +78,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   void _openFilterDrawer() {
-    // ── Was MediaQuery.sizeOf(context).width < 600 inline — routed
-    // through the shared ResponsiveContext.isMobile extension
-    // (build_context_extensions.dart) instead, matching the breakpoint
-    // watchlist_screen.dart/responsive_grid.dart already standardize on.
-    // Pure mechanical swap — Breakpoints.mobile is already 600, so
-    // behavior is unchanged. ──
+    // Routed through the shared ResponsiveContext.isMobile extension,
+    // matching the breakpoint watchlist_screen.dart/responsive_grid.dart
+    // standardize on.
     final isMobile = context.isMobile;
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
@@ -152,7 +149,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   Widget build(BuildContext context) {
     if (widget.query.trim().isEmpty) return const SizedBox.shrink();
 
-    // ── Pulled once at the top of build() ──
     final typography = context.appTypography;
 
     return SingleChildScrollView(
@@ -165,10 +161,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
             child: Row(
               children: [
-                // ── Was TextStyle(fontSize: 24, fontWeight: w600,
-                // letterSpacing: -0.4) — exact match for sectionTitle,
-                // zero visual delta. Same token also used by
-                // watchlist_screen.dart's "My Library" title. ──
                 Text(
                   'Results for "${widget.query}"',
                   style: typography.sectionTitle.copyWith(
@@ -287,8 +279,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                    // ── Shared with WatchlistScreen's portrait grid instead
-                    // of a locally duplicated breakpoint table. ──
+                    // Shared with WatchlistScreen's portrait grid rather
+                    // than a locally duplicated breakpoint table.
                     final cols = verticalGridColumns(constraints.maxWidth);
                     return GridView.builder(
                       shrinkWrap: true,

@@ -31,10 +31,10 @@ class _AnilistCacheEntry {
 /// filter combinations (different search term, different minScore, etc.)
 /// get distinct entries automatically.
 ///
-/// Fixes: `NavigationController.goHome()` builds a brand-new `HomeScreen`
-/// (and a brand-new `AnilistQueryService`) every time the user navigates
-/// Home → Details → Home, so without this, the three home carousels
-/// refetched from the network on every single trip back to Home.
+/// `NavigationController.goHome()` builds a brand-new `HomeScreen` (and a
+/// brand-new `AnilistQueryService`) every time the user navigates Home →
+/// Details → Home, so this cache is what keeps the three home carousels
+/// from refetching over the network on every single trip back to Home.
 ///
 /// Deliberately NOT used for `getUserWatchlist` or `getMediaProgress` —
 /// those need to reflect the viewer's live, current state, and a stale
@@ -67,10 +67,10 @@ abstract final class _AnilistCache {
     Map<String, dynamic> variables,
     Map<String, dynamic> data,
   ) {
-    // ── Simple bound so a long session of distinct searches can't grow
+    // Simple bound so a long session of distinct searches can't grow
     // this unboundedly — evict the oldest entry once over the cap rather
     // than pull in a full LRU package for what's normally a handful of
-    // slots (3 home carousels + whatever the user has searched). ──
+    // slots (3 home carousels + whatever the user has searched).
     if (_entries.length >= _maxEntries) {
       _entries.remove(_entries.keys.first);
     }
@@ -192,10 +192,9 @@ class AnilistQueryService {
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded.containsKey('errors')) {
       final errors = decoded['errors'] as List<dynamic>;
-      // ── Each element of a decoded `List<dynamic>` is itself `dynamic`,
-      // so `errors[0]['message']` would index straight into a dynamic
-      // receiver (avoid_dynamic_calls). Casting the element first keeps
-      // every subsequent access statically typed. ──
+      // Each element of a decoded `List<dynamic>` is itself `dynamic`, so
+      // it's cast before indexing to keep every subsequent access
+      // statically typed (avoid_dynamic_calls).
       String errorMessage = 'Unknown GraphQL Error';
       if (errors.isNotEmpty) {
         final first = errors[0] as Map<String, dynamic>?;
@@ -206,10 +205,9 @@ class AnilistQueryService {
   }
 
   List<Anime> _animeListFromPage(Map<String, dynamic> data) {
-    // ── `data['Page']` is `dynamic` (the value type of a
-    // `Map<String, dynamic>`), so chaining `?['media']` straight off it
-    // would index into a dynamic receiver. Casting the intermediate hop
-    // keeps every step statically typed. ──
+    // `data['Page']` is `dynamic` (the value type of a
+    // `Map<String, dynamic>`), so the intermediate hop is cast explicitly
+    // before indexing into it (avoid_dynamic_calls).
     final page = data['Page'] as Map<String, dynamic>?;
     final mediaList = page?['media'] as List<dynamic>? ?? const [];
     return mediaList
@@ -302,11 +300,11 @@ class AnilistQueryService {
       AnilistQueries.userWatchlistPaged,
       {'userId': viewerId, 'status': status, 'page': page, 'perPage': perPage},
       (data) {
-        // ── Same "cast each hop before indexing" fix as
-        // `_animeListFromPage` / `_assertResponse` above — see those for
-        // why. `rawList` is cast to `List<Map<String, dynamic>>` up front
-        // so the `.where`/`.map` callbacks below never touch a `dynamic`
-        // receiver either. ──
+        // Same "cast each hop before indexing" approach as
+        // `_animeListFromPage` / `_assertResponse` above. `rawList` is
+        // cast to `List<Map<String, dynamic>>` up front so the
+        // `.where`/`.map` callbacks below never touch a `dynamic`
+        // receiver either.
         final pageData = data['Page'] as Map<String, dynamic>?;
         final pageInfo = pageData?['pageInfo'] as Map<String, dynamic>?;
         final hasNextPage = pageInfo?['hasNextPage'] as bool? ?? false;
@@ -315,10 +313,10 @@ class AnilistQueryService {
 
         final banned = _bannedGenres;
 
-        // ── Since AniList does not natively allow filtering user watchlists
-        // by `genre_not_in`, we extract the genres out of the raw JSON map
-        // before converting them so we don't depend on missing parameters
-        // inside the Anime/MediaListEntry models. ──
+        // AniList doesn't expose a `genre_not_in` filter on the user's
+        // own watchlist, so the banned-genre filter is applied
+        // client-side here, against the raw JSON's genre list, before
+        // decoding into MediaListEntry.
         final entries = rawList
             .where((r) {
               final media = r['media'] as Map<String, dynamic>?;

@@ -4,8 +4,7 @@ import '../../core/theme/app_palette.dart';
 import 'frosted_container.dart';
 
 /// Shared visual content for both `AppleSnackBar` (bottom) and
-/// `AppleTopSnackBar` (top overlay) — previously duplicated almost
-/// verbatim between the two.
+/// `AppleTopSnackBar` (top overlay).
 class GlassToastContent extends StatelessWidget {
   final String message;
   final IconData icon;
@@ -28,13 +27,10 @@ class GlassToastContent extends StatelessWidget {
     return FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
       sigma: materials.prominent,
-      // ── Both radii here are LEFT as plain literals, not routed through
-      // AppRadii. This is a fully-rounded capsule/stadium toast — 50
-      // exceeds half this container's height specifically to guarantee a
-      // full pill curve regardless of exact size, the same "stadium"
-      // pattern flagged in watchlist_cards.dart's _PlayOverlay and
-      // calendar_card.dart's episode-label pill. None of tag/small/large
-      // are a semantic match. ──
+      // Fully-rounded capsule/stadium toast — 50 exceeds half this
+      // container's height to guarantee a full pill curve regardless of
+      // exact size, a different visual role than any of the tag/small/
+      // large tiers, so left as a plain literal.
       borderRadius: BorderRadius.circular(50),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/settings/settings_scope.dart';
 import 'glass_toast_content.dart';
 
-// ── Apple-Style Premium Glass Toast (Bottom) ──
+// Apple-style premium glass toast (bottom).
 
 class AppleSnackBar {
   static void show({
@@ -59,7 +59,7 @@ class _BottomToastWidget extends StatelessWidget {
   }
 }
 
-// ── Apple-Style Premium Glass Toast (Top Overlay for Theater) ──
+// Apple-style premium glass toast (top overlay for Theater).
 
 class AppleTopSnackBar {
   static void show({
@@ -140,11 +140,11 @@ class _TopToastWidgetState extends State<_TopToastWidget>
 
   @override
   Widget build(BuildContext context) {
-    // ── Uses SettingsScope directly instead of a locally-loaded
-    // _uiPerformanceMode field — this widget is inserted via Overlay, so it
+    // Reads SettingsScope directly rather than a locally-loaded
+    // _uiPerformanceMode field: this widget is inserted via Overlay, so it
     // sits above whatever context called AppleTopSnackBar.show(context),
-    // and SettingsScope is mounted at the app root, so it's always reachable
-    // here. ──
+    // and SettingsScope is mounted at the app root, so it's always
+    // reachable here.
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
     return Positioned(

@@ -17,7 +17,10 @@
 ## 2. Code Quality Directives
 
 - Linter Compliance: satisfy `analysis_options.yaml` in full — see § 1 above for exactly which of these rules `flutter analyze` actually catches versus what's enforced by review only.
-- Comment the "why" behind complex logic (Regex, Focus, FFI).
+- Comment the "why" behind complex logic (Regex, Focus, FFI) — every comment describes the code's **current** behavior only:
+  - Never reference the conversational or editorial process behind the code — no "as per the request," "as agreed in Phase 4," "per Track B," or similar. State what the code does and why it's built that way, not which session or turn produced it.
+  - Never describe a prior implementation alongside the new one — no "was X," "previously did Y," "the old version used to...". When an implementation changes, delete the stale comment entirely and write a single comment describing only how the current code works.
+  - Don't bracket comments in long-dash/box-drawing separators (e.g. `── like this ──`). Plain `//` comments only, with no decorative opening/closing marks.
 - Do not hallucinate APIs. Maintain the existing architecture — see [ARCHITECTURE.md](ARCHITECTURE.md) § 2 for the full `lib/` folder tree (`core/`, `data/`, `shared/`, `features/<name>/`) and the rule for where new code belongs.
 - Reject unnecessary external dependencies; prioritize native-only solutions and SOLID/DRY principles.
 
@@ -28,4 +31,4 @@ This file is Flutter/Dart only. The optional companion server (`anistream_server
 Before considering any non-trivial change finished, check it against [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule — a change that adds a dependency, a folder, a cache, a native bridge, or a design token isn't done until the matching doc is updated (or flagged) alongside it.
 
 ---
-*Governed by [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule. Last reviewed against the codebase: 2026-07-28. Changed a performance rule, a caching guideline, or a code-quality directive? Update this file — and check whether [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist needs the same update.*
+*Governed by [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule. Last reviewed against the codebase: 2026-08-03. Changed a performance rule, a caching guideline, or a code-quality directive? Update this file — and check whether [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist needs the same update.*

@@ -37,8 +37,8 @@ extension on LogLevel {
 /// too. Call [dispose] from your root widget's `dispose()` as a belt-and-
 /// braces flush; automatic hooks (see below) cover the rest.
 ///
-/// ── Why the log file stays current even if the app is killed outright ──
-/// There is no 100%-guaranteed "on any exit" hook in Flutter/Dart — a hard
+/// The log file stays current even if the app is killed outright because
+/// there is no 100%-guaranteed "on any exit" hook in Flutter/Dart — a hard
 /// `kill -9` or a yanked power cord can't be intercepted by anything. This
 /// class instead makes that scenario harmless by:
 ///   • flushing to disk every 2 seconds on a timer (so you lose at most the
@@ -60,11 +60,11 @@ abstract final class AppLogger {
   static bool _disposed = false;
   static LogLevel _minLevel = kReleaseMode ? LogLevel.info : LogLevel.debug;
 
-  // ── Process-lifetime signal subscriptions. Never explicitly canceled —
+  // Process-lifetime signal subscriptions. Never explicitly canceled —
   // there's no natural point to do so, since each one's only job is to run
   // until the process exits — but cancel_subscriptions requires the
   // subscription be captured somewhere rather than left as a bare
-  // expression statement, so they're stashed here instead of discarded. ──
+  // expression statement, so they're stashed here instead of discarded.
   static final List<StreamSubscription<ProcessSignal>> _signalSubs = [];
 
   /// Keep this many previous session log files around; older ones are
