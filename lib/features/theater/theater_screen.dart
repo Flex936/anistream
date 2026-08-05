@@ -242,6 +242,17 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
   }
 
+  // ── Platform ───────────────────────────────────────────────────────────
+  //
+  // Desktop-only flag, threaded into TheaterControls so it can hide the
+  // fullscreen toggle on Mobile/TV per DESIGN.md § 3 ("Hide PC-specific UI
+  // controls ... on Mobile/TV builds"). Mirrors the exact platform test
+  // already used elsewhere in this file (_initPlayerAndStream,
+  // _toggleFullscreen, _disposePlaybackResources) rather than introducing
+  // a new check.
+  bool get _isDesktopPlatform =>
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+
   // ── Keyboard shortcuts (desktop) ──────────────────────────────────────────
   //
   // Previously all of this — plus the D-Pad mode arrow/select bubbling —
@@ -269,6 +280,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // keys to move focus between controls instead. Both can't be true at
   // once on the same keys, so this is a real, unavoidable branch — not a
   // legacy holdover.
+  //
+  // NOTE: this CallbackShortcuts-based dispatcher is the known focus-loss
+  // bug tracked separately (keyboard shortcuts stop responding after the
+  // first controls auto-hide cycle, since ExcludeFocus clears the play
+  // button's focus and nothing re-requests it). Left unchanged in this
+  // pass — that fix is scoped to its own refactor alongside the gesture
+  // and auto-hide timer work, since all three touch this same region of
+  // the tree.
   Map<ShortcutActivator, VoidCallback> _buildShortcuts(bool dpadModeActive) {
     final subMenuOpen =
         _isSettingsOpen || _torrentController.needsManualSelection;
@@ -676,6 +695,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                                           chapterMetadata: _chapters,
                                           isSettingsOpen: _isSettingsOpen,
                                           isFullscreen: _isFullscreen,
+                                          isDesktop: _isDesktopPlatform,
                                           uiPerformanceMode: _uiPerformanceMode,
                                           dpadModeActive: dpadModeActive,
                                           onToggleFullscreen: _toggleFullscreen,

@@ -22,6 +22,14 @@ class TheaterControls extends StatefulWidget {
   final bool uiPerformanceMode;
   final bool dpadModeActive;
 
+  /// True only on Windows/Linux/macOS. Gates the fullscreen toggle per
+  /// DESIGN.md § 3 ("Hide PC-specific UI controls ... on Mobile/TV
+  /// builds") — Mobile has no windowed state to escape, and TV is
+  /// already permanently fullscreen, so the button previously rendered
+  /// there was dead chrome with no reachable "windowed" counterpart to
+  /// toggle back to.
+  final bool isDesktop;
+
   const TheaterControls({
     super.key,
     required this.player,
@@ -30,6 +38,7 @@ class TheaterControls extends StatefulWidget {
     required this.onToggleFullscreen,
     required this.isSettingsOpen,
     required this.isFullscreen,
+    required this.isDesktop,
     this.uiPerformanceMode = false,
     this.dpadModeActive = false,
     this.chapterMetadata = const [],
@@ -233,14 +242,22 @@ class _TheaterControlsState extends State<TheaterControls> {
                 onPressed: widget.onToggleSettings,
               ),
 
-              _TheaterIconButton(
-                icon: widget.isFullscreen
-                    ? Icons.fullscreen_exit_rounded
-                    : Icons.fullscreen_rounded,
-                tooltip: widget.isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
-                size: 28,
-                onPressed: widget.onToggleFullscreen,
-              ),
+              // ── Desktop-only per DESIGN.md § 3. On Mobile/TV there is
+              // no windowed state for this button to toggle back out of
+              // (Mobile has no window chrome at all; TV is permanently
+              // fullscreen), so it previously rendered as dead UI on
+              // both platforms. ──
+              if (widget.isDesktop)
+                _TheaterIconButton(
+                  icon: widget.isFullscreen
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                  tooltip: widget.isFullscreen
+                      ? 'Exit Fullscreen'
+                      : 'Fullscreen',
+                  size: 28,
+                  onPressed: widget.onToggleFullscreen,
+                ),
             ],
           ),
         ],
