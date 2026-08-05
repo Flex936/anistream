@@ -14,6 +14,13 @@ class Seekbar extends StatefulWidget {
   final bool uiPerformanceMode;
   final bool dpadModeActive;
 
+  /// Reports Seekbar's own keyboard-focus state to an ancestor, in
+  /// addition to driving the widget's own internal focus-ring styling.
+  /// `theater_screen.dart`'s global keyboard dispatcher uses this to defer
+  /// to Seekbar's own Left/Right handling below (see [_handleKey]) rather
+  /// than double-seeking on the same keypress.
+  final ValueChanged<bool>? onFocusChange;
+
   const Seekbar({
     super.key,
     required this.position,
@@ -25,6 +32,7 @@ class Seekbar extends StatefulWidget {
     required this.onSeekEnd,
     required this.uiPerformanceMode,
     this.dpadModeActive = false,
+    this.onFocusChange,
   });
 
   @override
@@ -116,7 +124,10 @@ class _SeekbarState extends State<Seekbar> {
 
     return Focus(
       focusNode: _focusNode,
-      onFocusChange: (f) => setState(() => _isFocused = f),
+      onFocusChange: (f) {
+        setState(() => _isFocused = f);
+        widget.onFocusChange?.call(f);
+      },
       onKeyEvent: _handleKey,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,

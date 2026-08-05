@@ -13,7 +13,19 @@ import 'seekbar.dart';
 
 class TheaterControls extends StatefulWidget {
   final Player player;
+
+  /// Discrete-interaction ping — a button press, a slider value tick, the
+  /// skip-chip tap. Resets the auto-hide countdown without suspending it.
   final VoidCallback onInteract;
+
+  /// Continuous-interaction brackets — fired at the start/end of a
+  /// seekbar or volume-slider drag. Suspends the auto-hide countdown for
+  /// the full duration of the drag rather than relying on the drag's own
+  /// per-update callback (`onInteract`, above) to keep re-pinging it
+  /// often enough on its own.
+  final VoidCallback onInteractionStart;
+  final VoidCallback onInteractionEnd;
+
   final VoidCallback onToggleSettings;
   final VoidCallback onToggleFullscreen;
   final bool isSettingsOpen;
@@ -30,10 +42,20 @@ class TheaterControls extends StatefulWidget {
   /// toggle back to.
   final bool isDesktop;
 
+  /// Reports whether Seekbar/the volume slider currently holds keyboard
+  /// focus, up to `theater_screen.dart`'s global keyboard dispatcher — so
+  /// it can defer to that widget's own local Left/Right handling instead
+  /// of double-seeking or unexpectedly seeking while the user is nudging
+  /// volume. Both optional: nothing breaks if a caller doesn't care.
+  final ValueChanged<bool>? onSeekbarFocusChange;
+  final ValueChanged<bool>? onVolumeFocusChange;
+
   const TheaterControls({
     super.key,
     required this.player,
     required this.onInteract,
+    required this.onInteractionStart,
+    required this.onInteractionEnd,
     required this.onToggleSettings,
     required this.onToggleFullscreen,
     required this.isSettingsOpen,
@@ -42,6 +64,8 @@ class TheaterControls extends StatefulWidget {
     this.uiPerformanceMode = false,
     this.dpadModeActive = false,
     this.chapterMetadata = const [],
+    this.onSeekbarFocusChange,
+    this.onVolumeFocusChange,
   });
 
   @override
@@ -71,6 +95,8 @@ class _TheaterControlsState extends State<TheaterControls> {
   late final StreamSubscription<bool> _playingSub;
   late final StreamSubscription<double> _volumeSub;
 
+  late final FocusNode _volumeFocusNode;
+
   final _prefs = SharedPreferencesAsync();
 
   @override
@@ -85,13 +111,22 @@ class _TheaterControlsState extends State<TheaterControls> {
     _volumeSub = widget.player.stream.volume.listen((v) {
       if (mounted) setState(() => _volume = v);
     });
+
+    _volumeFocusNode = FocusNode(debugLabel: 'TheaterVolumeSlider')
+      ..addListener(_handleVolumeFocusChange);
   }
 
   @override
   void dispose() {
     unawaited(_playingSub.cancel());
     unawaited(_volumeSub.cancel());
+    _volumeFocusNode.removeListener(_handleVolumeFocusChange);
+    _volumeFocusNode.dispose();
     super.dispose();
+  }
+
+  void _handleVolumeFocusChange() {
+    widget.onVolumeFocusChange?.call(_volumeFocusNode.hasFocus);
   }
 
   Future<void> _handleVolumeChanged(double value) async {
@@ -147,6 +182,9 @@ class _TheaterControlsState extends State<TheaterControls> {
             uiPerformanceMode: widget.uiPerformanceMode,
             dpadModeActive: widget.dpadModeActive,
             onInteract: widget.onInteract,
+            onInteractionStart: widget.onInteractionStart,
+            onInteractionEnd: widget.onInteractionEnd,
+            onSeekbarFocusChange: widget.onSeekbarFocusChange,
           ),
           const SizedBox(height: 12),
 
@@ -218,8 +256,15 @@ class _TheaterControlsState extends State<TheaterControls> {
                   // as a standard Flutter form control, same reasoning as
                   // Seekbar: a plain Focus-participating widget that
                   // interops with dpad's traversal without needing
-                  // DpadFocusable wrapping. ──
+                  // DpadFocusable wrapping. Given an explicit focusNode
+                  // now (rather than an implicit internal one) purely so
+                  // this State can observe its focus state and report it
+                  // upstream via onVolumeFocusChange — Slider's own
+                  // behavior is otherwise unchanged. onChangeStart/End
+                  // bracket a drag the same way Seekbar's onSeekStart/End
+                  // already do. ──
                   child: Slider(
+                    focusNode: _volumeFocusNode,
                     max: 100,
                     value: _volume.clamp(0.0, 100.0),
                     onChanged: (v) {
@@ -229,6 +274,8 @@ class _TheaterControlsState extends State<TheaterControls> {
                       unawaited(_handleVolumeChanged(v));
                       widget.onInteract();
                     },
+                    onChangeStart: (_) => widget.onInteractionStart(),
+                    onChangeEnd: (_) => widget.onInteractionEnd(),
                   ),
                 ),
               ),
@@ -296,6 +343,9 @@ class _PlaybackTimeline extends StatefulWidget {
   final bool uiPerformanceMode;
   final bool dpadModeActive;
   final VoidCallback onInteract;
+  final VoidCallback onInteractionStart;
+  final VoidCallback onInteractionEnd;
+  final ValueChanged<bool>? onSeekbarFocusChange;
 
   const _PlaybackTimeline({
     required this.player,
@@ -303,6 +353,9 @@ class _PlaybackTimeline extends StatefulWidget {
     required this.uiPerformanceMode,
     required this.dpadModeActive,
     required this.onInteract,
+    required this.onInteractionStart,
+    required this.onInteractionEnd,
+    this.onSeekbarFocusChange,
   });
 
   @override
@@ -347,7 +400,12 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
   void _onSeek(Duration time) {
     // ── Player.seek returns Future<void> — this is wired to Seekbar's
     // synchronous onSeek callback, so the fire-and-forget intent is made
-    // explicit instead of silently dropped (unawaited_futures). ──
+    // explicit instead of silently dropped (unawaited_futures). Fires on
+    // every drag update, not just start/end — left mapped to onInteract
+    // (not onInteractionStart/End) since it's a per-tick ping, and
+    // ControlsVisibilityController.registerActivity() already no-ops the
+    // timer schedule while an interaction is in progress, so this can't
+    // fight with the explicit begin/end bracket below. ──
     unawaited(widget.player.seek(time));
     widget.onInteract();
   }
@@ -436,8 +494,9 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
           uiPerformanceMode: widget.uiPerformanceMode,
           dpadModeActive: widget.dpadModeActive,
           onSeek: _onSeek,
-          onSeekStart: widget.onInteract,
-          onSeekEnd: widget.onInteract,
+          onSeekStart: widget.onInteractionStart,
+          onSeekEnd: widget.onInteractionEnd,
+          onFocusChange: widget.onSeekbarFocusChange,
         ),
       ],
     );
