@@ -117,7 +117,17 @@ abstract class BaseStreamingController extends ChangeNotifier {
   /// source is. No-op on controllers that don't support subtitles.
   Future<void> fetchSubtitleTracks() async {}
 
-  /// The URL to fetch a given track's WebVTT content from, or null if
-  /// subtitles aren't supported by this controller.
-  String? subtitleUrlFor(int streamIndex) => null;
+  /// Fetches a subtitle track's current WebVTT content. While the
+  /// underlying file is still downloading, repeated calls can return
+  /// progressively more content each time — see [isSubtitleTrackComplete]
+  /// to know when it's no longer worth calling again. Returns null on
+  /// failure or if this controller doesn't support subtitles at all.
+  Future<String?> fetchSubtitleContent(int streamIndex) async => null;
+
+  /// True once [fetchSubtitleContent] for this track is known to have
+  /// returned its final content — i.e. further calls won't return
+  /// anything new, so it's safe to stop re-fetching. Defaults to true
+  /// (the safe "don't bother retrying" answer) on controllers that don't
+  /// support subtitles, or for a track that's never been fetched.
+  bool isSubtitleTrackComplete(int streamIndex) => true;
 }

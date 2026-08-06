@@ -71,11 +71,13 @@ type statusResp struct {
 	Error      string     `json:"error,omitempty"`
 
 	// ── Subtitles (added) ──────────────────────────────────────────────
-	// True only once the active file has finished downloading AND
-	// ffmpeg/ffprobe are actually installed on this machine — lets the
-	// client decide whether it's even worth polling /subtitles instead
-	// of finding out by trial and error.
+	// SubtitlesAvailable: true once it's worth the client even trying —
+	// see subtitleProbeEligible's doc comment for why this is a low bar,
+	// not "fully downloaded".
+	// SubtitlesComplete: true once no further re-fetching will ever
+	// return more content — lets the client stop its own re-poll loop.
 	SubtitlesAvailable bool `json:"subtitles_available,omitempty"`
+	SubtitlesComplete  bool `json:"subtitles_complete,omitempty"`
 }
 
 // subtitleTracksResp is the body of GET /api/stream/:id/subtitles.
@@ -105,10 +107,21 @@ type session struct {
 	// distinguish "haven't probed yet" from "probed, found none".
 	subtitleTracks []SubtitleTrack
 
-	// extractedVTT caches streamIndex -> already-extracted .vtt path, so
-	// a track is only ever run through ffmpeg once per session, not once
-	// per request.
-	extractedVTT map[int]string
+	// extractedVTT caches the last extraction result per track, alongside
+	// how much of the file had downloaded when it was produced — lets
+	// repeat requests skip re-running ffmpeg when nothing new has
+	// arrived, while still re-extracting (to pick up newly-downloaded
+	// cues) once it has. See extractedSubtitle.
+	extractedVTT map[int]*extractedSubtitle
+}
+
+// extractedSubtitle is one track's cached extraction result.
+type extractedSubtitle struct {
+	path             string
+	extractedAtBytes int64
+	// complete is true once this extraction ran against a FULLY
+	// downloaded file — permanently final, never re-extracted again.
+	complete bool
 }
 
 var videoExts = map[string]bool{
@@ -236,15 +249,28 @@ func (s *session) watchBuffer(f *torrent.File) {
 	}
 }
 
-// subtitlesReady reports whether f has fully finished downloading.
-// Deliberately a much higher bar than bufferThreshold (5%, calibrated for
-// video — which only ever needs the FRONT of the file to start playing
-// thanks to sequential piece prioritization). Subtitle data is typically
-// interleaved throughout the whole runtime, not concentrated at the
-// start, so a low completion percentage doesn't guarantee the subtitle
-// track's actual bytes have arrived yet — probing or extracting before
-// this would likely read past gaps in a file that isn't done downloading.
-func subtitlesReady(f *torrent.File) bool {
+// subtitleProbeEligible reports whether f has enough downloaded to be
+// worth attempting a probe/extraction against at all. Deliberately as low
+// as bufferThreshold — verified directly (see chat notes) that ffmpeg's
+// Matroska demuxer handles a partially-downloaded file gracefully: it
+// reads the Tracks header (near the front of the file, not the tail) plus
+// however many complete Clusters have arrived, then stops cleanly at the
+// first gap rather than hanging or corrupting output. That means a probe
+// attempted early just returns less content, not garbage — there's no
+// need to hold off the way there was before this was tested.
+func subtitleProbeEligible(f *torrent.File) bool {
+	if f.Length() == 0 {
+		return false
+	}
+	pct := float64(f.BytesCompleted()) / float64(f.Length()) * 100.0
+	return pct >= bufferThreshold
+}
+
+// subtitlesComplete reports whether f has fully finished downloading —
+// i.e. whether an extraction result is FINAL, with no more cues arriving
+// later. Used to tell the client when it can stop re-polling for updated
+// subtitle content.
+func subtitlesComplete(f *torrent.File) bool {
 	return f.BytesCompleted() >= f.Length()
 }
 
@@ -261,7 +287,8 @@ func (s *session) status(streamBase string, ffmpegReady bool) statusResp {
 	switch s.st {
 	case stateReady:
 		resp.StreamURL = streamBase + "/api/stream/" + s.id + "/video"
-		resp.SubtitlesAvailable = ffmpegReady && s.active != nil && subtitlesReady(s.active)
+		resp.SubtitlesAvailable = ffmpegReady && s.active != nil && subtitleProbeEligible(s.active)
+		resp.SubtitlesComplete = s.active != nil && subtitlesComplete(s.active)
 	case stateNeedsSelection:
 		for i, f := range s.files {
 			resp.Files = append(resp.Files, fileInfo{
@@ -281,8 +308,8 @@ func (s *session) status(streamBase string, ffmpegReady bool) statusResp {
 func (s *session) cleanupSubtitleFiles() {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, path := range s.extractedVTT {
-		_ = os.Remove(path)
+	for _, entry := range s.extractedVTT {
+		_ = os.Remove(entry.path)
 	}
 }
 
@@ -555,7 +582,7 @@ func (sv *srv) listSubtitles(w http.ResponseWriter, r *http.Request, id string) 
 		http.Error(w, "ffmpeg/ffprobe not installed on this server", http.StatusNotImplemented)
 		return
 	}
-	if !subtitlesReady(f) {
+	if !subtitleProbeEligible(f) {
 		http.Error(w, "file still downloading — not enough of it available to probe subtitles yet", http.StatusServiceUnavailable)
 		return
 	}
@@ -581,8 +608,10 @@ func (sv *srv) listSubtitles(w http.ResponseWriter, r *http.Request, id string) 
 	json200(w, subtitleTracksResp{Tracks: tracks})
 }
 
-// serveSubtitleTrack extracts (on first request) or serves (from cache,
-// on repeat requests) a single subtitle track as WebVTT.
+// serveSubtitleTrack extracts (or re-extracts, if more has downloaded
+// since the last attempt) a single subtitle track as WebVTT. Sets
+// X-Subtitle-Complete so the client knows whether it's worth asking
+// again later for more content, or whether this is the final version.
 func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id string, trackIdxStr string) {
 	s, ok := sv.get(id)
 	if !ok {
@@ -599,7 +628,7 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 	s.mu.RLock()
 	st := s.st
 	f := s.active
-	cachedPath, alreadyExtracted := s.extractedVTT[streamIndex]
+	existing := s.extractedVTT[streamIndex]
 	s.mu.RUnlock()
 
 	if st != stateReady || f == nil {
@@ -607,9 +636,17 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
-	if alreadyExtracted {
+	currentBytes := f.BytesCompleted()
+	complete := subtitlesComplete(f)
+
+	// Serve the cached result without re-running ffmpeg if it's already
+	// final, or if nothing new has downloaded since it was produced —
+	// re-extracting identical input would just waste CPU for the same
+	// output.
+	if existing != nil && (existing.complete || existing.extractedAtBytes >= currentBytes) {
 		w.Header().Set("Content-Type", "text/vtt")
-		http.ServeFile(w, r, cachedPath)
+		w.Header().Set("X-Subtitle-Complete", strconv.FormatBool(existing.complete))
+		http.ServeFile(w, r, existing.path)
 		return
 	}
 
@@ -617,8 +654,8 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 		http.Error(w, "ffmpeg not installed on this server", http.StatusNotImplemented)
 		return
 	}
-	if !subtitlesReady(f) {
-		http.Error(w, "file still downloading", http.StatusServiceUnavailable)
+	if !subtitleProbeEligible(f) {
+		http.Error(w, "file still downloading — not enough of it available yet", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -628,6 +665,11 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
+	// Same destination path every time for a given (session, track) pair
+	// — ExtractSubtitleTrack's ffmpeg call runs with -y, so a
+	// re-extraction simply overwrites the previous partial result in
+	// place rather than needing this handler to separately track and
+	// clean up a prior file.
 	destPath := filepath.Join(os.TempDir(), fmt.Sprintf("anistream-sub-%s-%d.vtt", id, streamIndex))
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
@@ -639,12 +681,17 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 
 	s.mu.Lock()
 	if s.extractedVTT == nil {
-		s.extractedVTT = make(map[int]string)
+		s.extractedVTT = make(map[int]*extractedSubtitle)
 	}
-	s.extractedVTT[streamIndex] = destPath
+	s.extractedVTT[streamIndex] = &extractedSubtitle{
+		path:             destPath,
+		extractedAtBytes: currentBytes,
+		complete:         complete,
+	}
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "text/vtt")
+	w.Header().Set("X-Subtitle-Complete", strconv.FormatBool(complete))
 	http.ServeFile(w, r, destPath)
 }
 

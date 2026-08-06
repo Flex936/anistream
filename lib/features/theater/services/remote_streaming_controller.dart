@@ -59,6 +59,10 @@ class RemoteStreamingController extends BaseStreamingController {
   List<RemoteSubtitleTrack> _subtitleTracks = [];
   bool _fetchingSubtitleTracks = false;
   Timer? _subtitlePollTimer;
+  // Per-track "was the last fetch already final" — see
+  // fetchSubtitleContent/isSubtitleTrackComplete. Absent key means "never
+  // fetched", read as false (not known complete, worth trying).
+  final Map<int, bool> _subtitleTrackComplete = {};
 
   RemoteStreamingController({required this.serverUrl}) : _http = http.Client();
 
@@ -188,9 +192,7 @@ class RemoteStreamingController extends BaseStreamingController {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final rawTracks = data['tracks'] as List<dynamic>? ?? [];
         _subtitleTracks = rawTracks
-            .map(
-              (t) => RemoteSubtitleTrack.fromJson(t as Map<String, dynamic>),
-            )
+            .map((t) => RemoteSubtitleTrack.fromJson(t as Map<String, dynamic>))
             .toList();
         notifyListeners();
       }
@@ -208,10 +210,39 @@ class RemoteStreamingController extends BaseStreamingController {
   }
 
   @override
-  String? subtitleUrlFor(int streamIndex) {
+  Future<String?> fetchSubtitleContent(int streamIndex) async {
     if (_sessionId == null) return null;
-    return '$serverUrl/api/stream/$_sessionId/subtitles/$streamIndex';
+    try {
+      final resp = await _http
+          .get(
+            Uri.parse(
+              '$serverUrl/api/stream/$_sessionId/subtitles/$streamIndex',
+            ),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (resp.statusCode != 200) return null;
+
+      // ── The server re-extracts as more of the file downloads and
+      // tells us via this header whether THIS response is final —
+      // tracked per track since the user could have multiple tracks in
+      // flight across track switches within one session. ──
+      final completeHeader = resp.headers['x-subtitle-complete'];
+      _subtitleTrackComplete[streamIndex] = completeHeader == 'true';
+
+      return resp.body;
+    } catch (e) {
+      AppLogger.w(
+        'RemoteStreamingController',
+        'Failed to fetch subtitle content for track $streamIndex: $e',
+      );
+      return null;
+    }
   }
+
+  @override
+  bool isSubtitleTrackComplete(int streamIndex) =>
+      _subtitleTrackComplete[streamIndex] ?? false;
 
   /// Starts a slow (5s), self-stopping poll purely for subtitles_available.
   /// Deliberately separate from the main 500ms _pollTimer above, which

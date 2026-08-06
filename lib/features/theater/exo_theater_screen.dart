@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:video_player/video_player.dart';
 
 import '../../core/settings/settings_scope.dart';
@@ -78,13 +77,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   BaseStreamingController _torrentController = StreamingController();
   VideoPlayerController? _videoController;
 
-  // ── Subtitles (added) — separate small HTTP client just for fetching
-  // raw .vtt bodies. Deliberately not reusing _torrentController's own
-  // http.Client (RemoteStreamingController's is private to that class,
-  // and StreamingController — local mode — has no HTTP client at all
-  // since libtorrent_flutter isn't network-request-based the same way). ──
-  final http.Client _httpClient = http.Client();
-
   bool _videoInitialized = false;
   String? _playerError;
 
@@ -96,6 +88,9 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   int? _selectedSubtitleIndex;
   bool _subtitleFetchTriggered = false;
   bool _subtitleAutoApplied = false;
+  // Re-fetches the selected track's content periodically while the
+  // server hasn't yet marked it complete — see _applySubtitleTrack.
+  Timer? _subtitleContentTimer;
 
   @override
   void initState() {
@@ -149,11 +144,12 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       _subtitleFetchTriggered = true;
       unawaited(_torrentController.fetchSubtitleTracks());
     }
-    if (_torrentController.subtitleTracks.isNotEmpty &&
-        !_subtitleAutoApplied) {
+    if (_torrentController.subtitleTracks.isNotEmpty && !_subtitleAutoApplied) {
       _subtitleAutoApplied = true;
       unawaited(
-        _applySubtitleTrack(_torrentController.subtitleTracks.first.streamIndex),
+        _applySubtitleTrack(
+          _torrentController.subtitleTracks.first.streamIndex,
+        ),
       );
     }
 
@@ -213,12 +209,20 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
 
   // ── Subtitles (added) ────────────────────────────────────────────────
   //
-  // Fetches one track's raw WebVTT body and hands it to the ALREADY-
-  // PLAYING controller via setClosedCaptionFile — confirmed directly
-  // against video_player's own source that this is a real, callable-
-  // after-initialize method, not just a constructor-time option, so
-  // there's no need to dispose/recreate the controller (and cause a
-  // visible reload) just to turn captions on or switch tracks.
+  // Fetches one track's current WebVTT body through the controller and
+  // hands it to the ALREADY-PLAYING video controller via
+  // setClosedCaptionFile — confirmed directly against video_player's own
+  // source that this is a real, callable-after-initialize method, not
+  // just a constructor-time option, so there's no need to dispose/
+  // recreate the controller (and cause a visible reload) just to turn
+  // captions on or switch tracks.
+  //
+  // While the source file is still downloading, the server can return
+  // progressively more content on each fetch (see
+  // RemoteStreamingController.fetchSubtitleContent's doc comment) — this
+  // re-fetches on a timer until isSubtitleTrackComplete says there's no
+  // point asking again. Cancels and restarts cleanly if the user picks a
+  // different track mid-poll.
   //
   // streamIndex == null means "Off": video_player doesn't expose an
   // explicit "clear captions" call, so an empty (header-only) WebVTT
@@ -227,6 +231,9 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   Future<void> _applySubtitleTrack(int? streamIndex) async {
     final controller = _videoController;
     if (controller == null) return;
+
+    _subtitleContentTimer?.cancel();
+    _subtitleContentTimer = null;
 
     setState(() => _selectedSubtitleIndex = streamIndex);
 
@@ -237,21 +244,36 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       return;
     }
 
-    final url = _torrentController.subtitleUrlFor(streamIndex);
-    if (url == null) return;
+    await _fetchAndApplySubtitleContent(streamIndex);
 
-    try {
-      final resp = await _httpClient
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 15));
-      if (resp.statusCode == 200 && _videoController != null) {
-        await _videoController!.setClosedCaptionFile(
-          Future.value(WebVTTCaptionFile(resp.body)),
-        );
-      }
-    } catch (e) {
-      debugPrint('[ExoTheaterScreen] Failed to load subtitle track $streamIndex: $e');
+    if (!_torrentController.isSubtitleTrackComplete(streamIndex)) {
+      _subtitleContentTimer = Timer.periodic(const Duration(seconds: 20), (
+        _,
+      ) async {
+        // User switched tracks (or turned subtitles off) while this
+        // timer was waiting — stop rather than clobbering their new
+        // choice with stale content for the old track.
+        if (_selectedSubtitleIndex != streamIndex) {
+          _subtitleContentTimer?.cancel();
+          _subtitleContentTimer = null;
+          return;
+        }
+        await _fetchAndApplySubtitleContent(streamIndex);
+        if (_torrentController.isSubtitleTrackComplete(streamIndex)) {
+          _subtitleContentTimer?.cancel();
+          _subtitleContentTimer = null;
+        }
+      });
     }
+  }
+
+  Future<void> _fetchAndApplySubtitleContent(int streamIndex) async {
+    final content = await _torrentController.fetchSubtitleContent(streamIndex);
+    if (content == null || !mounted || _videoController == null) return;
+    if (_selectedSubtitleIndex != streamIndex) return;
+    await _videoController!.setClosedCaptionFile(
+      Future.value(WebVTTCaptionFile(content)),
+    );
   }
 
   Widget _buildSubtitleButton() {
@@ -269,7 +291,8 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               : Icons.subtitles_outlined,
           color: AppPalette.white,
         ),
-        onSelected: (streamIndex) => unawaited(_applySubtitleTrack(streamIndex)),
+        onSelected: (streamIndex) =>
+            unawaited(_applySubtitleTrack(streamIndex)),
         itemBuilder: (context) => [
           CheckedPopupMenuItem<int?>(
             value: null,
@@ -293,7 +316,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     _torrentController.dispose();
     _videoController?.removeListener(_onVideoTick);
     _videoController?.dispose();
-    _httpClient.close();
+    _subtitleContentTimer?.cancel();
     super.dispose();
   }
 
