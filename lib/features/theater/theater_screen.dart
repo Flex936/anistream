@@ -18,6 +18,7 @@ import '../../data/torrent/models/torrent.dart';
 import '../../shared/widgets/toast.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
+import 'services/playback_diagnostics.dart';
 import 'services/player_configurator.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
@@ -52,6 +53,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
   late final VideoController _videoController;
   late final AutoSkipController _autoSkipController;
   late final ControlsVisibilityController _controlsVisibility;
+
+  // ── Track C, 3a: temporary diagnostic instrumentation for the mpv
+  // paused-freeze bug — see playback_diagnostics.dart's class doc.
+  // Read-only; never affects playback behavior. ──
+  late final PlaybackDiagnostics _playbackDiagnostics;
 
   bool _videoInitialized = false;
   bool _isSettingsOpen = false;
@@ -89,6 +95,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       player: _player,
       isSubMenuOpen: () => _isSettingsOpen,
     );
+    _playbackDiagnostics = PlaybackDiagnostics(player: _player);
 
     if (Platform.isAndroid || Platform.isIOS) {
       // ── initState can't be async — SystemChrome's setters return
@@ -559,6 +566,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       setState(() => _videoInitialized = false);
       await WidgetsBinding.instance.endOfFrame;
     }
+    _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     await _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
@@ -588,6 +596,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
 
     _controlsVisibility.dispose();
+    _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     final posSub = _posSub;
     if (posSub != null) {
