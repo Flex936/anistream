@@ -43,28 +43,18 @@ _PillMetrics _measureStatusPill(String label, BuildContext context) {
 
 /// Pinned, shrink-driven hero header for AnimeDetailsScreen.
 ///
-/// The title has TWO representations that hand off near t = 0 via a
-/// SEQUENTIAL fade — the at-rest (wrap-enabled, up to 2 lines) layer
-/// fades fully to 0 over the FIRST half of `_kAtRestFadeRange`, then
-/// only once it's gone does the scrolling (single-line, Rect/fontSize-
-/// lerped) layer fade 0 -> 1 over the second half. The two are never
-/// both partially visible at once.
-///
-/// This replaces an earlier version that faded both layers
-/// SIMULTANEOUSLY over the same window, which produced a doubled/
-/// smeared "cut off" look wherever both were partially opaque at once —
-/// made worse by two consistency bugs fixed alongside this one:
-///  - `fullTitleRect`'s height used to be a hardcoded single-line value
-///    (44) even while the at-rest layer above it could genuinely be 2
-///    lines tall (via `titlePainter.height`, already computed for
-///    `metaContainerTop`'s sake) — so the lerp layer's box was shorter
-///    than what it was overlapping.
-///  - The lerp layer used to vertically CENTER its text inside that box
-///    (`Alignment.centerLeft`), while the at-rest layer's text simply
-///    started at the top of its own unconstrained-height box — two
-///    different vertical anchors for what's supposed to read as the
-///    same title. Now both anchor to `Alignment.topLeft`, so the
-///    handoff lands exactly where the at-rest title's first line was.
+/// The title has two representations that crossfade into each other as
+/// the header collapses: an at-rest layer (wrap-enabled, up to 2 lines,
+/// positioned at its natural spot) and a scrolling layer (single-line,
+/// with its `Rect` and font size interpolated across the scroll range).
+/// `crossfadeT` — derived from `_kAtRestFadeRange` — controls how much of
+/// each layer is visible at a given scroll position; their opacities
+/// always sum to 1, so the two are never both fully visible at once.
+/// `fullTitleRect` uses the at-rest layer's actual measured height
+/// (`titlePainter.height`, 1 or 2 lines depending on the title), and
+/// both layers anchor their text the same way during the crossfade (see
+/// `titleAlignment` below), which is what keeps the handoff between them
+/// visually clean.
 class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Anime anime;
   final VoidCallback? onBack;
@@ -148,14 +138,9 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         ? (t >= 0.35 ? 0.0 : 1.0)
         : 1.0 - labelT;
 
-    // ── Title crossfade — genuinely simultaneous again (opacities sum
-    // to exactly 1 throughout), not the sequential fade-out-then-fade-in
-    // split from the previous round. That split was only needed because
-    // the two layers used to disagree on height/alignment; now that
-    // fullTitleRect uses the real measured titlePainter.height and both
-    // layers share a common alignment strategy (see titleAlignment
-    // below), a plain crossfade dissolves cleanly instead of doubling
-    // or blinking to nothing at the midpoint. ──
+    // atRestOpacity and lerpOpacity (below) sum to exactly 1 throughout,
+    // so the at-rest and scrolling title layers dissolve into each other
+    // without ever fully overlapping or leaving a gap.
     final double crossfadeT = (t / _kAtRestFadeRange).clamp(0.0, 1.0);
     final double atRestOpacity = uiPerformanceMode
         ? (t > 0 ? 0.0 : 1.0)
@@ -164,20 +149,17 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         ? (t > 0 ? 1.0 : 0.0)
         : crossfadeT;
 
-    // Height now matches the at-rest layer's ACTUAL measured content
-    // (titlePainter.height — 1 or 2 lines, whatever this title needs)
-    // instead of a hardcoded single-line value.
+    // Matches the at-rest layer's measured content (titlePainter.height
+    // — 1 or 2 lines, whichever this title needs).
     final Rect fullTitleRect = Rect.fromLTWH(
       20,
       atRestTop,
       contentMaxWidth,
       titlePainter.height,
     );
-    // Was a hardcoded 172 — unrelated to the compact dot's actual size,
-    // which is what left the huge dead gap in the screenshot. Now
-    // derived from the dot's real position + its fixed 8px diameter +
-    // a 12px breathing gap, the same "measure it, don't guess"
-    // principle already applied to the full-state leadingGap.
+    // Derived from the dot's real position plus its fixed 8px diameter
+    // and a 12px breathing gap — the same "measure it, don't guess"
+    // principle applied to the full-state leadingGap.
     final double compactTitleLeft = compactStatusOffset.dx + 8 + 12;
     final Rect compactTitleRect = Rect.fromLTWH(
       compactTitleLeft,
@@ -246,16 +228,12 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
               child: Opacity(
                 opacity: lerpOpacity,
                 // Lerps topLeft -> centerLeft across the remaining scroll
-                // range AFTER the crossfade completes (not during it —
-                // titleAlignmentT stays 0 until crossfadeT reaches 1).
-                // topLeft is what makes the crossfade dissolve cleanly
-                // against the at-rest layer's own top-anchored text;
-                // centerLeft is what makes the fully-collapsed title
-                // line up against compactTitleRect's back-button/dot
-                // vertical center. A fixed topLeft throughout was
-                // correct for the former and wrong for the latter —
-                // this fixes the off-center look without reintroducing
-                // the crossfade-time mismatch the fixed value fixed.
+                // range after the crossfade completes (titleAlignmentT
+                // stays 0 until crossfadeT reaches 1). topLeft keeps the
+                // crossfade dissolving cleanly against the at-rest
+                // layer's own top-anchored text; centerLeft lines the
+                // fully-collapsed title up against compactTitleRect's
+                // back-button/dot vertical center.
                 child: Align(
                   alignment: titleAlignment,
                   child: Text(

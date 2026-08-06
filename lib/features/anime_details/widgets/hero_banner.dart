@@ -7,10 +7,9 @@ import '../../../shared/widgets/app_network_image.dart';
 import 'external_link_buttons.dart';
 
 /// The background art layer of the collapsing hero header — banner image
-/// + darkening gradient only. Unchanged from the previous round; the
-/// enlarged banner height is a maxExtentValue change owned by
-/// HeroHeaderDelegate, not this widget, since HeroBanner just fills
-/// whatever height a Stack.expand parent hands it.
+/// + darkening gradient only. The header's overall height is owned by
+/// HeroHeaderDelegate's `maxExtentValue`; HeroBanner just fills whatever
+/// height a Stack.expand parent hands it.
 class HeroBanner extends StatelessWidget {
   final Anime anime;
   final bool uiPerformanceMode;
