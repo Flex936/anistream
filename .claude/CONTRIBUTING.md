@@ -1,6 +1,6 @@
 # Contributing to AniStream
 
-> **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · **CONTRIBUTING.md — PR process**
+> **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · **CONTRIBUTING.md — PR process**
 > **Covers:** how to contribute — setup pointers, coding standards, the PR checklist, and the Code of Conduct. **See also:** [CODING_RULES.md](CODING_RULES.md) for the exact rules a PR is held to, [DESIGN.md](DESIGN.md) for UI/UX contributions, [ARCHITECTURE.md](ARCHITECTURE.md) § 2 for where new code belongs.
 
 Thanks for considering a contribution — AniStream is maintained by a small team (plus AI-assisted development), and outside contributions genuinely help. This guide covers how to get set up, what's expected of a PR, and where the project's other rules live so nothing here is duplicated.
@@ -40,6 +40,7 @@ If your change matches a trigger in [CLAUDE.md](CLAUDE.md) § 2's Living Documen
 
 - [ ] `flutter analyze` passes with no new warnings/errors
 - [ ] Widgets/state also follow [CODING_RULES.md](CODING_RULES.md) § 1's review-only conventions (collection rendering, `StatelessWidget`-by-default, `InheritedNotifier`-only state, offloaded parsing, network-request caching) — these aren't caught by `analyze`, so check them manually
+- [ ] New/changed comments describe current behavior only — no session/phase references, no "was X" history, no long-dash comment brackets ([CODING_RULES.md](CODING_RULES.md) § 2)
 - [ ] New/changed widgets follow [DESIGN.md](DESIGN.md) (colors, radii, blur, D-pad focus rules as applicable)
 - [ ] New files are placed per [ARCHITECTURE.md](ARCHITECTURE.md) § 2's folder rule
 - [ ] Any networking/scraping change is reflected in [API.md](API.md)
@@ -55,4 +56,4 @@ This project follows the [Contributor Covenant](https://www.contributor-covenant
 By contributing, you agree that your contributions are licensed under the project's **GNU General Public License v3.0 (GPLv3)** — see [README.md](../README.md) § 9 and the `LICENSE` file expected at the repository root (its presence there is currently pending verification).
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Changed the PR checklist (§ 6), the design-debt list (DESIGN.md § 5), or the license (§ 8)? Update this file too.*
+*Last reviewed against the codebase: 2026-08-03. Changed the PR checklist (§ 6), the design-debt list (DESIGN.md § 5), or the license (§ 8)? Update this file too.*

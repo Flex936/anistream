@@ -3,8 +3,8 @@ final RegExp _anyTagRegex = RegExp(r'<[^>]+>');
 final RegExp _multiNewlineRegex = RegExp(r'\n{3,}');
 
 /// Strips AniList's HTML-flavored description markup down to plain text.
-/// Consolidates the two divergent `_stripHtml` copies that used to live in
-/// `watchlist_cards.dart` and `hero_banner.dart`.
+/// Single shared implementation used by both `watchlist_cards.dart` and
+/// `hero_banner.dart`.
 ///
 /// [preserveLineBreaks]: true for the details hero banner's multi-paragraph
 /// synopsis (`<br>` → `\n`); false for card/list summaries that collapse to

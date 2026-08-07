@@ -10,10 +10,10 @@ import '../../../shared/widgets/hover_focus_builder.dart';
 /// Small, static building block for the back button — positioned
 /// directly by HeroHeaderDelegate and, unlike the title or the status
 /// indicator, doesn't change position across the collapse. Kept as the
-/// LAST child in HeroHeaderDelegate's Stack (topmost paint/hit-test
-/// priority) as one of two structural fixes for the back-button-stops-
-/// working bug — see that file's class doc for the other half (IgnorePointer
-/// on every fading interactive sibling).
+/// last child in HeroHeaderDelegate's Stack so it always has top
+/// paint/hit-test priority over the fading interactive siblings above it
+/// — see HeroHeaderDelegate's class doc for the matching `IgnorePointer`
+/// on those siblings.
 class HeroHeaderBackButton extends StatelessWidget {
   final VoidCallback? onBack;
   final bool uiPerformanceMode;
@@ -61,9 +61,8 @@ class HeroHeaderBackButton extends StatelessWidget {
 
         return FrostedContainer(
           uiPerformanceMode: uiPerformanceMode,
-          // Converged onto AppMaterials' .subtle tier (10px) — the same
-          // sigma the equivalent old _FloatingNavBar was converged to
-          // when main unified blur values across the app. Was 12.
+          // AppMaterials' subtle tier (10px) — the small-control blur
+          // used for icon buttons and pill-shaped floating controls.
           sigma: context.appMaterials.subtle,
           borderRadius: BorderRadius.circular(20),
           child: content,

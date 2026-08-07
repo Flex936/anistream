@@ -9,22 +9,21 @@ import 'torrent_tile.dart';
 
 /// Centered-card modal showing torrent search results for one episode.
 ///
-/// The full-screen glassmorphic backdrop lives INSIDE this widget's own
-/// build() now, rather than relying on showGeneralDialog's `barrierColor`
-/// — that's what makes it possible to route it through FrostedContainer
-/// (blur in normal mode, flat scrim under uiPerformanceMode, matching
-/// every other glass surface in the app) instead of a plain color scrim.
+/// The full-screen glassmorphic backdrop lives inside this widget's own
+/// build(), routed through FrostedContainer (blur in normal mode, flat
+/// scrim under uiPerformanceMode, matching every other glass surface in
+/// the app) rather than using showGeneralDialog's plain-color
+/// `barrierColor`.
 ///
 /// One consequence worth calling out: because this backdrop is a real,
-/// opaque widget painted IN FRONT of the actual (now-transparent)
-/// ModalBarrier, tapping it can no longer rely on barrierDismissible's
-/// own built-in gesture handling — that gesture lives on the barrier
-/// BEHIND our backdrop, which our backdrop would otherwise silently
-/// intercept. The backdrop below carries its own onTap-to-dismiss
-/// instead. The centered card is a Stack sibling painted AFTER (on top
-/// of) the backdrop, so a tap on the card itself is consumed by the
-/// card's own opaque decoration first and never reaches the backdrop's
-/// dismiss handler underneath.
+/// opaque widget painted in front of the (transparent) ModalBarrier,
+/// tapping it can't rely on barrierDismissible's own built-in gesture
+/// handling — that gesture lives on the barrier behind this backdrop,
+/// which the backdrop would otherwise silently intercept. The backdrop
+/// below carries its own onTap-to-dismiss instead. The centered card is
+/// a Stack sibling painted after (on top of) the backdrop, so a tap on
+/// the card itself is consumed by the card's own opaque decoration first
+/// and never reaches the backdrop's dismiss handler underneath.
 class TorrentSearchModal extends StatelessWidget {
   final int episodeNumber;
   final Future<List<Torrent>> torrentsFuture;
@@ -50,10 +49,9 @@ class TorrentSearchModal extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Episode $episodeNumber sources',
-      // Transparent — the darkening now lives entirely in this widget's
-      // own full-screen backdrop below, via FrostedContainer, instead of
-      // being layered here AND there. See class doc for why the actual
-      // dismiss gesture also had to move alongside it.
+      // Transparent — the darkening lives entirely in this widget's own
+      // full-screen backdrop below, via FrostedContainer. See class doc
+      // for why the dismiss gesture lives there too.
       barrierColor: AppPalette.transparent,
       transitionBuilder: (context, animation, _, child) {
         final curved = CurvedAnimation(
@@ -113,8 +111,6 @@ class TorrentSearchModal extends StatelessWidget {
               sigma: context.appMaterials.standard,
               borderRadius: BorderRadius.circular(16),
               child: Container(
-                // Widened + heightened (440x480 -> 520x560) per the
-                // "slightly wider and higher" request.
                 width: 520,
                 constraints: const BoxConstraints(maxHeight: 560),
                 decoration: BoxDecoration(

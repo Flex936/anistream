@@ -29,13 +29,11 @@ class TorrentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── Routed through the shared
-    // ResponsiveContext.isMobile extension. ──
+    // Routed through the shared ResponsiveContext.isMobile extension.
     final isMobile = context.isMobile;
 
-    // ── Pulling both token sets once at the top of
-    // build() rather than repeating `context.appTypography`/
-    // `context.appRadii` at each call site below. ──
+    // Pulled once at the top of build() rather than repeating
+    // `context.appTypography`/`context.appRadii` at each call site below.
     final typography = context.appTypography;
     final radii = context.appRadii;
 
@@ -51,10 +49,8 @@ class TorrentTile extends StatelessWidget {
               : isRecommended
               ? AppPalette.primary.withValues(alpha: 0.06)
               : AppPalette.overlay,
-          // ── Was BorderRadius.circular(12) hardcoded — matches
-          // AppRadii.small exactly (this is a card/list-item shape per
-          // DESIGN.md's own "12px for list items" rule), so this is a
-          // pure token substitution with no visual change. ──
+          // Matches AppRadii.small — this is a card/list-item shape per
+          // DESIGN.md's "12px for list items" rule.
           borderRadius: BorderRadius.circular(radii.small),
           border: Border.all(
             color: hovered
@@ -63,7 +59,6 @@ class TorrentTile extends StatelessWidget {
                 ? AppPalette.primary.withValues(alpha: 0.4)
                 : AppPalette.border,
           ),
-          // ── Drops the shadow if performance mode is enabled ──
           boxShadow: (isRecommended && !uiPerformanceMode)
               ? [
                   BoxShadow(
@@ -75,9 +70,8 @@ class TorrentTile extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(radii.small),
-          // ── Clip.hardEdge under Performant mode — see
-          // FrostedContainer's doc comment for the rationale. This clip
-          // wasn't routed through FrostedContainer at all previously. ──
+          // Clip.hardEdge under Performant mode — see FrostedContainer's
+          // doc comment for the rationale.
           clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -98,11 +92,6 @@ class TorrentTile extends StatelessWidget {
                         size: 12,
                       ),
                       const SizedBox(width: 6),
-                      // ── Was TextStyle(fontSize: 10, fontWeight: w800,
-                      // letterSpacing: 1.0) — part of the approved
-                      // badgeLabel convergence cluster. Only visual
-                      // delta: letterSpacing 1.0 -> 0.5 (badgeLabel's
-                      // converged value). Size/weight unchanged. ──
                       Text(
                         'RECOMMENDED',
                         style: typography.badgeLabel.copyWith(
@@ -124,11 +113,6 @@ class TorrentTile extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // ── Was TextStyle(fontSize: 13, fontWeight:
-                          // w500, height: 1.4) — part of the approved
-                          // cardTitleCompact convergence cluster. Visual
-                          // delta: fontWeight w500 -> w600 (converged
-                          // value); height 1.4 -> 1.35. ──
                           Text(
                             torrent.title,
                             style: typography.cardTitleCompact.copyWith(
@@ -154,12 +138,9 @@ class TorrentTile extends StatelessWidget {
                                     color: AppPalette.textMuted,
                                   ),
                                   const SizedBox(width: 4),
-                                  // ── Left as a plain literal — this is
-                                  // a muted, regular-weight 12px label,
-                                  // not a match for any identified
-                                  // duplicate cluster (metaLabel is
-                                  // w600). Forcing it into metaLabel
-                                  // would incorrectly bump its weight. ──
+                                  // Left as a plain literal — a muted,
+                                  // regular-weight 12px label, distinct
+                                  // from metaLabel (which is w600).
                                   Text(
                                     torrent.size,
                                     style: const TextStyle(
@@ -169,9 +150,6 @@ class TorrentTile extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              // ── Was TextStyle(fontSize: 12, fontWeight:
-                              // w600) inline — exact match for metaLabel,
-                              // pure token substitution, no visual change. ──
                               Text(
                                 '▲ ${torrent.seeders} Seeders',
                                 style: typography.metaLabel.copyWith(
@@ -194,9 +172,8 @@ class TorrentTile extends StatelessWidget {
                         color: hovered
                             ? AppPalette.primary
                             : AppPalette.primary.withValues(alpha: 0.1),
-                        boxShadow:
-                            (hovered &&
-                                !uiPerformanceMode) // Drop hover glow if in performance mode
+                        // Drops the hover glow under performance mode.
+                        boxShadow: (hovered && !uiPerformanceMode)
                             ? [
                                 BoxShadow(
                                   color: AppPalette.primary.withValues(
@@ -237,16 +214,11 @@ class _Pill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: AppPalette.primary.withValues(alpha: 0.12),
-        // ── Was BorderRadius.circular(4) — nudged up to AppRadii.tag
-        // (6), the approved tier for small decorative badges/pills.
-        // Small, deliberate visual convergence rather than a pure
-        // refactor. ──
+        // Uses AppRadii.tag, the approved tier for small decorative
+        // badges/pills.
         borderRadius: BorderRadius.circular(radii.tag),
         border: Border.all(color: AppPalette.primary.withValues(alpha: 0.28)),
       ),
-      // ── Was TextStyle(fontSize: 10, fontWeight: w700, letterSpacing:
-      // 0.3) — part of the approved badgeLabel convergence cluster.
-      // Visual delta: fontWeight w700 -> w800; letterSpacing 0.3 -> 0.5. ──
       child: Text(
         label,
         style: typography.badgeLabel.copyWith(color: AppPalette.primary),

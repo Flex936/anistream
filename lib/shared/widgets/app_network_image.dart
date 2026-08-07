@@ -7,7 +7,7 @@ import '../utils/perf_animations.dart';
 class AppNetworkImage extends StatelessWidget {
   final String? url;
   final double scale;
-  final int? cacheWidth; // ── Limit physical pixel decoding in RAM ──
+  final int? cacheWidth; // Limits physical pixel decoding in RAM
   final bool uiPerformanceMode;
 
   const AppNetworkImage({
@@ -43,28 +43,24 @@ class AppNetworkImage extends StatelessWidget {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        cacheWidth: cacheWidth, // Tells Flutter to discard excess pixel data!
-        // ── Cheaper resampling filter on weak GPUs — the difference is
+        cacheWidth: cacheWidth, // Tells Flutter to discard excess pixel data
+        // Cheaper resampling filter on weak GPUs — the difference is
         // basically invisible at the poster/thumbnail sizes this widget is
         // used at, but low-quality bilinear sampling is meaningfully less
-        // GPU work per frame than the medium-quality default. ──
+        // GPU work per frame than the medium-quality default.
         filterQuality: uiPerformanceMode
             ? FilterQuality.low
             : FilterQuality.medium,
         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
           if (wasSynchronouslyLoaded) return child;
 
-          // ── AnimatedSwitcher (not a permanently-mounted Stack) is the
-          // fix here. The old version kept `_SkeletonShimmer` in the tree
-          // forever, hidden behind AnimatedOpacity(opacity: 0) once loaded
-          // — its AnimationController never stopped ticking for the rest
-          // of the widget's life. Keying the child on load state means the
-          // skeleton branch (and its controller) is disposed the moment
-          // AnimatedSwitcher finishes cross-fading to the loaded image.
-          // Under uiPerformanceMode the cross-fade duration collapses to
-          // zero via perfDuration — the loaded image just appears on the
-          // next frame instead of dissolving in, with no saveLayer needed
-          // for the fade. ──
+          // AnimatedSwitcher is keyed on load state, so the skeleton
+          // branch (and its AnimationController) is disposed the moment
+          // the cross-fade to the loaded image finishes — nothing keeps
+          // ticking once an image has loaded. Under uiPerformanceMode the
+          // cross-fade duration collapses to zero via perfDuration — the
+          // loaded image just appears on the next frame instead of
+          // dissolving in, with no saveLayer needed for the fade.
           return AnimatedSwitcher(
             duration: perfDuration(
               uiPerformanceMode,
@@ -96,7 +92,7 @@ class AppNetworkImage extends StatelessWidget {
   }
 }
 
-// ── Animated Skeleton Loader ──
+// Animated skeleton loader.
 class _SkeletonShimmer extends StatefulWidget {
   final Widget? child;
   const _SkeletonShimmer({this.child});

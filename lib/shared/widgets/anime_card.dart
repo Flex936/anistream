@@ -29,7 +29,6 @@ class AnimeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
-    // ── Pulled once at the top of build() ──
     final typography = context.appTypography;
     final radii = context.appRadii;
 
@@ -37,14 +36,10 @@ class AnimeCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          // ── DpadFocusable replaces HoverFocusBuilder. The poster's
-          // hover overlay (_HoverOverlay) depends on the focus state, so
-          // — unlike _NavLogo — there's no focus-independent subtree
-          // worth passing through the `child` optimization param; builder
-          // rebuilds the whole visual tree each time, same shape as the
-          // old (context, hovered) => Widget callback, just keyed off
-          // state.focused instead. `child` is an unused placeholder for
-          // exactly that reason. ──
+          // The poster's hover overlay (_HoverOverlay) depends on focus
+          // state, so there's no focus-independent subtree worth passing
+          // through `child` — builder rebuilds the whole visual tree,
+          // keyed off state.focused.
           child: DpadFocusable(
             autofocus: autofocus,
             onSelect: () {
@@ -83,26 +78,24 @@ class AnimeCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radii.small),
-                // ── Clip.hardEdge under Performant mode instead of the
+                // Clip.hardEdge under Performant mode instead of the
                 // ClipRRect default (Clip.antiAlias) — a sampled,
                 // anti-aliased clip on every single poster in every
-                // carousel/grid is exactly the "complex clipping path"
-                // cost Performant mode exists to strip. ──
+                // carousel/grid is exactly the kind of complex clipping
+                // path Performant mode exists to strip.
                 clipBehavior: uiPerformanceMode
                     ? Clip.hardEdge
                     : Clip.antiAlias,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // ── cacheWidth added: this card renders at ~170dp in
-                    // every carousel and at similar widths in search/grid
-                    // layouts, but was decoding `extraLarge` (the largest
-                    // AniList cover variant) at full resolution every time.
-                    // Given this is the single most-instantiated poster
-                    // widget in the app, that was real, repeated,
-                    // avoidable decode + RAM cost. 450 covers up to ~2.6x
-                    // device pixel ratio at the widest display width this
-                    // card is actually used at. ──
+                    // This is the single most-instantiated poster widget
+                    // in the app (every carousel and grid), so
+                    // cacheWidth matters: 450 covers up to ~2.6x device
+                    // pixel ratio at the widest width this card is
+                    // actually used at, rather than decoding AniList's
+                    // full-resolution `extraLarge` variant for a ~170dp
+                    // card.
                     AppNetworkImage(
                       url: anime.coverImage?.extraLarge,
                       cacheWidth: 450,
@@ -137,14 +130,9 @@ class AnimeCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        // ── Was wrapped in a second, unused HoverFocusBuilder — it had no
-        // onTap and its builder ignored the hovered value it was handed,
-        // so it existed only as a dead, focusable stop: pressing D-Pad
-        // down from the poster landed here, showed a ring, and did
-        // nothing. That's exactly the "focus highlight on a
-        // non-interactive title" bug the original audit flagged. Plain
-        // Text now — nothing here is interactive, so nothing here should
-        // be a focus target. ──
+        // Plain Text, not a second focusable — nothing below the poster
+        // is interactive, so nothing below it should be a D-Pad focus
+        // target or show a focus ring.
         Text(
           anime.title.display,
           maxLines: 1,
@@ -163,7 +151,7 @@ class AnimeCard extends StatelessWidget {
   }
 }
 
-// ── Private Stateless Components ─────────────────────────────────────────────
+// Private stateless components.
 
 class _PosterGradient extends StatelessWidget {
   final int? score;
@@ -191,9 +179,8 @@ class _PosterGradient extends StatelessWidget {
         children: [
           const Icon(Icons.star_rounded, color: AppPalette.accent, size: 14),
           const SizedBox(width: 3),
-          // ── Left as a plain literal (fontSize: 12, fontWeight: w700) —
-          // doesn't match metaLabel (12/w600); forcing it in would
-          // incorrectly lighten this rating badge's weight. ──
+          // Left as a plain literal — distinct from metaLabel (w600);
+          // this rating badge is deliberately heavier.
           Text(
             (score! / 10).toStringAsFixed(1),
             style: const TextStyle(
@@ -255,11 +242,10 @@ class _HoverOverlay extends StatelessWidget {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1.0 : 0.0,
-        // ── Zero-duration under Performant mode: the overlay still shows
+        // Zero-duration under Performant mode: the overlay still shows
         // on hover/focus (TV remotes "hover" via D-Pad focus), it just
-        // snaps in instead of fading, which skips the saveLayer an
-        // interpolated opacity <1.0 would otherwise force every frame of
-        // the transition. ──
+        // snaps in instead of fading, skipping the saveLayer an
+        // interpolated opacity <1.0 would otherwise force every frame.
         duration: perfDuration(
           uiPerformanceMode,
           const Duration(milliseconds: 150),

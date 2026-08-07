@@ -10,25 +10,25 @@ class TorrentMetadata {
 }
 
 abstract final class TorrentParser {
-  // ── The one regex we keep ──
+  // The one regex this parser uses. Matches: [01-24], 01~24, ep01-12,
+  // e01-e24. It needs lookahead-style boundary checks on both sides
+  // (bracket / whitespace / punctuation / start-or-end-of-string), which
+  // is exactly the kind of thing a regex engine is good at and a
+  // hand-rolled scanner is not. It also runs once per filename (not once
+  // per token), so there's no hot loop to win back by removing it — see
+  // _tokenize's doc comment for the cases that do get a manual scan
+  // instead, and why.
   //
-  // Matches: [01-24], 01~24, ep01-12, e01-e24. It needs lookahead-style
-  // boundary checks on *both* sides (bracket / whitespace / punctuation /
-  // start-or-end-of-string), which is exactly the kind of thing a regex
-  // engine is good at and a hand-rolled scanner is not. It also runs once
-  // per filename (not once per token), so there's no hot loop to win back
-  // by removing it — see _tokenize's doc comment for the cases that *do*
-  // get a manual rewrite, and why.
-  //
-  // The {2,4} digit-count floor is deliberate and load-bearing, not just a
-  // sane-length guess — DO NOT relax it to {1,4} to catch rare single-digit
-  // batch ranges (e.g. a 6-episode OVA batched as "1-6"). Doing so would
-  // also make this regex match "Series 2 - 05" — a bare sequel-cour digit
-  // baked into the title, followed by a dash then the real episode — as if
-  // it were a batch range "2-5". Confirmed by running both shapes through
-  // this pattern side-by-side: {1,4} turns "Shingeki no Kyojin 2 - 05" into
-  // a false batch classification; {2,4} correctly leaves it alone and lets
-  // the token loop below (see `episodeIsConfident`) resolve it as episode 5.
+  // The {2,4} digit-count floor is deliberate and load-bearing, not just
+  // a sane-length guess — do not relax it to {1,4} to catch rare
+  // single-digit batch ranges (e.g. a 6-episode OVA batched as "1-6").
+  // Doing so would also make this regex match "Series 2 - 05" — a bare
+  // sequel-cour digit baked into the title, followed by a dash then the
+  // real episode — as if it were a batch range "2-5". Verified by running
+  // both shapes through this pattern side-by-side: {1,4} turns "Shingeki
+  // no Kyojin 2 - 05" into a false batch classification; {2,4} correctly
+  // leaves it alone and lets the token loop below (see
+  // `episodeIsConfident`) resolve it as episode 5.
   static final _batchRangeRegex = RegExp(
     r'(?:^|[\[\(\s_.,-])(?:e|ep)?(\d{2,4})\s*[-~]\s*(?:e|ep)?(\d{2,4})(?=[\]\)\s_.,-]|$)',
   );
@@ -36,17 +36,13 @@ abstract final class TorrentParser {
   static const _knownExtensions = {'mkv', 'mp4', 'avi', 'mp3', 'flac'};
   static const _seasonPrefixes = ['season', 'cour', 'part', 's'];
 
-  // ── Bare (unbracketed) numbers that should never be treated as episode
-  // candidates because they're almost certainly a resolution tag instead —
-  // e.g. "Show.Name.540.05.WEB-DL.mkv" from a scene-style release that
+  // Bare (unbracketed) numbers that are never treated as episode
+  // candidates because they're almost certainly a resolution tag instead
+  // — e.g. "Show.Name.540.05.WEB-DL.mkv" from a scene-style release that
   // skips brackets entirely. This is deliberately broader than the set
-  // _applyEnclosureResolution actually surfaces into meta.resolution: it
-  // only needs to keep these values from being *mistaken for an episode*,
-  // not to make every one of them user-visible. The original list was just
-  // {1080, 720, 480, 2160} — 360/540/576/1440/4320 sailed straight through
-  // into episode-candidate territory (a bare "540", a real if less common
-  // BD-encode height, would previously have overwritten the true episode
-  // number if it appeared before it with no dash in between). ──
+  // _applyEnclosureResolution surfaces into meta.resolution: it only
+  // needs to keep these values from being mistaken for an episode, not
+  // to make every one of them user-visible.
   static const _knownResolutionValues = {
     360,
     480,
@@ -65,20 +61,20 @@ abstract final class TorrentParser {
     final lowerFilename = filename.toLowerCase();
     bool explicitSeasonFound = false;
 
-    // 1. Global Batch Detection Check
+    // 1. Global batch detection check.
     if (lowerFilename.contains('batch') || lowerFilename.contains('complete')) {
       meta.isBatch = true;
     }
 
-    // 2. Extract Release Group (original casing preserved, anchored to the
+    // 2. Extract release group (original casing preserved, anchored to the
     // very start of the string — a plain bracket scan instead of a regex).
     final group = _extractLeadingBracket(filename.trim());
     if (group != null) {
       meta.releaseGroup = group;
     }
 
-    // 3. Pre-Pass: Detect batch ranges on the RAW, unprocessed string.
-    // This is the only mechanism that ever sets batchStart/batchEnd from a
+    // 3. Pre-pass: detect batch ranges on the raw, unprocessed string.
+    // This is the only mechanism that sets batchStart/batchEnd from a
     // dash-range — see the note in the token loop below for why.
     for (final m in _batchRangeRegex.allMatches(lowerFilename)) {
       final start = int.tryParse(m.group(1)!);
@@ -90,42 +86,39 @@ abstract final class TorrentParser {
       }
     }
 
-    // 4. Strip extension + tokenize. This single manual pass replaces what
-    // used to be 4 separate full-string regex/rewrite passes (extension
-    // strip, enclosure-blank, punctuation-strip, dash-pad) plus a final
-    // `.split()` allocation — see _tokenize for the equivalence argument.
+    // 4. Strip extension + tokenize. This single manual pass handles
+    // extension stripping, bracket-enclosure blanking (while still
+    // inspecting bracket contents for a resolution tag), punctuation
+    // stripping, dash isolation, and the final split — see _tokenize for
+    // the full behavior and the equivalence testing it was checked
+    // against.
     final stripped = _stripKnownExtension(lowerFilename);
     final tokens = _tokenize(stripped, meta);
 
-    // 5. Token Iteration — state machine.
+    // 5. Token iteration — state machine.
     //
     // `episodeIsConfident` tracks whether the current meta.episode came
     // from an unambiguous marker (S01E06, a bare E06/EP12 tag, or the
     // "episode"/"ep"/"e" keyword followed by a number) as opposed to a
-    // bare, structurally-unmarked digit. Only a *confident* match is
-    // allowed to stick once something later tries to overwrite it — a bare
-    // digit is always still just a guess and can be superseded by a better
-    // signal found later in the same filename.
+    // bare, structurally-unmarked digit. Only a confident match is
+    // allowed to stick once something later tries to overwrite it — a
+    // bare digit is always still just a guess and can be superseded by a
+    // better signal found later in the same filename.
     //
-    // Previously `foundDash` was tracked but never actually changed which
-    // branch ran below — both arms of the old if/else-if did the exact
-    // same `meta.episode = num` assignment, so the *first* bare digit
-    // anywhere in the filename won and could never be replaced. That meant
-    // any title with its own embedded sequel/cour digit before the real
-    // episode marker — "Shingeki no Kyojin 2 - 05", "Symphogear 2 - 12" —
-    // had its episode permanently misread as 2, not 5/12, causing the
-    // scoring engine's episode-match check to reject the correct torrent
-    // outright. `foundDash` now actually does something: a number *after*
-    // a dash overwrites a tentative pre-dash guess, since the dash is the
-    // strongest positional signal fansub naming gives us for "this is the
-    // real episode."
+    // `foundDash` tracks whether a literal `-` token has been seen yet: a
+    // number appearing after a dash overwrites a tentative pre-dash
+    // guess, since the dash is the strongest positional signal fansub
+    // naming gives for "this is the real episode" — this is what
+    // correctly resolves titles with their own embedded sequel/cour digit
+    // before the real episode marker, such as "Shingeki no Kyojin 2 - 05"
+    // or "Symphogear 2 - 12", to episode 5/12 rather than 2.
     bool foundDash = false;
     bool episodeIsConfident = false;
 
     for (int i = 0; i < tokens.length; i++) {
       final t = tokens[i];
       // (No `if (t.isEmpty) continue;` here — _tokenize never emits empty
-      // tokens, so that check from the original is now provably dead.)
+      // tokens, so that check would be dead.)
 
       if (t == '-') {
         foundDash = true;
@@ -212,14 +205,10 @@ abstract final class TorrentParser {
       } else if (_isDigit(char0)) {
         // Ordinal season prefix: "2nd"/"3rd"/"4th"/"21st" immediately
         // followed by a literal "season" token, e.g. "Show Name 2nd
-        // Season - 05". Never caught by FAST PATH 1 above (int.tryParse
-        // rejects the "nd"/"rd"/"th"/"st" suffix), so this previously fell
-        // straight through untouched, leaving meta.season stuck at its
-        // default of 1 for any anime whose sequel season is titled this
-        // way — which AniList (and the fansub groups mirroring its
-        // titling) does very commonly. Gated on the very next token being
-        // "season" so an unrelated ordinal like "1st Anniversary Edition"
-        // is never mistaken for a season marker.
+        // Season - 05" — a common AniList/fansub titling style for
+        // sequel seasons. Gated on the very next token being "season" so
+        // an unrelated ordinal like "1st Anniversary Edition" is never
+        // mistaken for a season marker.
         final ordinal = _matchOrdinalPrefix(t);
         if (ordinal != null &&
             i + 1 < tokens.length &&
@@ -230,30 +219,9 @@ abstract final class TorrentParser {
           continue;
         }
       }
-
-      // The original had one more branch here:
-      //   else if (t.length >= 3 && t.contains('-')) {
-      //     final rangeMatch = RegExp(r'^(\d{2,4})-(\d{2,4})$').firstMatch(t);
-      //     ...
-      //   }
-      // It's unreachable and has been removed, not just "optimized away".
-      // Reasoning: step 4 pads *every* '-' into its own isolated token
-      // before the token list is ever built (see _tokenize), so by the
-      // time this loop runs, no token can contain an embedded dash —
-      // `t.contains('-')` is always false here. The same is true of the
-      // original `_seFormatRegex`'s optional `(?:-(\d+))?` trailing group
-      // (now simply not represented in _matchSeasonEpisodeToken): it could
-      // never match for the same reason. Batch ranges are still correctly
-      // captured — they're caught by step 3, against the *raw* string,
-      // before any of this padding happens. I verified both of these were
-      // dead by running the original regex logic against ~30 representative
-      // filenames (including batch ranges, S01E01-12 style tags, and
-      // unmatched brackets) in a side-by-side harness; neither branch ever
-      // fired. Net effect on output: none — this is a pure dead-code
-      // removal, not a behavior change.
     }
 
-    // 6. Missing Episode Fallback
+    // 6. Missing episode fallback.
     if (explicitSeasonFound && meta.episode == -1) {
       meta.isBatch = true;
     }
@@ -261,8 +229,8 @@ abstract final class TorrentParser {
     return meta;
   }
 
-  // ── Manual extension strip — avoids invoking the regex engine for what
-  // is just a fixed-suffix check. ──
+  // Manual extension strip — avoids invoking the regex engine for what is
+  // just a fixed-suffix check.
   static String _stripKnownExtension(String s) {
     final dot = s.lastIndexOf('.');
     if (dot == -1) return s;
@@ -272,10 +240,9 @@ abstract final class TorrentParser {
     return s;
   }
 
-  // ── Manual release-group extraction — replaces `^\[(.*?)\]`. The pattern
-  // was already a simple anchored "first bracket pair at the start of the
-  // string" check; indexOf does the same job without spinning up the
-  // regex engine for it. ──
+  // Manual release-group extraction: the pattern is just "first bracket
+  // pair at the start of the string," so indexOf does the job without
+  // spinning up the regex engine for it.
   static String? _extractLeadingBracket(String trimmed) {
     if (trimmed.isEmpty || trimmed.codeUnitAt(0) != 0x5B /* [ */ ) return null;
     final close = trimmed.indexOf(']');
@@ -284,28 +251,21 @@ abstract final class TorrentParser {
   }
 
   /// Single forward pass over the (already-lowercased, extension-stripped)
-  /// filename that does the work of four separate regex/rewrite passes in
-  /// the original:
-  ///  1. blanking `[...]` / `(...)` enclosures — while still inspecting
-  ///     their contents for a resolution tag, exactly like the original's
-  ///     `replaceAllMapped` callback did,
-  ///  2. stripping `_.+~,` punctuation,
-  ///  3. padding every `-` into its own isolated token,
-  ///  4. splitting on whitespace.
+  /// filename that:
+  ///  1. blanks `[...]` / `(...)` enclosures while still inspecting their
+  ///     contents for a resolution tag,
+  ///  2. strips `_.+~,` punctuation,
+  ///  3. pads every `-` into its own isolated token,
+  ///  4. splits on whitespace,
+  /// all in one traversal, building the token list directly rather than
+  /// via several intermediate string copies.
   ///
-  /// Building the token list directly avoids 3 intermediate copies of the
-  /// (potentially 100+ char) filename string plus the final list
-  /// allocation from `.split()` — for a feed with 100+ items, that's
-  /// hundreds of avoided string allocations per search.
-  ///
-  /// Equivalence was checked against the original regex pipeline across
-  /// ~30 representative filenames, including: nested/nearby brackets,
-  /// unmatched/unclosed brackets (the original's non-greedy `[\[\(](.*?)
-  /// [\]\)]` doesn't require matching bracket *types*, so `[foo)` blanks
-  /// just like `[foo]` would — this scanner intentionally preserves that
-  /// quirk rather than "fixing" it), dash-separated batch ranges, S01E01
-  /// style tags, and non-ASCII titles. All produced identical token lists
-  /// and identical resolution detection.
+  /// Verified against ~30 representative filenames, including:
+  /// nested/nearby brackets, unmatched/unclosed brackets (a non-greedy
+  /// bracket match doesn't require matching bracket types, so `[foo)`
+  /// blanks just like `[foo]` would — this scanner intentionally
+  /// preserves that quirk rather than "fixing" it), dash-separated batch
+  /// ranges, S01E01-style tags, and non-ASCII titles.
   static List<String> _tokenize(String text, TorrentMetadata meta) {
     final tokens = <String>[];
     final buffer = StringBuffer();
@@ -337,9 +297,9 @@ abstract final class TorrentParser {
             j++;
           }
           if (closeIdx == -1) {
-            // No closing bracket anywhere ahead: same as the regex simply
-            // failing to match at this position — the bracket is literal
-            // text, leave it in the current token and keep scanning.
+            // No closing bracket anywhere ahead — the bracket is literal
+            // text, so it's left in the current token and scanning
+            // continues.
             buffer.writeCharCode(unit);
             i++;
           } else {
@@ -379,17 +339,14 @@ abstract final class TorrentParser {
     return tokens;
   }
 
-  // ── Widened from an exact-string equality check against the whole
-  // enclosure body to a per-word scan. Some releases pack multiple
+  // Scans each non-alphanumeric-delimited word inside a bracket enclosure
+  // for a resolution tag, rather than requiring the enclosure's entire
+  // contents to equal the tag exactly. Some releases pack multiple
   // space/dot/dash-separated descriptors into a single bracket pair
   // instead of one tag per bracket — e.g. "[BD 1080p FLAC]" or "[BDRip
-  // 1080p HEVC]" — and the old `switch (enc) { case '1080p': ... }` only
-  // ever matched when the enclosure's *entire* contents equaled exactly
-  // "1080p", so any compound tag silently left meta.resolution at
-  // "Unknown". Splitting on non-alphanumeric characters and checking each
-  // resulting word keeps the common single-tag case working identically
-  // (no separator inside "1080p" ⇒ one "word" ⇒ same match as before)
-  // while also catching the compound form. ──
+  // 1080p HEVC]" — and a per-word scan catches those compound tags while
+  // still handling the common single-tag case identically (no separator
+  // inside "1080p" means one "word", so the match is the same either way).
   static void _applyEnclosureResolution(String enc, TorrentMetadata meta) {
     for (final word in enc.split(_enclosureWordSplitter)) {
       switch (word) {
@@ -418,12 +375,9 @@ abstract final class TorrentParser {
 
   static bool _isDigit(int codeUnit) => codeUnit >= 0x30 && codeUnit <= 0x39;
 
-  /// Replaces `^s(\d+)e(\d+)$`. (The original pattern also had a trailing
-  /// `(?:-(\d+))?` batch group — proven unreachable, see the note in
-  /// `parse()`, so it's simply not reproduced here.)
-  ///
-  /// Also accepts an optional trailing version suffix on the episode part,
-  /// e.g. `s01e06v2` — the `v<digits>` is ignored.
+  /// Matches a fused season/episode tag of the form `s01e06`, with an
+  /// optional trailing version suffix on the episode part (e.g.
+  /// `s01e06v2`, where the `v2` is ignored).
   static ({int season, int episode})? _matchSeasonEpisodeToken(String t) {
     final len = t.length;
     if (t.codeUnitAt(0) != 0x73 /* s */ ) return null;
@@ -463,7 +417,7 @@ abstract final class TorrentParser {
     return (season: season, episode: episode);
   }
 
-  /// Replaces `^(?:season|s|part|cour)(\d+)$`.
+  /// Matches a bare season tag: `season12`, `s12`, `part2`, `cour2`.
   static int? _matchSeasonToken(String t) {
     for (final prefix in _seasonPrefixes) {
       if (t.length > prefix.length && t.startsWith(prefix)) {
@@ -474,22 +428,21 @@ abstract final class TorrentParser {
     return null;
   }
 
-  /// Replaces `^(season|s|part|cour)$`.
+  /// True for a standalone season keyword token: `season`, `s`, `part`,
+  /// `cour` — used together with the following token when the number is
+  /// space-separated instead of fused (e.g. "Season 2").
   static bool _isSeasonKeyword(String t) =>
       t == 'season' || t == 's' || t == 'part' || t == 'cour';
 
-  /// Replaces `^(episode|ep|e)$`.
+  /// True for a standalone episode keyword token: `episode`, `ep`, `e` —
+  /// used together with the following token when the number is
+  /// space-separated instead of fused (e.g. "Episode 6").
   static bool _isEpisodeKeyword(String t) =>
       t == 'episode' || t == 'ep' || t == 'e';
 
-  /// Bare `eNN` / `epNN` with no season prefix at all — e.g. "e06", "ep12"
-  /// used as a standalone episode tag instead of either a plain number or
-  /// a full "S01E06". Previously unhandled: `_isEpisodeKeyword` only
-  /// matches the literal tokens "episode"/"ep"/"e" and expects the number
-  /// as a *separate*, following token, so "e06"/"ep12" as one fused token
-  /// matched neither that check nor `_matchSeasonEpisodeToken` (which
-  /// requires a leading `s`) — it was silently dropped, leaving
-  /// meta.episode at -1 for releases using this tagging style.
+  /// Matches a bare, fused episode tag with no season prefix — `e06`,
+  /// `ep12` — used by releases that tag episodes this way instead of
+  /// either a plain number or a full `S01E06`.
   static int? _matchEpisodeToken(String t) {
     if (t.length > 2 && t.startsWith('ep')) {
       final n = int.tryParse(t.substring(2));
@@ -502,11 +455,11 @@ abstract final class TorrentParser {
     return null;
   }
 
-  /// Ordinal season prefix — "2nd", "3rd", "4th", "21st" — parsed on its
-  /// own; the caller is responsible for also checking that the *next*
-  /// token is literally "season" before treating this as a season marker,
-  /// so an unrelated ordinal like "1st Anniversary Edition" is never
-  /// mistaken for one.
+  /// Matches an ordinal season prefix — "2nd", "3rd", "4th", "21st" —
+  /// returning its numeric value. The caller is responsible for also
+  /// checking that the next token is literally "season" before treating
+  /// this as a season marker, so an unrelated ordinal like "1st
+  /// Anniversary Edition" is never mistaken for one.
   static int? _matchOrdinalPrefix(String t) {
     final len = t.length;
     if (len < 3) return null;

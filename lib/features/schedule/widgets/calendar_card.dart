@@ -32,16 +32,14 @@ class CalendarCard extends StatelessWidget {
         ? 'Ep ${nextEp.episode}'
         : 'Ep ${anime.episodes ?? "?"}';
 
-    // ── Pulled once at the top of build() ──
     final typography = context.appTypography;
     final radii = context.appRadii;
 
-    // ── DpadFocusable replaces HoverFocusBuilder. Multiple nested parts
-    // (the border/shadow, the episode-label overlay's opacity, the title
-    // color) all depend on the focus state, so — same as AnimeCard —
-    // there's no focus-independent subtree worth passing through `child`;
-    // builder rebuilds the whole visual tree, keyed off state.focused
-    // instead of the old hovered bool. ──
+    // DpadFocusable drives the border/shadow, the episode-label overlay's
+    // opacity, and the title color, all off a single state.focused value
+    // — builder rebuilds the whole visual tree rather than splitting out
+    // a focus-independent `child`, since nearly everything here depends
+    // on focus state anyway.
     return DpadFocusable(
       autofocus: autofocus,
       onSelect: () => onTap?.call(),
@@ -73,17 +71,16 @@ class CalendarCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radii.small),
-                // ── Clip.hardEdge under Performant mode — see
-                // FrostedContainer's doc comment for the rationale. ──
+                // Clip.hardEdge under Performant mode — see
+                // FrostedContainer's doc comment for the rationale.
                 clipBehavior: uiPerformanceMode
                     ? Clip.hardEdge
                     : Clip.antiAlias,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // ── cacheWidth added: displayed at 160dp in
-                    // ScheduledScreen's day shelves, was decoding
-                    // `coverImage.large` at full resolution. ──
+                    // cacheWidth matched to this card's 160dp display
+                    // width in ScheduledScreen's day shelves.
                     AppNetworkImage(
                       url: anime.coverImage?.large,
                       cacheWidth: 400,
@@ -115,14 +112,12 @@ class CalendarCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: AppPalette.primary,
-                            // ── Deliberately LEFT as a plain literal, not
-                            // routed through AppRadii. This is a
-                            // fully-rounded stadium/pill badge — 20
-                            // exceeds half this small container's height
-                            // specifically to guarantee a full pill curve,
-                            // the same "stadium" pattern flagged in
-                            // watchlist_cards.dart's _PlayOverlay. None of
-                            // tag/small/large are a semantic match. ──
+                            // Fully-rounded stadium/pill badge — 20
+                            // exceeds half this container's height to
+                            // guarantee a full pill curve regardless of
+                            // content length, so it's left as a plain
+                            // literal rather than one of the tag/small/
+                            // large tiers.
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -179,8 +174,6 @@ class CalendarCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          // ── Left as a plain literal (fontSize: 10, no weight set) —
-          // doesn't match any identified cluster. ──
           Text(
             getTimeRemaining(nextEp.airingAt),
             maxLines: 1,

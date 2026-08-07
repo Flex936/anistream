@@ -9,14 +9,10 @@ import '../../../shared/utils/perf_animations.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 
 /// The synopsis section that lives directly below the pinned hero header
-/// (see HeroHeaderDelegate) — now JUST the synopsis text + its "Show
-/// more"/"Show less" toggle. The English subtitle and the
-/// AniList/MyAnimeList link row that used to live here have both moved
-/// into HeroBannerMetaBlock (see hero_banner.dart), which renders them
-/// inside the hero banner itself, below the title — per the "status/
-/// links move below the titles, still inside the banner" request. This
-/// is what resolves the transient duplicate AniList/MyAnimeList row from
-/// the last two phases: this file no longer renders its own copy at all.
+/// (see HeroHeaderDelegate). Renders only the synopsis text and its
+/// "Show more"/"Show less" toggle — the English subtitle and the
+/// AniList/MyAnimeList link row render inside the hero banner itself
+/// (see HeroBannerMetaBlock in hero_banner.dart), below the title.
 class AnimeSynopsisSection extends StatefulWidget {
   final Anime anime;
 

@@ -31,7 +31,6 @@ class HeroCard extends StatelessWidget {
     final media = entry.media;
     final progress = entry.progress;
 
-    // ── Pulled once at the top of build() ──
     final typography = context.appTypography;
     final radii = context.appRadii;
 
@@ -70,12 +69,9 @@ class HeroCard extends StatelessWidget {
               : null,
         ),
         child: ClipRRect(
-          // ── Both outer and inner now share AppRadii.small (12),
-          // matching the established pattern from torrent_tile.dart's
-          // pilot of using the same token value for both. ──
           borderRadius: BorderRadius.circular(radii.small),
-          // ── Clip.hardEdge under Performant mode — see
-          // FrostedContainer's doc comment for the rationale. ──
+          // Clip.hardEdge under Performant mode — see FrostedContainer's
+          // doc comment for the rationale.
           clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
           child: Stack(
             fit: StackFit.expand,
@@ -132,10 +128,6 @@ class HeroCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    // ── fontSize/weight are an exact
-                    // match for tileSubtitle (12/w400); the token's
-                    // height: 1.4 is inconsequential here since this is a
-                    // single line of text. ──
                     Text(
                       'Next: Episode ${progress + 1}',
                       style: typography.tileSubtitle.copyWith(
@@ -222,12 +214,11 @@ class ListCard extends StatelessWidget {
         child: Row(
           children: [
             ClipRRect(
-              // ── Converged to AppRadii.tag (6), matching the already-consistent
-              // small-thumbnail radius search_input.dart uses for its
-              // own 32x48 result-row cover art. Visual delta: 8 -> 6. ──
+              // Matches search_input.dart's own 32x48 result-row cover
+              // art radius.
               borderRadius: BorderRadius.circular(radii.tag),
-              // ── Clip.hardEdge under Performant mode — see
-              // FrostedContainer's doc comment for the rationale. ──
+              // Clip.hardEdge under Performant mode — see
+              // FrostedContainer's doc comment for the rationale.
               clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
               child: AspectRatio(
                 aspectRatio: 0.7,
@@ -256,10 +247,10 @@ class ListCard extends StatelessWidget {
                   Text.rich(
                     TextSpan(
                       children: [
-                        // ── metaLabel deliberately sets no `height`,
-                        // so mixing it into this Text.rich alongside the
-                        // plain-literal spans below can't introduce any
-                        // per-span line-height mismatch. ──
+                        // metaLabel sets no `height`, so mixing it into
+                        // this Text.rich alongside the plain-literal
+                        // spans below can't introduce a per-span
+                        // line-height mismatch.
                         TextSpan(
                           text: (media.status ?? 'UNKNOWN').replaceAll(
                             '_',
@@ -271,11 +262,8 @@ class ListCard extends StatelessWidget {
                                 AppPalette.statusDefault,
                           ),
                         ),
-                        // ── Left as plain literals (separator + score +
-                        // EPS suffix): these are 12/w400 (no weight set),
-                        // which doesn't match metaLabel (12/w600) —
-                        // forcing them in would incorrectly bump their
-                        // weight. ──
+                        // Left as plain literals (separator + score + EPS
+                        // suffix): 12/w400, distinct from metaLabel's w600.
                         const TextSpan(
                           text: '  •  ',
                           style: TextStyle(
@@ -308,10 +296,10 @@ class ListCard extends StatelessWidget {
                       child: ClipRect(
                         child: Wrap(
                           spacing: 8,
-                          // ── Left as a plain literal (fontSize: 11) —
-                          // 11pt doesn't belong to any identified
-                          // cluster; the nearest tokens (metaLabel/
-                          // badgeLabel) are both a different size. ──
+                          // Left as a plain literal (11pt) — doesn't
+                          // belong to any typography token; both nearby
+                          // candidates (metaLabel/badgeLabel) are a
+                          // different size.
                           children: media.genres!
                               .take(3)
                               .map(
@@ -422,8 +410,8 @@ class WatchlistCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radii.small),
-                // ── Clip.hardEdge under Performant mode — see
-                // FrostedContainer's doc comment for the rationale. ──
+                // Clip.hardEdge under Performant mode — see
+                // FrostedContainer's doc comment for the rationale.
                 clipBehavior: uiPerformanceMode
                     ? Clip.hardEdge
                     : Clip.antiAlias,
@@ -567,8 +555,8 @@ class _PlayOverlay extends StatelessWidget {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1.0 : 0.0,
-        // ── Zero-duration under Performant mode — snaps in/out instead of
-        // fading, avoiding the saveLayer an interpolated opacity forces. ──
+        // Zero-duration under Performant mode — snaps in/out instead of
+        // fading, avoiding the saveLayer an interpolated opacity forces.
         duration: perfDuration(
           uiPerformanceMode,
           const Duration(milliseconds: 200),
@@ -590,17 +578,11 @@ class _PlayOverlay extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: AppPalette.primary,
-                  // ── Deliberately LEFT as a plain literal, not routed
-                  // through AppRadii. This is a fully-rounded stadium/pill
-                  // button — 24 exceeds half this container's height
-                  // specifically to guarantee a full pill curve
-                  // regardless of exact size, which is a different visual
-                  // role than any of the three approved tiers (tag =
-                  // small badges, small = cards/list items, large =
-                  // modals/panels). Forcing it onto `large` would be a
-                  // coincidental numeric match, not a semantic one —
-                  // flagging this as a possible future 4th "pill" tier
-                  // rather than silently reusing `large` here. ──
+                  // Fully-rounded stadium/pill button — 24 exceeds half
+                  // this container's height to guarantee a full pill
+                  // curve regardless of exact size, a different visual
+                  // role than any of the tag/small/large tiers, so left
+                  // as a plain literal.
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: uiPerformanceMode
                       ? null
@@ -613,10 +595,8 @@ class _PlayOverlay extends StatelessWidget {
                 ),
                 child: Text(
                   label,
-                  // ── Left as a plain literal (12/w700/0.2 spacing) —
-                  // doesn't match metaLabel (12/w600, no spacing) or
-                  // badgeLabel (10/w800/0.5 spacing); a distinct
-                  // combination not covered by any approved cluster. ──
+                  // Left as a plain literal (12/w700/0.2 spacing) —
+                  // doesn't match metaLabel or badgeLabel.
                   style: const TextStyle(
                     color: AppPalette.white,
                     fontSize: 12,

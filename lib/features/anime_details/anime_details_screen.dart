@@ -62,11 +62,10 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     () => _scraper.fetchTorrents(widget.anime, ep),
   );
 
-  /// Tap entry point for an episode row. Autoplay off -> always opens
-  /// [TorrentSearchModal] (no more inline expand — see episode_tile.dart's
-  /// class doc). Autoplay on -> silently tries the top result first,
-  /// falling back to the SAME modal on either an empty result or a
-  /// thrown exception, rather than the old inline-expand fallback.
+  /// Tap entry point for an episode row. With autoplay off, this always
+  /// opens [TorrentSearchModal]. With autoplay on, it silently tries the
+  /// top result first, falling back to the same modal on either an empty
+  /// result or a thrown exception.
   void _toggleEpisode(int ep) {
     if (_isFetchingSource) return;
 
@@ -114,7 +113,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     }
   }
 
-  /// Opens [TorrentSearchModal] for [ep], reusing the SAME memoized
+  /// Opens [TorrentSearchModal] for [ep], reusing the same memoized
   /// [Future] `_futureFor` already produces — including one that's
   /// already settled by the time this is called (e.g. autoplay's
   /// fallback path), so the modal never triggers a second network
