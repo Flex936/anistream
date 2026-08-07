@@ -26,7 +26,7 @@ Metadata and tracking come from AniList's GraphQL API; torrent discovery comes f
                 (libtorrent_flutter)       │
                                            │  LAN REST (optional)
                                   ┌────────▼────────┐
-                                  │ AniStream Server │  (Go, § 6)
+                                  │ AniStream Server│  (Go, § 6)
                                   └─────────────────┘
 ```
 
@@ -76,7 +76,7 @@ lib/
     ├── settings/                     settings_menu.dart, widgets/settings_components.dart
     ├── shell/                        app_shell.dart, controllers/navigation_controller.dart,
     │                                 widgets/{navbar, search_input}.dart
-    ├── theater/                      theater_screen.dart,
+    ├── theater/                      theater_screen.dart, exo_theater_screen.dart,
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,
     │                                 auto_skip_controller, theater_data, track_name_parser}.dart,
@@ -156,6 +156,8 @@ Two distinct native-integration mechanisms are in use — new performance-sensit
 
 Both implementations parse candidate filenames with the same `TorrentParser` (see [API.md](API.md)) to guess episode numbers inside a batch torrent — this logic is intentionally not duplicated between the on-device and remote paths.
 
+Independent of which streaming controller is active, `AppSettings.useExperimentalPlayer` (mobile/TV only; exposed as "Experimental Video Engine" under Settings → Playback Preferences) additionally picks the *player* implementation: `TheaterScreen` (`media_kit`/mpv — the default, and the only path with chapters, auto-skip, and AniList tracking) or `exo_theater_screen.dart`'s `ExoTheaterScreen` (`video_player`, an ExoPlayer/AVPlayer-backed engine kept around to isolate whether stutter on weak Android TV hardware is a decode-engine problem — see that file's own header comment for the experiment's findings so far). The two axes are orthogonal: either streaming controller pairs with either player. `useExperimentalPlayer` defaults to `false`, so `TheaterScreen` is what every session gets unless a user opts in.
+
 ## 6. AniStream Server (Go)
 
 Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, single external dependency `github.com/anacrolix/torrent`. Full build/run/API instructions live in [`anistream_server/README.md`](../anistream_server/README.md) — this section is the condensed architectural summary; that file is authoritative for the actual command-line flags and endpoint reference.
@@ -186,4 +188,4 @@ Documented per the Living Documentation Rule (CLAUDE.md § 4) rather than silent
 - **`playback_session_controller.dart` is a dead stub.** It exists in the repo as an empty file with nothing importing it anywhere in the app (already omitted from the folder tree in § 2). It's slated for removal — don't build on it, and don't be misled by its presence into thinking it's load-bearing.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
+*Last reviewed against the codebase: 2026-08-07. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*

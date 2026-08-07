@@ -23,6 +23,7 @@ class EpisodeTile extends StatelessWidget {
   final bool isAutoPlayEnabled;
   final bool isCurrentlyLoading;
   final bool uiPerformanceMode;
+  final bool useExperimentalPlayer;
 
   const EpisodeTile({
     super.key,
@@ -37,6 +38,7 @@ class EpisodeTile extends StatelessWidget {
     this.isAutoPlayEnabled = false,
     this.isCurrentlyLoading = false,
     this.uiPerformanceMode = false,
+    this.useExperimentalPlayer = false,
   });
 
   @override
@@ -288,7 +290,7 @@ class EpisodeTile extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute<void>(
-                          builder: (_) => uiPerformanceMode
+                          builder: (_) => useExperimentalPlayer
                               ? ExoTheaterScreen(
                                   anime: anime,
                                   episode: episodeNumber,

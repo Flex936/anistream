@@ -9,6 +9,7 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
+import '../theater/exo_theater_screen.dart';
 import '../theater/theater_screen.dart';
 import 'widgets/episode_tile.dart';
 import 'widgets/hero_banner.dart';
@@ -67,10 +68,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   Future<void> _toggleEpisode(int ep) async {
     if (_isFetchingSource) return;
 
-    final autoPlayEnabled = SettingsScope.of(
-      context,
-      listen: false,
-    ).settings.autoPlayEnabled;
+    final settings = SettingsScope.of(context, listen: false).settings;
+    final autoPlayEnabled = settings.autoPlayEnabled;
+    final useExperimentalPlayer = settings.useExperimentalPlayer;
 
     if (!autoPlayEnabled) {
       setState(() => _expandedEpisode = _expandedEpisode == ep ? -1 : ep);
@@ -91,11 +91,17 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         await Navigator.push(
           context,
           MaterialPageRoute<void>(
-            builder: (_) => TheaterScreen(
-              anime: widget.anime,
-              episode: ep,
-              torrent: torrents.first,
-            ),
+            builder: (_) => useExperimentalPlayer
+                ? ExoTheaterScreen(
+                    anime: widget.anime,
+                    episode: ep,
+                    torrent: torrents.first,
+                  )
+                : TheaterScreen(
+                    anime: widget.anime,
+                    episode: ep,
+                    torrent: torrents.first,
+                  ),
           ),
         );
         if (mounted) {
@@ -137,6 +143,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     final settings = SettingsScope.of(context).settings;
     final autoPlayEnabled = settings.autoPlayEnabled;
     final uiPerformanceMode = settings.uiPerformanceMode;
+    final useExperimentalPlayer = settings.useExperimentalPlayer;
 
     return Scaffold(
       backgroundColor: AppPalette.base,
@@ -219,6 +226,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         isCurrentlyLoading:
                             _isFetchingSource && _autoPlayTargetEpisode == ep,
                         uiPerformanceMode: uiPerformanceMode,
+                        useExperimentalPlayer: useExperimentalPlayer,
                         torrentFuture: _expandedEpisode == ep
                             ? _futureFor(ep)
                             : null,

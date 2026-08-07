@@ -14,7 +14,13 @@ import 'widgets/batch_picker.dart';
 import 'widgets/seekbar.dart';
 import 'widgets/theater_player.dart';
 
-// ── Branch-experiment screen. NOT wired into production routing. ──
+// ── Branch-experiment screen, reachable in production via the
+// "Experimental Video Engine" toggle (Settings → Playback Preferences,
+// mobile/TV only — see settings_menu.dart), which maps to
+// AppSettings.useExperimentalPlayer. That flag defaults to false, so
+// TheaterScreen is still what every session gets unless a user opts in
+// — this remains a branch experiment in spirit, just no longer an
+// unreachable one. ──
 //
 // Tests one specific, isolated hypothesis from the media_kit-vs-ExoPlayer
 // discussion: does swapping the actual decode/render engine fix the
@@ -22,7 +28,8 @@ import 'widgets/theater_player.dart';
 // feature-complete TheaterScreen replacement — no chapters, no auto-skip,
 // no AniList tracking, no keyboard shortcuts, no fullscreen chrome
 // handling. Those are all orthogonal to the thing being tested and would
-// multiply the diff for zero diagnostic value on THIS question.
+// multiply the diff for zero diagnostic value on THIS question. The
+// Settings toggle's own subtitle warns users about this trade-off.
 //
 // What IS reused, deliberately, because it's unrelated to the hypothesis
 // and already works: the real torrent/server streaming flow

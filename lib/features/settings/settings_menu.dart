@@ -52,6 +52,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late bool _autoSkip;
   late bool _uiPerformanceMode;
   late String _videoFilterQuality;
+  late bool _useExoPlayer;
 
   late bool _serverMode;
   late final TextEditingController _serverUrlController;
@@ -79,6 +80,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     _autoSkip = s.autoSkip;
     _uiPerformanceMode = s.uiPerformanceMode;
     _videoFilterQuality = s.videoFilterQuality;
+    _useExoPlayer = s.useExoPlayer;
     _serverMode = s.serverMode;
     _serverUrlController.text = s.serverUrl;
   }
@@ -101,6 +103,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           autoSkip: _autoSkip,
           uiPerformanceMode: _uiPerformanceMode,
           videoFilterQuality: _videoFilterQuality,
+          useExoPlayer: _useExoPlayer,
           serverMode: _serverMode,
           serverUrl: _serverUrlController.text.trim(),
         ),
@@ -288,6 +291,15 @@ class _SettingsMenuState extends State<SettingsMenu> {
                               onChanged: (v) =>
                                   setState(() => _uiPerformanceMode = v),
                             ),
+                            if (!_isDesktop)
+                              SettingRowTile(
+                                title: 'ExoPlayer Video Engine',
+                                subtitle:
+                                    'Uses an alternate ExoPlayer engine instead of the default. May help with stutter on some Android TV hardware, but chapters, auto-skip, and AniList tracking are unavailable while this is on.',
+                                value: _useExoPlayer,
+                                onChanged: (v) =>
+                                    setState(() => _useExoPlayer = v),
+                              ),
                             const SizedBox(height: 16),
                             const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16),
