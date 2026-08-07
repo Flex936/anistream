@@ -37,9 +37,8 @@ class TheaterControls extends StatefulWidget {
   /// True only on Windows/Linux/macOS. Gates the fullscreen toggle per
   /// DESIGN.md § 3 ("Hide PC-specific UI controls ... on Mobile/TV
   /// builds") — Mobile has no windowed state to escape, and TV is
-  /// already permanently fullscreen, so the button previously rendered
-  /// there was dead chrome with no reachable "windowed" counterpart to
-  /// toggle back to.
+  /// already permanently fullscreen, so there's no reachable "windowed"
+  /// counterpart for the button to toggle back to on either platform.
   final bool isDesktop;
 
   /// Reports whether Seekbar/the volume slider currently holds keyboard
@@ -72,22 +71,16 @@ class TheaterControls extends StatefulWidget {
   State<TheaterControls> createState() => _TheaterControlsState();
 }
 
-// ── Rebuild isolation ───────────────────────────────────────────────────────
-// This State now only owns _isPlaying and _volume — both change on discrete
-// user actions (a play/pause press, a volume drag), not continuously.
-// _position/_duration/_buffer used to live here too, updated by a
-// stream.listen() that called THIS State's setState() several times a
-// second during playback. Because a setState() rebuild always cascades to
-// every child in that build() call, that one field was forcing a rebuild of
-// the play button, volume slider, and settings/fullscreen buttons on every
-// tick, even though none of them read position/duration/buffer.
-//
-// _PlaybackTimeline and _PlaybackTimeLabel below are separate StatefulWidgets
-// with their own State objects and their own stream subscriptions. Widget
-// rebuilds only ever propagate DOWN from whichever State calls setState —
-// never up to an ancestor, never sideways to a sibling — so isolating the
-// ticking fields inside their own State objects means a position tick now
-// only rebuilds those two small subtrees, not this whole control bar.
+// Rebuild isolation: this State owns only _isPlaying and _volume, both of
+// which change on discrete user actions (a play/pause press, a volume
+// drag), not continuously. _PlaybackTimeline and _PlaybackTimeLabel below
+// are separate StatefulWidgets with their own State objects and stream
+// subscriptions for the fields that tick several times a second
+// (position/duration/buffer). Widget rebuilds only ever propagate down
+// from whichever State calls setState, so isolating the ticking fields
+// into their own State objects means a position tick only rebuilds those
+// two small subtrees, not the play button, volume slider, or settings/
+// fullscreen buttons alongside them in this Row.
 class _TheaterControlsState extends State<TheaterControls> {
   bool _isPlaying = false;
   double _volume = 100.0;
@@ -171,11 +164,10 @@ class _TheaterControlsState extends State<TheaterControls> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Owns _position/_duration/_buffer + the skip-chip/Seekbar
-          // visuals that depend on them. Ticks in isolation. dpadModeActive
-          // still flows through to Seekbar, which keeps its own working
-          // Focus-based key handling — see seekbar.dart, untouched by this
-          // migration. ──
+          // Owns _position/_duration/_buffer and the skip-chip/Seekbar
+          // visuals that depend on them, ticking in isolation.
+          // dpadModeActive flows through to Seekbar, which keeps its own
+          // Focus-based key handling — see seekbar.dart.
           _PlaybackTimeline(
             player: widget.player,
             chapterMetadata: widget.chapterMetadata,
@@ -196,17 +188,16 @@ class _TheaterControlsState extends State<TheaterControls> {
                     : Icons.play_arrow_rounded,
                 tooltip: _isPlaying ? 'Pause' : 'Play',
                 size: 34,
-                // ── The sensible default D-Pad landing spot the first
-                // time the control bar appears — matches "one autofocus
-                // per screen." Harmless on re-shows too: DpadRegion's
+                // The sensible default D-Pad landing spot the first time
+                // the control bar appears — matches "one autofocus per
+                // screen." Harmless on re-shows too: DpadRegion's
                 // memoryKey on the wrapping region in theater_screen.dart
-                // restores whatever was last focused instead. ──
+                // restores whatever was last focused instead.
                 autofocus: true,
                 onPressed: () {
-                  // ── Player.pause()/play() return Future<void> —
-                  // onPressed is a synchronous VoidCallback, so the
-                  // fire-and-forget intent is made explicit rather than
-                  // silently dropped (unawaited_futures). ──
+                  // Player.pause()/play() return Future<void> — onPressed
+                  // is a synchronous VoidCallback, so the fire-and-forget
+                  // intent is made explicit (unawaited_futures).
                   unawaited(
                     _isPlaying ? widget.player.pause() : widget.player.play(),
                   );
@@ -215,8 +206,8 @@ class _TheaterControlsState extends State<TheaterControls> {
               ),
               const SizedBox(width: 16),
 
-              // ── Owns its own position/duration subscription, renders
-              // just the "00:00 / 00:00" text. Ticks in isolation. ──
+              // Owns its own position/duration subscription, renders just
+              // the "00:00 / 00:00" text. Ticks in isolation.
               _PlaybackTimeLabel(player: widget.player),
 
               const Spacer(),
@@ -233,12 +224,12 @@ class _TheaterControlsState extends State<TheaterControls> {
                   120.0,
                 ),
                 child: SliderTheme(
-                  // ── NOT const: inactiveTrackColor calls
+                  // Not const: inactiveTrackColor calls
                   // AppPalette.white.withValues(alpha: 0.3), a method
-                  // invocation, which the compiler correctly rejects in a
-                  // const expression (const_eval_method_invocation). Only
-                  // the two shape constructors below (no method calls in
-                  // their arguments) can be const. ──
+                  // invocation the compiler rejects in a const expression
+                  // (const_eval_method_invocation). Only the two shape
+                  // constructors below (no method calls in their
+                  // arguments) can be const.
                   data: SliderThemeData(
                     activeTrackColor: AppPalette.white,
                     inactiveTrackColor: AppPalette.white.withValues(alpha: 0.3),
@@ -251,26 +242,24 @@ class _TheaterControlsState extends State<TheaterControls> {
                       overlayRadius: 14,
                     ),
                   ),
-                  // ── Left as a plain Material Slider — it already has
-                  // its own working keyboard-arrow-when-focused behavior
-                  // as a standard Flutter form control, same reasoning as
+                  // Left as a plain Material Slider — it already has its
+                  // own working keyboard-arrow-when-focused behavior as a
+                  // standard Flutter form control, the same reasoning as
                   // Seekbar: a plain Focus-participating widget that
                   // interops with dpad's traversal without needing
-                  // DpadFocusable wrapping. Given an explicit focusNode
-                  // now (rather than an implicit internal one) purely so
+                  // DpadFocusable wrapping. Given an explicit focusNode so
                   // this State can observe its focus state and report it
-                  // upstream via onVolumeFocusChange — Slider's own
-                  // behavior is otherwise unchanged. onChangeStart/End
+                  // upstream via onVolumeFocusChange. onChangeStart/End
                   // bracket a drag the same way Seekbar's onSeekStart/End
-                  // already do. ──
+                  // do.
                   child: Slider(
                     focusNode: _volumeFocusNode,
                     max: 100,
                     value: _volume.clamp(0.0, 100.0),
                     onChanged: (v) {
-                      // ── _handleVolumeChanged is Future<void> — onChanged
+                      // _handleVolumeChanged is Future<void> — onChanged
                       // is a synchronous callback, so wrapping makes the
-                      // fire-and-forget intent explicit. ──
+                      // fire-and-forget intent explicit.
                       unawaited(_handleVolumeChanged(v));
                       widget.onInteract();
                     },
@@ -289,11 +278,9 @@ class _TheaterControlsState extends State<TheaterControls> {
                 onPressed: widget.onToggleSettings,
               ),
 
-              // ── Desktop-only per DESIGN.md § 3. On Mobile/TV there is
-              // no windowed state for this button to toggle back out of
-              // (Mobile has no window chrome at all; TV is permanently
-              // fullscreen), so it previously rendered as dead UI on
-              // both platforms. ──
+              // Desktop-only per DESIGN.md § 3 — Mobile has no windowed
+              // state for this button to toggle back out of, and TV is
+              // permanently fullscreen.
               if (widget.isDesktop)
                 _TheaterIconButton(
                   icon: widget.isFullscreen
@@ -333,10 +320,10 @@ class _TheaterControlsState extends State<TheaterControls> {
 }
 
 /// Owns [Player.stream.position]/[duration]/[buffer] and renders the
-/// skip-chip + [Seekbar] — the two things in the control bar that actually
-/// need to redraw every tick. Extracted from [_TheaterControlsState] so its
-/// setState() calls only rebuild this subtree, not the play/volume/settings
-/// buttons living alongside it in the parent's Row.
+/// skip-chip + [Seekbar] — the parts of the control bar that redraw
+/// every tick. Kept separate from [_TheaterControlsState] so its
+/// setState() calls only rebuild this subtree, not the play/volume/
+/// settings buttons alongside it in the parent's Row.
 class _PlaybackTimeline extends StatefulWidget {
   final Player player;
   final List<Chapter> chapterMetadata;
@@ -398,14 +385,14 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
   }
 
   void _onSeek(Duration time) {
-    // ── Player.seek returns Future<void> — this is wired to Seekbar's
+    // Player.seek returns Future<void> — this is wired to Seekbar's
     // synchronous onSeek callback, so the fire-and-forget intent is made
-    // explicit instead of silently dropped (unawaited_futures). Fires on
-    // every drag update, not just start/end — left mapped to onInteract
-    // (not onInteractionStart/End) since it's a per-tick ping, and
+    // explicit (unawaited_futures). Fires on every drag update, not just
+    // start/end, so it's mapped to onInteract (not onInteractionStart/
+    // End): it's a per-tick ping, and
     // ControlsVisibilityController.registerActivity() already no-ops the
     // timer schedule while an interaction is in progress, so this can't
-    // fight with the explicit begin/end bracket below. ──
+    // fight with the explicit begin/end bracket below.
     unawaited(widget.player.seek(time));
     widget.onInteract();
   }
@@ -503,12 +490,12 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
   }
 }
 
-/// Owns its own (duplicate, but cheap — the stream is broadcast) subscription
-/// to [Player.stream.position]/[duration] and renders just the
-/// "00:00 / 00:00" label. Kept as a separate State from [_PlaybackTimeline]
-/// so the label — which sits in the parent's icon Row, not inside the
-/// timeline's Column — ticks independently without either widget needing to
-/// reach into the other's state.
+/// Owns its own (duplicate, but cheap — the stream is broadcast)
+/// subscription to [Player.stream.position]/[duration] and renders just
+/// the "00:00 / 00:00" label. Kept as a separate State from
+/// [_PlaybackTimeline] so the label — which sits in the parent's icon
+/// Row, not inside the timeline's Column — ticks independently without
+/// either widget reaching into the other's state.
 class _PlaybackTimeLabel extends StatefulWidget {
   final Player player;
   const _PlaybackTimeLabel({required this.player});
@@ -566,10 +553,9 @@ class _PlaybackTimeLabelState extends State<_PlaybackTimeLabel> {
   }
 }
 
-/// Small reusable icon button for the control bar. DpadFocusable replaces
-/// the old StatefulWidget's manual FocusNode + onFocusChange listener —
-/// state.focused drives the ring directly, with no local state of any kind
-/// left to manage here, so this is a StatelessWidget now.
+/// Small reusable icon button for the control bar. state.focused drives
+/// the ring directly, with no local state to manage, so this is a
+/// StatelessWidget.
 class _TheaterIconButton extends StatelessWidget {
   final IconData icon;
   final Color color;

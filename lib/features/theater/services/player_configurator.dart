@@ -8,10 +8,10 @@ import '../../../core/settings/settings_service.dart';
 /// Shared mpv property configuration for the theater window — respects the
 /// user's saved hardware-decoding preference per platform.
 abstract final class PlayerConfigurator {
-  /// `Future<void>`-returning (not `void`) and `await`ed by callers.
-  /// `NativePlayer.setProperty` itself returns `Future<void>` — firing six
-  /// of them off unawaited per playback session was six separate
-  /// `unawaited_futures` violations. Callers now `await` this.
+  /// Returns `Future<void>` and is awaited by callers: `NativePlayer.
+  /// setProperty` itself returns `Future<void>`, and each property set
+  /// below needs to complete before the next one is meaningful, so the
+  /// whole sequence is awaited rather than fired fire-and-forget.
   static Future<void> configureForTheater(
     Player player,
     AppSettings settings,
@@ -39,14 +39,14 @@ abstract final class PlayerConfigurator {
     await platform.setProperty('demuxer-max-bytes', '150000000');
     await platform.setProperty('demuxer-readahead-secs', '120');
 
-    // ── HTTP reconnect tuning ────────────────────────────────────────────
+    // HTTP reconnect tuning.
     //
     // Both streaming paths this app supports (StreamingController's local
     // loopback HTTP server backed by libtorrent_flutter, and
     // RemoteStreamingController's LAN HTTP connection to the Go server —
     // see API.md § 1 and ARCHITECTURE.md § 5) are plain HTTP(S) streams
     // read via mpv's ffmpeg/libavformat-backed network stream
-    // implementation. A long PAUSE routinely outlives the underlying TCP
+    // implementation. A long pause routinely outlives the underlying TCP
     // connection's keep-alive window — closed by the OS, by the local
     // server idling out a connection with nothing actively reading it, or
     // by an intermediate NAT/router on a LAN path — and mpv's demuxer has
@@ -75,8 +75,8 @@ abstract final class PlayerConfigurator {
     //                                   long exponential backoff
     //
     // This is a targeted mitigation for the specific failure mode
-    // PlaybackDiagnostics (playback_diagnostics.dart) was added alongside
-    // to confirm — not a guaranteed fix for every possible cause of a
+    // PlaybackDiagnostics (playback_diagnostics.dart) is designed to
+    // confirm — not a guaranteed fix for every possible cause of a
     // frozen frame. If the diagnostic logs show the freeze reproducing
     // with demuxer-cache-idle/core-idle already "no" (i.e. mpv believes
     // it's still actively reading), the root cause lies elsewhere and

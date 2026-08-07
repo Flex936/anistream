@@ -8,7 +8,7 @@ class ParsedTrack {
 }
 
 class TrackNameParser {
-  // ── Maps standard 2 and 3 letter ISO codes to readable names ──
+  // Maps standard 2- and 3-letter ISO codes to readable names.
   static String _normalizeLanguage(String lang) {
     final l = lang.toLowerCase().trim();
     return switch (l) {
@@ -56,7 +56,7 @@ class TrackNameParser {
       );
     }
 
-    // 3. Technical Jargon fallback (e.g. "Surround 5.1")
+    // 3. Technical jargon fallback (e.g. "Surround 5.1")
     final lower = title.toLowerCase();
     if (lower == 'surround 5.1' ||
         lower == 'stereo' ||
@@ -69,7 +69,7 @@ class TrackNameParser {
       );
     }
 
-    // 4. Default Fallback
+    // 4. Default fallback
     return ParsedTrack(
       mainTitle: lang.isEmpty ? (title.isEmpty ? 'Audio Track' : title) : lang,
       subTitle: lang.isEmpty || title.toLowerCase() == lang.toLowerCase()
@@ -96,7 +96,7 @@ class TrackNameParser {
       title = title.replaceAll(RegExp(r'\(.*?\)'), '').trim();
     }
 
-    // 3. Standardize Generic Names
+    // 3. Standardize generic names
     final lower = title.toLowerCase();
     if (lower.contains('sign') || lower.contains('song')) {
       title = 'Signs & Songs';
@@ -107,7 +107,7 @@ class TrackNameParser {
       title = 'Full Subtitles';
     }
 
-    // 4. Build Final Strings
+    // 4. Build final strings
     String finalMain = '';
     String finalSub = '';
 

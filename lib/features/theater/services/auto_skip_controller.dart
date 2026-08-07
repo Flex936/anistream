@@ -2,11 +2,10 @@ import 'dart:async';
 import 'package:media_kit/media_kit.dart';
 import 'theater_data.dart';
 
-/// Owns the "auto-skip openings/endings" state machine. Feed it every
-/// player position tick via [onPosition]; it seeks the player itself once
-/// the 2s grace period elapses, and reports arming via [onSkipArmed] so the
-/// UI can show a toast. Extracted out of `_TheaterScreenState`, which
-/// previously held this logic inline as several loose fields.
+/// Owns the "auto-skip openings/endings" state machine for TheaterScreen.
+/// Feed it every player position tick via [onPosition]; it seeks the
+/// player itself once the 2s grace period elapses, and reports arming via
+/// [onSkipArmed] so the UI can show a toast.
 class AutoSkipController {
   final Player player;
   final bool Function() isEnabled;
@@ -53,10 +52,10 @@ class AutoSkipController {
 
       _timer = Timer(const Duration(seconds: 2), () {
         if (_isAutoSkipping && _currentChapter == active) {
-          // ── Timer callbacks are synchronous — `Player.seek` returns a
-          // Future<void> that can't be awaited here, so the fire-and-forget
-          // intent is made explicit instead of silently dropped
-          // (unawaited_futures). ──
+          // Timer callbacks are synchronous — Player.seek returns a
+          // Future<void> that can't be awaited here, so the
+          // fire-and-forget intent is made explicit instead of silently
+          // dropped (unawaited_futures).
           unawaited(player.seek(active!.end));
           _isAutoSkipping = false;
         }

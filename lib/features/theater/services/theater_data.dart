@@ -16,21 +16,21 @@ class Chapter {
   });
 }
 
-// ── Strict Chapter Parsing Logic ──
+// Chapter-skippability classification.
 
 bool _isChapterSkippable(String title) {
   final t = title.toLowerCase().trim();
 
-  // 1. DO NOT skip story segments (Release groups often name the Prologue "Intro")
+  // 1. Do not skip story segments (release groups often name the Prologue "Intro")
   if (t == 'intro' || t == 'avant' || t == 'prologue' || t == 'epilogue') {
     return false;
   }
 
-  // 2. DO skip theme songs (Use strict equality for short codes to prevent false positives like "Operation" or "Wedding")
+  // 2. Do skip theme songs (strict equality for short codes to prevent false positives like "Operation" or "Wedding")
   if (t == 'op' || t.contains('opening') || t == 'ncop') return true;
   if (t == 'ed' || t.contains('ending') || t == 'nced') return true;
 
-  // 3. DO skip next-episode previews
+  // 3. Do skip next-episode previews
   if (t == 'pv' || t.contains('preview') || t.contains('next episode')) {
     return true;
   }
@@ -50,7 +50,7 @@ String _getSkipLabel(String title) {
   return 'Skip';
 }
 
-// ── MKV Metadata Extraction ──
+// MKV chapter metadata extraction.
 
 Future<List<Chapter>> loadChapters(Player player) async {
   final platform = player.platform;

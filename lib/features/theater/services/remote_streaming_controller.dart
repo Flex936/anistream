@@ -7,13 +7,13 @@ import '../../../core/logging/app_logger.dart';
 import '../../../data/torrent/services/torrent_parser.dart';
 import 'streaming_controller_base.dart';
 
-/// Connects to the AniStream Go server instead of running libtorrent locally.
+/// Connects to the AniStream Go server instead of running libtorrent
+/// locally.
 ///
 /// Usage is identical to [StreamingController] — [TheaterScreen] receives this
 /// as a [BaseStreamingController] and never touches server-specific details.
 ///
-/// Flow
-/// ────
+/// Flow:
 ///  1. [initialize] POSTs the magnet link to the server → gets a session ID.
 ///  2. A 500 ms poll timer calls GET /api/stream/:id and maps the JSON state
 ///     to the same bool flags that [StreamingController] exposes.
@@ -25,7 +25,7 @@ class RemoteStreamingController extends BaseStreamingController {
   final String serverUrl; // e.g. "http://192.168.1.5:7878"
   final http.Client _http;
 
-  // ── State exposed to TheaterScreen ──
+  // State exposed to TheaterScreen.
   String _statusText = 'Connecting to AniStream Server…';
   String? _streamUrl;
   bool _isReadyToPlay = false;
@@ -33,13 +33,11 @@ class RemoteStreamingController extends BaseStreamingController {
   bool _needsManualSelection = false;
   List<BatchFileOption> _batchFiles = [];
 
-  // ── Cache of the raw (undecoded-to-BatchFileOption) file list from the
-  // last poll where we actually reparsed it. While the batch picker is open,
-  // the server returns the exact same file list every single 500ms tick —
-  // reparsing every filename via TorrentParser.parse() on every poll was
-  // real, repeated, avoidable CPU work on the UI isolate for as long as the
-  // user sat looking at the picker. Only reparse (and rebuild _batchFiles)
-  // when the server's list has actually changed. ──
+  // Raw (undecoded-to-BatchFileOption) file list from the last poll that
+  // was actually reparsed. While the batch picker is open, the server
+  // returns the identical file list on every 500ms tick, so this cache
+  // lets the poll skip re-running TorrentParser.parse() over every
+  // filename when nothing has actually changed.
   List<dynamic>? _lastRawFiles;
 
   String? _sessionId;
@@ -60,7 +58,7 @@ class RemoteStreamingController extends BaseStreamingController {
   @override
   List<BatchFileOption> get batchFiles => _batchFiles;
 
-  // ── Public API ─────────────────────────────────────────────────────────────
+  // Public API.
 
   @override
   Future<void> initialize(String magnetUri, {int? episodeNumber}) async {
@@ -119,17 +117,8 @@ class RemoteStreamingController extends BaseStreamingController {
     _needsManualSelection = false;
     notifyListeners();
 
-    // ── _fireAndForget (see below) instead of a chained .catchError(). A
-    // bare `.catchError((_) {})` on a Future<http.Response> requires the
-    // callback to return something assignable to `Response` (or a Future
-    // of one) — an empty body implicitly returns null, which the analyzer
-    // correctly rejects (body_might_complete_normally_catch_error).
-    // Wrapping in a try/catch inside a Future<void> helper sidesteps the
-    // typing requirement while keeping identical "best-effort, ignore
-    // failures" behavior. The outer `unawaited()` is needed too —
-    // `_fireAndForget` itself returns a `Future<void>`, so calling it from
-    // this (necessarily synchronous) method is itself a discarded future
-    // under `unawaited_futures`. ──
+    // Fire-and-forget: best-effort request, teardown of this overlay
+    // doesn't depend on the server acknowledging it.
     unawaited(
       _fireAndForget(
         _http
@@ -149,7 +138,7 @@ class RemoteStreamingController extends BaseStreamingController {
     );
   }
 
-  // ── Internal ──────────────────────────────────────────────────────────────
+  // Internal.
 
   /// Awaits [future] and silently discards any error. Used for best-effort
   /// network calls (batch-file selection, session teardown) where the
@@ -179,12 +168,11 @@ class RemoteStreamingController extends BaseStreamingController {
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       final serverState = data['state'] as String? ?? 'error';
 
-      // ── Snapshot every field this controller exposes BEFORE mutating,
-      // so we can tell at the end whether anything actually changed.
-      // Without this, notifyListeners() fired unconditionally on every
-      // 500ms tick — including the entire time the batch picker sat open
-      // with nothing new to show — rebuilding BatchEpisodePickerOverlay's
-      // ListView.builder for no reason. ──
+      // Snapshots every field this controller exposes before mutating,
+      // so notifyListeners() only fires when something actually changed
+      // — avoids rebuilding BatchEpisodePickerOverlay's ListView.builder
+      // on every 500ms tick while the picker sits open with nothing new
+      // to show.
       final prevStatusText = _statusText;
       final prevReady = _isReadyToPlay;
       final prevNeedsSelection = _needsManualSelection;
@@ -207,16 +195,14 @@ class RemoteStreamingController extends BaseStreamingController {
 
           if (!_sameRawFileList(rawFiles, _lastRawFiles)) {
             _lastRawFiles = rawFiles;
-            // ── `rawFiles` is `List<dynamic>`, so each element `f` is
-            // `dynamic` until cast — indexing straight into `f['name']`
-            // would be an index operation on a dynamic receiver
-            // (avoid_dynamic_calls). Casting once up front keeps every
-            // field access below statically typed. ──
+            // `rawFiles` is `List<dynamic>`, so each element is cast once
+            // up front to keep every field access below statically typed
+            // (avoid_dynamic_calls).
             _batchFiles = rawFiles.map((f) {
               final map = f as Map<String, dynamic>;
               final name = (map['name'] as String?) ?? '';
-              // Reuse the existing Dart parser to guess the episode number
-              // from the filename — no duplication of logic on the server.
+              // Reuses the existing Dart parser to guess the episode
+              // number from the filename — no duplicated logic server-side.
               final meta = TorrentParser.parse(name);
               return BatchFileOption(
                 index: (map['index'] as num?)?.toInt() ?? 0,
@@ -263,9 +249,9 @@ class RemoteStreamingController extends BaseStreamingController {
 
   /// Cheap content-equality check between two raw (still-JSON, not yet
   /// parsed into [BatchFileOption]) file lists from consecutive polls.
-  /// Compares only the fields we actually consume (`index`/`name`/`size`),
-  /// which is enough to tell "the server sent the identical list again"
-  /// from "something actually changed" without needing a full deep-equals.
+  /// Compares only the fields actually consumed (`index`/`name`/`size`),
+  /// which is enough to tell an identical list from a genuinely changed
+  /// one without a full deep-equals.
   bool _sameRawFileList(List<dynamic> a, List<dynamic>? b) {
     if (b == null || a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
@@ -294,10 +280,8 @@ class RemoteStreamingController extends BaseStreamingController {
   void dispose() {
     _pollTimer?.cancel();
     if (_sessionId != null) {
-      // Best-effort cleanup; don't let errors bubble up during disposal.
-      // See _fireAndForget's doc comment for why this isn't a chained
-      // .catchError() anymore, and unawaited()'s doc comment above in
-      // selectBatchFile for why the outer call needs wrapping too.
+      // Best-effort cleanup; errors don't need to bubble up during
+      // disposal — see _fireAndForget above.
       unawaited(
         _fireAndForget(
           _http

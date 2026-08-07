@@ -97,11 +97,10 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
       uiPerformanceMode: widget.uiPerformanceMode,
       sigma: context.appMaterials.standard,
       borderRadius: BorderRadius.circular(12),
-      // ── DpadRegion replaces the old plain FocusScope(autofocus: true) —
-      // same "contain focus within this popup" intent, now with a
+      // DpadRegion keeps focus contained within this popup, with a
       // memoryKey so returning to the same page (main/subtitles/audio)
       // remembers where focus was, plus dpad's own beam-based traversal
-      // between the two/three rows on each page. ──
+      // between the rows on each page.
       child: DpadRegion(
         memoryKey: 'theater.settingsMenu.${_currentPage.name}',
         child: menuContent,
@@ -149,10 +148,10 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
                 track: TrackNameParser.parseSubtitle(t),
                 selected: t.id == _activeSubtitle?.id,
                 onTap: () {
-                  // ── Player.setSubtitleTrack returns a Future<void> —
-                  // this onTap is a synchronous VoidCallback, so the
+                  // Player.setSubtitleTrack returns a Future<void> — this
+                  // onTap is a synchronous VoidCallback, so the
                   // fire-and-forget intent is made explicit instead of
-                  // silently dropped (unawaited_futures). ──
+                  // silently dropped (unawaited_futures).
                   unawaited(widget.player.setSubtitleTrack(t));
                   widget.onClose();
                 },
@@ -212,10 +211,9 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── Built as a plain Container+Row instead of wrapping ListTile —
+    // Built as a plain Container+Row rather than wrapping ListTile —
     // ListTile manages its own focus/tap mechanics internally, which
-    // would otherwise need reconciling with DpadFocusable's. Building the
-    // row directly avoids that ambiguity entirely. ──
+    // would otherwise need reconciling with DpadFocusable's.
     return DpadFocusable(
       autofocus: autofocus,
       onSelect: onTap,

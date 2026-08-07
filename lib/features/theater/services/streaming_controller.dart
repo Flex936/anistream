@@ -6,15 +6,12 @@ import '../../../core/logging/app_logger.dart';
 import '../../../data/torrent/services/torrent_parser.dart';
 import 'streaming_controller_base.dart';
 
-// BatchFileOption is now defined in streaming_controller_base.dart.
-// Re-export it so existing imports of this file keep working without changes.
 export 'streaming_controller_base.dart' show BatchFileOption;
 
 class StreamingController extends BaseStreamingController {
-  // ── PRE-BUFFER GATE ──────────────────────────────────────────────────────
-  /// Minimum sequential buffer percentage before the URL is handed to the
-  /// player. 2 % gives MPV a solid head-start without making the user wait
-  /// long. Raise it if black-frames persist on very slow connections.
+  // Minimum sequential buffer percentage before the URL is handed to the
+  // player. 2% gives MPV a solid head-start without making the user wait
+  // long. Raise it if black-frames persist on very slow connections.
   static const double _kPreBufferThreshold = 0.1;
 
   String _statusText = 'Initializing Native Engine...';
@@ -110,7 +107,7 @@ class StreamingController extends BaseStreamingController {
         return;
       }
 
-      // ── Batch torrent: multiple episodes packed into one torrent ──
+      // Batch torrent: multiple episodes packed into one torrent.
       _batchFiles =
           videoFiles
               .map(
