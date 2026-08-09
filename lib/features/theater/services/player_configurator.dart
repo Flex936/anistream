@@ -9,7 +9,7 @@ import '../../../core/settings/settings_service.dart';
 /// user's saved hardware-decoding preference per platform.
 abstract final class PlayerConfigurator {
   /// Returns `Future<void>` and is awaited by callers: `NativePlayer.
-  /// setProperty` itself returns `Future<void>`, and each property set
+  /// setProperty` itself returns `Future\<void>\`, and each property set
   /// below needs to complete before the next one is meaningful, so the
   /// whole sequence is awaited rather than fired fire-and-forget.
   static Future<void> configureForTheater(

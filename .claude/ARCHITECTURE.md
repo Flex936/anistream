@@ -81,7 +81,9 @@ lib/
     ├── theater/                      theater_screen.dart,
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,
-    │                                 auto_skip_controller, theater_data, track_name_parser}.dart,
+    │                                 auto_skip_controller, playback_diagnostics,
+    │                                 playback_freeze_workaround_controller, theater_data,
+    │                                 track_name_parser}.dart,
     │                                 widgets/{theater_controls, theater_player, seekbar,
     │                                 theater_settings, batch_picker}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
@@ -187,6 +189,7 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
 
 - **`playback_session_controller.dart` is a dead stub.** It exists in the repo as an empty file with nothing importing it anywhere in the app (already omitted from the folder tree in § 2). It's slated for removal — don't build on it, and don't be misled by its presence into thinking it's load-bearing.
 - **macOS/iOS Release entitlements are an unconfirmed gap, not a fix.** § 4 (macOS / iOS) flags that `Release.entitlements` may be missing `com.apple.security.network.client`/`.server` relative to `DebugProfile.entitlements` — unconfirmed whether this actually breaks AniList OAuth's loopback server or on-device torrenting in signed/notarized Release builds, just noted as an untested gap. Cross-referenced here so this section remains the complete index of open items.
+- **Linux/NVIDIA/Wayland video freeze after an extended pause is a confirmed bug outside this codebase's control.** Diagnostic isolation (network/demuxer/app-lifecycle ruled out; mpv's own decode pipeline confirmed healthy via `estimated-frame-number` climbing at the correct rate while the displayed frame stayed frozen) traced this to how `media_kit_video`'s libmpv render-API hands a newly-decoded frame to Flutter's `Texture` widget on Linux/Wayland/NVIDIA (`hwdec-current=nvdec`, `current-vo=libmpv`) once the GL/EGL context has sat idle through a long pause — confirmed reproducing at ~20-56 minute pauses on that platform combination; Windows + Intel iGPU does not reproduce. The fix would live in `media_kit_video`'s plugin internals, the Flutter Linux embedder, or the NVIDIA driver, none of which this codebase owns. `AppSettings.nudgeSeekOnResume` (default `false`, in Settings → Playback Preferences) is an opt-in mitigation — a same-position seek on resume that forces mpv to re-present — not a resolution.
 
 ---
 *Last reviewed against the codebase: 2026-08-03. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

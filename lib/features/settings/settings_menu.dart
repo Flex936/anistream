@@ -41,9 +41,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
   bool _saving = false;
   bool _pinging = false;
 
-  // Seeded from SettingsScope in didChangeDependencies — the values are
-  // already sitting in the app-wide scope by the time this dialog opens,
-  // so there's no need for a second, independent load.
+  // ── Seeded from SettingsScope in didChangeDependencies instead of a
+  // second independent SettingsService().load() call — the values are
+  // already sitting in the app-wide scope by the time this dialog opens. ──
   bool _hydrated = false;
 
   late bool _filterEcchi;
@@ -51,6 +51,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late String _androidHwDec;
   late bool _autoPlayEnabled;
   late bool _autoSkip;
+  late bool _nudgeSeekOnResume;
   late bool _uiPerformanceMode;
   late String _videoFilterQuality;
 
@@ -78,6 +79,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     _androidHwDec = s.androidHwDec;
     _autoPlayEnabled = s.autoPlayEnabled;
     _autoSkip = s.autoSkip;
+    _nudgeSeekOnResume = s.nudgeSeekOnResume;
     _uiPerformanceMode = s.uiPerformanceMode;
     _videoFilterQuality = s.videoFilterQuality;
     _serverMode = s.serverMode;
@@ -100,6 +102,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           androidHwDec: _androidHwDec,
           autoPlayEnabled: _autoPlayEnabled,
           autoSkip: _autoSkip,
+          nudgeSeekOnResume: _nudgeSeekOnResume,
           uiPerformanceMode: _uiPerformanceMode,
           videoFilterQuality: _videoFilterQuality,
           serverMode: _serverMode,
@@ -175,6 +178,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
   Widget build(BuildContext context) {
     final isMobile = context.isMobile;
 
+    // ── Pulled once at the top of build(), same convention established ──
     final typography = context.appTypography;
     final materials = context.appMaterials;
 
@@ -185,10 +189,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
         child: SizedBox(
           width: isMobile ? MediaQuery.sizeOf(context).width : 450,
           height: double.infinity,
-          // Routed through the same FrostedContainer every other glass
-          // surface in the app uses, so this panel drops its own blur
-          // under uiPerformanceMode and updates live as the setting is
-          // toggled below, before it's even saved.
+          // ── Was an unconditional ClipRRect + BackdropFilter(sigma: 50)
+          // regardless of _uiPerformanceMode. Routed through the same
+          // FrostedContainer every other glass surface in the app uses,
+          // so this panel now actually drops its own blur when the setting
+          // is on (and updates live as the user flips the switch below, before even saving). ──
           child: FrostedContainer(
             uiPerformanceMode: _uiPerformanceMode,
             sigma: materials.prominent,
@@ -225,6 +230,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        // ── Was TextStyle(fontSize: 26, fontWeight: bold,
+                        // letterSpacing: -0.5) — converged to panelHeader
+                        // (24/w700/-0.5) per the approved standardize-on-24
+                        // decision (vs. navbar.dart's mobile menu header,
+                        // already 24). Visual delta: 26 -> 24. ──
                         Text(
                           'Settings',
                           style: typography.panelHeader.copyWith(
@@ -239,9 +249,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
                   ),
 
                   Expanded(
-                    // Values are hydrated synchronously in
-                    // didChangeDependencies, before the first build, so
-                    // there's no loading-spinner state to show here.
+                    // ── Values are hydrated synchronously in
+                    // didChangeDependencies (before the first build), so
+                    // there's no longer a loading spinner state to show
+                    // here — SettingsScope already holds the data. ──
                     child: ListView(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
@@ -280,6 +291,14 @@ class _SettingsMenuState extends State<SettingsMenu> {
                               onChanged: (v) => setState(() => _autoSkip = v),
                             ),
                             SettingRowTile(
+                              title: 'Fix Frozen Video After Long Pauses',
+                              subtitle:
+                                  "Forces a tiny re-seek when resuming after an extended pause. Works around a rare frozen-frame bug seen on some Linux/NVIDIA setups — leave off unless you've experienced this.",
+                              value: _nudgeSeekOnResume,
+                              onChanged: (v) =>
+                                  setState(() => _nudgeSeekOnResume = v),
+                            ),
+                            SettingRowTile(
                               title: 'UI Performance Mode',
                               subtitle:
                                   'Disables frosted glass, blurs, and animations. Highly recommended for Android TVs.',
@@ -295,6 +314,16 @@ class _SettingsMenuState extends State<SettingsMenu> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // ── Was TextStyle(fontSize: 14,
+                                  // fontWeight: w600) — this recurring
+                                  // pattern (also settings_menu.dart's
+                                  // other sub-headers below, plus
+                                  // settings_components.dart's
+                                  // SettingRowTile.title and
+                                  // search_input.dart's dropdown row
+                                  // title) got its own token,
+                                  // compactHeading.
+                                  // Exact match, zero visual delta. ──
                                   Text(
                                     'Video Scaling Quality',
                                     style: typography.compactHeading.copyWith(
@@ -302,6 +331,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
+                                  // ── Was TextStyle(fontSize: 12, height:
+                                  // 1.4) (no explicit weight, i.e.
+                                  // regular/w400) — exact match for
+                                  // tileSubtitle, zero visual delta. ──
                                   Text(
                                     'Determines how the GPU scales video frames. Set to "None" if 1080p stutters on your TV.',
                                     style: typography.tileSubtitle.copyWith(
@@ -426,11 +459,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          // Left as a plain literal (11pt,
-                                          // height 1.5) — doesn't belong
-                                          // to any typography token, and
-                                          // its line-height differs from
-                                          // tileSubtitle's.
+                                          // ── Left as a plain literal
+                                          // (11/height 1.5) — 11pt doesn't
+                                          // belong to any identified
+                                          // cluster, and the height differs
+                                          // from tileSubtitle's 1.4 as well. ──
                                           Text(
                                             'Run anistream-server on any PC, NAS, or Raspberry Pi on your LAN. '
                                             'See anistream_server/README.md for build instructions.',
@@ -461,6 +494,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // ── Same compactHeading token as
+                                    // "Video Scaling Quality" above —
+                                    // exact match, zero visual delta. ──
                                     Text(
                                       'Hardware Decoding',
                                       style: typography.compactHeading.copyWith(
@@ -468,6 +504,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
+                                    // ── Exact match for tileSubtitle,
+                                    // same as above. ──
                                     Text(
                                       'Use your GPU to decode video streams for vastly improved performance and lower battery usage.',
                                       style: typography.tileSubtitle.copyWith(
@@ -530,6 +568,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // ── Same compactHeading token as
+                                    // above — exact match, zero visual
+                                    // delta. ──
                                     Text(
                                       'Hardware Decoding (Android)',
                                       style: typography.compactHeading.copyWith(
@@ -537,6 +578,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
+                                    // ── Exact match for tileSubtitle. ──
                                     Text(
                                       'Phones run best on "mediacodec" (Zero-Copy). Android TVs with weak drivers may crash and require "mediacodec-copy".',
                                       style: typography.tileSubtitle.copyWith(
@@ -613,11 +655,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 ),
                               ),
                             )
-                          // Left as a plain literal (15/w600/0.2
-                          // spacing) — close to toastMessage (14/w600/0.2)
-                          // but a deliberately distinct size for this
-                          // primary CTA button, not routed through that
-                          // token.
+                          // ── Left as a plain literal (15/w600/0.2
+                          // spacing) — a near-miss on toastMessage
+                          // (14/w600/0.2), but 1pt off on a primary CTA
+                          // button felt riskier to silently accept than
+                          // the caption-text convergences elsewhere. ──
                           : const Text(
                               'Save Changes',
                               style: TextStyle(

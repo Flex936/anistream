@@ -19,6 +19,7 @@ import '../../shared/widgets/toast.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
 import 'services/playback_diagnostics.dart';
+import 'services/playback_freeze_workaround_controller.dart';
 import 'services/player_configurator.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
@@ -59,6 +60,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // behavior.
   late final PlaybackDiagnostics _playbackDiagnostics;
 
+  /// Opt-in mitigation for the same confirmed Linux/NVIDIA/Wayland freeze
+  /// bug — see PlaybackFreezeWorkaroundController's own doc comment for
+  /// the full diagnostic trail. Unlike PlaybackDiagnostics above (purely
+  /// observational), this one actually issues a same-position seek on
+  /// resume when the user has opted in and the just-ended pause was long
+  /// enough.
+  late final PlaybackFreezeWorkaroundController _playbackFreezeWorkaround;
+
   bool _videoInitialized = false;
   bool _isSettingsOpen = false;
   bool _isFullscreen = true;
@@ -74,6 +83,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // Auto-skip setting; the state machine itself lives in
   // AutoSkipController.
   bool _autoSkip = false;
+
+  // Nudge-seek-on-resume setting; the state machine itself lives in
+  // PlaybackFreezeWorkaroundController. Defaults false — see
+  // AppSettings.nudgeSeekOnResume's doc comment for why this stays opt-in.
+  bool _nudgeSeekOnResume = false;
 
   // Performance settings.
   bool _uiPerformanceMode = false;
@@ -127,6 +141,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
       },
     );
 
+    _playbackFreezeWorkaround = PlaybackFreezeWorkaroundController(
+      player: _player,
+      isEnabled: () => _nudgeSeekOnResume,
+    );
+
     _tracker = AnilistTrackerService(
       onSuccess: () {
         if (mounted) {
@@ -161,6 +180,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       _uiPerformanceMode = s.uiPerformanceMode;
       _videoFilterQuality = s.videoFilterQuality;
       _autoSkip = s.autoSkip;
+      _nudgeSeekOnResume = s.nudgeSeekOnResume;
     });
 
     final BaseStreamingController newController;
@@ -550,6 +570,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
+    _playbackFreezeWorkaround.dispose();
     await _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
@@ -580,6 +601,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _controlsVisibility.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
+    _playbackFreezeWorkaround.dispose();
     final posSub = _posSub;
     if (posSub != null) {
       unawaited(posSub.cancel());
