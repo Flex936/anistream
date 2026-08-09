@@ -29,6 +29,17 @@ class _AppShellState extends State<AppShell> {
   final _auth = AnilistAuthService();
   late final NavigationController _nav;
 
+  // Dedicated focus scope for the routed page content, kept separate from
+  // the nav bar's own ambient scope. Flutter autofocus only activates
+  // when nothing else in a widget's nearest scope is already focused —
+  // this boundary is what lets each page's own autofocus:true target
+  // (HomeScreen's first carousel card, AnimeDetailsScreen's up-next
+  // episode, etc.) win focus on every navigation, regardless of which
+  // nav bar control was pressed to get here.
+  final FocusScopeNode _bodyFocusScope = FocusScopeNode(
+    debugLabel: 'AppShellBody',
+  );
+
   bool _isLoggedIn = false;
   bool _loginBusy = false;
   String _searchQuery = '';
@@ -40,11 +51,25 @@ class _AppShellState extends State<AppShell> {
     _nav = NavigationController(
       buildHome: () => HomeScreen(onSelectAnime: _handleSelectAnime),
     );
+    _nav.addListener(_focusNewPage);
     unawaited(_restoreSession());
+  }
+
+  // Runs after every navigation, once the new page's widgets have
+  // actually mounted, so its own autofocus target exists to receive
+  // focus. requestFocus() on a scope with no currently-focused child
+  // defers to normal autofocus resolution among its descendants — see
+  // the field doc comment above.
+  void _focusNewPage() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _bodyFocusScope.requestFocus();
+    });
   }
 
   @override
   void dispose() {
+    _nav.removeListener(_focusNewPage);
+    _bodyFocusScope.dispose();
     _nav.dispose();
     super.dispose();
   }
@@ -179,7 +204,16 @@ class _AppShellState extends State<AppShell> {
                   // outer level wouldn't mean anything — that memory
                   // belongs inside each screen's own regions instead (see
                   // HomeScreen).
-                  child: DpadRegion(child: _nav.current),
+                  //
+                  // Wrapped in its own FocusScope (_bodyFocusScope, set
+                  // above) so this region's focus state is independent of
+                  // AniStreamNavBar's — see that field's doc comment for
+                  // why that separation is what makes each page's own
+                  // autofocus target actually win focus on navigation.
+                  child: FocusScope(
+                    node: _bodyFocusScope,
+                    child: DpadRegion(child: _nav.current),
+                  ),
                 ),
               ),
             );

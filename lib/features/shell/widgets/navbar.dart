@@ -556,7 +556,16 @@ class _NavLogo extends StatelessWidget {
     // AnimatedDefaultTextStyle's color depends on state.focused — so it's
     // passed as `child` and reused across focus-state rebuilds instead
     // of being reconstructed inside `builder` every time.
+    //
+    // autofocus: true — the navbar's designated default focus target
+    // (DESIGN.md § 4's "exactly one autofocus per region" convention): a
+    // cold entry into the 'navbar' DpadRegion, with nothing else in this
+    // scope yet focused, lands here. Once the user has focused something
+    // else in the navbar, memoryKey: 'navbar' (see AniStreamNavBar's
+    // build method) restores that instead — this only governs the
+    // memory-less first visit.
     return DpadFocusable(
+      autofocus: true,
       onSelect: () => onTap?.call(),
       builder: (context, state, child) => AnimatedDefaultTextStyle(
         duration: const Duration(milliseconds: 150),
