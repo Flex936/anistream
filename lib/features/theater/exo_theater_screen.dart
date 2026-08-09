@@ -160,9 +160,11 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     );
   }
 
+  bool _videoPlayerLaunching = false;
   void _onTorrentStateChanged() {
-    if (_torrentController.isReadyToPlay && _videoController == null) {
-      _openVideoPlayer(_torrentController.streamUrl!);
+    if (_torrentController.isReadyToPlay && !_videoPlayerLaunching) {
+      _videoPlayerLaunching = true;
+      unawaited(_openVideoPlayer(_torrentController.streamUrl!));
     }
 
     // ── Subtitles (added). Both guards below are one-shot triggers —

@@ -42,6 +42,7 @@ class RemoteStreamingController extends BaseStreamingController {
   bool _isReadyToPlay = false;
   bool _hasError = false;
   bool _needsManualSelection = false;
+  bool _pollInFlight = false;
   List<BatchFileOption> _batchFiles = [];
 
   // Raw (undecoded-to-BatchFileOption) file list from the last poll that
@@ -328,8 +329,8 @@ class RemoteStreamingController extends BaseStreamingController {
   }
 
   Future<void> _poll() async {
-    if (_sessionId == null) return;
-
+    if (_sessionId == null || _pollInFlight) return;
+    _pollInFlight = true;
     try {
       final resp = await _http
           .get(Uri.parse('$serverUrl/api/stream/$_sessionId'))
@@ -429,6 +430,8 @@ class RemoteStreamingController extends BaseStreamingController {
       // Network hiccup — silently retry on the next tick.
     } catch (_) {
       // Any other transient error — keep polling.
+    } finally {
+      _pollInFlight = false;
     }
   }
 
