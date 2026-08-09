@@ -12,7 +12,7 @@
 //  POST /api/stream/:id/select {file_index}→ pick a file from a batch torrent
 //  GET  /api/stream/:id/video              → HTTP range-request video stream (MPV opens this)
 //  GET  /api/stream/:id/subtitles          → embedded subtitle tracks (only once fully downloaded)
-//  GET  /api/stream/:id/subtitles/:index   → that track, converted to WebVTT
+//  GET  /api/stream/:id/subtitles/:index   → that track, ?format=vtt|ass|ttml (default vtt)
 // DELETE /api/stream/:id                   → explicit cleanup
 
 package main
@@ -107,12 +107,23 @@ type session struct {
 	// distinguish "haven't probed yet" from "probed, found none".
 	subtitleTracks []SubtitleTrack
 
-	// extractedVTT caches the last extraction result per track, alongside
-	// how much of the file had downloaded when it was produced — lets
-	// repeat requests skip re-running ffmpeg when nothing new has
-	// arrived, while still re-extracting (to pick up newly-downloaded
-	// cues) once it has. See extractedSubtitle.
-	extractedVTT map[int]*extractedSubtitle
+	// extractedSubtitles caches the last extraction result per (track,
+	// format) pair, alongside how much of the file had downloaded when
+	// it was produced — lets repeat requests skip re-running ffmpeg/
+	// astisub when nothing new has arrived, while still re-extracting
+	// (to pick up newly-downloaded cues) once it has. Keyed by format as
+	// well as track index (added) — the same track re-requested as ass
+	// vs ttml must not be served a stale result cached for the other
+	// format. See extractedSubtitle.
+	extractedSubtitles map[subtitleCacheKey]*extractedSubtitle
+}
+
+// subtitleCacheKey identifies one (track, output format) pair in
+// session.extractedSubtitles. Added alongside format-aware subtitle
+// extraction — see SubtitleFormat in subtitle_extractor.go.
+type subtitleCacheKey struct {
+	index  int
+	format SubtitleFormat
 }
 
 // extractedSubtitle is one track's cached extraction result.
@@ -303,12 +314,13 @@ func (s *session) status(streamBase string, ffmpegReady bool) statusResp {
 	return resp
 }
 
-// cleanupSubtitleFiles removes any temp .vtt files this session extracted,
-// so dropping or reaping a session doesn't leak files in os.TempDir().
+// cleanupSubtitleFiles removes any temp subtitle files (vtt/ass/ttml)
+// this session extracted, so dropping or reaping a session doesn't leak
+// files in os.TempDir().
 func (s *session) cleanupSubtitleFiles() {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, entry := range s.extractedVTT {
+	for _, entry := range s.extractedSubtitles {
 		_ = os.Remove(entry.path)
 	}
 }
@@ -608,10 +620,25 @@ func (sv *srv) listSubtitles(w http.ResponseWriter, r *http.Request, id string) 
 	json200(w, subtitleTracksResp{Tracks: tracks})
 }
 
+// contentTypeFor returns the Content-Type header for a given output
+// format. Informational only — the Flutter client already knows which
+// format it asked for via the query param, so nothing on that side
+// parses this back out.
+func contentTypeFor(format SubtitleFormat) string {
+	switch format {
+	case FormatASS:
+		return "text/x-ssa"
+	case FormatTTML:
+		return "application/ttml+xml"
+	default:
+		return "text/vtt"
+	}
+}
+
 // serveSubtitleTrack extracts (or re-extracts, if more has downloaded
-// since the last attempt) a single subtitle track as WebVTT. Sets
-// X-Subtitle-Complete so the client knows whether it's worth asking
-// again later for more content, or whether this is the final version.
+// since the last attempt) a single subtitle track in the requested
+// format. Sets X-Subtitle-Complete so the client knows whether it's
+// worth asking again later for more content, or whether this is final.
 func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id string, trackIdxStr string) {
 	s, ok := sv.get(id)
 	if !ok {
@@ -625,10 +652,33 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
+	// ── Format selection (added) ────────────────────────────────────────
+	// Defaults to vtt so any client that predates this — including
+	// video_player's Dart-side WebVTT-text path — keeps working with zero
+	// changes. ass/ttml are the new native-parser paths — see
+	// native_subtitle_parser.dart / SubtitleParserPlugin.kt on the
+	// Flutter side.
+	format := SubtitleFormat(r.URL.Query().Get("format"))
+	if format == "" {
+		format = FormatWebVTT
+	}
+	if format != FormatWebVTT && format != FormatASS && format != FormatTTML {
+		http.Error(w, fmt.Sprintf("unsupported format %q (want vtt, ass, or ttml)", format), http.StatusBadRequest)
+		return
+	}
+
 	s.mu.RLock()
 	st := s.st
 	f := s.active
-	existing := s.extractedVTT[streamIndex]
+	trackCodec := ""
+	for _, t := range s.subtitleTracks {
+		if t.StreamIndex == streamIndex {
+			trackCodec = t.Codec
+			break
+		}
+	}
+	cacheKey := subtitleCacheKey{index: streamIndex, format: format}
+	existing := s.extractedSubtitles[cacheKey]
 	s.mu.RUnlock()
 
 	if st != stateReady || f == nil {
@@ -636,15 +686,26 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
+	// ass and ttml both require the source track to actually BE ass/ssa
+	// — ass because it's a raw stream copy (forcing -c:s copy against,
+	// say, a PGS bitmap track produces a corrupt .ass file, not a valid
+	// one), ttml because its conversion step reads that same raw copy as
+	// input. vtt has no such restriction — ffmpeg's webvtt encoder
+	// accepts any text-based subtitle codec it understands.
+	if (format == FormatASS || format == FormatTTML) && !FormatASS.IsNativeCodec(trackCodec) {
+		http.Error(w, fmt.Sprintf("track %d is %q, not ass/ssa — %s requires an ass/ssa source track", streamIndex, trackCodec, format), http.StatusUnprocessableEntity)
+		return
+	}
+
 	currentBytes := f.BytesCompleted()
 	complete := subtitlesComplete(f)
 
-	// Serve the cached result without re-running ffmpeg if it's already
-	// final, or if nothing new has downloaded since it was produced —
-	// re-extracting identical input would just waste CPU for the same
-	// output.
+	// Serve the cached result without re-running the extraction if it's
+	// already final, or if nothing new has downloaded since it was
+	// produced — re-extracting identical input would just waste CPU for
+	// the same output.
 	if existing != nil && (existing.complete || existing.extractedAtBytes >= currentBytes) {
-		w.Header().Set("Content-Type", "text/vtt")
+		w.Header().Set("Content-Type", contentTypeFor(format))
 		w.Header().Set("X-Subtitle-Complete", strconv.FormatBool(existing.complete))
 		http.ServeFile(w, r, existing.path)
 		return
@@ -665,32 +726,34 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
-	// Same destination path every time for a given (session, track) pair
-	// — ExtractSubtitleTrack's ffmpeg call runs with -y, so a
-	// re-extraction simply overwrites the previous partial result in
-	// place rather than needing this handler to separately track and
-	// clean up a prior file.
-	destPath := filepath.Join(os.TempDir(), fmt.Sprintf("anistream-sub-%s-%d.vtt", id, streamIndex))
+	// Same destination path every time for a given (session, track,
+	// format) triple — ExtractSubtitleTrack's ffmpeg calls run with -y,
+	// so a re-extraction simply overwrites the previous partial result
+	// in place rather than needing this handler to separately track and
+	// clean up a prior file. Extension carries the format so a track
+	// re-requested in a different format never collides with the other
+	// format's temp file.
+	destPath := filepath.Join(os.TempDir(), fmt.Sprintf("anistream-sub-%s-%d.%s", id, streamIndex, format))
 
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	if err := ExtractSubtitleTrack(ctx, srcPath, streamIndex, destPath); err != nil {
+	if err := ExtractSubtitleTrack(ctx, srcPath, streamIndex, destPath, format); err != nil {
 		http.Error(w, "extraction failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	s.mu.Lock()
-	if s.extractedVTT == nil {
-		s.extractedVTT = make(map[int]*extractedSubtitle)
+	if s.extractedSubtitles == nil {
+		s.extractedSubtitles = make(map[subtitleCacheKey]*extractedSubtitle)
 	}
-	s.extractedVTT[streamIndex] = &extractedSubtitle{
+	s.extractedSubtitles[cacheKey] = &extractedSubtitle{
 		path:             destPath,
 		extractedAtBytes: currentBytes,
 		complete:         complete,
 	}
 	s.mu.Unlock()
 
-	w.Header().Set("Content-Type", "text/vtt")
+	w.Header().Set("Content-Type", contentTypeFor(format))
 	w.Header().Set("X-Subtitle-Complete", strconv.FormatBool(complete))
 	http.ServeFile(w, r, destPath)
 }

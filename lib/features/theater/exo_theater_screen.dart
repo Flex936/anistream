@@ -3,15 +3,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/logging/app_logger.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
+import 'services/native_subtitle_parser.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
 import 'widgets/batch_picker.dart';
 import 'widgets/seekbar.dart';
+import 'widgets/styled_subtitle_view.dart';
 import 'widgets/theater_player.dart';
 
 // ── Branch-experiment screen, reachable in production via the
@@ -64,6 +67,23 @@ import 'widgets/theater_player.dart';
 // here currently exercises the hardware-overlay path, on purpose.
 const bool kUseHardwareOverlay = false;
 
+// ── Subtitle pipeline (added) ──────────────────────────────────────────
+//
+// Which format gets requested from the server and handed to Media3's
+// native parser (see SubtitleParserPlugin.kt / native_subtitle_parser.dart).
+// ass is the default: the source track inside the MKV is already ASS for
+// the overwhelming majority of fansub releases, so the server serves it
+// via a stream copy — no re-encode — and Media3's SsaParser decodes it
+// with real timing, positioning, and style-span fidelity.
+//
+// Swapping to TTML is exactly flipping this one value to
+// NativeSubtitleFormat.ttml. Nothing else here, in
+// remote_streaming_controller.dart, or in SubtitleParserPlugin.kt
+// branches on format beyond this same enum — the server converts via
+// go-astisub (not ffmpeg — see subtitle_extractor.go's FormatTTML doc
+// comment for why) and the native side swaps SsaParser for TtmlParser.
+const NativeSubtitleFormat kSubtitleFormat = NativeSubtitleFormat.ass;
+
 class ExoTheaterScreen extends StatefulWidget {
   final Anime anime;
   final int episode;
@@ -95,6 +115,12 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   int? _selectedSubtitleIndex;
   bool _subtitleFetchTriggered = false;
   bool _subtitleAutoApplied = false;
+  // Parsed cues for the currently-selected track — see
+  // _fetchAndApplySubtitleBytes and StyledSubtitleView. Replaces the old
+  // WebVTTCaptionFile/setClosedCaptionFile flow entirely: cues now carry
+  // real timing, positioning, and per-run styling from Media3's own
+  // TtmlParser/SsaParser instead of video_player's plain-text captions.
+  List<StyledCue> _styledCues = [];
   // Re-fetches the selected track's content periodically while the
   // server hasn't yet marked it complete — see _applySubtitleTrack.
   Timer? _subtitleContentTimer;
@@ -216,42 +242,37 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
 
   // ── Subtitles (added) ────────────────────────────────────────────────
   //
-  // Fetches one track's current WebVTT body through the controller and
-  // hands it to the ALREADY-PLAYING video controller via
-  // setClosedCaptionFile — confirmed directly against video_player's own
-  // source that this is a real, callable-after-initialize method, not
-  // just a constructor-time option, so there's no need to dispose/
-  // recreate the controller (and cause a visible reload) just to turn
-  // captions on or switch tracks.
+  // Fetches one track's raw bytes (ass, or ttml — see kSubtitleFormat)
+  // through the controller and runs them through NativeSubtitleParser
+  // (Media3's own TtmlParser/SsaParser via SubtitleParserPlugin.kt),
+  // storing the resulting cues in state for StyledSubtitleView to render.
+  // No longer routed through the video controller at all — unlike the
+  // old setClosedCaptionFile flow, cue fetching/parsing is now
+  // independent of whether the video player itself has finished
+  // initializing, which also fixes a latent ordering gap the old code
+  // had (a subtitle selection arriving before _videoController existed
+  // was silently dropped).
   //
   // While the source file is still downloading, the server can return
   // progressively more content on each fetch (see
-  // RemoteStreamingController.fetchSubtitleContent's doc comment) — this
+  // RemoteStreamingController.fetchSubtitleBytes's doc comment) — this
   // re-fetches on a timer until isSubtitleTrackComplete says there's no
   // point asking again. Cancels and restarts cleanly if the user picks a
   // different track mid-poll.
   //
-  // streamIndex == null means "Off": video_player doesn't expose an
-  // explicit "clear captions" call, so an empty (header-only) WebVTT
-  // file is fed in instead — ClosedCaption then simply has nothing to
-  // ever show, which is the practical equivalent.
+  // streamIndex == null means "Off": just clear the cue list.
   Future<void> _applySubtitleTrack(int? streamIndex) async {
-    final controller = _videoController;
-    if (controller == null) return;
-
     _subtitleContentTimer?.cancel();
     _subtitleContentTimer = null;
 
-    setState(() => _selectedSubtitleIndex = streamIndex);
+    setState(() {
+      _selectedSubtitleIndex = streamIndex;
+      _styledCues = [];
+    });
 
-    if (streamIndex == null) {
-      await controller.setClosedCaptionFile(
-        Future.value(WebVTTCaptionFile('WEBVTT\n')),
-      );
-      return;
-    }
+    if (streamIndex == null) return;
 
-    await _fetchAndApplySubtitleContent(streamIndex);
+    await _fetchAndApplySubtitleBytes(streamIndex);
 
     if (!_torrentController.isSubtitleTrackComplete(streamIndex)) {
       _subtitleContentTimer = Timer.periodic(const Duration(seconds: 20), (
@@ -265,7 +286,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
           _subtitleContentTimer = null;
           return;
         }
-        await _fetchAndApplySubtitleContent(streamIndex);
+        await _fetchAndApplySubtitleBytes(streamIndex);
         if (_torrentController.isSubtitleTrackComplete(streamIndex)) {
           _subtitleContentTimer?.cancel();
           _subtitleContentTimer = null;
@@ -274,13 +295,22 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     }
   }
 
-  Future<void> _fetchAndApplySubtitleContent(int streamIndex) async {
-    final content = await _torrentController.fetchSubtitleContent(streamIndex);
-    if (content == null || !mounted || _videoController == null) return;
-    if (_selectedSubtitleIndex != streamIndex) return;
-    await _videoController!.setClosedCaptionFile(
-      Future.value(WebVTTCaptionFile(content)),
+  Future<void> _fetchAndApplySubtitleBytes(int streamIndex) async {
+    final bytes = await _torrentController.fetchSubtitleBytes(
+      streamIndex,
+      kSubtitleFormat,
     );
+    if (bytes == null || !mounted || _selectedSubtitleIndex != streamIndex) {
+      return;
+    }
+
+    try {
+      final cues = await NativeSubtitleParser.parse(bytes, kSubtitleFormat);
+      if (!mounted || _selectedSubtitleIndex != streamIndex) return;
+      setState(() => _styledCues = cues);
+    } catch (e) {
+      AppLogger.w('ExoTheaterScreen', 'Native subtitle parse failed: $e');
+    }
   }
 
   Widget _buildSubtitleButton() {
@@ -349,25 +379,29 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               ),
             ),
 
-          // ── Subtitles (added): ClosedCaption is video_player's own
-          // prebuilt widget — it reads value.caption.text itself, no
-          // manual timing/lookup logic needed here. Wrapped in its own
+          // ── Subtitles (added): StyledSubtitleView reads _styledCues —
+          // real timing, positioning, and per-run styling from Media3's
+          // TtmlParser/SsaParser via NativeSubtitleParser — instead of
+          // video_player's own plain-text-only ClosedCaption widget.
+          // Spans the full video area (not a fixed bottom strip) since a
+          // cue can position itself anywhere on screen, same as a real
+          // ASS/TTML "sign" override would. Wrapped in its own
           // ValueListenableBuilder (VideoPlayerController IS a
           // ValueNotifier<VideoPlayerValue>) so only this small subtree
-          // rebuilds as captions change, not the whole screen. ──
-          if (_videoInitialized && videoController != null)
+          // rebuilds as playback position changes, not the whole screen. ──
+          if (_videoInitialized &&
+              videoController != null &&
+              _styledCues.isNotEmpty)
             Positioned(
               left: 0,
               right: 0,
+              top: 0,
               bottom: 110,
               child: ValueListenableBuilder<VideoPlayerValue>(
                 valueListenable: videoController,
-                builder: (context, value, _) => ClosedCaption(
-                  text: value.caption.text,
-                  textStyle: const TextStyle(
-                    fontSize: 18,
-                    color: AppPalette.white,
-                  ),
+                builder: (context, value, _) => StyledSubtitleView(
+                  cues: _styledCues,
+                  position: value.position,
                 ),
               ),
             ),

@@ -70,7 +70,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
     final settings = SettingsScope.of(context, listen: false).settings;
     final autoPlayEnabled = settings.autoPlayEnabled;
-    final useExperimentalPlayer = settings.useExperimentalPlayer;
+    final useExoPlayer = settings.useExoPlayer;
 
     if (!autoPlayEnabled) {
       setState(() => _expandedEpisode = _expandedEpisode == ep ? -1 : ep);
@@ -91,7 +91,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         await Navigator.push(
           context,
           MaterialPageRoute<void>(
-            builder: (_) => useExperimentalPlayer
+            builder: (_) => useExoPlayer
                 ? ExoTheaterScreen(
                     anime: widget.anime,
                     episode: ep,
@@ -143,7 +143,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     final settings = SettingsScope.of(context).settings;
     final autoPlayEnabled = settings.autoPlayEnabled;
     final uiPerformanceMode = settings.uiPerformanceMode;
-    final useExperimentalPlayer = settings.useExperimentalPlayer;
+    final useExoPlayer = settings.useExoPlayer;
 
     return Scaffold(
       backgroundColor: AppPalette.base,
@@ -226,7 +226,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         isCurrentlyLoading:
                             _isFetchingSource && _autoPlayTargetEpisode == ep,
                         uiPerformanceMode: uiPerformanceMode,
-                        useExperimentalPlayer: useExperimentalPlayer,
+                        useExoPlayer: useExoPlayer,
                         torrentFuture: _expandedEpisode == ep
                             ? _futureFor(ep)
                             : null,

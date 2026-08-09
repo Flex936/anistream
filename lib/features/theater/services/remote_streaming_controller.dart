@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
 import '../../../core/logging/app_logger.dart';
 import '../../../data/torrent/services/torrent_parser.dart';
+import 'native_subtitle_parser.dart';
 import 'streaming_controller_base.dart';
 
 /// Connects to the AniStream Go server instead of running libtorrent locally.
@@ -235,6 +237,45 @@ class RemoteStreamingController extends BaseStreamingController {
       AppLogger.w(
         'RemoteStreamingController',
         'Failed to fetch subtitle content for track $streamIndex: $e',
+      );
+      return null;
+    }
+  }
+
+  /// Fetches a subtitle track's raw bytes in [format] ('ass'/'ttml') via
+  /// the server's `?format=` query param (see anistream_server's
+  /// subtitle_extractor.go / main.go) — the native-parser counterpart to
+  /// [fetchSubtitleContent] above, which only ever asks for (and
+  /// returns) WebVTT text. Same growing-file polling contract: the
+  /// x-subtitle-complete header and [_subtitleTrackComplete] map are
+  /// shared with the WebVTT path above, since a given track is only ever
+  /// fetched in one format per session.
+  @override
+  Future<Uint8List?> fetchSubtitleBytes(
+    int streamIndex,
+    NativeSubtitleFormat format,
+  ) async {
+    if (_sessionId == null) return null;
+    try {
+      final resp = await _http
+          .get(
+            Uri.parse(
+              '$serverUrl/api/stream/$_sessionId/subtitles/$streamIndex'
+              '?format=${format.wireValue}',
+            ),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (resp.statusCode != 200) return null;
+
+      final completeHeader = resp.headers['x-subtitle-complete'];
+      _subtitleTrackComplete[streamIndex] = completeHeader == 'true';
+
+      return resp.bodyBytes;
+    } catch (e) {
+      AppLogger.w(
+        'RemoteStreamingController',
+        'Failed to fetch subtitle bytes for track $streamIndex ($format): $e',
       );
       return null;
     }

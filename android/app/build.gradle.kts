@@ -3,7 +3,10 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
-
+dependencies{
+    implementation("androidx.media3:media3-common:1.5.1")
+    implementation("androidx.media3:media3-extractor:1.5.1")
+}
 android {
     namespace = "com.example.anistream"
     compileSdk = flutter.compileSdkVersion

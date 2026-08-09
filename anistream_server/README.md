@@ -25,7 +25,7 @@ MPV on the TV then opens the stream URL directly. HTTP range requests
 
 ```bash
 cd anistream_server
-go mod tidy          # fetches anacrolix/torrent and its deps (~30 s first run)
+go mod tidy          # fetches anacrolix/torrent and go-astisub and their deps (~30 s first run)
 go build -o anistream-server .
 ```
 

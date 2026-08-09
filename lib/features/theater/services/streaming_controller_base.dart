@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
+
+import 'native_subtitle_parser.dart';
 
 /// A single video file inside a batch (multi-episode) torrent.
 ///
@@ -130,4 +134,19 @@ abstract class BaseStreamingController extends ChangeNotifier {
   /// (the safe "don't bother retrying" answer) on controllers that don't
   /// support subtitles, or for a track that's never been fetched.
   bool isSubtitleTrackComplete(int streamIndex) => true;
+
+  /// Fetches a subtitle track's raw bytes in [format] — the
+  /// native-parser counterpart to [fetchSubtitleContent], which only
+  /// ever returns WebVTT text for video_player's Dart-side
+  /// ClosedCaptionFile mechanism. Consumed by [NativeSubtitleParser] to
+  /// get real timing, positioning, and per-run styling out of Media3's
+  /// own TtmlParser/SsaParser — see ExoTheaterScreen. Same growing-file
+  /// semantics as [fetchSubtitleContent] apply: while the underlying
+  /// file is still downloading, repeated calls can return progressively
+  /// more complete bytes — see [isSubtitleTrackComplete]. Returns null
+  /// on failure or if this controller doesn't support subtitles at all.
+  Future<Uint8List?> fetchSubtitleBytes(
+    int streamIndex,
+    NativeSubtitleFormat format,
+  ) async => null;
 }
