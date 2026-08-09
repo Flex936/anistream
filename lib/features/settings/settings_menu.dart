@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/settings/settings_service.dart';
 import '../../core/theme/app_palette.dart';
@@ -40,9 +41,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
   bool _saving = false;
   bool _pinging = false;
 
-  // ── Seeded from SettingsScope in didChangeDependencies instead of a
-  // second independent SettingsService().load() call — the values are
-  // already sitting in the app-wide scope by the time this dialog opens. ──
+  // Seeded from SettingsScope in didChangeDependencies — the values are
+  // already sitting in the app-wide scope by the time this dialog opens,
+  // so there's no need for a second, independent load.
   bool _hydrated = false;
 
   late bool _filterEcchi;
@@ -175,7 +176,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
+    final isMobile = context.isMobile;
+
+    final typography = context.appTypography;
+    final materials = context.appMaterials;
 
     return Align(
       alignment: Alignment.centerRight,
@@ -184,14 +188,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
         child: SizedBox(
           width: isMobile ? MediaQuery.sizeOf(context).width : 450,
           height: double.infinity,
-          // ── Was an unconditional ClipRRect + BackdropFilter(sigma: 50)
-          // regardless of _uiPerformanceMode. Routed through the same
-          // FrostedContainer every other glass surface in the app uses,
-          // so this panel now actually drops its own blur when the setting
-          // is on (and updates live as the user flips the switch below, before even saving). ──
+          // Routed through the same FrostedContainer every other glass
+          // surface in the app uses, so this panel drops its own blur
+          // under uiPerformanceMode and updates live as the setting is
+          // toggled below, before it's even saved.
           child: FrostedContainer(
             uiPerformanceMode: _uiPerformanceMode,
-            sigma: 50,
+            sigma: materials.prominent,
             borderRadius: isMobile
                 ? BorderRadius.zero
                 : const BorderRadius.only(
@@ -225,13 +228,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           'Settings',
-                          style: TextStyle(
+                          style: typography.panelHeader.copyWith(
                             color: AppPalette.textMain,
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
                           ),
                         ),
                         SettingsCloseButton(
@@ -242,10 +242,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                   ),
 
                   Expanded(
-                    // ── Values are hydrated synchronously in
-                    // didChangeDependencies (before the first build), so
-                    // there's no longer a loading spinner state to show
-                    // here — SettingsScope already holds the data. ──
+                    // Values are hydrated synchronously in
+                    // didChangeDependencies, before the first build, so
+                    // there's no loading-spinner state to show here.
                     child: ListView(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
@@ -301,26 +300,24 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                     setState(() => _useExoPlayer = v),
                               ),
                             const SizedBox(height: 16),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     'Video Scaling Quality',
-                                    style: TextStyle(
+                                    style: typography.compactHeading.copyWith(
                                       color: AppPalette.textMain,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  SizedBox(height: 4),
+                                  const SizedBox(height: 4),
                                   Text(
                                     'Determines how the GPU scales video frames. Set to "None" if 1080p stutters on your TV.',
-                                    style: TextStyle(
+                                    style: typography.tileSubtitle.copyWith(
                                       color: AppPalette.textMuted,
-                                      fontSize: 12,
-                                      height: 1.4,
                                     ),
                                   ),
                                 ],
@@ -441,6 +438,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
+                                          // Left as a plain literal (11pt,
+                                          // height 1.5) — doesn't belong
+                                          // to any typography token, and
+                                          // its line-height differs from
+                                          // tileSubtitle's.
                                           Text(
                                             'Run anistream-server on any PC, NAS, or Raspberry Pi on your LAN. '
                                             'See anistream_server/README.md for build instructions.',
@@ -464,26 +466,24 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             label: 'Desktop Playback Engine',
                             showDividerAbove: true,
                             children: [
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Hardware Decoding',
-                                      style: TextStyle(
+                                      style: typography.compactHeading.copyWith(
                                         color: AppPalette.textMain,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    SizedBox(height: 4),
+                                    const SizedBox(height: 4),
                                     Text(
                                       'Use your GPU to decode video streams for vastly improved performance and lower battery usage.',
-                                      style: TextStyle(
+                                      style: typography.tileSubtitle.copyWith(
                                         color: AppPalette.textMuted,
-                                        fontSize: 12,
-                                        height: 1.4,
                                       ),
                                     ),
                                   ],
@@ -535,26 +535,24 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             label: 'Android Playback Engine',
                             showDividerAbove: true,
                             children: [
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 16),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       'Hardware Decoding (Android)',
-                                      style: TextStyle(
+                                      style: typography.compactHeading.copyWith(
                                         color: AppPalette.textMain,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    SizedBox(height: 4),
+                                    const SizedBox(height: 4),
                                     Text(
                                       'Phones run best on "mediacodec" (Zero-Copy). Android TVs with weak drivers may crash and require "mediacodec-copy".',
-                                      style: TextStyle(
+                                      style: typography.tileSubtitle.copyWith(
                                         color: AppPalette.textMuted,
-                                        fontSize: 12,
-                                        height: 1.4,
                                       ),
                                     ),
                                   ],
@@ -627,6 +625,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 ),
                               ),
                             )
+                          // Left as a plain literal (15/w600/0.2
+                          // spacing) — close to toastMessage (14/w600/0.2)
+                          // but a deliberately distinct size for this
+                          // primary CTA button, not routed through that
+                          // token.
                           : const Text(
                               'Save Changes',
                               style: TextStyle(

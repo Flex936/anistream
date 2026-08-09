@@ -1,6 +1,7 @@
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/utils/perf_animations.dart';
@@ -31,12 +32,14 @@ class CalendarCard extends StatelessWidget {
         ? 'Ep ${nextEp.episode}'
         : 'Ep ${anime.episodes ?? "?"}';
 
-    // ── DpadFocusable replaces HoverFocusBuilder. Multiple nested parts
-    // (the border/shadow, the episode-label overlay's opacity, the title
-    // color) all depend on the focus state, so — same as AnimeCard —
-    // there's no focus-independent subtree worth passing through `child`;
-    // builder rebuilds the whole visual tree, keyed off state.focused
-    // instead of the old hovered bool. ──
+    final typography = context.appTypography;
+    final radii = context.appRadii;
+
+    // DpadFocusable drives the border/shadow, the episode-label overlay's
+    // opacity, and the title color, all off a single state.focused value
+    // — builder rebuilds the whole visual tree rather than splitting out
+    // a focus-independent `child`, since nearly everything here depends
+    // on focus state anyway.
     return DpadFocusable(
       autofocus: autofocus,
       onSelect: () => onTap?.call(),
@@ -49,7 +52,7 @@ class CalendarCard extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(radii.small),
                 border: Border.all(
                   color: state.focused
                       ? AppPalette.primary.withValues(alpha: 0.80)
@@ -67,18 +70,17 @@ class CalendarCard extends StatelessWidget {
                       ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(9),
-                // ── Clip.hardEdge under Performant mode — see
-                // FrostedContainer's doc comment for the rationale. ──
+                borderRadius: BorderRadius.circular(radii.small),
+                // Clip.hardEdge under Performant mode — see
+                // FrostedContainer's doc comment for the rationale.
                 clipBehavior: uiPerformanceMode
                     ? Clip.hardEdge
                     : Clip.antiAlias,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // ── cacheWidth added: displayed at 160dp in
-                    // ScheduledScreen's day shelves, was decoding
-                    // `coverImage.large` at full resolution. ──
+                    // cacheWidth matched to this card's 160dp display
+                    // width in ScheduledScreen's day shelves.
                     AppNetworkImage(
                       url: anime.coverImage?.large,
                       cacheWidth: 400,
@@ -110,14 +112,18 @@ class CalendarCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: AppPalette.primary,
+                            // Fully-rounded stadium/pill badge — 20
+                            // exceeds half this container's height to
+                            // guarantee a full pill curve regardless of
+                            // content length, so it's left as a plain
+                            // literal rather than one of the tag/small/
+                            // large tiers.
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
                             epLabel,
-                            style: const TextStyle(
+                            style: typography.badgeLabel.copyWith(
                               color: AppPalette.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
@@ -135,7 +141,7 @@ class CalendarCard extends StatelessWidget {
                           color: AppPalette.black.withValues(
                             alpha: uiPerformanceMode ? 0.9 : 0.72,
                           ),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(radii.tag),
                           border: Border.all(
                             color: AppPalette.statusReleasing.withValues(
                               alpha: 0.40,
@@ -144,10 +150,8 @@ class CalendarCard extends StatelessWidget {
                         ),
                         child: Text(
                           formatLocalTime(nextEp.airingAt),
-                          style: const TextStyle(
+                          style: typography.badgeLabel.copyWith(
                             color: AppPalette.statusReleasing,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
@@ -160,11 +164,8 @@ class CalendarCard extends StatelessWidget {
           const SizedBox(height: 8),
           AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 150),
-            style: TextStyle(
+            style: typography.cardTitleCompact.copyWith(
               color: state.focused ? AppPalette.primary : AppPalette.textMain,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              height: 1.2,
             ),
             child: Text(
               anime.title.romaji ?? anime.title.english ?? 'Unknown',

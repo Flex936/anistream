@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
@@ -11,8 +12,10 @@ import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
 import '../theater/exo_theater_screen.dart';
 import '../theater/theater_screen.dart';
+import 'widgets/anime_synopsis_section.dart';
 import 'widgets/episode_tile.dart';
-import 'widgets/hero_banner.dart';
+import 'widgets/hero_header_delegate.dart';
+import 'widgets/torrent_search_modal.dart';
 
 class AnimeDetailsScreen extends StatefulWidget {
   final Anime anime;
@@ -29,7 +32,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   final Map<int, Future<List<Torrent>>> _torrentFutures = {};
 
   int? _userProgress;
-  int _expandedEpisode = -1;
 
   bool _isFetchingSource = false;
   int _autoPlayTargetEpisode = -1;
@@ -37,10 +39,6 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    // ── initState can't be async — _fetchProgress() returns Future<void>,
-    // so the fire-and-forget intent is made explicit instead of silently
-    // dropped (unawaited_futures). setState inside it already guards on
-    // `mounted`. ──
     unawaited(_fetchProgress());
   }
 
@@ -65,22 +63,30 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     () => _scraper.fetchTorrents(widget.anime, ep),
   );
 
-  Future<void> _toggleEpisode(int ep) async {
+  /// Tap entry point for an episode row. With autoplay off, this always
+  /// opens [TorrentSearchModal]. With autoplay on, it silently tries the
+  /// top result first, falling back to the same modal on either an empty
+  /// result or a thrown exception.
+  void _toggleEpisode(int ep) {
     if (_isFetchingSource) return;
 
-    final settings = SettingsScope.of(context, listen: false).settings;
-    final autoPlayEnabled = settings.autoPlayEnabled;
-    final useExoPlayer = settings.useExoPlayer;
+    final bool autoPlayEnabled = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.autoPlayEnabled;
 
     if (!autoPlayEnabled) {
-      setState(() => _expandedEpisode = _expandedEpisode == ep ? -1 : ep);
+      _openTorrentModal(ep);
       return;
     }
 
+    unawaited(_autoPlayEpisode(ep));
+  }
+
+  Future<void> _autoPlayEpisode(int ep) async {
     setState(() {
       _isFetchingSource = true;
       _autoPlayTargetEpisode = ep;
-      _expandedEpisode = -1;
     });
 
     try {
@@ -88,34 +94,12 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (!mounted) return;
 
       if (torrents.isNotEmpty) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute<void>(
-            builder: (_) => useExoPlayer
-                ? ExoTheaterScreen(
-                    anime: widget.anime,
-                    episode: ep,
-                    torrent: torrents.first,
-                  )
-                : TheaterScreen(
-                    anime: widget.anime,
-                    episode: ep,
-                    torrent: torrents.first,
-                  ),
-          ),
-        );
-        if (mounted) {
-          // ── Already inside an async method, so this is a plain await
-          // rather than an unawaited() wrap — no reason to leave it
-          // fire-and-forget when the surrounding context can just wait
-          // for it (unawaited_futures). ──
-          await _fetchProgress();
-        }
-      } else {
-        if (mounted) setState(() => _expandedEpisode = ep);
+        await _streamTorrent(ep, torrents.first);
+      } else if (mounted) {
+        _openTorrentModal(ep);
       }
     } catch (_) {
-      if (mounted) setState(() => _expandedEpisode = ep);
+      if (mounted) _openTorrentModal(ep);
     } finally {
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -130,6 +114,62 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     }
   }
 
+  /// Opens [TorrentSearchModal] for [ep], reusing the same memoized
+  /// [Future] `_futureFor` already produces — including one that's
+  /// already settled by the time this is called (e.g. autoplay's
+  /// fallback path), so the modal never triggers a second network
+  /// request for a search that already ran.
+  void _openTorrentModal(int ep) {
+    final bool uiPerformanceMode = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.uiPerformanceMode;
+
+    unawaited(
+      TorrentSearchModal.show(
+        context: context,
+        episodeNumber: ep,
+        torrentsFuture: _futureFor(ep),
+        uiPerformanceMode: uiPerformanceMode,
+        onSelectTorrent: (torrent) {
+          // Closes the modal itself — see the note above _streamTorrent
+          // for why that responsibility lives here and not there.
+          Navigator.of(context).pop();
+          unawaited(_streamTorrent(ep, torrent));
+        },
+      ),
+    );
+  }
+
+  /// Pushes TheaterScreen or ExoTheaterScreen and refreshes AniList progress on return.
+  /// Deliberately does NOT pop anything itself — it's called both from
+  /// [_openTorrentModal]'s onSelectTorrent (which pops the modal before
+  /// calling this) AND from [_autoPlayEpisode]'s direct success path
+  /// (where no modal was ever opened). Popping unconditionally here
+  /// would incorrectly pop AnimeDetailsScreen itself off the stack on a
+  /// successful autoplay stream.
+  Future<void> _streamTorrent(int ep, Torrent torrent) async {
+    final bool useExoPlayer = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.useExoPlayer;
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => useExoPlayer
+            ? ExoTheaterScreen(
+                anime: widget.anime,
+                episode: ep,
+                torrent: torrent,
+              )
+            : TheaterScreen(anime: widget.anime, episode: ep, torrent: torrent),
+      ),
+    );
+    if (mounted) {
+      await _fetchProgress();
+    }
+  }
+
   @override
   void dispose() {
     _scraper.dispose();
@@ -138,12 +178,11 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.sizeOf(context).width < 600;
-    final hPad = isMobile ? 24.0 : 48.0;
+    final bool isMobile = MediaQuery.sizeOf(context).width < 600;
+    final double hPad = isMobile ? 24.0 : 48.0;
     final settings = SettingsScope.of(context).settings;
-    final autoPlayEnabled = settings.autoPlayEnabled;
-    final uiPerformanceMode = settings.uiPerformanceMode;
-    final useExoPlayer = settings.useExoPlayer;
+    final bool uiPerformanceMode = settings.uiPerformanceMode;
+    final materials = context.appMaterials;
 
     return Scaffold(
       backgroundColor: AppPalette.base,
@@ -151,12 +190,16 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
         children: [
           CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(
-                child: HeroBanner(
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: HeroHeaderDelegate(
                   anime: widget.anime,
                   onBack: widget.onBack,
                   uiPerformanceMode: uiPerformanceMode,
                 ),
+              ),
+              SliverToBoxAdapter(
+                child: AnimeSynopsisSection(anime: widget.anime),
               ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 16),
@@ -217,21 +260,13 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
                       return EpisodeTile(
                         key: ValueKey(ep),
-                        anime: widget.anime,
                         episodeNumber: ep,
-                        isExpanded: _expandedEpisode == ep,
                         userProgress: _userProgress,
                         isUpNext: isUpNext,
-                        isAutoPlayEnabled: autoPlayEnabled,
                         isCurrentlyLoading:
                             _isFetchingSource && _autoPlayTargetEpisode == ep,
                         uiPerformanceMode: uiPerformanceMode,
-                        useExoPlayer: useExoPlayer,
-                        torrentFuture: _expandedEpisode == ep
-                            ? _futureFor(ep)
-                            : null,
-                        onToggle: () => unawaited(_toggleEpisode(ep)),
-                        onReturnFromTheater: () => unawaited(_fetchProgress()),
+                        onToggle: () => _toggleEpisode(ep),
                       );
                     }, childCount: _episodeCount),
                   ),
@@ -249,7 +284,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                 builder: (context, opacity, child) {
                   final overlayContent = FrostedContainer(
                     uiPerformanceMode: uiPerformanceMode,
-                    sigma: 12,
+                    sigma: materials.standard,
                     child: Container(
                       color: AppPalette.base.withValues(
                         alpha: uiPerformanceMode ? 0.95 : 0.75,

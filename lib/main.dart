@@ -9,19 +9,16 @@ import 'app.dart';
 import 'core/input/input_mode_controller.dart';
 import 'core/logging/app_logger.dart';
 
-// ── Accept CLI args (kept for forward compatibility with the Flutter
-// tool's own launch args; PIP's 'multi_window' interception has been
-// removed entirely — this app no longer spawns secondary windows). ──
+// Accepts CLI args (kept for forward compatibility with the Flutter
+// tool's own launch args).
 void main(List<String> args) {
-  // Run everything — including binding initialization — inside the SAME
-  // zone that `runApp()` will later execute in. Previously
-  // `WidgetsFlutterBinding.ensureInitialized()` ran in the root zone while
-  // `runApp()` (inside `_bootstrap`) ran inside `runZonedGuarded`'s child
-  // zone, which is exactly the "Zone mismatch" Flutter warns about —
-  // zone-specific state (like the error zone used for reporting) could
-  // inconsistently reflect one zone or the other.
+  // Runs everything, including binding initialization, inside the same
+  // zone that `runApp()` executes in — `WidgetsFlutterBinding.ensureInitialized()`
+  // and `runApp()` (inside `_bootstrap`) both need to share a zone, since
+  // zone-specific state (like the error zone used for reporting) must
+  // consistently reflect one zone, not straddle two.
   //
-  // `main` itself is deliberately NOT `async` here: the zone runs for the
+  // `main` itself is deliberately NOT `async`: the zone runs for the
   // lifetime of the app (there's nothing meaningful to await — the
   // returned Future only completes if the zone's body itself returns,
   // which for a running Flutter app it never does), so the call is
@@ -32,10 +29,11 @@ void main(List<String> args) {
       () async {
         WidgetsFlutterBinding.ensureInitialized();
 
-        // Initialize logging FIRST — before anything else runs — so that any
-        // boot-time crash (native window init, media_kit init, etc.) is still
-        // captured to disk. This also installs FlutterError/PlatformDispatcher
-        // hooks and desktop signal handlers (see app_logger.dart for details).
+        // Logging initializes first, before anything else runs, so that
+        // any boot-time crash (native window init, media_kit init, etc.)
+        // is still captured to disk. This also installs
+        // FlutterError/PlatformDispatcher hooks and desktop signal
+        // handlers (see app_logger.dart for details).
         await AppLogger.init();
 
         await _bootstrap(args);

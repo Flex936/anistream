@@ -30,14 +30,11 @@ class Torrent {
     'udp://exodus.desync.com:6969/announce',
   ];
 
-  /// Built on demand instead of at construction time.
-  ///
-  /// A single search can produce 50-300 scored `Torrent`s, but the UI only
-  /// ever needs a magnet link for the *one* the user actually hands to
-  /// libtorrent. The old code built and percent-encoded 3 tracker URLs for
-  /// every single candidate up front, even though ~99% of that work was
-  /// thrown away. Same trackers, same encoding, same final string — just
-  /// computed only when something actually asks for it.
+  /// Built on demand instead of at construction time — a single search can
+  /// produce 50-300 scored `Torrent`s, but the UI only ever needs a magnet
+  /// link for the one the user actually hands to libtorrent, so building
+  /// and percent-encoding tracker URLs for every candidate up front would
+  /// be mostly wasted work.
   String get magnetLink {
     final buffer = StringBuffer()
       ..write('magnet:?xt=urn:btih:')
@@ -53,10 +50,6 @@ class Torrent {
   }
 
   /// Two `Torrent`s are the same release if they share an infoHash.
-  /// (Additive — nothing in the current scraper relies on this, it still
-  /// dedupes via a `Set<String>` of ids, but it's a reasonable default for
-  /// a model class and costs nothing. Drop it if you'd rather keep
-  /// identity equality.)
   @override
   bool operator ==(Object other) =>
       identical(this, other) || (other is Torrent && other.id == id);

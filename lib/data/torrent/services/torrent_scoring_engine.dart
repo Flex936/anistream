@@ -22,10 +22,10 @@ typedef RawItemFields = ({
   bool isTrusted,
 });
 
-/// Splits the old 200-line `_scoreItem` monolith into six independent,
-/// named steps. No scoring math was changed — this is a pure reorganization
-/// so a future change to (say) the size curve doesn't require reading the
-/// whole function to find it.
+/// Scores a single Nyaa RSS `<item>` against the requested anime/episode,
+/// split into six independent, named steps so a change to one part of the
+/// rubric (say, the size curve) doesn't require reading the whole function
+/// to find it.
 abstract final class TorrentScoringEngine {
   static Torrent? score(XmlElement item, ScoringContext ctx) {
     final fields = _extractItemFields(item);

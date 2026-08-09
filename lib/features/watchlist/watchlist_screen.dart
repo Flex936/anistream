@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
@@ -27,11 +28,10 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
   bool _isListView = false;
 
-  // ── Was a plain `String? _hoveredBanner` field driven by setState() on
-  // this entire State — hovering any single card in a 36-item grid was
-  // rebuilding the whole screen, including the CustomScrollView's slivers.
-  // As a ValueNotifier, only the small ValueListenableBuilder wrapping the
-  // background image below rebuilds on hover; the grid/list never does. ──
+  // A ValueNotifier rather than plain State, so hovering a single card in
+  // a 36-item grid only rebuilds the small ValueListenableBuilder wrapping
+  // the background image below, not the whole screen (including the
+  // CustomScrollView's slivers).
   final ValueNotifier<String?> _hoveredBanner = ValueNotifier<String?>(null);
 
   @override
@@ -103,24 +103,26 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
+    final typography = context.appTypography;
+
     return ListenableBuilder(
       listenable: _controller,
       builder: (context, _) {
         return Stack(
           children: [
-            // ── Hover-driven background: isolated behind a
-            // ValueListenableBuilder so hovering a card only rebuilds this
-            // small subtree, never the grid/list below it. ──
+            // Hover-driven background, isolated behind a
+            // ValueListenableBuilder so hovering a card only rebuilds
+            // this small subtree, never the grid/list below it.
             Positioned.fill(
               child: ValueListenableBuilder<String?>(
                 valueListenable: _hoveredBanner,
                 builder: (context, hoveredBanner, _) {
                   return AnimatedSwitcher(
-                    // ── Zero-duration under Performant mode — the backdrop
+                    // Zero-duration under Performant mode — the backdrop
                     // swap still happens, it just snaps instead of
                     // dissolving, avoiding the extra composited frames a
                     // 600ms cross-fade of a full-screen image would
-                    // otherwise cost. ──
+                    // otherwise cost.
                     duration: perfDuration(
                       uiPerformanceMode,
                       const Duration(milliseconds: 600),
@@ -137,11 +139,11 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                               Image.network(
                                 hoveredBanner,
                                 fit: BoxFit.cover,
-                                // ── cacheWidth added: this is a
-                                // full-screen backdrop that's immediately
-                                // heavily blurred (or fully covered in
-                                // performance mode) — decoding it at full
-                                // network resolution bought nothing. ──
+                                // A full-screen backdrop that's
+                                // immediately heavily blurred (or fully
+                                // covered in performance mode), so
+                                // decoding at full network resolution
+                                // buys nothing.
                                 cacheWidth: 400,
                                 errorBuilder: (context, error, stackTrace) =>
                                     const ColoredBox(color: AppPalette.base),
@@ -186,13 +188,10 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                         spacing: 32,
                         runSpacing: 16,
                         children: [
-                          const Text(
+                          Text(
                             'My Library',
-                            style: TextStyle(
+                            style: typography.sectionTitle.copyWith(
                               color: AppPalette.textMain,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: -0.4,
                             ),
                           ),
                           Wrap(
@@ -450,6 +449,8 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return HoverFocusBuilder(
       onTap: onTap,
       builder: (context, hovered) {
@@ -483,12 +484,14 @@ class _TabButton extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: contentColor),
               const SizedBox(width: 6),
+              // cardTitleCompact (13/w600) is reused here for the tab
+              // label — the token's height is inconsequential for a
+              // single line of text; see app_typography.dart's class doc
+              // comment on token-name drift.
               Text(
                 label,
-                style: TextStyle(
+                style: typography.cardTitleCompact.copyWith(
                   color: contentColor,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -523,6 +526,8 @@ class _EmptyPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return Center(
       child: Container(
         width: double.infinity,
@@ -538,15 +543,18 @@ class _EmptyPane extends StatelessWidget {
           children: [
             Icon(icon, color: AppPalette.textMuted, size: 48),
             const SizedBox(height: 16),
+            // cardTitleProminent is reused here — see
+            // app_typography.dart's class doc comment on token-name drift.
             Text(
               title,
-              style: const TextStyle(
+              style: typography.cardTitleProminent.copyWith(
                 color: AppPalette.textMain,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 6),
+            // This subtitle can wrap depending on content/screen width;
+            // cardSummary's height would visibly change line-spacing on
+            // wrapped text, so it's left as a plain literal.
             Text(
               subtitle,
               style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
@@ -586,6 +594,9 @@ class _ErrorPane extends StatelessWidget {
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
+            // A dynamic, potentially long error message — same
+            // multi-line height caution as scheduled_screen.dart's
+            // _ErrorPane.
             child: Text(
               message,
               textAlign: TextAlign.center,

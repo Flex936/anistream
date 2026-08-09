@@ -22,13 +22,13 @@ class HoverFocusBuilder extends StatefulWidget {
 }
 
 class _HoverFocusBuilderState extends State<HoverFocusBuilder> {
-  // ── Split so the two triggers can be gated independently. Mouse hover is
+  // Split so the two triggers can be gated independently. Mouse hover is
   // a deliberate signal on every platform and always counts. Keyboard/D-Pad
   // *focus* only visually counts once InputModeScope says we're actually in
-  // a TV/D-Pad context — see build() below. This is the one change that
-  // stops focus rings from appearing on PC/mobile just because a widget
-  // happened to have autofocus, or because Flutter's own default highlight
-  // mode starts "traditional" on desktop before any real input happens. ──
+  // a TV/D-Pad context — see build() below. This is what keeps focus rings
+  // from appearing on PC/mobile just because a widget happened to have
+  // autofocus, or because Flutter's own default highlight mode starts
+  // "traditional" on desktop before any real input happens.
   bool _hovered = false;
   bool _focused = false;
 

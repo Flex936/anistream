@@ -1,41 +1,25 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../data/anilist/models/anime.dart';
-import '../../../data/torrent/models/torrent.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
-import '../../theater/exo_theater_screen.dart';
-import '../../theater/theater_screen.dart';
-import 'torrent_tile.dart';
 
+/// A single row in AnimeDetailsScreen's episode list.
 class EpisodeTile extends StatelessWidget {
-  final Anime anime;
   final int episodeNumber;
-  final bool isExpanded;
   final int? userProgress;
   final bool isUpNext;
-  final Future<List<Torrent>>? torrentFuture;
   final VoidCallback onToggle;
-  final VoidCallback? onReturnFromTheater;
-  final bool isAutoPlayEnabled;
   final bool isCurrentlyLoading;
   final bool uiPerformanceMode;
   final bool useExoPlayer;
 
   const EpisodeTile({
     super.key,
-    required this.anime,
     required this.episodeNumber,
-    required this.isExpanded,
     this.userProgress,
     this.isUpNext = false,
-    this.torrentFuture,
     required this.onToggle,
-    this.onReturnFromTheater,
-    this.isAutoPlayEnabled = false,
     this.isCurrentlyLoading = false,
     this.uiPerformanceMode = false,
     this.useExoPlayer = false,
@@ -48,15 +32,13 @@ class EpisodeTile extends StatelessWidget {
 
     final isWatched = userProgress != null && episodeNumber <= userProgress!;
 
-    final Color numColor = isExpanded
-        ? AppPalette.primary
-        : isUpNext
+    final Color numColor = isUpNext
         ? AppPalette.textMain
         : isWatched
         ? AppPalette.textMuted.withValues(alpha: 0.25)
         : AppPalette.textMuted.withValues(alpha: 0.35);
 
-    final Color titleColor = isExpanded || isUpNext
+    final Color titleColor = isUpNext
         ? AppPalette.textMain
         : isWatched
         ? AppPalette.textMuted.withValues(alpha: 0.5)
@@ -73,16 +55,12 @@ class EpisodeTile extends StatelessWidget {
             curve: Curves.easeOutCubic,
             padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 15),
             decoration: BoxDecoration(
-              color: isExpanded
-                  ? AppPalette.primary.withValues(alpha: 0.06)
-                  : hovered
+              color: hovered
                   ? AppPalette.white.withValues(alpha: 0.025)
                   : AppPalette.transparent,
               border: Border(
                 left: BorderSide(
-                  color: isExpanded
-                      ? AppPalette.primary
-                      : isUpNext
+                  color: isUpNext
                       ? AppPalette.primary.withValues(alpha: 0.3)
                       : AppPalette.transparent,
                   width: 3,
@@ -117,7 +95,7 @@ class EpisodeTile extends StatelessWidget {
                         style: TextStyle(
                           color: titleColor,
                           fontSize: 14,
-                          fontWeight: isExpanded || isUpNext
+                          fontWeight: isUpNext
                               ? FontWeight.w600
                               : FontWeight.w400,
                         ),
@@ -166,153 +144,20 @@ class EpisodeTile extends StatelessWidget {
                       ),
                     ),
                   )
-                else if (isAutoPlayEnabled)
+                else
                   Icon(
                     Icons.play_arrow_rounded,
                     size: 24,
                     color: hovered
                         ? AppPalette.primary
                         : AppPalette.textMuted.withValues(alpha: 0.5),
-                  )
-                else
-                  AnimatedRotation(
-                    turns: isExpanded ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 22,
-                      color: isExpanded
-                          ? AppPalette.primary
-                          : AppPalette.textMuted.withValues(alpha: 0.5),
-                    ),
                   ),
               ],
             ),
           ),
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: isExpanded
-              ? _buildTorrentContent(context, hPad)
-              : const SizedBox.shrink(),
-        ),
         const Divider(height: 1, thickness: 1, color: AppPalette.border),
       ],
-    );
-  }
-
-  Widget _buildTorrentContent(BuildContext context, double hPad) {
-    final future = torrentFuture;
-    if (future == null) return const SizedBox.shrink();
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 16),
-      child: FutureBuilder<List<Torrent>>(
-        future: future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        AppPalette.primary,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 14),
-                  Text(
-                    'Searching for releases…',
-                    style: TextStyle(color: AppPalette.textMuted, fontSize: 12),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (snapshot.hasError) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.error_outline_rounded,
-                    color: AppPalette.statusCancelled,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Failed to load releases: ${snapshot.error}',
-                      style: const TextStyle(
-                        color: AppPalette.statusCancelled,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final torrents = snapshot.data ?? [];
-          if (torrents.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                'No releases found for this episode.',
-                style: TextStyle(color: AppPalette.textMuted, fontSize: 13),
-              ),
-            );
-          }
-
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 12),
-              for (int i = 0; i < torrents.length; i++) ...[
-                TorrentTile(
-                  torrent: torrents[i],
-                  isRecommended: i == 0,
-                  uiPerformanceMode: uiPerformanceMode,
-                  onStream: () {
-                    unawaited(
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => useExoPlayer
-                              ? ExoTheaterScreen(
-                                  anime: anime,
-                                  episode: episodeNumber,
-                                  torrent: torrents[i],
-                                )
-                              : TheaterScreen(
-                                  anime: anime,
-                                  episode: episodeNumber,
-                                  torrent: torrents[i],
-                                ),
-                        ),
-                      ).then((_) => onReturnFromTheater?.call()),
-                    );
-                  },
-                ),
-                if (i < torrents.length - 1) const SizedBox(height: 8),
-              ],
-              const SizedBox(height: 4),
-            ],
-          );
-        },
-      ),
     );
   }
 }

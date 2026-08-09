@@ -11,9 +11,8 @@ const List<String> weekdays = [
 ];
 
 /// Groups currently-airing anime by the weekday their next episode airs on,
-/// in the viewer's local timezone. Pulled out of
-/// `_ScheduledScreenState._buildCalendar` — pure data transformation with no
-/// business being a State method.
+/// in the viewer's local timezone. Pure data transformation with no
+/// dependency on `ScheduledScreen`'s widget state.
 Map<String, List<Anime>> groupByWeekday(List<Anime> anime) {
   final grid = {for (final day in weekdays) day: <Anime>[]};
 

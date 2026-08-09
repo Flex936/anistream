@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/anime.dart';
@@ -36,14 +37,10 @@ class _SearchInputState extends State<SearchInput> {
   final FocusNode _focusNode = FocusNode();
   final LayerLink _layerLink = LayerLink();
 
-  // ── replaces the manual `OverlayEntry?` field + Overlay.of
-  // (context).insert()/entry.remove() pair. OverlayPortalController ties
-  // the dropdown's mount/unmount lifecycle directly to this widget's own
-  // lifecycle — show()/hide() just flip an internal flag that the
-  // OverlayPortal below reacts to, and the portal's overlay child is torn
-  // down automatically when this State is disposed. Removes the manual
-  // leak risk of a stray `_overlayEntry` never being removed on some
-  // dispose/error path. ──
+  /// Ties the dropdown's mount/unmount lifecycle directly to this
+  /// widget's own lifecycle: show()/hide() just flip an internal flag
+  /// the OverlayPortal below reacts to, and the portal's overlay child
+  /// is torn down automatically when this State is disposed.
   final OverlayPortalController _overlayController = OverlayPortalController();
 
   final AnilistQueryService _api = AnilistQueryService();
@@ -52,11 +49,11 @@ class _SearchInputState extends State<SearchInput> {
   bool _isLoading = false;
   List<Anime> _instantMatches = [];
 
-  // ── Fixed-size pool of FocusNodes for the dropdown result rows, capped
-  // at 3 to match _fetchMatches' `results.take(3)`. Pre-allocated once in
-  // initState rather than created/disposed per search so the focus-group
-  // listener below always has a stable set of nodes to watch instead of
-  // chasing a list that grows and shrinks with every keystroke. ──
+  // Fixed-size pool of FocusNodes for the dropdown result rows, capped
+  // at 3 to match _fetchMatches' `results.take(3)`. Pre-allocated once
+  // in initState so the focus-group listener below always watches a
+  // stable set of nodes rather than a list that grows and shrinks with
+  // every keystroke.
   static const int _kMaxInstantMatches = 3;
   late final List<FocusNode> _resultFocusNodes;
   Timer? _dismissCheckTimer;
@@ -96,13 +93,11 @@ class _SearchInputState extends State<SearchInput> {
       return KeyEventResult.ignored;
     };
 
-    // ── Every node in the "search group" — the text field itself, plus
-    // each result row below — shares this one handler. Previously only
-    // _focusNode's own hasFocus was checked, so moving focus FROM the
-    // field INTO a result row (exactly what D-Pad/keyboard navigation
-    // into the dropdown looks like) was indistinguishable from the user
-    // dismissing search entirely, and the delayed hide tore the dropdown
-    // down out from under the very navigation trying to reach it. ──
+    // Every node in the "search group" — the text field itself, plus
+    // each result row below — shares this one handler, so moving focus
+    // from the field into a result row (what D-Pad/keyboard navigation
+    // into the dropdown looks like) is distinguishable from the user
+    // dismissing search entirely.
     _focusNode.addListener(_handleGroupFocusChange);
     for (final node in _resultFocusNodes) {
       node.addListener(_handleGroupFocusChange);
@@ -116,20 +111,20 @@ class _SearchInputState extends State<SearchInput> {
       _overlayController.show();
     }
 
-    // Closing is keyed off the WHOLE group, re-checked after a short,
+    // Closing is keyed off the whole group, re-checked after a short,
     // conditional delay rather than firing an unconditional hide. When
     // focus hops from the text field to a result row (D-Pad Down, Tab —
     // and also a mouse tap, since InkWell requests focus on activation
     // too), the old node's "focus lost" notification and the new node's
     // "focus gained" notification aren't guaranteed to land in the same
     // synchronous pass. Checking immediately risks catching that
-    // in-between instant and treating a pure focus HANDOFF within our
-    // own group as the user leaving it. 100ms is comfortably more than
-    // one frame, so the handoff has settled by the time this fires — and
-    // because the check re-reads live focus state instead of the
-    // original's bare unconditional hide, a genuinely fast focus return
-    // (e.g. Up then immediately back Down) is still caught correctly
-    // either way, since nothing here ever fires on a timer alone. ──
+    // in-between instant and treating a pure focus handoff within this
+    // group as the user leaving it. 100ms is comfortably more than one
+    // frame, so the handoff has settled by the time this fires — and
+    // because the check re-reads live focus state rather than relying on
+    // an unconditional hide, a genuinely fast focus return (e.g. Up then
+    // immediately back Down) is still caught correctly, since nothing
+    // here ever fires on a timer alone.
     _dismissCheckTimer?.cancel();
     _dismissCheckTimer = Timer(const Duration(milliseconds: 100), () {
       if (!mounted) return;
@@ -149,9 +144,8 @@ class _SearchInputState extends State<SearchInput> {
       node.dispose();
     }
     _debounce?.cancel();
-    // ── No explicit _overlayController.hide()/teardown needed here —
-    // unlike the old OverlayEntry, OverlayPortal's overlay child is torn
-    // down automatically as part of this State's disposal. ──
+    // No explicit overlay teardown needed here — OverlayPortal's overlay
+    // child is torn down automatically as part of this State's disposal.
     _api.dispose();
     super.dispose();
   }
@@ -169,13 +163,9 @@ class _SearchInputState extends State<SearchInput> {
     }
 
     _overlayController.show();
-    // ── setState() alone is enough to rebuild the dropdown now — the
-    // overlayChildBuilder below is part of THIS State's build output, so
-    // it rebuilds on every setState() the same as any other descendant.
-    // The old `_overlayEntry?.markNeedsBuild()` calls (here and in
-    // _fetchMatches) are gone entirely; they existed only because a bare
-    // OverlayEntry has no widget-tree connection to this State and
-    // wouldn't otherwise know to rebuild. ──
+    // setState() alone is enough to rebuild the dropdown — the
+    // overlayChildBuilder below is part of this State's own build output,
+    // so it rebuilds on every setState() the same as any other descendant.
     setState(() => _isLoading = true);
 
     _debounce?.cancel();
@@ -232,13 +222,10 @@ class _SearchInputState extends State<SearchInput> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        // ── Gives this row a real, externally-held FocusNode instead of
-        // InkWell's private internal one, so _handleGroupFocusChange can
-        // actually see "focus is on a result row" rather than only ever
-        // seeing _focusNode go blank. This is also what makes the row a
-        // reachable D-Pad/keyboard directional-focus target in the first
-        // place — an InkWell with no attached FocusNode isn't a valid
-        // candidate for focusInDirection(down) from the text field. ──
+        // A real, externally-held FocusNode (rather than InkWell's
+        // private internal one) is what lets _handleGroupFocusChange see
+        // "focus is on a result row" and what makes the row a reachable
+        // D-Pad/keyboard directional-focus target from the text field.
         focusNode: focusNode,
         onTap: () {
           _overlayController.hide();
@@ -246,12 +233,8 @@ class _SearchInputState extends State<SearchInput> {
           widget.onSelectAnime?.call(anime);
         },
         hoverColor: AppPalette.white.withValues(alpha: 0.1),
-        // ── Matches hoverColor so a D-Pad/keyboard user gets the same
-        // visible feedback a mouse user already had. Without this, the
-        // race-condition fix above would work but be invisible: focus
-        // would genuinely be on the row, with nothing onscreen to show
-        // it. Full dpad-mode-gated styling (matching HoverFocusBuilder's
-        // convention elsewhere in the app) is Phase 2 scope. ──
+        // Matches hoverColor so a D-Pad/keyboard user gets the same
+        // visible feedback a mouse user gets.
         focusColor: AppPalette.white.withValues(alpha: 0.1),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -265,9 +248,8 @@ class _SearchInputState extends State<SearchInput> {
                   child: anime.coverImage?.display != null
                       ? AppNetworkImage(
                           url: anime.coverImage!.display!,
-                          // ── cacheWidth added: this thumbnail
-                          // renders at 32dp wide, yet was decoding
-                          // a full-resolution poster. 100 gives ~3x headroom. ──
+                          // Renders at 32dp wide; 100 gives ~3x headroom
+                          // over the thumbnail's display size.
                           cacheWidth: 100,
                           uiPerformanceMode: widget.uiPerformanceMode,
                         )
@@ -283,10 +265,8 @@ class _SearchInputState extends State<SearchInput> {
                       anime.title.display,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: context.appTypography.compactHeading.copyWith(
                         color: AppPalette.textMain,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -356,7 +336,7 @@ class _SearchInputState extends State<SearchInput> {
 
     return FrostedContainer(
       uiPerformanceMode: widget.uiPerformanceMode,
-      sigma: 16,
+      sigma: context.appMaterials.standard,
       borderRadius: BorderRadius.circular(16),
       child: content,
     );
@@ -364,15 +344,9 @@ class _SearchInputState extends State<SearchInput> {
 
   @override
   Widget build(BuildContext context) {
-    // OverlayPortal replaces the old
-    // Overlay.of(context).insert(_overlayEntry!) call. The
-    // CompositedTransformTarget/CompositedTransformFollower + _layerLink
-    // pairing is UNCHANGED — only the entry lifecycle mechanism moved.
     // overlayChildBuilder runs as part of this State's own build/rebuild
-    // cycle (rather than a detached OverlayEntry callback), which is also
-    // why `context` here — this build method's own BuildContext — can be
-    // used directly for the width lookup below, instead of the old
-    // OverlayEntry builder's own (unrelated) context.
+    // cycle, so `context` here (this build method's own BuildContext)
+    // can be used directly for the width lookup below.
     return OverlayPortal(
       controller: _overlayController,
       overlayChildBuilder: (overlayContext) {

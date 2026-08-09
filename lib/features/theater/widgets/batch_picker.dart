@@ -117,11 +117,11 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                           requestedEpisode != null &&
                           f.guessedEpisode == requestedEpisode;
 
-                      // ── Built as a plain Container+Row instead of
+                      // Built as a plain Container+Row instead of
                       // wrapping ListTile, same reasoning as
-                      // theater_settings.dart's _Tile — avoids reconciling
-                      // ListTile's own internal focus/tap mechanics with
-                      // DpadFocusable's. ──
+                      // theater_settings.dart's _Tile — avoids
+                      // reconciling ListTile's own internal focus/tap
+                      // mechanics with DpadFocusable's.
                       return DpadFocusable(
                         autofocus: i == 0,
                         onSelect: () => onSelect(f.index),

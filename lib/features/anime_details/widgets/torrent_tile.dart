@@ -9,6 +9,7 @@ class TorrentTile extends StatelessWidget {
   final Torrent torrent;
   final bool isRecommended;
   final bool uiPerformanceMode;
+  final bool autofocus;
   final VoidCallback onStream;
 
   const TorrentTile({
@@ -16,6 +17,7 @@ class TorrentTile extends StatelessWidget {
     required this.torrent,
     this.isRecommended = false,
     this.uiPerformanceMode = false,
+    this.autofocus = false,
     required this.onStream,
   });
 
@@ -27,9 +29,16 @@ class TorrentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Routed through the shared ResponsiveContext.isMobile extension.
     final isMobile = context.isMobile;
 
+    // Pulled once at the top of build() rather than repeating
+    // `context.appTypography`/`context.appRadii` at each call site below.
+    final typography = context.appTypography;
+    final radii = context.appRadii;
+
     return HoverFocusBuilder(
+      autofocus: autofocus,
       onTap: onStream,
       builder: (context, hovered) => AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -40,7 +49,9 @@ class TorrentTile extends StatelessWidget {
               : isRecommended
               ? AppPalette.primary.withValues(alpha: 0.06)
               : AppPalette.overlay,
-          borderRadius: BorderRadius.circular(12),
+          // Matches AppRadii.small — this is a card/list-item shape per
+          // DESIGN.md's "12px for list items" rule.
+          borderRadius: BorderRadius.circular(radii.small),
           border: Border.all(
             color: hovered
                 ? AppPalette.primary.withValues(alpha: 0.4)
@@ -48,7 +59,6 @@ class TorrentTile extends StatelessWidget {
                 ? AppPalette.primary.withValues(alpha: 0.4)
                 : AppPalette.border,
           ),
-          // ── Drops the shadow if performance mode is enabled ──
           boxShadow: (isRecommended && !uiPerformanceMode)
               ? [
                   BoxShadow(
@@ -59,10 +69,9 @@ class TorrentTile extends StatelessWidget {
               : null,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          // ── Clip.hardEdge under Performant mode — see
-          // FrostedContainer's doc comment for the rationale. This clip
-          // wasn't routed through FrostedContainer at all previously. ──
+          borderRadius: BorderRadius.circular(radii.small),
+          // Clip.hardEdge under Performant mode — see FrostedContainer's
+          // doc comment for the rationale.
           clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -75,21 +84,18 @@ class TorrentTile extends StatelessWidget {
                     horizontal: 14,
                     vertical: 6,
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.star_rounded,
                         color: AppPalette.primary,
                         size: 12,
                       ),
-                      SizedBox(width: 6),
+                      const SizedBox(width: 6),
                       Text(
                         'RECOMMENDED',
-                        style: TextStyle(
+                        style: typography.badgeLabel.copyWith(
                           color: AppPalette.primary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.0,
                         ),
                       ),
                     ],
@@ -109,11 +115,8 @@ class TorrentTile extends StatelessWidget {
                         children: [
                           Text(
                             torrent.title,
-                            style: const TextStyle(
+                            style: typography.cardTitleCompact.copyWith(
                               color: AppPalette.textMain,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              height: 1.4,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -135,6 +138,9 @@ class TorrentTile extends StatelessWidget {
                                     color: AppPalette.textMuted,
                                   ),
                                   const SizedBox(width: 4),
+                                  // Left as a plain literal — a muted,
+                                  // regular-weight 12px label, distinct
+                                  // from metaLabel (which is w600).
                                   Text(
                                     torrent.size,
                                     style: const TextStyle(
@@ -146,10 +152,8 @@ class TorrentTile extends StatelessWidget {
                               ),
                               Text(
                                 '▲ ${torrent.seeders} Seeders',
-                                style: TextStyle(
+                                style: typography.metaLabel.copyWith(
                                   color: _seederColor(torrent.seeders),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
@@ -168,9 +172,8 @@ class TorrentTile extends StatelessWidget {
                         color: hovered
                             ? AppPalette.primary
                             : AppPalette.primary.withValues(alpha: 0.1),
-                        boxShadow:
-                            (hovered &&
-                                !uiPerformanceMode) // Drop hover glow if in performance mode
+                        // Drops the hover glow under performance mode.
+                        boxShadow: (hovered && !uiPerformanceMode)
                             ? [
                                 BoxShadow(
                                   color: AppPalette.primary.withValues(
@@ -204,21 +207,21 @@ class _Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+    final radii = context.appRadii;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: AppPalette.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
+        // Uses AppRadii.tag, the approved tier for small decorative
+        // badges/pills.
+        borderRadius: BorderRadius.circular(radii.tag),
         border: Border.all(color: AppPalette.primary.withValues(alpha: 0.28)),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppPalette.primary,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
-        ),
+        style: typography.badgeLabel.copyWith(color: AppPalette.primary),
       ),
     );
   }

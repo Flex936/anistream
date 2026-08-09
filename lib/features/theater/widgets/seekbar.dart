@@ -14,6 +14,13 @@ class Seekbar extends StatefulWidget {
   final bool uiPerformanceMode;
   final bool dpadModeActive;
 
+  /// Reports Seekbar's own keyboard-focus state to an ancestor, in
+  /// addition to driving the widget's own internal focus-ring styling.
+  /// `theater_screen.dart`'s global keyboard dispatcher uses this to defer
+  /// to Seekbar's own Left/Right handling below (see [_handleKey]) rather
+  /// than double-seeking on the same keypress.
+  final ValueChanged<bool>? onFocusChange;
+
   const Seekbar({
     super.key,
     required this.position,
@@ -25,6 +32,7 @@ class Seekbar extends StatefulWidget {
     required this.onSeekEnd,
     required this.uiPerformanceMode,
     this.dpadModeActive = false,
+    this.onFocusChange,
   });
 
   @override
@@ -82,12 +90,12 @@ class _SeekbarState extends State<Seekbar> {
     widget.onSeek(seekTo);
   }
 
-  // ── Left/Right seek the focused seekbar directly — a keyboard
+  // Left/Right seek the focused seekbar directly — a keyboard
   // accessibility affordance independent of D-Pad mode (someone who tabs
-  // here on a plain desktop keyboard expects arrow keys to scrub, same as a
-  // native <input type="range">). Anything else (Up/Down/Tab) is left
-  // `ignored` so it bubbles up to whatever FocusTraversalPolicy is in charge
-  // and moves focus elsewhere instead of getting stuck here. ──
+  // here on a plain desktop keyboard expects arrow keys to scrub, same as
+  // a native <input type="range">). Anything else (Up/Down/Tab) is left
+  // `ignored` so it bubbles up to whatever FocusTraversalPolicy is in
+  // charge and moves focus elsewhere instead of getting stuck here.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
@@ -116,7 +124,10 @@ class _SeekbarState extends State<Seekbar> {
 
     return Focus(
       focusNode: _focusNode,
-      onFocusChange: (f) => setState(() => _isFocused = f),
+      onFocusChange: (f) {
+        setState(() => _isFocused = f);
+        widget.onFocusChange?.call(f);
+      },
       onKeyEvent: _handleKey,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -142,9 +153,9 @@ class _SeekbarState extends State<Seekbar> {
               milliseconds: (hoverPercentage * maxMs).toInt(),
             );
 
-            // ── D-Pad focus expands the track exactly like a mouse hover
+            // D-Pad focus expands the track exactly like a mouse hover
             // would — a remote-only user still gets the easier-to-hit,
-            // easier-to-read expanded state. ──
+            // easier-to-read expanded state.
             final bool showDpadFocus = _isFocused && widget.dpadModeActive;
             final bool isExpanded = _isHovering || _isDragging || showDpadFocus;
             final double trackHeight = isExpanded ? 8.0 : 4.0;
@@ -185,8 +196,8 @@ class _SeekbarState extends State<Seekbar> {
                   alignment: Alignment.centerLeft,
                   clipBehavior: Clip.none,
                   children: [
-                    // 0. D-Pad focus ring — behind everything else, only ever
-                    // visible in D-Pad mode.
+                    // 0. D-Pad focus ring — behind everything else, only
+                    // ever visible in D-Pad mode.
                     if (showDpadFocus)
                       Positioned.fill(
                         child: Align(
@@ -207,7 +218,7 @@ class _SeekbarState extends State<Seekbar> {
                         ),
                       ),
 
-                    // 1. Background Track (Faint Outline)
+                    // 1. Background track (faint outline).
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       curve: Curves.easeOutCubic,
@@ -219,7 +230,7 @@ class _SeekbarState extends State<Seekbar> {
                       ),
                     ),
 
-                    // ── 2. Buffer Track (Medium Opaque) ──
+                    // 2. Buffer track (medium opaque).
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       curve: Curves.easeOutCubic,
@@ -231,7 +242,7 @@ class _SeekbarState extends State<Seekbar> {
                       ),
                     ),
 
-                    // 3. Hover Ghost Track
+                    // 3. Hover ghost track.
                     AnimatedContainer(
                       duration: _isDragging
                           ? Duration.zero
@@ -246,7 +257,7 @@ class _SeekbarState extends State<Seekbar> {
                       ),
                     ),
 
-                    // 4. Actual Position Track (Solid White)
+                    // 4. Actual position track (solid white).
                     AnimatedContainer(
                       duration: _isDragging
                           ? Duration.zero
@@ -259,7 +270,7 @@ class _SeekbarState extends State<Seekbar> {
                       ),
                     ),
 
-                    // 5. Chapter Markers (Cuts through the tracks)
+                    // 5. Chapter markers (cut through the tracks).
                     for (final chapter in widget.chapters) ...[
                       if (chapter.start.inMilliseconds > 0 &&
                           chapter.start.inMilliseconds < maxMs)
@@ -274,7 +285,7 @@ class _SeekbarState extends State<Seekbar> {
                         ),
                     ],
 
-                    // 6. Playhead Thumb
+                    // 6. Playhead thumb.
                     Positioned(
                       left: (maxWidth * currentPercentage) - (thumbSize / 2),
                       child: AnimatedContainer(
@@ -298,10 +309,10 @@ class _SeekbarState extends State<Seekbar> {
                       ),
                     ),
 
-                    // 7. Hover/Focus Tooltip — falls back to the current
-                    // position (not the stale hover position, which would
-                    // default to 0:00) when D-Pad-focused without the mouse
-                    // ever having moved.
+                    // 7. Hover/focus tooltip — falls back to the current
+                    // position (not the stale hover position, which
+                    // would default to 0:00) when D-Pad-focused without
+                    // the mouse ever having moved.
                     if (isExpanded)
                       Positioned(
                         top: -10,

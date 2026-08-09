@@ -1,8 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-/// Extracted from `_AppShellState`: an in-memory back/forward history
-/// stack. Pure navigation bookkeeping — it had no business being widget
-/// state.
+/// Owns `AppShell`'s in-memory back/forward history stack. Pure navigation
+/// bookkeeping, kept separate from widget state.
 class NavigationController extends ChangeNotifier {
   final Widget Function() buildHome;
   NavigationController({required this.buildHome}) {

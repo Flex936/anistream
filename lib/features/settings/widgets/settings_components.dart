@@ -2,6 +2,7 @@ import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 
 class SettingsSection extends StatelessWidget {
@@ -18,6 +19,8 @@ class SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -32,11 +35,8 @@ class SettingsSection extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4),
           child: Text(
             label.toUpperCase(),
-            style: const TextStyle(
+            style: typography.sectionEyebrow.copyWith(
               color: AppPalette.textMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
             ),
           ),
         ),
@@ -115,6 +115,8 @@ class SettingRowTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return DpadFocusable(
       autofocus: autofocus,
       onSelect: () => onChanged(!value),
@@ -137,22 +139,18 @@ class SettingRowTile extends StatelessWidget {
                 children: [
                   AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 150),
-                    style: TextStyle(
+                    style: typography.compactHeading.copyWith(
                       color: state.focused
                           ? AppPalette.white
                           : AppPalette.textMain,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
                     ),
                     child: Text(title),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: typography.tileSubtitle.copyWith(
                       color: AppPalette.textMuted,
-                      fontSize: 12,
-                      height: 1.4,
                     ),
                   ),
                 ],
@@ -182,15 +180,15 @@ class SettingsDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── excludeChildFocus: false — DropdownButton needs to keep handling
+    // excludeChildFocus: false — DropdownButton needs to keep handling
     // its own taps/opens internally (it manages its own overlay menu),
     // so it can't be fully subsumed by DpadFocusable's own onSelect
     // model the way a plain icon button can. DpadFocusable here exists
     // purely to make this reachable via D-Pad directional navigation and
     // to drive the border/background from state.focused; the actual
-    // dropdown interaction stays exactly as it was. The DropdownButton
-    // itself doesn't visually depend on state.focused, so it's passed
-    // through `child` rather than rebuilt inside `builder`. ──
+    // dropdown interaction stays with DropdownButton itself. The
+    // DropdownButton doesn't visually depend on state.focused, so it's
+    // passed through `child` rather than rebuilt inside `builder`.
     return DpadFocusable(
       excludeChildFocus: false,
       builder: (context, state, child) => AnimatedContainer(
@@ -218,6 +216,9 @@ class SettingsDropdown extends StatelessWidget {
             color: AppPalette.textMuted,
           ),
           isExpanded: true,
+          // Distinct from compactHeading (14/w600) — a dropdown's own
+          // selected-value text is deliberately a step lighter than a
+          // section heading.
           style: const TextStyle(
             color: AppPalette.textMain,
             fontSize: 14,
@@ -233,13 +234,11 @@ class SettingsDropdown extends StatelessWidget {
 
 /// A styled text field for settings values such as the server URL.
 ///
-/// Rebuilt as a StatefulWidget so it can own a FocusNode with the same
-/// caret-boundary-escape logic search_input.dart already proved out —
-/// arrows move the cursor normally everywhere except the two edges, where
-/// they hand off to directional focus traversal instead. This field
-/// previously had no such logic at all, which is the whole reason it
-/// trapped focus permanently: arrows only ever moved the cursor (or did
-/// nothing), with no escape hatch in either direction.
+/// Owns a FocusNode with the same caret-boundary-escape logic
+/// search_input.dart uses: arrows move the cursor normally everywhere
+/// except the two edges, where they hand off to directional focus
+/// traversal instead — so D-Pad/keyboard focus can always escape the
+/// field in either direction.
 class SettingsTextField extends StatefulWidget {
   final TextEditingController controller;
   final String hint;
@@ -308,6 +307,9 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
         if (widget.label != null) ...[
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 6),
+            // Sits between tileSubtitle (12/w400) and metaLabel
+            // (12/w600) — a form field label, not a caption, so it's
+            // left as a plain literal rather than either token.
             child: Text(
               widget.label!,
               style: const TextStyle(
@@ -320,10 +322,10 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
         ],
         DpadFocusable(
           excludeChildFocus: false,
-          // ── Requesting focus here covers a D-Pad user navigating onto
-          // this field and pressing Select before typing — the TextField
-          // itself already grabs focus normally for touch/mouse taps
-          // and Tab, this just makes Select do the same thing. ──
+          // Covers a D-Pad user navigating onto this field and pressing
+          // Select before typing — the TextField itself already grabs
+          // focus normally for touch/mouse taps and Tab, this makes
+          // Select do the same thing.
           onSelect: _focusNode.requestFocus,
           child: TextField(
             controller: widget.controller,
@@ -331,6 +333,8 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
             enabled: widget.enabled,
             keyboardType: widget.keyboardType,
             autocorrect: false,
+            // Distinct from compactHeading (14/w600), same reasoning as
+            // SettingsDropdown's style above.
             style: TextStyle(
               color: widget.enabled
                   ? AppPalette.textMain

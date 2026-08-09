@@ -4,10 +4,12 @@ import 'dart:ui';
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/anilist_query_service.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/widgets/anime_card.dart';
+import '../../../shared/widgets/frosted_container.dart';
 
 class AnimeCarousel extends StatefulWidget {
   final String title;
@@ -178,18 +180,17 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                 onExit: (_) => setState(() => _isHovered = false),
                 child: Stack(
                   children: [
-                    // ── DpadRegion: this shelf is its own visual section
+                    // DpadRegion: this shelf is its own visual section
                     // per dpad's "one region per section" convention.
-                    // memoryKey (widget.memoryKey) makes the last-focused
-                    // card survive not just a rebuild of THIS widget, but
-                    // a fresh HomeScreen instance entirely — goHome()
-                    // rebuilds the whole tree, and keyed memory is what
-                    // makes "leave and come back" land where you left
-                    // off, matching the same shelf on every real TV app.
-                    // No edge-behavior overrides: default `leave` on the
-                    // vertical axis is what lets Up from row 1 escape to
-                    // the navbar, and Up/Down between shelves cascade
-                    // through each other's regions the same way. ──
+                    // memoryKey (widget.memoryKey) makes the
+                    // last-focused card survive not just a rebuild of
+                    // this widget, but a fresh HomeScreen instance
+                    // entirely, which is what makes "leave and come
+                    // back" land where you left off. No edge-behavior
+                    // overrides: default `leave` on the vertical axis is
+                    // what lets Up from row 1 escape to the navbar, and
+                    // Up/Down between shelves cascade through each
+                    // other's regions the same way.
                     DpadRegion(
                       memoryKey: widget.memoryKey,
                       child: ScrollConfiguration(
@@ -280,11 +281,11 @@ class _NavArrow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The core arrow button visual
+    // The core arrow button visual.
     final arrowContent = Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        // Increase opacity if blur is disabled to maintain contrast
+        // Increases opacity when blur is disabled to maintain contrast.
         color: AppPalette.black.withValues(
           alpha: uiPerformanceMode ? 0.8 : 0.4,
         ),
@@ -303,14 +304,14 @@ class _NavArrow extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: gradientColors),
         ),
-        child: ClipRRect(
+        // Routed through FrostedContainer, which switches between
+        // Clip.hardEdge (performance mode) and the anti-aliased default
+        // internally.
+        child: FrostedContainer(
+          uiPerformanceMode: uiPerformanceMode,
+          sigma: context.appMaterials.subtle,
           borderRadius: BorderRadius.circular(24),
-          child: uiPerformanceMode
-              ? arrowContent // Return without blur
-              : BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: arrowContent, // Return with frosted glass
-                ),
+          child: arrowContent,
         ),
       ),
     );

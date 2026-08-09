@@ -1,6 +1,7 @@
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/streaming_controller_base.dart';
@@ -21,15 +22,13 @@ class FrostedIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── DpadFocusable replaces the old StatefulWidget's manual
-    // InkWell.onFocusChange + local _focused bool — the ring is now
-    // driven directly by state.focused, which dpad manages itself. No
+    // The ring is driven directly by DpadFocusable's state.focused. No
     // nested InkWell: DpadFocusable already provides tap + Select-key
     // activation via onSelect, so an inner InkWell with its own onTap
-    // would just double-handle the same press. ──
+    // would double-handle the same press.
     final wrapped = FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
-      sigma: 10,
+      sigma: context.appMaterials.subtle,
       borderRadius: BorderRadius.circular(24),
       child: DpadFocusable(
         onSelect: onPressed,
@@ -98,9 +97,9 @@ class TheaterTopBar extends StatelessWidget {
   }
 }
 
-/// Loading overlay shown while the torrent is buffering. Unchanged — no
-/// interactive/focusable elements live here, so there's nothing for D-Pad
-/// mode to affect.
+/// Loading overlay shown while the torrent is buffering. No
+/// interactive/focusable elements live here, so D-Pad mode doesn't
+/// affect it.
 class TheaterLoadingOverlay extends StatelessWidget {
   final int episode;
   final BaseStreamingController controller;

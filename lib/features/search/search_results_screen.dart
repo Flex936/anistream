@@ -78,6 +78,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   void _openFilterDrawer() {
+    // Routed through the shared ResponsiveContext.isMobile extension,
+    // matching the breakpoint watchlist_screen.dart/responsive_grid.dart
+    // standardize on.
     final isMobile = context.isMobile;
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
@@ -146,6 +149,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   Widget build(BuildContext context) {
     if (widget.query.trim().isEmpty) return const SizedBox.shrink();
 
+    final typography = context.appTypography;
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,11 +163,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               children: [
                 Text(
                   'Results for "${widget.query}"',
-                  style: const TextStyle(
+                  style: typography.sectionTitle.copyWith(
                     color: AppPalette.textMain,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.4,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -277,8 +279,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
 
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                    // ── Shared with WatchlistScreen's portrait grid instead
-                    // of a locally duplicated breakpoint table. ──
+                    // Shared with WatchlistScreen's portrait grid rather
+                    // than a locally duplicated breakpoint table.
                     final cols = verticalGridColumns(constraints.maxWidth);
                     return GridView.builder(
                       shrinkWrap: true,

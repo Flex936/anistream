@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
@@ -26,14 +27,14 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   DateTime _now = DateTime.now();
   final ScrollController _scrollController = ScrollController();
 
-  // ── Memoization for groupByWeekday. _animeFuture is only ever reassigned
+  // Memoization for groupByWeekday. _animeFuture is only ever reassigned
   // by _reload() — the once-a-minute clock tick just calls setState(() =>
   // _now = ...), leaving _animeFuture (and therefore FutureBuilder's
-  // resolved snapshot.data instance) untouched. That means the SAME
-  // List<Anime> reference comes back on every single tick, so identical()
+  // resolved snapshot.data instance) untouched. That means the same
+  // List<Anime> reference comes back on every tick, so identical()
   // reliably tells us "nothing to regroup" without needing to compare
-  // contents. Previously every tick re-ran a full sort+bucket over the
-  // entire airing list purely to refresh "Xh Ym left" labels. ──
+  // contents — avoiding a full sort+bucket over the entire airing list
+  // purely to refresh "Xh Ym left" labels.
   List<Anime>? _cachedSourceList;
   Map<String, List<Anime>>? _cachedCalendar;
 
@@ -59,7 +60,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   void _reload() => setState(() => _animeFuture = _api.getCurrentlyAiring());
 
   /// Returns the cached weekday grouping if [source] is the same list
-  /// instance we last grouped, otherwise regroups and caches the result.
+  /// instance last grouped, otherwise regroups and caches the result.
   Map<String, List<Anime>> _calendarFor(List<Anime> source) {
     if (identical(source, _cachedSourceList) && _cachedCalendar != null) {
       return _cachedCalendar!;
@@ -96,6 +97,8 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
     final hPad = isMobile ? 16.0 : 32.0;
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
+    final typography = context.appTypography;
+
     return FutureBuilder<List<Anime>>(
       future: _animeFuture,
       builder: (context, snapshot) {
@@ -114,15 +117,14 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
           );
         }
 
-        // ── const <Anime>[] rather than a fresh [] literal: if this
-        // fallback were ever hit twice in a row, a `[]` literal would
-        // create a NEW empty list each time (never identical() to the
-        // last one), permanently defeating the cache. The const literal
-        // is canonicalized, so even this edge case stays memoized. ──
+        // const <Anime>[] rather than a fresh [] literal: the const
+        // literal is canonicalized, so if this fallback is ever hit
+        // twice in a row, identical() below still recognizes it as the
+        // same instance and the cache stays warm.
         final sourceList = snapshot.data ?? const <Anime>[];
         final calendar = _calendarFor(sourceList);
 
-        // ── Reorder days to start with "Today" ──
+        // Reorders days to start with "Today".
         final todayIdx = _now.weekday - 1;
         final orderedDays = [
           ...weekdays.sublist(todayIdx),
@@ -131,32 +133,26 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
 
         return SingleChildScrollView(
           controller: _scrollController,
-          // ── Top 96px navbar clearance moved from a leading SizedBox
-          // inside the Column into the scroll view's own padding — same
-          // fix as home_screen.dart, following dpad's documented
-          // convention that shelf-layout padding needs to live inside the
-          // scrollable's own padding property to be accounted for as part
-          // of its content extent. ──
+          // Top 96px navbar clearance lives in the scroll view's own
+          // padding rather than as a sibling widget — same convention as
+          // home_screen.dart, per dpad's shelf-layout padding rule.
           padding: const EdgeInsets.only(top: 96, bottom: 64),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 24),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Schedule',
-                      style: TextStyle(
+                      style: typography.screenTitle.copyWith(
                         color: AppPalette.textMain,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -1.0,
                       ),
                     ),
-                    SizedBox(height: 4),
-                    Text(
+                    const SizedBox(height: 4),
+                    const Text(
                       'Automatically adjusted to your local timezone.',
                       style: TextStyle(
                         color: AppPalette.textMuted,
@@ -183,15 +179,12 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                     }
 
                     return _DayShelf(
-                      // ── The stable weekday name, NOT displayTitle —
-                      // "Today"/"Tomorrow" describe the SAME underlying
-                      // weekday differently depending on which day it
-                      // actually is right now, which would silently
-                      // break memory continuity across the daily
-                      // rollover (Monday's shelf would answer to
-                      // "Today" one day and "in 6 days" the next,
-                      // fragmenting its own memory key). dayName never
-                      // changes regardless of what today is. ──
+                      // The stable weekday name, not displayTitle —
+                      // "Today"/"Tomorrow" describe the same underlying
+                      // weekday differently depending on the current
+                      // date, which would fragment the shelf's own
+                      // memory key across the daily rollover. dayName
+                      // never changes regardless of what today is.
                       regionKey: dayName,
                       title: displayTitle,
                       items: items,
@@ -212,7 +205,7 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   }
 }
 
-// ── Horizontal Carousel Shelf ──
+// Horizontal carousel shelf.
 class _DayShelf extends StatelessWidget {
   final String regionKey;
   final String title;
@@ -236,6 +229,8 @@ class _DayShelf extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final typography = context.appTypography;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -247,20 +242,15 @@ class _DayShelf extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
+                style: typography.dayShelfTitle.copyWith(
                   color: AppPalette.textMain,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(width: 12),
               Text(
                 '${items.length} releases',
-                style: const TextStyle(
+                style: typography.metaLabel.copyWith(
                   color: AppPalette.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -268,15 +258,15 @@ class _DayShelf extends StatelessWidget {
         ),
         SizedBox(
           height: 300,
-          // ── DpadRegion: this shelf is its own visual section, same
-          // "one region per section" convention as the Home carousels.
-          // memoryKey uses the stable regionKey (weekday name) so the
-          // last-focused card in, say, Wednesday's row survives not just
-          // the once-a-minute clock-driven rebuild but a full
-          // leave-and-return trip through Search/Watchlist/Home too. No
-          // edge-behavior overrides — default leave is what lets Up
-          // escape to the navbar from the topmost shelf, and cascades
-          // between shelves the same way Home's carousels do. ──
+          // DpadRegion: this shelf is its own visual section, matching
+          // the Home carousels' convention. memoryKey uses the stable
+          // regionKey (weekday name) so the last-focused card in a given
+          // day's row survives both the once-a-minute clock-driven
+          // rebuild and a full leave-and-return trip through
+          // Search/Watchlist/Home. No edge-behavior overrides — default
+          // leave is what lets Up escape to the navbar from the topmost
+          // shelf, and cascades between shelves the same way Home's
+          // carousels do.
           child: DpadRegion(
             memoryKey: 'schedule.$regionKey',
             child: ListView.separated(
@@ -286,14 +276,11 @@ class _DayShelf extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(width: 16),
               itemBuilder: (context, i) {
                 return SizedBox(
-                  // ── Stable per-anime identity across rebuilds — kept
-                  // from the earlier fix. DpadRegion's memoryKey above
-                  // remembers WHICH INDEX was focused; this key makes
-                  // sure the CalendarCard at that index is reliably the
-                  // same anime's Element/State across a rebuild, not
-                  // just whichever happens to occupy that position. Both
-                  // are needed; they fix different layers of the same
-                  // "erratic jumping" symptom. ──
+                  // Stable per-anime identity across rebuilds: this key
+                  // guarantees the CalendarCard at a given index is
+                  // reliably the same anime's Element/State across a
+                  // rebuild, complementing DpadRegion's own memoryKey
+                  // (which remembers which index was focused).
                   key: ValueKey(items[i].id),
                   width: 160,
                   child: CalendarCard(
@@ -342,6 +329,10 @@ class _ErrorPane extends StatelessWidget {
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 48),
+          // This text can wrap up to 3 lines. cardSummary's height: 1.4
+          // would visibly change line-spacing on wrapped text here, so
+          // it's left as a plain literal rather than routed through that
+          // token.
           child: Text(
             error.toString(),
             textAlign: TextAlign.center,

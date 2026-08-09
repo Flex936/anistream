@@ -17,6 +17,8 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../shared/widgets/toast.dart';
 import 'services/auto_skip_controller.dart';
+import 'services/controls_visibility_controller.dart';
+import 'services/playback_diagnostics.dart';
 import 'services/player_configurator.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
@@ -50,19 +52,30 @@ class _TheaterScreenState extends State<TheaterScreen> {
   late final Player _player;
   late final VideoController _videoController;
   late final AutoSkipController _autoSkipController;
+  late final ControlsVisibilityController _controlsVisibility;
+
+  // Read-only diagnostic instrumentation for the mpv paused-freeze bug —
+  // see playback_diagnostics.dart's class doc. Never affects playback
+  // behavior.
+  late final PlaybackDiagnostics _playbackDiagnostics;
 
   bool _videoInitialized = false;
-  bool _showControls = true;
   bool _isSettingsOpen = false;
   bool _isFullscreen = true;
-  Timer? _hideControlsTimer;
   bool _isClosing = false;
 
-  // ── Auto-skip setting (the state machine itself now lives in
-  // AutoSkipController) ──
+  // Set by TheaterControls/Seekbar/the volume Slider via
+  // onSeekbarFocusChange/onVolumeFocusChange. Read only by _onKeyEvent
+  // below, never by build(), so plain field writes (no setState) are
+  // correct and cheap. See _onKeyEvent's doc comment for why these exist.
+  bool _seekbarFocused = false;
+  bool _volumeSliderFocused = false;
+
+  // Auto-skip setting; the state machine itself lives in
+  // AutoSkipController.
   bool _autoSkip = false;
 
-  // ── Performance settings ─────────────────────────────────────────────────
+  // Performance settings.
   bool _uiPerformanceMode = false;
   String _videoFilterQuality = 'low';
 
@@ -78,10 +91,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
     );
     _videoController = VideoController(_player, configuration: videoConfig);
 
+    _controlsVisibility = ControlsVisibilityController(
+      player: _player,
+      isSubMenuOpen: () => _isSettingsOpen,
+    );
+    _playbackDiagnostics = PlaybackDiagnostics(player: _player);
+
     if (Platform.isAndroid || Platform.isIOS) {
-      // ── initState can't be async — SystemChrome's setters return
+      // initState can't be async — SystemChrome's setters return
       // Future<void>, so the fire-and-forget intent is made explicit
-      // instead of silently dropped (unawaited_futures). ──
+      // instead of silently dropped (unawaited_futures).
       unawaited(
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
       );
@@ -121,12 +140,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
       },
     );
 
-    // ── _initPlayerAndStream is Future<void> — initState can't be async,
+    // _initPlayerAndStream is Future<void> — initState can't be async,
     // so the fire-and-forget intent is made explicit (unawaited_futures).
     // The method itself already guards every `mounted`-sensitive step
-    // internally. ──
+    // internally.
     unawaited(_initPlayerAndStream());
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
+
+    // Registered last, after every field this handler can read is
+    // already initialized — see _onKeyEvent's doc comment.
+    HardwareKeyboard.instance.addHandler(_onKeyEvent);
   }
 
   Future<void> _initPlayerAndStream() async {
@@ -160,30 +183,29 @@ class _TheaterScreenState extends State<TheaterScreen> {
       (_) => oldPlaceholder.dispose(),
     );
 
-    // ── Hardware decoding + streaming tuning. PlayerConfigurator is now
-    // Future<void>-returning (see player_configurator.dart) rather than
-    // firing six unawaited mpv property sets, so this is awaited. ──
+    // Hardware decoding + streaming tuning is awaited here, since
+    // PlayerConfigurator.configureForTheater returns Future<void> (see
+    // player_configurator.dart).
     await PlayerConfigurator.configureForTheater(_player, s);
 
-    // Preserves the original quirk: fullscreen is only forced here when
-    // hwdec is left on "auto" and we're on a desktop platform (matches the
-    // prior inline logic exactly).
+    // Fullscreen is only forced here when hwdec is left on "auto" and
+    // the app is running on a desktop platform.
     if (s.hardwareDecoding == 'auto' &&
         (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
       await windowManager.setFullScreen(true);
     }
 
-    // ── Restore persistent volume ─────────────────────────────────────────
+    // Restores persistent volume.
     final savedVolume =
         await SharedPreferencesAsync().getDouble('theater_volume') ?? 100.0;
     await _player.setVolume(savedVolume);
 
-    // ── Start streaming ───────────────────────────────────────────────────
-    // Deliberately NOT awaited — StreamingController/RemoteStreamingController
-    // report readiness asynchronously via notifyListeners as buffering
-    // progresses, not by this returned Future completing. Awaiting it would
-    // serialize AniList tracker init (below) behind it for no benefit, so
-    // the fire-and-forget intent is made explicit instead. ──
+    // Starts streaming. Deliberately not awaited — StreamingController/
+    // RemoteStreamingController report readiness asynchronously via
+    // notifyListeners as buffering progresses, not by this returned
+    // Future completing. Awaiting it would serialize AniList tracker
+    // init (below) behind it for no benefit, so the fire-and-forget
+    // intent is made explicit instead.
     unawaited(
       _torrentController.initialize(
         widget.torrent.magnetLink,
@@ -191,7 +213,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       ),
     );
 
-    // ── AniList progress tracking ─────────────────────────────────────────
+    // AniList progress tracking.
     await _tracker.init(
       mediaId: widget.anime.id,
       episode: widget.episode,
@@ -205,15 +227,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
     });
   }
 
-  // ── Controller listener ───────────────────────────────────────────────────
+  // Controller listener.
 
   void _onTorrentStateChanged() {
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
-      // ── Listener callbacks (added via addListener) are synchronous —
+      // Listener callbacks (added via addListener) are synchronous —
       // Player.open/.play and the .then() chain below all return Futures
       // that can't be awaited here, so each fire-and-forget is wrapped
-      // explicitly instead of silently dropped (unawaited_futures). ──
+      // explicitly instead of silently dropped (unawaited_futures).
       unawaited(_player.open(Media(_torrentController.streamUrl!)));
 
       unawaited(
@@ -242,81 +264,118 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
   }
 
-  // ── Keyboard shortcuts (desktop) ──────────────────────────────────────────
+  // Platform.
   //
-  // Previously all of this — plus the D-Pad mode arrow/select bubbling —
-  // lived inside one Focus(autofocus: true, onKeyEvent: _handleKeyEvent)
-  // wrapping the ENTIRE Scaffold. That Focus node claiming primaryFocus
-  // with a screen-sized Rect was the actual bug: any DirectionalFocusIntent
-  // triggered from it had a full-screen rectangle as its search anchor,
-  // which is meaningless geometry for "find the nearest button in this
-  // direction" — so D-Pad navigation inside the controls never worked
-  // right, regardless of what individual controls did.
-  //
-  // CallbackShortcuts below replaces it for the desktop-keyboard case. It
-  // does NOT claim focus and has no geometry of its own — it just
-  // intercepts specific keys as they bubble up from whatever legitimately
-  // has focus (or nothing, since these binidngs don't require an anchor
-  // at all), which is exactly what a screen-wide "Space always
-  // plays/pauses regardless of what's focused" convention needs, without
-  // corrupting anything for D-Pad's own directional search.
-  //
-  // dpadModeActive itself is now PURELY a data signal read from
-  // InputModeScope — not a focus mechanism — deciding which shortcut
-  // scheme below is active. It has to stay: a desktop keyboard user
-  // expects Left/Right/Up/Down to seek and adjust volume from anywhere,
-  // exactly like any other video player; a D-Pad user needs those same
-  // keys to move focus between controls instead. Both can't be true at
-  // once on the same keys, so this is a real, unavoidable branch — not a
-  // legacy holdover.
-  Map<ShortcutActivator, VoidCallback> _buildShortcuts(bool dpadModeActive) {
-    final subMenuOpen =
-        _isSettingsOpen || _torrentController.needsManualSelection;
+  // Desktop-only flag, threaded into TheaterControls so it can hide the
+  // fullscreen toggle on Mobile/TV per DESIGN.md § 3 ("Hide PC-specific UI
+  // controls ... on Mobile/TV builds"). Mirrors the exact platform test
+  // already used elsewhere in this file (_initPlayerAndStream,
+  // _toggleFullscreen, _disposePlaybackResources) rather than introducing
+  // a new check.
+  bool get _isDesktopPlatform =>
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
-    final shortcuts = <ShortcutActivator, VoidCallback>{
-      // ── Always active regardless of input mode or sub-menu state —
-      // this is what actually closes a sub-menu, so it can't be gated
-      // behind "no sub-menu open" the way the desktop shortcuts below
-      // are. ──
-      const SingleActivator(LogicalKeyboardKey.escape): _handleBackOrEscape,
-      const SingleActivator(LogicalKeyboardKey.goBack): _handleBackOrEscape,
-    };
+  // Keyboard shortcuts (desktop).
+  //
+  // Registered directly with HardwareKeyboard.instance rather than via
+  // CallbackShortcuts. A raw HardwareKeyboard handler receives every key
+  // event regardless of what currently holds focus, which matters here
+  // because the controls subtree sits inside an `ExcludeFocus` that's
+  // toggled on auto-hide — a focus-chain-bubbling approach would stop
+  // receiving events once nothing in that subtree can hold focus anymore.
+  //
+  // This bypasses the focus tree's own bubbling/consumption semantics
+  // entirely, so unlike a focus-chain-based dispatcher, this handler does
+  // NOT automatically defer to a widget that already handled the same key
+  // via its own `Focus.onKeyEvent` (Seekbar and the volume Slider both do
+  // this for Left/Right when they hold keyboard focus). Left unguarded,
+  // that would double-seek (Seekbar) or seek unexpectedly while the user
+  // is nudging volume (the Slider). `_seekbarFocused`/`_volumeSliderFocused`
+  // (set via TheaterControls' onSeekbarFocusChange/onVolumeFocusChange)
+  // exist specifically so the literal ArrowLeft/ArrowRight/ArrowUp/
+  // ArrowDown cases below can defer to that widget's own handling instead.
+  // The J/K/L letter-key equivalents are unaffected by this guard —
+  // Seekbar and the Slider only ever bind the literal arrow keys locally,
+  // never letters, so those always reach this handler regardless of focus.
+  //
+  // dpadModeActive remains a pure data signal (not a focus mechanism)
+  // deciding which shortcut scheme is active: a desktop keyboard user
+  // expects Left/Right/Up/Down to seek/adjust volume from anywhere, a
+  // D-Pad user needs those same keys to move focus between controls
+  // instead — both can't be true on the same keys, so this branch stays.
+  bool _onKeyEvent(KeyEvent event) {
+    if (!mounted) return false;
+    if (event is! KeyDownEvent) return false;
 
-    if (!dpadModeActive && !subMenuOpen) {
-      shortcuts.addAll({
-        const SingleActivator(LogicalKeyboardKey.space): _togglePlayPause,
-        const SingleActivator(LogicalKeyboardKey.keyK): _togglePlayPause,
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): _seekBackward,
-        const SingleActivator(LogicalKeyboardKey.keyJ): _seekBackward,
-        const SingleActivator(LogicalKeyboardKey.arrowRight): _seekForward,
-        const SingleActivator(LogicalKeyboardKey.keyL): _seekForward,
-        const SingleActivator(LogicalKeyboardKey.arrowUp): _volumeUp,
-        const SingleActivator(LogicalKeyboardKey.arrowDown): _volumeDown,
-        const SingleActivator(LogicalKeyboardKey.keyF):
-            _handleFullscreenShortcut,
-        const SingleActivator(LogicalKeyboardKey.contextMenu):
-            _toggleSettingsMenu,
-      });
+    final key = event.logicalKey;
+
+    // Always active regardless of input mode or sub-menu state — this is
+    // what actually closes a sub-menu, so it can't be gated behind "no
+    // sub-menu open" the way the desktop-only bindings below are.
+    if (key == LogicalKeyboardKey.escape || key == LogicalKeyboardKey.goBack) {
+      _handleBackOrEscape();
+      return true;
     }
 
-    return shortcuts;
+    final dpadModeActive = InputModeScope.of(
+      context,
+      listen: false,
+    ).dpadModeActive;
+    final subMenuOpen =
+        _isSettingsOpen || _torrentController.needsManualSelection;
+    if (dpadModeActive || subMenuOpen) return false;
+
+    switch (key) {
+      case LogicalKeyboardKey.space:
+      case LogicalKeyboardKey.keyK:
+        _togglePlayPause();
+        return true;
+
+      case LogicalKeyboardKey.keyJ:
+        _seekBackward();
+        return true;
+      case LogicalKeyboardKey.arrowLeft:
+        if (_seekbarFocused || _volumeSliderFocused) return false;
+        _seekBackward();
+        return true;
+
+      case LogicalKeyboardKey.keyL:
+        _seekForward();
+        return true;
+      case LogicalKeyboardKey.arrowRight:
+        if (_seekbarFocused || _volumeSliderFocused) return false;
+        _seekForward();
+        return true;
+
+      case LogicalKeyboardKey.arrowUp:
+        if (_volumeSliderFocused) return false;
+        _volumeUp();
+        return true;
+      case LogicalKeyboardKey.arrowDown:
+        if (_volumeSliderFocused) return false;
+        _volumeDown();
+        return true;
+
+      case LogicalKeyboardKey.keyF:
+        _handleFullscreenShortcut();
+        return true;
+      case LogicalKeyboardKey.contextMenu:
+        _toggleSettingsMenu();
+        return true;
+    }
+    return false;
   }
 
   void _handleBackOrEscape() {
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
     if (_isSettingsOpen) {
       setState(() => _isSettingsOpen = false);
       return;
     }
     if (_torrentController.needsManualSelection) {
-      // ── Previously a dead end: the batch picker had no onBack wired at
-      // all (BatchEpisodePickerOverlay only renders its own close button
-      // `if (onBack != null)`, and this branch used to just set
-      // _isSettingsOpen = false — already false here, since the picker
-      // and settings menu are never open at the same time — so Escape
-      // silently did nothing while the picker was showing). There was no
-      // way to back out of a batch torrent without picking a file. Now
-      // routes to the same exit used by the picker's own close button. ──
+      // Escape while the batch picker is showing routes to the same
+      // exit used by the picker's own close button — there's no partial
+      // state to back out of otherwise.
       unawaited(_exitTheater());
       return;
     }
@@ -329,12 +388,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   void _togglePlayPause() {
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
     unawaited(_player.playOrPause());
   }
 
   void _seekBackward() {
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
     final isShift =
         HardwareKeyboard.instance.logicalKeysPressed.contains(
           LogicalKeyboardKey.shiftLeft,
@@ -360,7 +419,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   void _seekForward() {
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
     final isShift =
         HardwareKeyboard.instance.logicalKeysPressed.contains(
           LogicalKeyboardKey.shiftLeft,
@@ -387,7 +446,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   void _volumeUp() {
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
     final newVol = (_player.state.volume + 5).clamp(0.0, 100.0);
     unawaited(_player.setVolume(newVol));
     if (newVol > 0) {
@@ -396,7 +455,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   void _volumeDown() {
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
     final newVol = (_player.state.volume - 5).clamp(0.0, 100.0);
     unawaited(_player.setVolume(newVol));
     if (newVol > 0) {
@@ -405,30 +464,31 @@ class _TheaterScreenState extends State<TheaterScreen> {
   }
 
   void _handleFullscreenShortcut() {
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
     unawaited(_toggleFullscreen());
   }
 
   void _toggleSettingsMenu() {
-    _startHideControlsTimer();
+    _controlsVisibility.registerActivity();
     setState(() => _isSettingsOpen = !_isSettingsOpen);
   }
 
-  // ── Controls visibility ───────────────────────────────────────────────────
+  // Background gesture.
 
-  void _startHideControlsTimer() {
-    _hideControlsTimer?.cancel();
-    if (!mounted) return;
-    setState(() => _showControls = true);
-
-    _hideControlsTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted && _player.state.playing && !_isSettingsOpen) {
-        setState(() => _showControls = false);
-      }
-    });
+  void _handleBackgroundTap() {
+    if (_isSettingsOpen) {
+      setState(() => _isSettingsOpen = false);
+      _controlsVisibility.registerActivity();
+      return;
+    }
+    if (_controlsVisibility.visible.value) {
+      _controlsVisibility.hideNow();
+    } else {
+      _controlsVisibility.registerActivity();
+    }
   }
 
-  // ── Window / exit ─────────────────────────────────────────────────────────
+  // Window / exit.
 
   Future<void> _toggleFullscreen() async {
     _isFullscreen = !_isFullscreen;
@@ -472,10 +532,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _isClosing = true;
 
     if (Platform.isAndroid || Platform.isIOS) {
-      // ── Now awaited, matching _toggleFullscreen's existing pattern —
-      // this method is already async, so there's no reason these two
-      // calls were left unawaited while the identical pair in
-      // _toggleFullscreen was correctly awaited. ──
+      // Awaited here, matching _toggleFullscreen's pattern for the
+      // identical pair of calls — this method is already async, so
+      // there's no reason to leave these unawaited.
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       await SystemChrome.setPreferredOrientations([
         DeviceOrientation.portraitUp,
@@ -489,7 +548,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       setState(() => _videoInitialized = false);
       await WidgetsBinding.instance.endOfFrame;
     }
-    _hideControlsTimer?.cancel();
+    _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     await _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
@@ -500,11 +559,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKeyEvent);
+
     if (Platform.isAndroid || Platform.isIOS) {
-      // ── dispose() must stay synchronous (it can't become async — the
+      // dispose() must stay synchronous (it can't become async — the
       // required super.dispose() call has to happen in this same
       // synchronous frame), so these fire-and-forget calls are wrapped
-      // explicitly instead of silently dropped (unawaited_futures). ──
+      // explicitly instead of silently dropped (unawaited_futures).
       unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
       unawaited(
         SystemChrome.setPreferredOrientations([
@@ -516,7 +577,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
       );
     }
 
-    _hideControlsTimer?.cancel();
+    _controlsVisibility.dispose();
+    _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     final posSub = _posSub;
     if (posSub != null) {
@@ -532,7 +594,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     super.dispose();
   }
 
-  // ── Video quality ─────────────────────────────────────────────────────────
+  // Video quality.
 
   FilterQuality _getFilterQuality() => switch (_videoFilterQuality) {
     'high' => FilterQuality.high,
@@ -541,21 +603,188 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _ => FilterQuality.low,
   };
 
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // Controls overlay (top bar + control bar).
+  //
+  // Parameterized on showControls/dpadModeActive rather than reading
+  // fields directly, since it's built from inside the ValueListenableBuilder
+  // in build() below — see that method's doc comment for why.
+  Widget _buildControlsOverlay(bool showControls, bool dpadModeActive) {
+    return AnimatedOpacity(
+      opacity: showControls ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 300),
+      child: IgnorePointer(
+        ignoring: !showControls,
+        // ExcludeFocus alongside IgnorePointer: the opacity/IgnorePointer
+        // pair alone only blocks pointer hit-testing when controls are
+        // hidden — keyboard/D-Pad focus could still land on (and stay
+        // on) a fully invisible button. ExcludeFocus removes the whole
+        // subtree from the focus tree entirely while excluding is true,
+        // so hidden controls are genuinely unreachable, not just
+        // untappable. Flutter moves focus elsewhere automatically if
+        // something inside was focused right as this flips — the global
+        // keyboard handler in _onKeyEvent doesn't depend on where focus
+        // ends up after that, since it reads every key event directly
+        // rather than via focus-chain bubbling.
+        child: ExcludeFocus(
+          excluding: !showControls,
+          child: RepaintBoundary(
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 24 + MediaQuery.paddingOf(context).top,
+                  left: 24,
+                  right: 24,
+                  // DpadRegion: its own visual section, separate from
+                  // the controls bar below. No edge-behavior overrides —
+                  // default leave/leave lets Down escape into the
+                  // controls region, and Up has nothing above it to
+                  // find anyway. No tap-swallowing wrapper needed here:
+                  // TheaterTopBar's own row paints nothing behind its
+                  // two children, so empty space around them already
+                  // falls through to the root's background-tap handler.
+                  child: DpadRegion(
+                    memoryKey: 'theater.topbar',
+                    child: TheaterTopBar(
+                      episode: widget.episode,
+                      uiPerformanceMode: _uiPerformanceMode,
+                      onBack: _exitTheater,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  // No tap-swallowing wrapper here either. TheaterControls'
+                  // gradient Container paints across nearly its entire
+                  // bounds, but under Flutter's standard nested-
+                  // GestureDetector resolution a descendant's own tap
+                  // recognizer (an actual button) still wins the gesture
+                  // arena over an ancestor's — so real buttons keep
+                  // working, while a tap on empty gradient space falls
+                  // through to the root GestureDetector's onTap
+                  // (_handleBackgroundTap) in build() below.
+                  child: DpadRegion(
+                    memoryKey: 'theater.controls',
+                    child: TheaterControls(
+                      player: _player,
+                      chapterMetadata: _chapters,
+                      isSettingsOpen: _isSettingsOpen,
+                      isFullscreen: _isFullscreen,
+                      isDesktop: _isDesktopPlatform,
+                      uiPerformanceMode: _uiPerformanceMode,
+                      dpadModeActive: dpadModeActive,
+                      onToggleFullscreen: _toggleFullscreen,
+                      onInteract: _controlsVisibility.registerActivity,
+                      onInteractionStart: _controlsVisibility.beginInteraction,
+                      onInteractionEnd: _controlsVisibility.endInteraction,
+                      onToggleSettings: () =>
+                          setState(() => _isSettingsOpen = !_isSettingsOpen),
+                      onSeekbarFocusChange: (f) => _seekbarFocused = f,
+                      onVolumeFocusChange: (f) => _volumeSliderFocused = f,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Build.
 
   @override
   Widget build(BuildContext context) {
     final dpadModeActive = InputModeScope.of(context).dpadModeActive;
 
+    // The video texture, the settings-menu popup, and the loading/
+    // batch-picker overlay switcher don't depend on controls visibility
+    // at all — they're computed once per real setState() (video-ready,
+    // settings toggle, chapters loaded, etc.). Passed as the `child` of
+    // the ValueListenableBuilder below so this subtree is reused, not
+    // rebuilt, on every controls-visibility transition.
+    final staticLayer = Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedOpacity(
+          opacity: _videoInitialized ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 300),
+          // RepaintBoundary: the video texture updates on every decoded
+          // frame (dozens of times/sec) completely independently of the
+          // controls overlay above it (which only repaints on user
+          // interaction/position ticks). Without a boundary here, Flutter
+          // has no reason to treat them as separate compositor layers,
+          // so a control-bar repaint could force the video's layer to be
+          // re-recorded too, and vice versa. This pins the video to its
+          // own stable, GPU-cacheable layer.
+          child: RepaintBoundary(
+            child: Video(
+              controller: _videoController,
+              // NoVideoControls is media_kit_video's `const dynamic`
+              // sentinel for "no controls builder" — its actual runtime
+              // value is `null`, not a function. The parameter itself is
+              // nullable (VideoControlsBuilder?), so the cast target
+              // must be nullable too, or casting null throws at runtime
+              // (confirmed via crash log: "type 'Null' is not a subtype
+              // of type '(VideoState) => Widget' in type cast").
+              controls: NoVideoControls as Widget Function(VideoState)?,
+              filterQuality: _getFilterQuality(),
+            ),
+          ),
+        ),
+
+        if (_isSettingsOpen)
+          Positioned(
+            bottom: 110,
+            right: 32,
+            child: TheaterSettingsMenu(
+              player: _player,
+              uiPerformanceMode: _uiPerformanceMode,
+              onClose: () => setState(() => _isSettingsOpen = false),
+            ),
+          ),
+
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 600),
+          child: ListenableBuilder(
+            listenable: _torrentController,
+            builder: (context, _) {
+              if (_torrentController.isReadyToPlay) {
+                return const SizedBox.shrink();
+              }
+              if (_torrentController.needsManualSelection) {
+                return BatchEpisodePickerOverlay(
+                  files: _torrentController.batchFiles,
+                  requestedEpisode: widget.episode,
+                  onSelect: _torrentController.selectBatchFile,
+                  // Exits Theater entirely, matching what Escape does in
+                  // the same state (see _handleBackOrEscape) — there's
+                  // no partial "fullscreen exit" to do here since no
+                  // stream has started yet.
+                  onBack: _exitTheater,
+                );
+              }
+              return TheaterLoadingOverlay(
+                episode: widget.episode,
+                controller: _torrentController,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+
     return PopScope(
-      // ── Never let a bare pop through directly — both branches below
+      // Never lets a bare pop through directly — both branches below
       // always explicitly handle it (exit fullscreen and stay, or run
       // _exitTheater's careful async teardown sequence before popping).
       // This is what maybePop() — called from _handleBackOrEscape above,
-      // AND from Dpad.wrap()'s root-level onBack via the same
-      // Navigator.maybePop() path — actually resolves to. One
-      // mechanism, reachable from the system back gesture, a desktop
-      // Escape key, and the D-Pad remote's dedicated Back key alike. ──
+      // and from Dpad.wrap()'s root-level onBack via the same
+      // Navigator.maybePop() path — resolves to. One mechanism,
+      // reachable from the system back gesture, a desktop Escape key,
+      // and the D-Pad remote's dedicated Back key alike.
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (didPop) return;
@@ -565,183 +794,54 @@ class _TheaterScreenState extends State<TheaterScreen> {
           unawaited(_exitTheater());
         }
       },
-      child: CallbackShortcuts(
-        bindings: _buildShortcuts(dpadModeActive),
-        child: Scaffold(
-          backgroundColor: AppPalette.black,
-          body: ExcludeSemantics(
-            child: MouseRegion(
-              cursor: _showControls
-                  ? SystemMouseCursors.basic
-                  : SystemMouseCursors.none,
-              onHover: (_) => _startHideControlsTimer(),
-              child: GestureDetector(
-                onTap: () {
-                  if (_isSettingsOpen) {
-                    setState(() => _isSettingsOpen = false);
-                  } else if (_videoInitialized) {
-                    unawaited(_player.playOrPause());
-                  }
-                  _startHideControlsTimer();
-                },
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    AnimatedOpacity(
-                      opacity: _videoInitialized ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 300),
-                      // ── RepaintBoundary: the video texture updates on
-                      // every decoded frame (dozens of times/sec) completely
-                      // independently of the controls overlay above it
-                      // (which only repaints on user interaction/position
-                      // ticks). Without a boundary here, Flutter has no
-                      // reason to treat them as separate compositor layers,
-                      // so a control-bar repaint could force the video's
-                      // layer to be re-recorded too, and vice versa. This
-                      // pins the video to its own stable, GPU-cacheable
-                      // layer. ──
-                      child: RepaintBoundary(
-                        child: Video(
-                          controller: _videoController,
-                          // ── NoVideoControls is media_kit_video's `const
-                          // dynamic` sentinel for "no controls builder" —
-                          // its actual runtime value is `null`, not a
-                          // function. The parameter itself is nullable
-                          // (VideoControlsBuilder?), so the cast target
-                          // must be nullable too, or casting null throws
-                          // at runtime (confirmed via crash log:
-                          // "type 'Null' is not a subtype of type
-                          // '(VideoState) => Widget' in type cast"). ──
-                          controls:
-                              NoVideoControls as Widget Function(VideoState)?,
-                          filterQuality: _getFilterQuality(),
-                        ),
-                      ),
-                    ),
-
-                    if (_videoInitialized)
-                      AnimatedOpacity(
-                        opacity: _showControls ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 300),
-                        child: IgnorePointer(
-                          ignoring: !_showControls,
-                          // ── ExcludeFocus alongside IgnorePointer: the
-                          // opacity/IgnorePointer pair alone only ever
-                          // blocked POINTER hit-testing when controls were
-                          // hidden — keyboard/D-Pad focus could still land
-                          // on (and stay on) a fully invisible button.
-                          // ExcludeFocus removes the whole subtree from the
-                          // focus tree entirely while excluding is true, so
-                          // hidden controls are genuinely unreachable, not
-                          // just untappable. Flutter moves focus elsewhere
-                          // automatically if something inside was focused
-                          // right as this flips. ──
-                          child: ExcludeFocus(
-                            excluding: !_showControls,
-                            child: RepaintBoundary(
-                              child: Stack(
-                                children: [
-                                  Positioned(
-                                    top: 24 + MediaQuery.paddingOf(context).top,
-                                    left: 24,
-                                    right: 24,
-                                    // ── DpadRegion: its own visual section,
-                                    // separate from the controls bar below.
-                                    // No edge-behavior overrides — default
-                                    // leave/leave lets Down escape into the
-                                    // controls region, and Up has nothing
-                                    // above it to find anyway. ──
-                                    child: DpadRegion(
-                                      memoryKey: 'theater.topbar',
-                                      child: GestureDetector(
-                                        onTap: () {},
-                                        child: TheaterTopBar(
-                                          episode: widget.episode,
-                                          uiPerformanceMode: _uiPerformanceMode,
-                                          onBack: _exitTheater,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    bottom: 0,
-                                    left: 0,
-                                    right: 0,
-                                    child: DpadRegion(
-                                      memoryKey: 'theater.controls',
-                                      child: GestureDetector(
-                                        onTap: () {},
-                                        child: TheaterControls(
-                                          player: _player,
-                                          chapterMetadata: _chapters,
-                                          isSettingsOpen: _isSettingsOpen,
-                                          isFullscreen: _isFullscreen,
-                                          uiPerformanceMode: _uiPerformanceMode,
-                                          dpadModeActive: dpadModeActive,
-                                          onToggleFullscreen: _toggleFullscreen,
-                                          onInteract: _startHideControlsTimer,
-                                          onToggleSettings: () => setState(
-                                            () => _isSettingsOpen =
-                                                !_isSettingsOpen,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    if (_isSettingsOpen)
-                      Positioned(
-                        bottom: 110,
-                        right: 32,
-                        child: TheaterSettingsMenu(
-                          player: _player,
-                          uiPerformanceMode: _uiPerformanceMode,
-                          onClose: () =>
-                              setState(() => _isSettingsOpen = false),
-                        ),
-                      ),
-
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 600),
-                      child: ListenableBuilder(
-                        listenable: _torrentController,
-                        builder: (context, _) {
-                          if (_torrentController.isReadyToPlay) {
-                            return const SizedBox.shrink();
-                          }
-                          if (_torrentController.needsManualSelection) {
-                            return BatchEpisodePickerOverlay(
-                              files: _torrentController.batchFiles,
-                              requestedEpisode: widget.episode,
-                              onSelect: _torrentController.selectBatchFile,
-                              // ── Previously never wired — the picker's
-                              // own close (X) button only renders `if
-                              // (onBack != null)`, so it never appeared at
-                              // all. Exits Theater entirely, matching what
-                              // Escape now does in the same state (see
-                              // _handleBackOrEscape) — there's no partial
-                              // "fullscreen exit" to do here since no
-                              // stream has started yet. ──
-                              onBack: _exitTheater,
-                            );
-                          }
-                          return TheaterLoadingOverlay(
-                            episode: widget.episode,
-                            controller: _torrentController,
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+      child: Scaffold(
+        backgroundColor: AppPalette.black,
+        body: ExcludeSemantics(
+          // ValueListenableBuilder scoped to controls visibility only —
+          // MouseRegion's cursor and the controls overlay's opacity/
+          // hit-testing both depend on it, but `staticLayer` above
+          // (video, settings menu, loading/batch-picker overlay) does
+          // not, and is passed as `child` so it's reused rather than
+          // reconstructed on every show/hide transition. registerActivity()
+          // writes to a ValueNotifier, which only notifies listeners on a
+          // genuine true→false/false→true transition — so hovering with
+          // controls already visible costs a cancelled+rescheduled
+          // Timer, not a rebuild of anything visual.
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _controlsVisibility.visible,
+            child: staticLayer,
+            builder: (context, showControls, child) {
+              return MouseRegion(
+                cursor: showControls
+                    ? SystemMouseCursors.basic
+                    : SystemMouseCursors.none,
+                onHover: (_) => _controlsVisibility.registerActivity(),
+                // opaque (not the default deferToChild): guarantees a
+                // tap anywhere in this Stack — including areas where
+                // nothing paints, like gaps around the IgnorePointer'd
+                // controls overlay while it's hidden — reaches this
+                // detector's own onTap. Real interactive descendants
+                // (buttons, the settings menu's close button, etc.) are
+                // unaffected: a descendant's own tap recognizer still
+                // wins the gesture arena over this ancestor's, by
+                // Flutter's standard nested-GestureDetector resolution —
+                // opaque only changes whether empty space counts as a
+                // hit, not how competing recognizers along the same
+                // hit-test chain resolve against each other.
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _handleBackgroundTap,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      child!,
+                      if (_videoInitialized)
+                        _buildControlsOverlay(showControls, dpadModeActive),
+                    ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),

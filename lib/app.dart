@@ -9,7 +9,10 @@ import 'core/input/input_mode_scope.dart';
 import 'core/logging/app_logger.dart';
 import 'core/router/app_router.dart';
 import 'core/settings/settings_scope.dart';
+import 'core/theme/app_materials.dart';
 import 'core/theme/app_palette.dart';
+import 'core/theme/app_radii.dart';
+import 'core/theme/app_typography.dart';
 
 class AniStreamApp extends StatefulWidget {
   const AniStreamApp({super.key});
@@ -20,13 +23,13 @@ class AniStreamApp extends StatefulWidget {
 
 class _AniStreamAppState extends State<AniStreamApp>
     with WidgetsBindingObserver {
-  // ── Lets _handleDpadBack reach the real Navigator from a callback that
-  // has no BuildContext of its own. Deliberately NOT using
+  // Lets _handleDpadBack reach the real Navigator from a callback that
+  // has no BuildContext of its own. Deliberately not using
   // MaterialApp.builder's own `context` for this: that context sits
-  // ABOVE the Navigator this app pushes routes on (builder wraps AROUND
+  // above the Navigator this app pushes routes on (builder wraps around
   // the routed content), so Navigator.of(context) called with it can't
   // reliably find the Navigator below. A navigatorKey sidesteps that
-  // entirely. ──
+  // entirely.
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
@@ -47,7 +50,7 @@ class _AniStreamAppState extends State<AniStreamApp>
     super.dispose();
   }
 
-  // ── Deliberately does NOT reimplement back-navigation. maybePop() walks
+  // Deliberately does not reimplement back-navigation. maybePop() walks
   // the exact same PopScope chain the system back gesture/key already
   // triggers — which means AppShell's own
   // `PopScope(canPop: !_nav.canGoBack, onPopInvokedWithResult: ...)` is
@@ -55,14 +58,14 @@ class _AniStreamAppState extends State<AniStreamApp>
   // (redirect into NavigationController.goBack(), pop a pushed route like
   // TheaterScreen/AnimeDetailsScreen, or — at Home, with nothing left —
   // let the pop through, which is the normal "back at the app's root
-  // exits to the launcher" behavior, not a bug). This just gives the
-  // D-Pad remote's dedicated Back key the same entry point the manifest
-  // fix already gave the system gesture.
+  // exits to the launcher" behavior, not a bug). This gives the D-Pad
+  // remote's dedicated Back key the same entry point the manifest gives
+  // the system gesture.
   //
   // Always returning true tells Dpad "the app handled this back-press" —
   // either something popped, or PopScope already correctly decided
   // nothing needed to change. There's nothing further for Dpad itself to
-  // do in either case. ──
+  // do in either case.
   bool _handleDpadBack() {
     final navigator = _navigatorKey.currentState;
     if (navigator != null) {
@@ -89,19 +92,24 @@ class _AniStreamAppState extends State<AniStreamApp>
           seedColor: AppPalette.primary,
           brightness: Brightness.dark,
         ),
+        // Named typography/radius/materials tokens, registered once here
+        // and read anywhere below via `context.appTypography` /
+        // `context.appRadii` / `context.appMaterials`
+        // (build_context_extensions.dart).
+        extensions: const [
+          AppTypography.standard,
+          AppRadii.standard,
+          AppMaterials.standardTiers,
+        ],
       ),
-      // ── Dpad.wrap() is now the outermost layer, matching its documented
+      // Dpad.wrap() is the outermost layer, matching its documented
       // root-install pattern (`MaterialApp(builder: Dpad.wrap())`).
-      // InputModeScope + SettingsScope keep their EXACT prior relative
-      // nesting, just pushed one level in. InputModeScope — and by
-      // extension InputModeController and the native isTelevision channel
-      // beneath it — is still load-bearing for TheaterScreen and every
-      // widget it hands dpadModeActive to (Seekbar, TheaterControls,
-      // TheaterSettingsMenu, BatchEpisodePickerOverlay), plus
-      // settings_components.dart, calendar_card.dart, watchlist_cards.dart,
-      // hero_banner.dart, episode_tile.dart, and torrent_tile.dart, none of
-      // which are migrated yet. It comes out in the phase that migrates
-      // Theater — not before, or none of those files compile. ──
+      // InputModeScope + SettingsScope keep this relative nesting — it's
+      // load-bearing for TheaterScreen and every widget it hands
+      // dpadModeActive to (Seekbar, TheaterControls, TheaterSettingsMenu,
+      // BatchEpisodePickerOverlay), plus settings_components.dart,
+      // calendar_card.dart, watchlist_cards.dart, hero_banner.dart,
+      // episode_tile.dart, and torrent_tile.dart.
       builder: (context, child) => Dpad.wrap(
         theme: const DpadThemeData(scrollPadding: 24),
         debugOverlay: kDebugMode,
