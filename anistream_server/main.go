@@ -697,6 +697,12 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
+	// Unconditional, fires for every valid request regardless of
+	// cache-hit/fresh-extraction below — the one line to watch in this
+	// server's own terminal output to confirm which format a given
+	// request actually resolved to.
+	log.Printf("[subtitle] session=%s track=%d format=%s codec=%s", id, streamIndex, format, trackCodec)
+
 	currentBytes := f.BytesCompleted()
 	complete := subtitlesComplete(f)
 

@@ -160,11 +160,9 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     );
   }
 
-  bool _videoPlayerLaunching = false;
   void _onTorrentStateChanged() {
-    if (_torrentController.isReadyToPlay && !_videoPlayerLaunching) {
-      _videoPlayerLaunching = true;
-      unawaited(_openVideoPlayer(_torrentController.streamUrl!));
+    if (_torrentController.isReadyToPlay && _videoController == null) {
+      _openVideoPlayer(_torrentController.streamUrl!);
     }
 
     // ── Subtitles (added). Both guards below are one-shot triggers —
@@ -302,13 +300,32 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       streamIndex,
       kSubtitleFormat,
     );
-    if (bytes == null || !mounted || _selectedSubtitleIndex != streamIndex) {
+    if (bytes == null) {
+      // Distinguished from the mounted/track-changed guard below —
+      // this specifically means the fetch itself failed (network error,
+      // or the server rejected the format — e.g. ass/ttml requested
+      // against a track that isn't actually ass/ssa, see
+      // subtitle_extractor.go's IsNativeCodec).
+      AppLogger.w(
+        'ExoTheaterScreen',
+        'fetchSubtitleBytes returned null for track $streamIndex, format ${kSubtitleFormat.wireValue}',
+      );
       return;
     }
+    if (!mounted || _selectedSubtitleIndex != streamIndex) return;
+
+    AppLogger.i(
+      'ExoTheaterScreen',
+      'Fetched ${bytes.length} bytes for track $streamIndex, format ${kSubtitleFormat.wireValue}',
+    );
 
     try {
       final cues = await NativeSubtitleParser.parse(bytes, kSubtitleFormat);
       if (!mounted || _selectedSubtitleIndex != streamIndex) return;
+      AppLogger.i(
+        'ExoTheaterScreen',
+        'Parsed ${cues.length} styled cues from ${kSubtitleFormat.wireValue}',
+      );
       setState(() => _styledCues = cues);
     } catch (e) {
       AppLogger.w('ExoTheaterScreen', 'Native subtitle parse failed: $e');

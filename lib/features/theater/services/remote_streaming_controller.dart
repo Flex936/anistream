@@ -42,7 +42,6 @@ class RemoteStreamingController extends BaseStreamingController {
   bool _isReadyToPlay = false;
   bool _hasError = false;
   bool _needsManualSelection = false;
-  bool _pollInFlight = false;
   List<BatchFileOption> _batchFiles = [];
 
   // Raw (undecoded-to-BatchFileOption) file list from the last poll that
@@ -54,6 +53,14 @@ class RemoteStreamingController extends BaseStreamingController {
 
   String? _sessionId;
   Timer? _pollTimer;
+
+  // Timer.periodic fires every 500ms regardless of whether the previous
+  // _poll() call has returned yet. Guards against two overlapping polls
+  // both reading a stale pre-ready snapshot right at the tick where the
+  // server first reports "ready," which would let a downstream listener
+  // (e.g. ExoTheaterScreen) observe more than one ready transition for
+  // what is really a single state change.
+  bool _pollInFlight = false;
 
   // ── Subtitles (added) ──────────────────────────────────────────────────
   bool _subtitlesAvailable = false;
@@ -331,6 +338,7 @@ class RemoteStreamingController extends BaseStreamingController {
   Future<void> _poll() async {
     if (_sessionId == null || _pollInFlight) return;
     _pollInFlight = true;
+
     try {
       final resp = await _http
           .get(Uri.parse('$serverUrl/api/stream/$_sessionId'))

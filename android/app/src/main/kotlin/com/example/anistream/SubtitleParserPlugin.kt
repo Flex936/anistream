@@ -73,6 +73,7 @@ object SubtitleParserPlugin {
     private fun parse(bytes: ByteArray, format: String): List<Map<String, Any?>> {
         val parser = parserFor(format)
         val out = mutableListOf<Map<String, Any?>>()
+        Log.i(TAG, "Parsing ${bytes.size} bytes as \"$format\" using ${parser::class.simpleName}")
 
         // Fresh parser instance per call, entire standalone file handed
         // to parse() in one shot — the same "whole sideloaded file"
@@ -92,6 +93,7 @@ object SubtitleParserPlugin {
                 out.add(cueToMap(cue, startMs, endMs))
             }
         }
+        Log.i(TAG, "Produced ${out.size} styled cues from \"$format\" input")
         return out
     }
 
@@ -174,6 +176,13 @@ object SubtitleParserPlugin {
                     "backgroundColor" to backgroundColor,
                 )
             )
+
+            if (foregroundColor != null || backgroundColor != null) {
+                Log.i(
+                    TAG,
+                    "Run \"${text.subSequence(start, end)}\" fg=${foregroundColor?.let { "#%08X".format(it) }} bg=${backgroundColor?.let { "#%08X".format(it) }}",
+                )
+            }
         }
         return runs
     }

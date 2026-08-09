@@ -152,7 +152,15 @@ func ExtractSubtitleTrack(ctx context.Context, sourcePath string, streamIndex in
 		return extractViaFFmpeg(ctx, sourcePath, streamIndex, destPath, "copy")
 
 	case FormatTTML:
-		scratchPath := destPath + ".ass.tmp"
+		// ffmpeg infers its output muxer from destPath's extension, the
+		// same mechanism the direct FormatASS case above already relies
+		// on successfully. The scratch file must genuinely END in
+		// ".ass" for that inference to pick the right muxer — a
+		// filename ending in ".tmp" (e.g. destPath + ".ass.tmp", tried
+		// first and confirmed broken: ffmpeg reports "Unable to choose
+		// an output format" because .tmp is the last, and therefore the
+		// only, extension it looks at) fails for exactly that reason.
+		scratchPath := destPath + ".scratch.ass"
 		if err := extractViaFFmpeg(ctx, sourcePath, streamIndex, scratchPath, "copy"); err != nil {
 			return fmt.Errorf("extracting source ass for ttml conversion: %w", err)
 		}
