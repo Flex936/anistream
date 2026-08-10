@@ -293,7 +293,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             SettingRowTile(
                               title: 'Fix Frozen Video After Long Pauses',
                               subtitle:
-                                  "Forces a tiny re-seek when resuming after an extended pause. Works around a rare frozen-frame bug seen on some Linux/NVIDIA setups — leave off unless you've experienced this.",
+                                  "Briefly reinitializes hardware decoding when resuming after an extended pause. Works around a rare frozen-frame bug seen on some Linux/NVIDIA setups — may cause a short stutter when it fires, so leave off unless you've experienced this.",
                               value: _nudgeSeekOnResume,
                               onChanged: (v) =>
                                   setState(() => _nudgeSeekOnResume = v),

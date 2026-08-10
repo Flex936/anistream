@@ -100,3 +100,25 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 - [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `settings_menu.dart`, `navbar.dart`
 - [ ] `navbar.dart`: bump `_NavIconButton` from 44×44 to the documented 48×48 minimum
 - [ ] `search_filter_panel.dart`: remove `autofocus: true` from two of the three `ChoiceChip`s, keeping exactly one
+
+## Platform & Playback
+
+*Unlike the sections above, this one isn't drawn from the design-system audit — it doesn't reference a `DESIGN.md` § 5 entry, since the issue lives in native playback internals, not the design system. Tracked here per explicit request rather than in a separate document; refs point to `ARCHITECTURE.md` § 7 instead.*
+
+### 9. Replace the ineffective automatic freeze mitigation with a manual restart button
+
+**Priority:** Medium · **Size:** Medium-Large (touches theater player lifecycle, settings, and UI) · **Ref:** `ARCHITECTURE.md` § 7
+
+**Context:** The confirmed Linux/Wayland/NVIDIA video-freeze bug has no reliable mpv-level signal that distinguishes a frozen frame from a healthy one — every property logged is identical either way — so no automatic, timer-based heuristic can ever detect it correctly. Two were tried anyway (same-position seek, then cycling `hwdec`) and both were confirmed ineffective on real affected hardware. Source inspection traced the actual stuck layer to an EGL context inside `media_kit_video`'s Linux plugin that's isolated from Flutter's own and only gets recreated when the underlying `Player` is fully disposed — so the only thing that can actually recover from this is a full `Player`/`VideoController` restart, and since nothing in the app can detect the freeze itself, that restart has to be user-triggered.
+
+**Plan:**
+
+- [ ] Delete `playback_freeze_workaround_controller.dart` entirely. A manually-triggered action has no ongoing pause-duration state to track — the whole reason that class existed was to gate an *automatic* heuristic, which this replaces. The restart becomes a plain method on `_TheaterScreenState`, invoked directly by a button's `onPressed`.
+- [ ] Rename `AppSettings.nudgeSeekOnResume` → `showFreezeRecoveryButton` (and its `SharedPreferences` key) — the setting's mechanism has changed shape twice now; a clean rename is warranted since nothing external depends on the old name.
+- [ ] Add a settings-gated icon button to `TheaterTopBar` (next to the existing back button, reusing `FrostedIconButton`) — visible only when the setting is on, so unaffected users see zero added UI.
+- [ ] On tap: capture `player.state.position`; dispose only `_player` (never `_torrentController` — `StreamingController.dispose()` deletes downloaded torrent pieces, `RemoteStreamingController.dispose()` tears down the remote session; either would force a real re-download instead of a near-instant recovery); rebuild `_player`/`_videoController` **in place within the same `TheaterScreen` State** — `pushReplacement`-ing a new screen was considered and rejected, since it resolves `AnimeDetailsScreen`'s `await Navigator.push(...)` early and would fire `_fetchProgress()` at the wrong time; re-open `_torrentController.streamUrl` (left running, untouched) into the fresh player; seek to the captured position minus a small fixed rewind (clamped to `>= Duration.zero`); resume.
+- [ ] `_player`/`_videoController` need to become mutable fields (no longer `late final`). `_autoSkipController`, `_playbackDiagnostics`, `_controlsVisibility`, and the `_posSub` subscription all capture `Player` at construction and need rebuilding against the new instance — extract this into one `_buildPlayerScopedResources()` method used both by `initState` and the restart handler, so there's exactly one construction path rather than two that can drift apart. `_tracker` (`AnilistTrackerService`) doesn't capture `Player` directly and needs no changes.
+- [ ] File an upstream issue against `media-kit/media-kit` describing the isolated-EGL-context finding — the root cause isn't fixable from this codebase, and this evidence (confirmed-healthy decode, stuck presentation, exact file/line, platform correlation) is worth reporting regardless of whether the manual-restart mitigation ships.
+- [ ] Update `ARCHITECTURE.md` § 7's entry once this ships, since it currently describes the (now superseded) automatic hwdec-cycle mitigation as the current state.
+
+**Affected files:** `lib/core/settings/settings_service.dart`, `lib/features/settings/settings_menu.dart`, `lib/features/theater/services/playback_freeze_workaround_controller.dart` (deleted), `lib/features/theater/theater_screen.dart`, `lib/features/theater/widgets/theater_player.dart`

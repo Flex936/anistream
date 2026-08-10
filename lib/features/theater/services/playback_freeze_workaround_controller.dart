@@ -20,35 +20,52 @@ import '../../../core/logging/app_logger.dart';
 ///  - App focus/lifecycle: reproduced with the window holding focus
 ///    continuously through the whole pause.
 ///  - Fullscreen state: froze in both windowed and fullscreen.
-///  - mpv's own decode pipeline: the decisive test —
-///    `estimated-frame-number` (the live current-frame index; NOT the
-///    static per-file `estimated-frame-count`, an earlier-round red
-///    herring) was confirmed climbing at ~24fps, matching elapsed
-///    wall-clock time, for 5+ seconds after a resume where the on-screen
-///    picture was directly confirmed still frozen. mpv is genuinely
-///    decoding new frames — nothing is reaching the display.
+///  - mpv's own decode pipeline: `estimated-frame-number` (the live
+///    current-frame index) was confirmed climbing at the correct rate
+///    while the on-screen picture was directly confirmed still frozen.
+///    mpv is genuinely decoding new frames — nothing is reaching the
+///    display.
 ///
-/// Root-causing/fixing this natively is out of scope for this Dart/Flutter
-/// codebase — it would live in media_kit_video's plugin internals, the
-/// Flutter Linux embedder, or the NVIDIA driver itself. The mitigation
-/// applied here — a same-position seek on resume, which forces mpv to
-/// flush and re-present through its render API from scratch — is a
-/// well-established workaround for "decoder's fine, presented texture is
-/// stuck" bugs in other GL-embedded players, not a real fix.
+/// A first iteration of this mitigation issued a same-position
+/// `player.seek()` on resume, on the theory that a seek forces mpv to
+/// flush and re-present through its render API. On-device testing
+/// disproved that: manually scrubbing the seekbar after the freeze
+/// reproduced doesn't restore the picture either, which means the stuck
+/// state doesn't live anywhere a seek can reach — the seek/demux/decode
+/// path was already confirmed healthy above, so a seek was never going
+/// to touch whatever's actually stuck downstream of it.
 ///
-/// Opt-in only (see [isEnabled]) — confirmed reproducing only on Linux +
-/// NVIDIA + Wayland, not on Windows + Intel iGPU. Any pause-duration gate
-/// short enough to catch this bug is also short enough to fire on
-/// completely ordinary pauses (answering the door, a phone call), so a
-/// default-on mitigation would cost every unaffected user a small,
-/// purposeless stutter for a bug they can never hit.
+/// This version instead cycles the `hwdec` property off and back to its
+/// prior value. Unlike a seek, changing `hwdec` while a file is loaded
+/// forces mpv to tear down and reconfigure the entire video chain
+/// (decoder → vo) from scratch, which is a materially different reset
+/// than anything a seek touches — the next actionable lever before
+/// escalating to rebuilding the `VideoController`/`Video` widget
+/// entirely (a heavier, visibly-flickering fallback held in reserve).
+/// Root-causing/fixing the underlying bug natively is out of scope for
+/// this Dart/Flutter codebase — it would live in media_kit_video's
+/// plugin internals, the Flutter Linux embedder, or the NVIDIA driver
+/// itself.
+///
+/// Status: unverified — this mechanism has not yet been confirmed to
+/// resolve the freeze on real affected hardware. Opt-in only (see
+/// [isEnabled]) for the same reason as before: confirmed reproducing
+/// only on Linux + NVIDIA + Wayland, and cycling hwdec is a more
+/// noticeable interruption (a brief decoder reinit stutter) than the
+/// same-position seek this replaces, so it should never fire for anyone
+/// who hasn't deliberately opted in.
 class PlaybackFreezeWorkaroundController {
   final Player player;
 
   /// Reads the live `AppSettings.nudgeSeekOnResume` value — a function
   /// rather than a captured bool so a mid-session settings change takes
   /// effect without reconstructing this controller, matching
-  /// `AutoSkipController.isEnabled`'s existing pattern.
+  /// `AutoSkipController.isEnabled`'s existing pattern. The setting's
+  /// name still reflects the original seek-based mechanism; renaming it
+  /// (and its persisted SharedPreferences key) is deliberately deferred
+  /// until the hwdec-cycle approach is confirmed to actually work — no
+  /// point renaming a setting twice if this iteration also needs to be
+  /// replaced.
   final bool Function() isEnabled;
 
   /// Internal-only — deliberately NOT user-configurable. The opt-in
@@ -84,14 +101,34 @@ class PlaybackFreezeWorkaroundController {
     final pauseDuration = DateTime.now().difference(pausedAt);
     if (pauseDuration < _kMinPauseDuration) return;
 
-    AppLogger.i(
-      'PlaybackFreezeWorkaround',
-      'Nudge-seeking after ${pauseDuration.inSeconds}s pause',
-    );
-    // Player.seek returns Future<void> — this is called from a
-    // synchronous stream listener callback, so the fire-and-forget intent
-    // is made explicit instead of silently dropped (unawaited_futures).
-    unawaited(player.seek(player.state.position));
+    unawaited(_cycleHwdec(pauseDuration));
+  }
+
+  /// Reads the current `hwdec` value, sets it to `'no'` (software
+  /// decoding), then immediately restores the original value. Forces
+  /// mpv to fully tear down and reconfigure the decode/vo chain rather
+  /// than just moving the playback position — see the class doc for why
+  /// this is expected to reach a different failure point than the
+  /// same-position seek this replaces.
+  Future<void> _cycleHwdec(Duration pauseDuration) async {
+    final platform = player.platform;
+    if (platform is! NativePlayer) return;
+
+    try {
+      final currentHwdec = await platform.getProperty('hwdec');
+      AppLogger.i(
+        'PlaybackFreezeWorkaround',
+        'Cycling hwdec ($currentHwdec) after ${pauseDuration.inSeconds}s pause',
+      );
+      await platform.setProperty('hwdec', 'no');
+      await platform.setProperty('hwdec', currentHwdec);
+    } catch (e) {
+      // mpv property read/write can fail if the engine's mid-teardown or
+      // the property is momentarily unavailable — not worth surfacing
+      // to the user over, but logged so a future diagnostic pass can see
+      // it happened.
+      AppLogger.w('PlaybackFreezeWorkaround', 'hwdec cycle failed: $e');
+    }
   }
 
   void dispose() {
