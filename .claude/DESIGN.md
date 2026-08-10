@@ -63,9 +63,9 @@ Visual restraint, typographic rhythm, and motion quality, in the spirit of Apple
 - Shared breakpoints live in `build_context_extensions.dart` (`Breakpoints.{mobile,tablet,desktop,wide}` = 600/900/1200/1500) and the column-count helpers in `responsive_grid.dart`. New screens should use these (`context.isMobile`, etc.) rather than a new hardcoded `< 600` check — § 5 tracks the current split between migrated and not-yet-migrated call sites.
 - **Landscape title constraint:** any title/heading rendered over a full-bleed hero/banner treatment (§ 1.2) must not exceed half the screen's width when `MediaQuery.sizeOf(context).width > height` (landscape) — long titles over wide artwork otherwise crowd out whatever sits beside or below them. `HeroHeaderDelegate`'s `contentMaxWidth` calculation is the canonical example.
 
-## 4. Spatial Navigation & TV (D-Pad)
+## 4. Spatial Navigation & TV (D-pad)
 
-- Isolate D-Pad navigation exclusively to TV builds or when a physical controller is explicitly connected. Do NOT let TV focus logic bleed into standard Mobile/PC pointer/touch interactions.
+- Isolate D-pad navigation exclusively to TV builds or when a physical controller is explicitly connected. Do NOT let TV focus logic bleed into standard Mobile/PC pointer/touch interactions.
 - Manage spatial navigation strictly via `FocusNode` and `FocusTraversalGroup` (in practice, via the `dpad` package's `DpadRegion`/`DpadFocusable`, which wrap these).
 - Display visual focus rings ONLY when `dpadModeActive` is true.
 
@@ -118,4 +118,4 @@ These are documented as-is per the Living Documentation Rule — **do not silent
 *(Formerly tracked two items here — "blur sigma has no named tiers" and `anime_carousel.dart`'s `_NavArrow` bypassing `FrostedContainer` — both resolved via the `AppMaterials` tiers introduced in `core/theme/app_materials.dart`; see § 1.4. Removed from this list accordingly.)*
 
 ---
-*Last reviewed against the codebase: 2026-08-03. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-10. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

@@ -12,7 +12,7 @@ AniStream is a single Flutter/Dart codebase producing native apps for Windows, L
 
 Metadata and tracking come from AniList's GraphQL API; torrent discovery comes from scraping Nyaa.si's RSS feeds. Both are covered in [API.md](API.md), not here.
 
-`````text
+```text
 ┌──────────────┐      GraphQL      ┌──────────────┐
 │  AniList API │◄─────────────────►│              │
 └──────────────┘                   │              │
@@ -26,11 +26,11 @@ Metadata and tracking come from AniList's GraphQL API; torrent discovery comes f
                                   ┌────────▼────────┐
                                   │ AniStream Server │  (Go, § 6)
                                   └─────────────────┘
-`````
+```
 
 ## 2. Flutter App Structure
 
-`````text
+```text
 lib/
 ├── main.dart                  # Entry point: zone setup, AppLogger.init(), MediaKit.ensureInitialized(),
 │                               # InputModeController.instance.init(), desktop window bootstrap, runApp()
@@ -84,7 +84,7 @@ lib/
     │                                 theater_settings, batch_picker}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
-`````
+```
 
 **Where does new code go?**
 
@@ -164,7 +164,7 @@ Optional, standalone companion for thin clients (Android TV boxes, phones, weak 
 
 **Session state machine** (one session per active magnet link):
 
-`````text
+```text
 loading_metadata
     │
     ├── single video file found ──────────────┐
@@ -172,7 +172,7 @@ loading_metadata
     └── multiple video files ──► needs_selection ──(POST /select)──► buffering ──(≥5% downloaded)──► ready
 
 any state ──(3 min metadata timeout / no video files / stream failure)──► error
-`````
+```
 
 - Sessions idle for 30+ minutes are dropped automatically (`reap()`, checked every 5 minutes).
 - No authentication — the server is designed for trusted-LAN use only (see [`anistream_server/README.md`](../anistream_server/README.md)'s own notes on this).
@@ -187,4 +187,4 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
 - **macOS/iOS Release entitlements are an unconfirmed gap, not a fix.** § 4 (macOS / iOS) flags that `Release.entitlements` may be missing `com.apple.security.network.client`/`.server` relative to `DebugProfile.entitlements` — unconfirmed whether this actually breaks AniList OAuth's loopback server or on-device torrenting in signed/notarized Release builds, just noted as an untested gap. Cross-referenced here so this section remains the complete index of open items.
 
 ---
-*Last reviewed against the codebase: 2026-08-03. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-10. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

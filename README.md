@@ -9,9 +9,9 @@
 | Doc | Purpose | Start here if you want to… |
 | --- | --- | --- |
 | [CLAUDE.md](.claude/CLAUDE.md) | Project overview, AI/human working norms, and the index tying the whole doc suite together | …get oriented, or find which doc covers what |
-| [CODING_RULES.md](.claude/CODING_RULES.md) | Strict, enforced coding rules — performance, state management, caching, linter compliance | …know what a PR or an AI-generated change needs to satisfy |
+| [CODING_RULES.md](.claude/CODING_RULES.md) | Strict, enforced coding rules — performance, state management, caching, code-generation quality standards | …know what a PR or an AI-generated change needs to satisfy |
 | [DESIGN.md](.claude/DESIGN.md) | Visual language, design tokens, TV/D-pad rules | …build or review UI |
-| [ARCHITECTURE.md](.claude/ARCHITECTURE.md) | `lib/` folder structure, native platform layer, the optional Go server | …know where a file belongs, or how a platform-specific piece works |
+| [ARCHITECTURE.md](.claude/ARCHITECTURE.md) | `lib/` folder structure, state-management pattern, native platform layer, the optional Go server | …know where a file belongs, or how a platform-specific piece works |
 | [API.md](.claude/API.md) | AniList & Nyaa.si integrations, scraping, caching | …touch networking, scraping, or tracking |
 | [CONTRIBUTING.md](.claude/CONTRIBUTING.md) | PR process, checklist, Code of Conduct | …submit a change |
 
@@ -224,4 +224,4 @@ AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)**; see
 AniStream is an open-source architectural proof-of-concept designed as a personal utility. Users assume complete liability for the metadata aggregation parameters, torrent tracking hashes, and compliance with local legal frameworks governing peer-to-peer data transfers. No copyright-infringing media files are hosted, stored, or distributed on this codebase. However, while you are streaming, you will become a seeder for that duration.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*
+*Last reviewed against the codebase: 2026-08-10. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*

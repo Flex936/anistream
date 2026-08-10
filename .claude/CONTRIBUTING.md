@@ -56,4 +56,4 @@ This project follows the [Contributor Covenant](https://www.contributor-covenant
 By contributing, you agree that your contributions are licensed under the project's **GNU General Public License v3.0 (GPLv3)** — see [README.md](../README.md) § 9 and the `LICENSE` file at the repository root.
 
 ---
-*Last reviewed against the codebase: 2026-08-03. Changed the PR checklist (§ 6), the design-debt list (DESIGN.md § 5), or the license (§ 8)? Update this file too.*
+*Last reviewed against the codebase: 2026-08-10. Changed the PR checklist (§ 6), the design-debt list (DESIGN.md § 5), or the license (§ 8)? Update this file too.*
