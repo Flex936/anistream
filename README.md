@@ -1,6 +1,6 @@
 # AniStream
 
-> **AniStream Docs:** [CLAUDE.md — overview & index](.claude/CLAUDE.md) · [CODING_RULES.md — tech constraints](.claude/CODING_RULES.md) · [DESIGN.md — UI/UX rules](.claude/DESIGN.md) · [ARCHITECTURE.md — structure & platform](.claude/ARCHITECTURE.md) · [API.md — data & caching](.claude/API.md) · **README.md — project intro** · [CONTRIBUTING.md — PR process](.claude/CONTRIBUTING.md)
+> **AniStream Docs:** [CLAUDE.md](.claude/CLAUDE.md) · [CODING_RULES.md](.claude/CODING_RULES.md) · [DESIGN.md](.claude/DESIGN.md) · [ARCHITECTURE.md](.claude/ARCHITECTURE.md) · [API.md](.claude/API.md) · **README.md** · [CONTRIBUTING.md](.claude/CONTRIBUTING.md)
 > **Covers:** project introduction, feature overview, developer setup/build instructions, and licensing. **See also:** [CLAUDE.md](.claude/CLAUDE.md) for the doc suite's own index and AI/human working norms, [ARCHITECTURE.md](.claude/ARCHITECTURE.md) for the `lib/` folder structure and the optional Go server, [CONTRIBUTING.md](.claude/CONTRIBUTING.md) for the PR process.
 > **Disclaimer:** Until we release v1.0.0, the current releases (up to v0.3.0) are built via Wails (a Svelte frontend with a Go backend, opened via your default webview). That version was built with entirely different tools and is also far more behind in development — in design, compatibility, features, optimizations, and general polish. The description below covers the complete new version of the app, which has not been released yet.
 

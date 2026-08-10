@@ -1,6 +1,6 @@
 # AniStream Server
 
-> **Part of the AniStream docs.** Main suite: [CLAUDE.md — overview & index](../.claude/CLAUDE.md) · [CODING_RULES.md — tech constraints](../.claude/CODING_RULES.md) · [DESIGN.md — UI/UX rules](../.claude/DESIGN.md) · [ARCHITECTURE.md — structure & platform](../.claude/ARCHITECTURE.md) · [API.md — data & caching](../.claude/API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](../.claude/CONTRIBUTING.md)
+> **Part of the AniStream docs.** Main suite: [CLAUDE.md](../.claude/CLAUDE.md) · [CODING_RULES.md](../.claude/CODING_RULES.md) · [DESIGN.md](../.claude/DESIGN.md) · [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) · [API.md](../.claude/API.md) · [README.md](../README.md) · [CONTRIBUTING.md](../.claude/CONTRIBUTING.md)
 > **Covers:** building, running, and the REST API of the standalone Go server that offloads torrenting from thin clients. **See also:** [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) § 6 for the condensed architecture summary (session state diagram, which Dart controller talks to this server) — that section links back here for the full reference.
 
 A lightweight Go binary that handles BitTorrent downloading and HTTP streaming

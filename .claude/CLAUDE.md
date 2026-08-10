@@ -1,6 +1,6 @@
 # AniStream Project Rules
 
-> **AniStream Docs:** **CLAUDE.md — overview & index** · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
+> **AniStream Docs:** **CLAUDE.md** · [CODING_RULES.md](CODING_RULES.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · [README.md](../README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** project orientation for AI/human contributors, the code-generation workflow norms (plan-first, complete-file output), and the rule that keeps this whole doc suite in sync. **See also:** [CODING_RULES.md](CODING_RULES.md) for the strict, enforced technical constraints on generated code, [DESIGN.md](DESIGN.md) for visual rules, [ARCHITECTURE.md](ARCHITECTURE.md) for where code lives.
 
 ## 1. Project Overview & Working Norms

@@ -1,6 +1,6 @@
 # Contributing to AniStream
 
-> **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · [ARCHITECTURE.md — structure & platform](ARCHITECTURE.md) · [API.md — data & caching](API.md) · **CONTRIBUTING.md — PR process**
+> **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [CODING_RULES.md](CODING_RULES.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · [README.md](../README.md) · **CONTRIBUTING.md**
 > **Covers:** how to contribute — setup pointers, coding standards, the PR checklist, and the Code of Conduct. **See also:** [CODING_RULES.md](CODING_RULES.md) for the exact rules a PR is held to, [DESIGN.md](DESIGN.md) for UI/UX contributions, [ARCHITECTURE.md](ARCHITECTURE.md) § 2 for where new code belongs.
 
 Thanks for considering a contribution — AniStream is maintained by a small team (plus AI-assisted development), and outside contributions genuinely help. This guide covers how to get set up, what's expected of a PR, and where the project's other rules live so nothing here is duplicated.
