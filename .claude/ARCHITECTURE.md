@@ -1,9 +1,7 @@
 # AniStream Architecture
 
-> **AniStream Docs:** [CLAUDE.md — overview & index](CLAUDE.md) · [CODING_RULES.md — tech constraints](CODING_RULES.md) · [DESIGN.md — UI/UX rules](DESIGN.md) · **ARCHITECTURE.md — structure & platform** · [API.md — data & caching](API.md) · [README.md — project intro](../README.md) · [CONTRIBUTING.md — PR process](CONTRIBUTING.md)
+> **AniStream Docs:** [CLAUDE.md](CLAUDE.md) · [CODING_RULES.md](CODING_RULES.md) · [DESIGN.md](DESIGN.md) · **ARCHITECTURE.md** · [API.md](API.md) · [README.md](../README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
 > **Covers:** the `lib/` folder structure, state-management pattern, native platform layer, and how the optional Go server fits in. **See also:** [CODING_RULES.md](CODING_RULES.md) for the rules that assume this structure, [DESIGN.md](DESIGN.md) for the UI layer this hosts, [API.md](API.md) for what the data layer talks to.
-
-**In this file:** [System Overview](#1-system-overview) · [Flutter App Structure](#2-flutter-app-structure) · [State Management](#3-state-management) · [Native Platform Layer](#4-native-platform-layer) · [Streaming Pipeline](#5-streaming-pipeline) · [AniStream Server (Go)](#6-anistream-server-go) · [Known Issues](#7-known-issues)
 
 ## 1. System Overview
 
@@ -14,7 +12,7 @@ AniStream is a single Flutter/Dart codebase producing native apps for Windows, L
 
 Metadata and tracking come from AniList's GraphQL API; torrent discovery comes from scraping Nyaa.si's RSS feeds. Both are covered in [API.md](API.md), not here.
 
-`````text
+```text
 ┌──────────────┐      GraphQL      ┌──────────────┐
 │  AniList API │◄─────────────────►│              │
 └──────────────┘                   │              │
@@ -28,11 +26,11 @@ Metadata and tracking come from AniList's GraphQL API; torrent discovery comes f
                                   ┌────────▼────────┐
                                   │ AniStream Server │  (Go, § 6)
                                   └─────────────────┘
-`````
+```
 
 ## 2. Flutter App Structure
 
-`````text
+```text
 lib/
 ├── main.dart                  # Entry point: zone setup, AppLogger.init(), MediaKit.ensureInitialized(),
 │                               # InputModeController.instance.init(), desktop window bootstrap, runApp()
@@ -68,9 +66,9 @@ lib/
 │                                    perf_animations.dart
 │
 └── features/                   # One folder per screen/flow. Each owns its own widgets/services/controllers.
-├── anime_details/                anime_details_screen.dart, widgets/{episode_tile, hero_banner,
+    ├── anime_details/                anime_details_screen.dart, widgets/{episode_tile, hero_banner,
     │                                 hero_header_delegate, hero_header_compact, anime_synopsis_section,
-    │                                 torrent_tile, external_link_buttons}.dart
+    │                                 torrent_tile, torrent_search_modal, external_link_buttons}.dart
     ├── home/                         home_screen.dart, widgets/anime_carousel.dart
     ├── schedule/                     scheduled_screen.dart, utils/schedule_grouping.dart,
     │                                 widgets/calendar_card.dart
@@ -88,7 +86,7 @@ lib/
     │                                 theater_settings, batch_picker}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
-`````
+```
 
 **Where does new code go?**
 
@@ -168,7 +166,7 @@ Optional, standalone companion for thin clients (Android TV boxes, phones, weak 
 
 **Session state machine** (one session per active magnet link):
 
-`````text
+```text
 loading_metadata
     │
     ├── single video file found ──────────────┐
@@ -176,7 +174,7 @@ loading_metadata
     └── multiple video files ──► needs_selection ──(POST /select)──► buffering ──(≥5% downloaded)──► ready
 
 any state ──(3 min metadata timeout / no video files / stream failure)──► error
-`````
+```
 
 - Sessions idle for 30+ minutes are dropped automatically (`reap()`, checked every 5 minutes).
 - No authentication — the server is designed for trusted-LAN use only (see [`anistream_server/README.md`](../anistream_server/README.md)'s own notes on this).
