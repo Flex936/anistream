@@ -191,6 +191,7 @@ class ListCard extends StatelessWidget {
 
     final typography = context.appTypography;
     final radii = context.appRadii;
+    final cardSizes = context.appCardSizes;
 
     return HoverFocusBuilder(
       autofocus: autofocus,
@@ -221,7 +222,10 @@ class ListCard extends StatelessWidget {
               // FrostedContainer's doc comment for the rationale.
               clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
               child: AspectRatio(
-                aspectRatio: 0.7,
+                // Matches AniList's coverImage art (2:3) — the same
+                // canonical ratio AnimeCard/WatchlistCard/CalendarCard
+                // share via AppCardSizes.
+                aspectRatio: cardSizes.posterAspectRatio,
                 child: AppNetworkImage(
                   url: media.coverImage?.large ?? media.coverImage?.extraLarge,
                   scale: (hovered && !uiPerformanceMode) ? 1.05 : 1.0,
@@ -348,6 +352,12 @@ class WatchlistCard extends StatelessWidget {
   final bool autofocus;
   final bool uiPerformanceMode;
 
+  /// Fixed height of the text block below the poster — the title line
+  /// plus its surrounding spacing, plus the episode/airing line.
+  /// `WatchlistScreen`'s grid needs this on top of the width-driven
+  /// poster height to size its cells without clipping the text.
+  static const double kTextBlockHeight = 48;
+
   const WatchlistCard({
     super.key,
     required this.entry,
@@ -374,6 +384,7 @@ class WatchlistCard extends StatelessWidget {
     final typography = context.appTypography;
     final radii = context.appRadii;
     final materials = context.appMaterials;
+    final cardSizes = context.appCardSizes;
 
     double percent = 0.0;
     if (media.episodes != null && media.episodes! > 0) {
@@ -389,7 +400,11 @@ class WatchlistCard extends StatelessWidget {
       builder: (context, hovered) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          AspectRatio(
+            // Matches AniList's coverImage art (2:3) — the same
+            // canonical ratio AnimeCard/CalendarCard/ListCard share via
+            // AppCardSizes.
+            aspectRatio: cardSizes.posterAspectRatio,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(

@@ -9,6 +9,7 @@ import 'core/input/input_mode_scope.dart';
 import 'core/logging/app_logger.dart';
 import 'core/router/app_router.dart';
 import 'core/settings/settings_scope.dart';
+import 'core/theme/app_card_sizes.dart';
 import 'core/theme/app_materials.dart';
 import 'core/theme/app_palette.dart';
 import 'core/theme/app_radii.dart';
@@ -92,14 +93,15 @@ class _AniStreamAppState extends State<AniStreamApp>
           seedColor: AppPalette.primary,
           brightness: Brightness.dark,
         ),
-        // Named typography/radius/materials tokens, registered once here
-        // and read anywhere below via `context.appTypography` /
-        // `context.appRadii` / `context.appMaterials`
-        // (build_context_extensions.dart).
+        // Named typography/radius/materials/card-size tokens, registered
+        // once here and read anywhere below via `context.appTypography` /
+        // `context.appRadii` / `context.appMaterials` /
+        // `context.appCardSizes` (build_context_extensions.dart).
         extensions: const [
           AppTypography.standard,
           AppRadii.standard,
           AppMaterials.standardTiers,
+          AppCardSizes.standard,
         ],
       ),
       // Dpad.wrap() is the outermost layer, matching its documented

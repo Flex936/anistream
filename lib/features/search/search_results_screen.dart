@@ -7,7 +7,6 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
-import '../../shared/utils/responsive_grid.dart';
 import '../../shared/widgets/anime_card.dart';
 import 'widgets/search_filter_panel.dart';
 
@@ -277,29 +276,36 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                   );
                 }
 
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Shared with WatchlistScreen's portrait grid rather
-                    // than a locally duplicated breakpoint table.
-                    final cols = verticalGridColumns(constraints.maxWidth);
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(32, 8, 32, 48),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: cols,
-                        crossAxisSpacing: 20,
-                        mainAxisSpacing: 24,
-                        childAspectRatio: 0.55,
-                      ),
-                      itemCount: results.length,
-                      itemBuilder: (_, i) => AnimeCard(
-                        anime: results[i],
-                        onSelect: widget.onSelectAnime,
-                        autofocus: i == 0,
-                      ),
-                    );
-                  },
+                final cardSizes = context.appCardSizes;
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(32, 8, 32, 48),
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: cardSizes.gridMaxWidth,
+                    crossAxisSpacing: 20,
+                    mainAxisSpacing: 24,
+                    // Fixed absolute row height rather than
+                    // childAspectRatio: AnimeCard's poster is
+                    // width-driven (its own internal AspectRatio adapts
+                    // to whatever column width the grid actually
+                    // produces), but the text block beneath it is a
+                    // fixed pixel height regardless of width. Deriving
+                    // this extent from the widest possible column
+                    // (gridMaxWidth) guarantees every narrower column —
+                    // which always needs less height too, since its
+                    // poster is proportionally shorter — still fits
+                    // inside it without overflowing.
+                    mainAxisExtent:
+                        cardSizes.gridMaxWidth / cardSizes.posterAspectRatio +
+                        AnimeCard.kTextBlockHeight,
+                  ),
+                  itemCount: results.length,
+                  itemBuilder: (_, i) => AnimeCard(
+                    anime: results[i],
+                    onSelect: widget.onSelectAnime,
+                    autofocus: i == 0,
+                  ),
                 );
               },
             ),

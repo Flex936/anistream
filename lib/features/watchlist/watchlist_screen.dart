@@ -8,7 +8,6 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/utils/perf_animations.dart';
-import '../../shared/utils/responsive_grid.dart';
 import '../../shared/widgets/hover_focus_builder.dart';
 import 'controllers/watchlist_controller.dart';
 import 'widgets/watchlist_cards.dart';
@@ -336,23 +335,51 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     final activeStatus = _controller.activeStatus;
     final activeEntries = _controller.activeEntries;
     final isWatching = activeStatus == 'CURRENT';
+    final cardSizes = context.appCardSizes;
+
+    final double maxCrossAxisExtent = isWatching
+        ? cardSizes.heroGridMaxWidth
+        : cardSizes.gridMaxWidth;
+
+    final SliverGridDelegateWithMaxCrossAxisExtent gridDelegate = isWatching
+        ? SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: maxCrossAxisExtent,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 24,
+            // HeroCard has no separate text block below the art — every
+            // pixel of its box is the Stack.expand poster/overlay
+            // itself — so a plain childAspectRatio is exact at any
+            // column width, unlike the offset-height calculation the
+            // poster-card branch below needs.
+            childAspectRatio: 16 / 9,
+          )
+        : SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: maxCrossAxisExtent,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 24,
+            // See SearchResultsScreen's identical calculation —
+            // WatchlistCard shares the same width-driven-poster-plus-
+            // fixed-text-block shape as AnimeCard.
+            mainAxisExtent:
+                cardSizes.gridMaxWidth / cardSizes.posterAspectRatio +
+                WatchlistCard.kTextBlockHeight,
+          );
 
     return SliverLayoutBuilder(
       builder: (context, constraints) {
-        final cols = isWatching
-            ? landscapeGridColumns(constraints.crossAxisExtent)
-            : verticalGridColumns(constraints.crossAxisExtent);
-        final aspectRatio = isWatching ? 1.77 : 0.52;
+        // Mirrors SliverGridDelegateWithMaxCrossAxisExtent's own
+        // column-count formula — used only to know which items sit in
+        // the first visual row, so focusing one of them scrolls it clear
+        // of the pinned nav bar. The grid's actual sizing comes from
+        // gridDelegate above, not from this value.
+        final cols = (constraints.crossAxisExtent / (maxCrossAxisExtent + 20))
+            .ceil()
+            .clamp(1, activeEntries.length);
 
         return SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           sliver: SliverGrid(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: cols,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 24,
-              childAspectRatio: aspectRatio,
-            ),
+            gridDelegate: gridDelegate,
             delegate: SliverChildBuilderDelegate((context, i) {
               final entry = activeEntries[i];
               final hoverImage =
