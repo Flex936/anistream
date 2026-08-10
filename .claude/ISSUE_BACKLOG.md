@@ -59,6 +59,10 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 
 ---
 
+  *Items #4 and #5 previously tracked here have since been resolved — removed from this list accordingly.*
+
+---
+
 ### 6. Add genre/mood-based shelves to Home
 
 **Priority:** Low · **Size:** Medium · **Ref:** `DESIGN.md` § 5.2

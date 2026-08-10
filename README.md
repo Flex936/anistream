@@ -215,7 +215,7 @@ Contributions are welcome — bug reports, features, design work, and documentat
 
 ## 9. License
 
-AniStream is intended to be licensed under the **GNU General Public License v3.0 (GPLv3)**; a [`LICENSE`](LICENSE) file is expected at the repository root, though its presence there is currently pending verification. By contributing, you agree your contributions are made available under the same license — see [CONTRIBUTING.md](.claude/CONTRIBUTING.md) § 8.
+AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)**; see the [`LICENSE`](LICENSE) file at the repository root. By contributing, you agree your contributions are made available under the same license — see [CONTRIBUTING.md](.claude/CONTRIBUTING.md) § 8.
 
 ---
 
