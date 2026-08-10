@@ -84,6 +84,15 @@ const bool kUseHardwareOverlay = false;
 // comment for why) and the native side swaps SsaParser for TtmlParser.
 const NativeSubtitleFormat kSubtitleFormat = NativeSubtitleFormat.ass;
 
+// Approximate on-screen height of the bottom controls (Seekbar +
+// TheaterTopBar-equivalent chrome for this screen). Previously just a
+// bare `110` baked into StyledSubtitleView's own Positioned bounds; now
+// named and passed down explicitly (see StyledSubtitleView's
+// reservedBottom) so the widget can be measured against the video's
+// true full height — required for Cue.line/Cue.position fractions to
+// resolve correctly — while still keeping cues clear of this zone.
+const double kSubtitleControlsReservedHeight = 110;
+
 class ExoTheaterScreen extends StatefulWidget {
   final Anime anime;
   final int episode;
@@ -402,25 +411,29 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
           // real timing, positioning, and per-run styling from Media3's
           // TtmlParser/SsaParser via NativeSubtitleParser — instead of
           // video_player's own plain-text-only ClosedCaption widget.
-          // Spans the full video area (not a fixed bottom strip) since a
-          // cue can position itself anywhere on screen, same as a real
-          // ASS/TTML "sign" override would. Wrapped in its own
-          // ValueListenableBuilder (VideoPlayerController IS a
-          // ValueNotifier<VideoPlayerValue>) so only this small subtree
-          // rebuilds as playback position changes, not the whole screen. ──
-          if (_videoInitialized &&
-              videoController != null &&
-              _styledCues.isNotEmpty)
+          // Spans the FULL video area, bottom:0 included — Cue.line/
+          // Cue.position are fractions of the true video height (same
+          // denominator ExoPlayer's own SubtitleView would use), so
+          // measuring against a pre-shrunk area shifts every cue upward
+          // from where the source file actually places it. Staying clear
+          // of the controls bar is reservedBottom's job now, applied per
+          // cue inside StyledSubtitleView, not this Positioned's own
+          // bounds. Wrapped in its own ValueListenableBuilder
+          // (VideoPlayerController IS a ValueNotifier<VideoPlayerValue>)
+          // so only this small subtree rebuilds as playback position
+          // changes, not the whole screen. ──
+          if (_videoInitialized && videoController != null && _styledCues.isNotEmpty)
             Positioned(
               left: 0,
               right: 0,
               top: 0,
-              bottom: 110,
+              bottom: 0,
               child: ValueListenableBuilder<VideoPlayerValue>(
                 valueListenable: videoController,
                 builder: (context, value, _) => StyledSubtitleView(
                   cues: _styledCues,
                   position: value.position,
+                  reservedBottom: kSubtitleControlsReservedHeight,
                 ),
               ),
             ),

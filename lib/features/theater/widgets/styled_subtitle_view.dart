@@ -8,14 +8,25 @@ import '../services/native_subtitle_parser.dart';
 /// is limited to. Sits in the same spot `ClosedCaption` used to (see
 /// ExoTheaterScreen), driven the same way: rebuilt on every position
 /// tick via a `ValueListenableBuilder`.
+///
+/// Must be given the video's true, full-height bounds (not pre-shrunk to
+/// dodge the controls bar) — `Cue.line`/`Cue.position` are fractions of
+/// the *real* video area, the same denominator ExoPlayer's own
+/// SubtitleView would use, so measuring against anything smaller shifts
+/// every cue upward from where the source file actually places it.
+/// [reservedBottom] is how this widget still avoids the controls: rather
+/// than shrinking its own bounds, it clamps individual cues away from
+/// that zone at layout time — see [_positionCue].
 class StyledSubtitleView extends StatelessWidget {
   final List<StyledCue> cues;
   final Duration position;
+  final double reservedBottom;
 
   const StyledSubtitleView({
     super.key,
     required this.cues,
     required this.position,
+    this.reservedBottom = 0,
   });
 
   @override
@@ -51,6 +62,11 @@ class StyledSubtitleView extends StatelessWidget {
   /// overrides. SubtitleParserPlugin.kt already sends both anchor
   /// values across the bridge, unused here, for exactly this follow-up
   /// if a release that leans on them shows up visibly off.
+  ///
+  /// Both branches keep cues clear of [reservedBottom] (the controls
+  /// bar) explicitly, now that this widget is measured against the
+  /// video's true full height rather than a pre-shrunk area — nothing
+  /// upstream reserves that space on this widget's behalf anymore.
   Widget _positionCue(StyledCue cue, double width, double height) {
     final hasPosition = cue.line != null || cue.position != null;
 
@@ -58,7 +74,7 @@ class StyledSubtitleView extends StatelessWidget {
       return Positioned(
         left: 0,
         right: 0,
-        bottom: 24,
+        bottom: 24 + reservedBottom,
         child: Align(
           alignment: _horizontalAlignmentFor(cue.textAlignment),
           child: _CueText(cue: cue),
@@ -66,12 +82,28 @@ class StyledSubtitleView extends StatelessWidget {
       );
     }
 
+    // Generous estimate for a cue box's own rendered height — enough
+    // headroom for several wrapped/explicit-newline lines at _CueText's
+    // current font size. Not a real per-cue measurement (that would mean
+    // laying the text out twice, once to measure and once to render, for
+    // every active cue on every frame) — just enough to keep a
+    // positioned sign's box from dipping into the reserved zone at all,
+    // which is the actual bug being fixed here, not pixel-perfect
+    // placement for unusually tall cues.
+    const estimatedCueBoxHeight = 100.0;
+    final maxAllowedTop =
+        (height - reservedBottom - estimatedCueBoxHeight).clamp(0.0, height);
+    final rawTop = (cue.line ?? 0.85).clamp(0.0, 1.0) * height;
+
     return Positioned(
-      top: (cue.line ?? 0.85).clamp(0.0, 1.0) * height,
+      top: rawTop.clamp(0.0, maxAllowedTop),
       left: 0,
       width: width,
       child: Align(
-        alignment: Alignment((cue.position ?? 0.5).clamp(0.0, 1.0) * 2 - 1, 0),
+        alignment: Alignment(
+          (cue.position ?? 0.5).clamp(0.0, 1.0) * 2 - 1,
+          0,
+        ),
         child: _CueText(cue: cue),
       ),
     );
@@ -91,9 +123,8 @@ class _CueText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      color: const Color(0x99000000),
       child: Text.rich(
         TextSpan(
           children: [
@@ -105,6 +136,24 @@ class _CueText extends StatelessWidget {
       ),
     );
   }
+
+  // Deliberately no background box (see class doc for why — this style's
+  // own BorderStyle:1 means "outline + shadow", not "opaque box"; that
+  // field just isn't something Media3 exposes to us per-run). A few
+  // small, near-zero-blur shadows stacked around each glyph fake a
+  // solid-looking outline instead — the standard way to get ASS-style
+  // readability in Flutter, since Text has no native stroke support
+  // outside a custom Paint. Always black: the real per-line outline
+  // color (\3c) isn't available to us any more than \c is, so this is a
+  // reasonable universal stand-in, not a faithful reproduction of
+  // whatever color a given line's outline actually specifies.
+  static const List<Shadow> _outline = [
+    Shadow(offset: Offset(-1, -1), color: Colors.black),
+    Shadow(offset: Offset(1, -1), color: Colors.black),
+    Shadow(offset: Offset(-1, 1), color: Colors.black),
+    Shadow(offset: Offset(1, 1), color: Colors.black),
+    Shadow(offset: Offset(0, 0), color: Colors.black, blurRadius: 3),
+  ];
 
   TextStyle _styleFor(StyledTextRun run) {
     final decorations = <TextDecoration>[
@@ -120,6 +169,7 @@ class _CueText extends StatelessWidget {
           ? TextDecoration.none
           : TextDecoration.combine(decorations),
       fontSize: 18,
+      shadows: _outline,
     );
   }
 
