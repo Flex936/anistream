@@ -24,28 +24,35 @@ import 'torrent_tile.dart';
 /// a Stack sibling painted after (on top of) the backdrop, so a tap on
 /// the card itself is consumed by the card's own opaque decoration first
 /// and never reaches the backdrop's dismiss handler underneath.
+///
+/// Selecting a torrent pops this route with that [Torrent] as the result
+/// — the modal closes itself rather than exposing a separate
+/// onSelectTorrent callback for the caller to act on and then pop
+/// manually. [show] returns null if the modal is dismissed (backdrop tap,
+/// close button, or system back) without a selection. Callers must await
+/// [show] before pushing any new route on the same Navigator: since this
+/// is an animated ModalRoute, popping it doesn't remove it from the
+/// Overlay synchronously, and pushing a new route before that exit
+/// finishes races the two routes' Overlay entries against each other.
 class TorrentSearchModal extends StatelessWidget {
   final int episodeNumber;
   final Future<List<Torrent>> torrentsFuture;
-  final void Function(Torrent torrent) onSelectTorrent;
   final bool uiPerformanceMode;
 
   const TorrentSearchModal({
     super.key,
     required this.episodeNumber,
     required this.torrentsFuture,
-    required this.onSelectTorrent,
     this.uiPerformanceMode = false,
   });
 
-  static Future<void> show({
+  static Future<Torrent?> show({
     required BuildContext context,
     required int episodeNumber,
     required Future<List<Torrent>> torrentsFuture,
-    required void Function(Torrent torrent) onSelectTorrent,
     bool uiPerformanceMode = false,
   }) {
-    return showGeneralDialog<void>(
+    return showGeneralDialog<Torrent?>(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Episode $episodeNumber sources',
@@ -69,7 +76,6 @@ class TorrentSearchModal extends StatelessWidget {
       pageBuilder: (context, _, _) => TorrentSearchModal(
         episodeNumber: episodeNumber,
         torrentsFuture: torrentsFuture,
-        onSelectTorrent: onSelectTorrent,
         uiPerformanceMode: uiPerformanceMode,
       ),
     );
@@ -161,7 +167,8 @@ class TorrentSearchModal extends StatelessWidget {
                           return _ResultsList(
                             torrents: torrents,
                             uiPerformanceMode: uiPerformanceMode,
-                            onSelectTorrent: onSelectTorrent,
+                            onSelectTorrent: (torrent) =>
+                                Navigator.of(context).pop(torrent),
                           );
                         },
                       ),

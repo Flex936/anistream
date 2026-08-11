@@ -76,7 +76,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     ).settings.autoPlayEnabled;
 
     if (!autoPlayEnabled) {
-      _openTorrentModal(ep);
+      unawaited(_openTorrentModal(ep));
       return;
     }
 
@@ -96,10 +96,10 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (torrents.isNotEmpty) {
         await _streamTorrent(ep, torrents.first);
       } else if (mounted) {
-        _openTorrentModal(ep);
+        unawaited(_openTorrentModal(ep));
       }
     } catch (_) {
-      if (mounted) _openTorrentModal(ep);
+      if (mounted) unawaited(_openTorrentModal(ep));
     } finally {
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -119,33 +119,37 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   /// already settled by the time this is called (e.g. autoplay's
   /// fallback path), so the modal never triggers a second network
   /// request for a search that already ran.
-  void _openTorrentModal(int ep) {
+  ///
+  /// Awaits the modal's own pop result rather than handing it a callback
+  /// that pops and immediately pushes TheaterScreen: [TorrentSearchModal]
+  /// is an animated route, so popping it doesn't remove it from the
+  /// Overlay synchronously. Pushing TheaterScreen in the same call stack
+  /// as that pop races the two routes' Overlay entries against each
+  /// other. Awaiting [TorrentSearchModal.show] defers the push to a later
+  /// microtask, after the modal's own exit has actually resolved.
+  Future<void> _openTorrentModal(int ep) async {
     final bool uiPerformanceMode = SettingsScope.of(
       context,
       listen: false,
     ).settings.uiPerformanceMode;
 
-    unawaited(
-      TorrentSearchModal.show(
-        context: context,
-        episodeNumber: ep,
-        torrentsFuture: _futureFor(ep),
-        uiPerformanceMode: uiPerformanceMode,
-        onSelectTorrent: (torrent) {
-          // Closes the modal itself — see the note above _streamTorrent
-          // for why that responsibility lives here and not there.
-          Navigator.of(context).pop();
-          unawaited(_streamTorrent(ep, torrent));
-        },
-      ),
+    final torrent = await TorrentSearchModal.show(
+      context: context,
+      episodeNumber: ep,
+      torrentsFuture: _futureFor(ep),
+      uiPerformanceMode: uiPerformanceMode,
     );
+
+    if (torrent != null && mounted) {
+      unawaited(_streamTorrent(ep, torrent));
+    }
   }
 
   /// Pushes TheaterScreen and refreshes AniList progress once the whole
   /// viewing session ends. Deliberately does NOT pop anything itself —
-  /// it's called both from [_openTorrentModal]'s onSelectTorrent (which
-  /// pops the modal before calling this) AND from [_autoPlayEpisode]'s
-  /// direct success path (where no modal was ever opened).
+  /// it's called both from [_openTorrentModal] (once the modal's own pop
+  /// has already resolved) AND from [_autoPlayEpisode]'s direct success
+  /// path (where no modal was ever opened).
   ///
   /// Loops rather than a single push/pop: TheaterScreen normally pops
   /// with `null` (a real exit), but pops with a [TheaterRestartRequest]
