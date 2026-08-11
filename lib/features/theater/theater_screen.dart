@@ -290,17 +290,35 @@ class _TheaterScreenState extends State<TheaterScreen> {
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
       // Listener callbacks (added via addListener) are synchronous —
-      // Player.open/.play and the .then() chain below all return Futures
+      // Player.open and the .then() chains below all return Futures
       // that can't be awaited here, so each fire-and-forget is wrapped
       // explicitly instead of silently dropped (unawaited_futures).
       unawaited(_player.open(Media(_torrentController.streamUrl!)));
 
       final resumePosition = widget.resumePosition;
       if (resumePosition != null) {
-        // Freeze-recovery restart — lands a few seconds before wherever
-        // the prior TheaterScreen instance's position was when the user
-        // requested the restart, rather than starting over from 0:00.
-        unawaited(_player.seek(resumePosition));
+        // Player.open()'s Future completes once mpv accepts the open
+        // command, not once the file has actually finished loading — a
+        // seek issued immediately after races the load and gets
+        // silently dropped/overridden back to 0:00. Waiting for a
+        // genuine duration (the same signal the chapter-load below
+        // already relies on) confirms the file is actually ready to
+        // accept a seek before issuing one. play() is deliberately
+        // deferred until after the seek lands too, so a freeze-recovery
+        // restart jumps straight to the resume position instead of
+        // briefly showing frame 0 first — this only affects the
+        // restart path; the normal first-time-watching path below still
+        // plays immediately, since it never needs to seek at all.
+        unawaited(
+          _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
+            _,
+          ) async {
+            await _player.seek(resumePosition);
+            await _player.play();
+          }),
+        );
+      } else {
+        unawaited(_player.play());
       }
 
       unawaited(
@@ -324,8 +342,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
           }
         }),
       );
-
-      unawaited(_player.play());
     }
   }
 
