@@ -19,7 +19,6 @@ import '../../shared/widgets/toast.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
 import 'services/playback_diagnostics.dart';
-import 'services/playback_freeze_workaround_controller.dart';
 import 'services/player_configurator.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
@@ -30,17 +29,49 @@ import 'widgets/theater_controls.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_settings.dart';
 
+/// Returned by [TheaterScreen] when the user taps its freeze-recovery
+/// restart button (see [_TheaterScreenState._handleRestartRequested]).
+/// Carries the still-live, still-buffered streaming session across to
+/// whatever [TheaterScreen] instance replaces this one, so a restart
+/// recovers a frozen frame near-instantly instead of re-downloading the
+/// torrent from scratch. A normal exit pops with `null` instead — see
+/// [_TheaterScreenState._exitTheater].
+class TheaterRestartRequest {
+  final BaseStreamingController resumeController;
+  final Duration resumePosition;
+
+  const TheaterRestartRequest({
+    required this.resumeController,
+    required this.resumePosition,
+  });
+}
+
 class TheaterScreen extends StatefulWidget {
   final Anime anime;
   final int episode;
   final Torrent torrent;
+
+  /// Non-null only when this screen is replacing a prior instance after
+  /// a freeze-recovery restart — the already-buffered controller to
+  /// resume from instead of starting a fresh torrent download. Always
+  /// paired with [resumePosition].
+  final BaseStreamingController? resumeController;
+
+  /// Paired with [resumeController] — where to seek to once the resumed
+  /// stream reopens. Always null on a normal (non-restart) entry.
+  final Duration? resumePosition;
 
   const TheaterScreen({
     super.key,
     required this.anime,
     required this.episode,
     required this.torrent,
-  });
+    this.resumeController,
+    this.resumePosition,
+  }) : assert(
+         (resumeController == null) == (resumePosition == null),
+         'resumeController and resumePosition must both be null or both be provided',
+       );
 
   @override
   State<TheaterScreen> createState() => _TheaterScreenState();
@@ -60,13 +91,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // behavior.
   late final PlaybackDiagnostics _playbackDiagnostics;
 
-  /// Opt-in mitigation for the same confirmed Linux/NVIDIA/Wayland freeze
-  /// bug — see PlaybackFreezeWorkaroundController's own doc comment for
-  /// the full diagnostic trail. Unlike PlaybackDiagnostics above (purely
-  /// observational), this one actually issues a same-position seek on
-  /// resume when the user has opted in and the just-ended pause was long
-  /// enough.
-  late final PlaybackFreezeWorkaroundController _playbackFreezeWorkaround;
+  /// A same-position pause before a manual restart, below which a
+  /// restart wouldn't meaningfully rewind anything.
+  static const Duration _kFreezeRecoveryRewind = Duration(seconds: 5);
 
   bool _videoInitialized = false;
   bool _isSettingsOpen = false;
@@ -84,10 +111,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // AutoSkipController.
   bool _autoSkip = false;
 
-  // Nudge-seek-on-resume setting; the state machine itself lives in
-  // PlaybackFreezeWorkaroundController. Defaults false — see
-  // AppSettings.nudgeSeekOnResume's doc comment for why this stays opt-in.
-  bool _nudgeSeekOnResume = false;
+  // Gates the freeze-recovery restart button in TheaterTopBar. Defaults
+  // false — see AppSettings.showFreezeRecoveryButton's doc comment for
+  // why this stays a manual, opt-in action rather than an automatic one.
+  bool _showFreezeRecoveryButton = false;
 
   // Performance settings.
   bool _uiPerformanceMode = false;
@@ -141,11 +168,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
       },
     );
 
-    _playbackFreezeWorkaround = PlaybackFreezeWorkaroundController(
-      player: _player,
-      isEnabled: () => _nudgeSeekOnResume,
-    );
-
     _tracker = AnilistTrackerService(
       onSuccess: () {
         if (mounted) {
@@ -180,19 +202,24 @@ class _TheaterScreenState extends State<TheaterScreen> {
       _uiPerformanceMode = s.uiPerformanceMode;
       _videoFilterQuality = s.videoFilterQuality;
       _autoSkip = s.autoSkip;
-      _nudgeSeekOnResume = s.nudgeSeekOnResume;
+      _showFreezeRecoveryButton = s.showFreezeRecoveryButton;
     });
 
-    final BaseStreamingController newController;
-    if (s.serverMode && s.serverUrl.isNotEmpty) {
-      newController = RemoteStreamingController(serverUrl: s.serverUrl);
-    } else {
-      newController = StreamingController();
-    }
+    final bool isResuming = widget.resumeController != null;
+
+    final BaseStreamingController newController =
+        widget.resumeController ??
+        (s.serverMode && s.serverUrl.isNotEmpty
+            ? RemoteStreamingController(serverUrl: s.serverUrl)
+            : StreamingController());
     newController.addListener(_onTorrentStateChanged);
 
     if (!mounted) {
-      newController.dispose();
+      // Only disposes a controller this method constructed itself — a
+      // resumed controller is a still-live session handed off by a
+      // prior TheaterScreen instance, not this screen's to discard on a
+      // mount-race edge case.
+      if (!isResuming) newController.dispose();
       return;
     }
 
@@ -220,18 +247,28 @@ class _TheaterScreenState extends State<TheaterScreen> {
         await SharedPreferencesAsync().getDouble('theater_volume') ?? 100.0;
     await _player.setVolume(savedVolume);
 
-    // Starts streaming. Deliberately not awaited — StreamingController/
-    // RemoteStreamingController report readiness asynchronously via
-    // notifyListeners as buffering progresses, not by this returned
-    // Future completing. Awaiting it would serialize AniList tracker
-    // init (below) behind it for no benefit, so the fire-and-forget
-    // intent is made explicit instead.
-    unawaited(
-      _torrentController.initialize(
-        widget.torrent.magnetLink,
-        episodeNumber: widget.episode,
-      ),
-    );
+    if (isResuming) {
+      // The controller is already buffered and ready — its readiness
+      // notification already fired on the TheaterScreen instance this
+      // one is replacing, so a freshly attached listener here won't
+      // replay it. Readiness is checked directly instead, running the
+      // same open/seek/play bootstrap _onTorrentStateChanged runs for a
+      // first-time stream.
+      _onTorrentStateChanged();
+    } else {
+      // Starts streaming. Deliberately not awaited — StreamingController/
+      // RemoteStreamingController report readiness asynchronously via
+      // notifyListeners as buffering progresses, not by this returned
+      // Future completing. Awaiting it would serialize AniList tracker
+      // init (below) behind it for no benefit, so the fire-and-forget
+      // intent is made explicit instead.
+      unawaited(
+        _torrentController.initialize(
+          widget.torrent.magnetLink,
+          episodeNumber: widget.episode,
+        ),
+      );
+    }
 
     // AniList progress tracking.
     await _tracker.init(
@@ -257,6 +294,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
       // that can't be awaited here, so each fire-and-forget is wrapped
       // explicitly instead of silently dropped (unawaited_futures).
       unawaited(_player.open(Media(_torrentController.streamUrl!)));
+
+      final resumePosition = widget.resumePosition;
+      if (resumePosition != null) {
+        // Freeze-recovery restart — lands a few seconds before wherever
+        // the prior TheaterScreen instance's position was when the user
+        // requested the restart, rather than starting over from 0:00.
+        unawaited(_player.seek(resumePosition));
+      }
 
       unawaited(
         _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
@@ -570,12 +615,53 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
-    _playbackFreezeWorkaround.dispose();
     await _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
     await _disposePlaybackResources();
     if (mounted) Navigator.pop(context);
+  }
+
+  /// Handles a tap on TheaterTopBar's freeze-recovery button (only shown
+  /// when `showFreezeRecoveryButton` is on). Disposes only `_player` —
+  /// which is what actually frees the stuck native texture behind the
+  /// confirmed Linux/NVIDIA/Wayland freeze (see ARCHITECTURE.md § 7) —
+  /// and pops with a [TheaterRestartRequest] carrying the still-live,
+  /// still-buffered `_torrentController` and a resume position a few
+  /// seconds before wherever playback was. `_torrentController` is
+  /// deliberately NOT disposed here: `StreamingController.dispose()`
+  /// deletes downloaded torrent pieces and `RemoteStreamingController.
+  /// dispose()` tears down the remote session, either of which would
+  /// force a real re-download instead of a near-instant recovery. The
+  /// caller (`AnimeDetailsScreen._streamTorrent`) is expected to
+  /// immediately re-push a fresh TheaterScreen using both values.
+  Future<void> _handleRestartRequested() async {
+    if (_isClosing) return;
+    _isClosing = true;
+
+    final rawResumePosition = _player.state.position - _kFreezeRecoveryRewind;
+    final resumePosition = rawResumePosition.isNegative
+        ? Duration.zero
+        : rawResumePosition;
+
+    _autoSkipController.dispose();
+    _playbackDiagnostics.dispose();
+    await _posSub?.cancel();
+    _torrentController.removeListener(_onTorrentStateChanged);
+    _tracker.dispose();
+
+    await _player.stop();
+    await _player.dispose();
+
+    if (mounted) {
+      Navigator.pop(
+        context,
+        TheaterRestartRequest(
+          resumeController: _torrentController,
+          resumePosition: resumePosition,
+        ),
+      );
+    }
   }
 
   @override
@@ -601,7 +687,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _controlsVisibility.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
-    _playbackFreezeWorkaround.dispose();
     final posSub = _posSub;
     if (posSub != null) {
       unawaited(posSub.cancel());
@@ -662,14 +747,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
                   // controls region, and Up has nothing above it to
                   // find anyway. No tap-swallowing wrapper needed here:
                   // TheaterTopBar's own row paints nothing behind its
-                  // two children, so empty space around them already
-                  // falls through to the root's background-tap handler.
+                  // children, so empty space around them already falls
+                  // through to the root's background-tap handler.
                   child: DpadRegion(
                     memoryKey: 'theater.topbar',
                     child: TheaterTopBar(
                       episode: widget.episode,
                       uiPerformanceMode: _uiPerformanceMode,
+                      showFreezeRecoveryButton: _showFreezeRecoveryButton,
                       onBack: _exitTheater,
+                      onRestart: _handleRestartRequested,
                     ),
                   ),
                 ),
@@ -806,7 +893,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
       // and from Dpad.wrap()'s root-level onBack via the same
       // Navigator.maybePop() path — resolves to. One mechanism,
       // reachable from the system back gesture, a desktop Escape key,
-      // and the D-Pad remote's dedicated Back key alike.
+      // and the D-Pad remote's dedicated Back key alike. A direct
+      // Navigator.pop() call (as _exitTheater's own last line and
+      // _handleRestartRequested both do) bypasses this guard entirely —
+      // canPop only intercepts involuntary pop attempts, not explicit
+      // ones from this screen's own code.
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (didPop) return;

@@ -51,7 +51,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late String _androidHwDec;
   late bool _autoPlayEnabled;
   late bool _autoSkip;
-  late bool _nudgeSeekOnResume;
+  late bool _showFreezeRecoveryButton;
   late bool _uiPerformanceMode;
   late String _videoFilterQuality;
 
@@ -79,7 +79,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     _androidHwDec = s.androidHwDec;
     _autoPlayEnabled = s.autoPlayEnabled;
     _autoSkip = s.autoSkip;
-    _nudgeSeekOnResume = s.nudgeSeekOnResume;
+    _showFreezeRecoveryButton = s.showFreezeRecoveryButton;
     _uiPerformanceMode = s.uiPerformanceMode;
     _videoFilterQuality = s.videoFilterQuality;
     _serverMode = s.serverMode;
@@ -102,7 +102,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           androidHwDec: _androidHwDec,
           autoPlayEnabled: _autoPlayEnabled,
           autoSkip: _autoSkip,
-          nudgeSeekOnResume: _nudgeSeekOnResume,
+          showFreezeRecoveryButton: _showFreezeRecoveryButton,
           uiPerformanceMode: _uiPerformanceMode,
           videoFilterQuality: _videoFilterQuality,
           serverMode: _serverMode,
@@ -188,10 +188,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
         child: SizedBox(
           width: isMobile ? MediaQuery.sizeOf(context).width : 450,
           height: double.infinity,
-          // Routed through the same FrostedContainer every other glass
-          // surface in the app uses, so this panel drops its own blur
-          // when uiPerformanceMode is on, updating live as the switch
-          // below is flipped, before the change is saved.
           child: FrostedContainer(
             uiPerformanceMode: _uiPerformanceMode,
             sigma: materials.prominent,
@@ -287,12 +283,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
                               onChanged: (v) => setState(() => _autoSkip = v),
                             ),
                             SettingRowTile(
-                              title: 'Fix Frozen Video After Long Pauses',
+                              title: 'Show Freeze Recovery Button',
                               subtitle:
-                                  "Briefly reinitializes hardware decoding when resuming after an extended pause. Works around a rare frozen-frame bug seen on some Linux/NVIDIA setups — may cause a short stutter when it fires, so leave off unless you've experienced this.",
-                              value: _nudgeSeekOnResume,
+                                  "Adds a manual restart button to the player, for a rare frozen-frame bug seen on some Linux/NVIDIA setups. Tap it if the video ever freezes after resuming from a long pause — it reloads the player and resumes a few seconds before where you left off.",
+                              value: _showFreezeRecoveryButton,
                               onChanged: (v) =>
-                                  setState(() => _nudgeSeekOnResume = v),
+                                  setState(() => _showFreezeRecoveryButton = v),
                             ),
                             SettingRowTile(
                               title: 'UI Performance Mode',

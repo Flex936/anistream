@@ -65,11 +65,24 @@ class TheaterTopBar extends StatelessWidget {
   final VoidCallback onBack;
   final bool uiPerformanceMode;
 
+  /// Gated by `AppSettings.showFreezeRecoveryButton` — the restart
+  /// button next to [onBack] is only rendered when this is true, so
+  /// unaffected users never see it. See that setting's doc comment and
+  /// ARCHITECTURE.md § 7 for what it recovers from.
+  final bool showFreezeRecoveryButton;
+
+  /// Always provided regardless of [showFreezeRecoveryButton], matching
+  /// [onBack]'s always-required shape — only whether the button renders
+  /// is conditional, not whether the callback exists.
+  final VoidCallback onRestart;
+
   const TheaterTopBar({
     super.key,
     required this.episode,
     required this.onBack,
+    required this.onRestart,
     this.uiPerformanceMode = false,
+    this.showFreezeRecoveryButton = false,
   });
 
   @override
@@ -92,6 +105,15 @@ class TheaterTopBar extends StatelessWidget {
             shadows: [Shadow(blurRadius: 8)],
           ),
         ),
+        if (showFreezeRecoveryButton) ...[
+          const SizedBox(width: 16),
+          FrostedIconButton(
+            icon: Icons.refresh_rounded,
+            onPressed: onRestart,
+            uiPerformanceMode: uiPerformanceMode,
+            tooltip: 'Restart Player',
+          ),
+        ],
       ],
     );
   }

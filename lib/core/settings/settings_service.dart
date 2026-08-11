@@ -7,15 +7,17 @@ class AppSettings {
   final bool autoPlayEnabled;
   final bool autoSkip;
 
-  /// Opt-in workaround for a confirmed Linux/NVIDIA/Wayland video-freeze
-  /// bug in media_kit_video's texture delivery after a long pause — issues
-  /// a same-position seek on resume to force mpv to flush and re-present.
+  /// Gates a manual "restart player" button shown in the theater top bar
+  /// — a recovery action for a confirmed Linux/NVIDIA/Wayland video-freeze
+  /// bug in media_kit_video's texture delivery after a long pause, where
+  /// full player recreation is the only recovery (see ARCHITECTURE.md
+  /// § 7 for the diagnostic trail, including two automatic mitigations
+  /// that were tried and confirmed ineffective before landing here).
   /// Defaults to `false`: the bug is confirmed on that one platform
-  /// combination only, and any pause-duration gate short enough to catch
-  /// it is also short enough to fire on completely ordinary pauses for
-  /// everyone else. See [PlaybackFreezeWorkaroundController] for the full
-  /// diagnostic trail behind this setting.
-  final bool nudgeSeekOnResume;
+  /// combination only, and the button is a deliberate, user-triggered
+  /// action rather than anything automatic, since no mpv property
+  /// distinguishes a frozen frame from a healthy one.
+  final bool showFreezeRecoveryButton;
 
   // ── PERFORMANCE ──
   final bool uiPerformanceMode;
@@ -35,7 +37,7 @@ class AppSettings {
     this.androidHwDec = 'mediacodec-copy',
     this.autoPlayEnabled = false,
     this.autoSkip = false,
-    this.nudgeSeekOnResume = false,
+    this.showFreezeRecoveryButton = false,
     this.uiPerformanceMode = false,
     this.videoFilterQuality = 'low',
     this.serverMode = false,
@@ -77,7 +79,7 @@ class SettingsService {
   static const String kAndroidHwDec = 'android_hwdec';
   static const String kAutoPlayEnabled = 'autoplay_enabled';
   static const String kAutoSkip = 'auto_skip';
-  static const String kNudgeSeekOnResume = 'nudge_seek_on_resume';
+  static const String kShowFreezeRecoveryButton = 'show_freeze_recovery_button';
   static const String kUiPerformanceMode = 'ui_performance_mode';
   static const String kVideoFilterQuality = 'video_filter_quality';
   static const String kServerMode = 'server_mode';
@@ -106,7 +108,8 @@ class SettingsService {
       androidHwDec: await _prefs.getString(kAndroidHwDec) ?? 'mediacodec-copy',
       autoPlayEnabled: await _prefs.getBool(kAutoPlayEnabled) ?? false,
       autoSkip: await _prefs.getBool(kAutoSkip) ?? false,
-      nudgeSeekOnResume: await _prefs.getBool(kNudgeSeekOnResume) ?? false,
+      showFreezeRecoveryButton:
+          await _prefs.getBool(kShowFreezeRecoveryButton) ?? false,
       uiPerformanceMode: await _prefs.getBool(kUiPerformanceMode) ?? false,
       videoFilterQuality: await _prefs.getString(kVideoFilterQuality) ?? 'low',
       serverMode: await _prefs.getBool(kServerMode) ?? false,
@@ -125,7 +128,10 @@ class SettingsService {
       _prefs.setString(kAndroidHwDec, settings.androidHwDec),
       _prefs.setBool(kAutoPlayEnabled, settings.autoPlayEnabled),
       _prefs.setBool(kAutoSkip, settings.autoSkip),
-      _prefs.setBool(kNudgeSeekOnResume, settings.nudgeSeekOnResume),
+      _prefs.setBool(
+        kShowFreezeRecoveryButton,
+        settings.showFreezeRecoveryButton,
+      ),
       _prefs.setBool(kUiPerformanceMode, settings.uiPerformanceMode),
       _prefs.setString(kVideoFilterQuality, settings.videoFilterQuality),
       _prefs.setBool(kServerMode, settings.serverMode),
@@ -166,7 +172,7 @@ class SettingsService {
         migrateString(kAndroidHwDec),
         migrateBool(kAutoPlayEnabled),
         migrateBool(kAutoSkip),
-        migrateBool(kNudgeSeekOnResume),
+        migrateBool(kShowFreezeRecoveryButton),
         migrateBool(kUiPerformanceMode),
         migrateString(kVideoFilterQuality),
         migrateBool(kServerMode),
