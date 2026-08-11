@@ -10,6 +10,7 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
+import '../theater/services/streaming_controller_base.dart';
 import '../theater/theater_screen.dart';
 import 'widgets/anime_synopsis_section.dart';
 import 'widgets/episode_tile.dart';
@@ -140,21 +141,46 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     );
   }
 
-  /// Pushes TheaterScreen and refreshes AniList progress on return.
-  /// Deliberately does NOT pop anything itself — it's called both from
-  /// [_openTorrentModal]'s onSelectTorrent (which pops the modal before
-  /// calling this) AND from [_autoPlayEpisode]'s direct success path
-  /// (where no modal was ever opened). Popping unconditionally here
-  /// would incorrectly pop AnimeDetailsScreen itself off the stack on a
-  /// successful autoplay stream.
+  /// Pushes TheaterScreen and refreshes AniList progress once the whole
+  /// viewing session ends. Deliberately does NOT pop anything itself —
+  /// it's called both from [_openTorrentModal]'s onSelectTorrent (which
+  /// pops the modal before calling this) AND from [_autoPlayEpisode]'s
+  /// direct success path (where no modal was ever opened).
+  ///
+  /// Loops rather than a single push/pop: TheaterScreen normally pops
+  /// with `null` (a real exit), but pops with a [TheaterRestartRequest]
+  /// instead when the user taps its freeze-recovery restart button
+  /// (Settings → Playback Preferences → "Show Freeze Recovery Button").
+  /// Each such result immediately re-pushes a fresh TheaterScreen against
+  /// the same still-buffered [BaseStreamingController] carried in the
+  /// result, rather than starting the torrent over from scratch. The loop
+  /// — and therefore _fetchProgress() — only runs once TheaterScreen pops
+  /// with a genuine `null`, so a restart never triggers a premature
+  /// progress refresh mid-episode the way popping AnimeDetailsScreen's
+  /// own route early would.
   Future<void> _streamTorrent(int ep, Torrent torrent) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            TheaterScreen(anime: widget.anime, episode: ep, torrent: torrent),
-      ),
-    );
+    BaseStreamingController? resumeController;
+    Duration? resumePosition;
+
+    while (true) {
+      final result = await Navigator.push<TheaterRestartRequest?>(
+        context,
+        MaterialPageRoute<TheaterRestartRequest?>(
+          builder: (_) => TheaterScreen(
+            anime: widget.anime,
+            episode: ep,
+            torrent: torrent,
+            resumeController: resumeController,
+            resumePosition: resumePosition,
+          ),
+        ),
+      );
+
+      if (result == null) break;
+      resumeController = result.resumeController;
+      resumePosition = result.resumePosition;
+    }
+
     if (mounted) {
       await _fetchProgress();
     }
