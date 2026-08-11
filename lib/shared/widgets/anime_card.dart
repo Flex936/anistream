@@ -18,6 +18,14 @@ class AnimeCard extends StatelessWidget {
   final ValueChanged<Anime>? onSelect;
   final bool autofocus;
 
+  /// Fixed height of the text block below the poster — the title line
+  /// (cardTitleCompact) plus its surrounding spacing, plus the
+  /// episode-count line. Grid callers that size their own
+  /// `SliverGridDelegateWithMaxCrossAxisExtent` (SearchResultsScreen) need
+  /// this on top of the width-driven poster height to size the cell
+  /// without clipping the text.
+  static const double kTextBlockHeight = 48;
+
   const AnimeCard({
     super.key,
     required this.anime,
@@ -31,11 +39,16 @@ class AnimeCard extends StatelessWidget {
 
     final typography = context.appTypography;
     final radii = context.appRadii;
+    final cardSizes = context.appCardSizes;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
+        AspectRatio(
+          // Matches AniList's own coverImage art (2:3) — see
+          // AppCardSizes's doc comment for why this is the shared
+          // canonical ratio rather than a per-screen crop.
+          aspectRatio: cardSizes.posterAspectRatio,
           // The poster's hover overlay (_HoverOverlay) depends on focus
           // state, so there's no focus-independent subtree worth passing
           // through `child` — builder rebuilds the whole visual tree,

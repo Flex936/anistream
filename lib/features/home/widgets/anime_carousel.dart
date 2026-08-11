@@ -96,6 +96,14 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.sizeOf(context).width < 600;
     final hPad = isMobile ? 16.0 : 32.0;
+    final cardSizes = context.appCardSizes;
+    // Poster height is width-driven (AnimeCard's own AspectRatio), so the
+    // shelf's fixed height is derived from the same tokens rather than a
+    // separately-guessed literal, keeping this shelf's card height in
+    // sync with every other screen that reads AppCardSizes.
+    final shelfHeight =
+        cardSizes.shelfWidth / cardSizes.posterAspectRatio +
+        AnimeCard.kTextBlockHeight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,7 +121,7 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
           ),
         ),
         SizedBox(
-          height: 330,
+          height: shelfHeight,
           child: FutureBuilder<List<Anime>>(
             future: widget.future,
             builder: (context, snapshot) {
@@ -214,7 +222,7 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                               // `autofocusFirst && i == 0`'s ability to refire on the new top
                               // result (autofocus only fires once, at State creation).
                               key: ValueKey(items[i].id),
-                              width: 170,
+                              width: cardSizes.shelfWidth,
                               child: AnimeCard(
                                 anime: items[i],
                                 onSelect: widget.onSelectAnime,

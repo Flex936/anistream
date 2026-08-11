@@ -15,6 +15,12 @@ class CalendarCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool uiPerformanceMode;
 
+  /// Fixed height of the text block below the poster — the title line
+  /// plus its surrounding spacing, plus the airing-time-remaining line.
+  /// `ScheduledScreen`'s day shelves add this on top of the width-driven
+  /// poster height to size each shelf.
+  static const double kTextBlockHeight = 44;
+
   const CalendarCard({
     super.key,
     required this.anime,
@@ -34,6 +40,7 @@ class CalendarCard extends StatelessWidget {
 
     final typography = context.appTypography;
     final radii = context.appRadii;
+    final cardSizes = context.appCardSizes;
 
     // DpadFocusable drives the border/shadow, the episode-label overlay's
     // opacity, and the title color, all off a single state.focused value
@@ -48,7 +55,10 @@ class CalendarCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           AspectRatio(
-            aspectRatio: 2 / 3,
+            // Matches AniList's coverImage art (2:3) — the same
+            // canonical ratio every other poster card in the app shares
+            // via AppCardSizes.
+            aspectRatio: cardSizes.posterAspectRatio,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               decoration: BoxDecoration(
@@ -79,7 +89,7 @@ class CalendarCard extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // cacheWidth matched to this card's 160dp display
+                    // cacheWidth matched to this card's 170dp display
                     // width in ScheduledScreen's day shelves.
                     AppNetworkImage(
                       url: anime.coverImage?.large,
