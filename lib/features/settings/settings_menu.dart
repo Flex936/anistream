@@ -58,6 +58,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late bool _serverMode;
   late final TextEditingController _serverUrlController;
 
+  // Preserves the settings list's ScrollPosition (and any other state
+  // inside FrostedContainer's child) across a live UI Performance Mode
+  // toggle, which otherwise changes FrostedContainer's internal ancestor
+  // chain (bare / ClipRRect / ClipRRect+BackdropFilter) and would force a
+  // full subtree remount — see frosted_container.dart's own doc comment.
+  final GlobalKey _frostedBodyKey = GlobalKey();
+
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
@@ -190,6 +197,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           height: double.infinity,
           child: FrostedContainer(
             uiPerformanceMode: _uiPerformanceMode,
+            preservationKey: _frostedBodyKey,
             sigma: materials.prominent,
             borderRadius: isMobile
                 ? BorderRadius.zero
