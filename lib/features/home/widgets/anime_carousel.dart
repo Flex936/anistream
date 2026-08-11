@@ -208,6 +208,12 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                           separatorBuilder: (_, _) => const SizedBox(width: 20),
                           itemBuilder: (context, i) {
                             return SizedBox(
+                              // Stable per-anime identity across rebuilds — without this, an
+                              // onRetry reload that changes ranking reuses each AnimeCard's
+                              // Element by position, which silently defeats
+                              // `autofocusFirst && i == 0`'s ability to refire on the new top
+                              // result (autofocus only fires once, at State creation).
+                              key: ValueKey(items[i].id),
                               width: 170,
                               child: AnimeCard(
                                 anime: items[i],
