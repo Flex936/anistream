@@ -43,7 +43,7 @@ lib/
 │   ├── router/                     app_router.dart
 │   ├── settings/                   settings_service.dart, settings_scope.dart
 │   └── theme/                      app_palette.dart, app_radii.dart, app_typography.dart,
-│                                   app_materials.dart
+│                                   app_materials.dart, app_card_sizes.dart
 │
 ├── data/                       # External-API clients + their models. No UI.
 │   ├── anilist/
@@ -62,8 +62,7 @@ lib/
 │   ├── widgets/                    anime_card.dart, app_network_image.dart, frosted_container.dart,
 │   │                                hover_focus_builder.dart, mouse_back_forward_listener.dart,
 │   │                                toast.dart, glass_toast_content.dart
-│   └── utils/                       responsive_grid.dart, html_utils.dart, anime_status_style.dart,
-│                                    perf_animations.dart
+│   └── utils/                       html_utils.dart, anime_status_style.dart, perf_animations.dart
 │
 └── features/                   # One folder per screen/flow. Each owns its own widgets/services/controllers.
     ├── anime_details/                anime_details_screen.dart, widgets/{episode_tile, hero_banner,
@@ -190,4 +189,4 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
 - **Linux/Wayland/NVIDIA video freeze after an extended pause is a confirmed, unresolved playback bug.** After a long enough pause (reproduced at pause durations from ~15 minutes to over an hour), resuming continues audio and the seekbar/position normally, but the video frame stays permanently frozen for the rest of that session — no seeking or scrubbing ever unsticks it. Diagnostic investigation (`playback_diagnostics.dart`, still present and harmless — read-only mpv property polling around pause/resume/seek) confirmed the network layer, demuxer/cache, app focus/lifecycle, and mpv's own decode pipeline (`estimated-frame-number` climbs at the correct rate throughout) are all healthy; confirmed reproducing on Linux + Wayland + NVIDIA (`hwdec-current=nvdec`, `current-vo=libmpv`), not on Windows + Intel iGPU. Two app-level mitigations were built and tested on real affected hardware — a same-position seek on resume, then cycling the `hwdec` mpv property on resume — and both were confirmed ineffective; manually scrubbing the seekbar after the freeze reproduces doesn't restore the picture either, ruling out every seek-based approach outright. Source inspection of `media_kit_video`'s Linux plugin (`video_output.cc` in the `media-kit/media-kit` repo) explains why: it renders through an EGL context deliberately isolated from Flutter's own, created exactly once inside `video_output_new()`, with no public API to re-initialize it short of fully disposing the underlying `Player` — nothing reachable via an mpv property or command from this codebase. `AppSettings.nudgeSeekOnResume` / `PlaybackFreezeWorkaroundController` (Settings → Playback Preferences, default off) currently implement the now-confirmed-ineffective hwdec-cycle mitigation and are stale relative to this finding — slated for replacement by a manual, user-triggered in-place player restart instead of a timer-based heuristic (no mpv property distinguishes "frame frozen" from "frame fine," so no automatic trigger can ever be correct). See `ISSUE_BACKLOG.md`'s Platform & Playback section for the concrete plan. Also planned: filing this upstream against `media-kit/media-kit`, since the confirmed root cause lives entirely in the plugin's native Linux rendering path.
 
 ---
-*Last reviewed against the codebase: 2026-08-10. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-11. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
