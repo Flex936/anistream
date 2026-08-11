@@ -179,6 +179,13 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                     }
 
                     return _DayShelf(
+                      // Keyed by the stable weekday name so a real
+                      // midnight rollover mid-session (a TV box left
+                      // running) — which shifts which day sits at this
+                      // list position — replaces this Element instead of
+                      // updating it in place with a different day's data
+                      // under the old one's identity.
+                      key: ValueKey(dayName),
                       // The stable weekday name, not displayTitle —
                       // "Today"/"Tomorrow" describe the same underlying
                       // weekday differently depending on the current
@@ -217,6 +224,7 @@ class _DayShelf extends StatelessWidget {
   final bool uiPerformanceMode;
 
   const _DayShelf({
+    super.key,
     required this.regionKey,
     required this.title,
     required this.items,

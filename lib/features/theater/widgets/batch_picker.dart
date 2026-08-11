@@ -123,6 +123,14 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                       // reconciling ListTile's own internal focus/tap
                       // mechanics with DpadFocusable's.
                       return DpadFocusable(
+                        // Keyed by the file's own stable index — without
+                        // this, a batch-file list that changes shape
+                        // between polls (RemoteStreamingController._poll,
+                        // or the on-device path) reuses each row's
+                        // Element by position, silently defeating
+                        // `autofocus: i == 0` on whichever file ends up
+                        // suggested.
+                        key: ValueKey(f.index),
                         autofocus: i == 0,
                         onSelect: () => onSelect(f.index),
                         builder: (context, state, child) => Container(
