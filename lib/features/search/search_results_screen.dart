@@ -294,6 +294,10 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                       ),
                       itemCount: results.length,
                       itemBuilder: (_, i) => AnimeCard(
+                        // Keyed by anime id — a new search or filter apply reuses this
+                        // GridView's Elements by position otherwise, which silently
+                        // defeats `autofocus: i == 0` on the new top result.
+                        key: ValueKey(results[i].id),
                         anime: results[i],
                         onSelect: widget.onSelectAnime,
                         autofocus: i == 0,

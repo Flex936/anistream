@@ -39,7 +39,7 @@ If your change matches a trigger in [CLAUDE.md](CLAUDE.md) § 2's Living Documen
 ## 6. Pull Request Checklist
 
 - [ ] `flutter analyze` passes with no new warnings/errors
-- [ ] Widgets/state also follow [CODING_RULES.md](CODING_RULES.md) § 1's review-only conventions (collection rendering, `StatelessWidget`-by-default, `InheritedNotifier`-only state, offloaded parsing, network-request caching) — these aren't caught by `analyze`, so check them manually
+- [ ] Widgets/state also follow [CODING_RULES.md](CODING_RULES.md) § 1's review-only conventions (collection rendering, `StatelessWidget`-by-default, `InheritedNotifier`-only state, offloaded parsing, network-request caching, widget-key discipline on dynamic lists) — these aren't caught by `analyze`, so check them manually
 - [ ] New/changed comments describe current behavior only — no session/phase references, no "was X" history, no long-dash comment brackets ([CODING_RULES.md](CODING_RULES.md) § 2)
 - [ ] New/changed widgets follow [DESIGN.md](DESIGN.md) (colors, radii, blur, D-pad focus rules as applicable)
 - [ ] New files are placed per [ARCHITECTURE.md](ARCHITECTURE.md) § 2's folder rule

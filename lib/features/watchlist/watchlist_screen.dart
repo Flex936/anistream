@@ -358,8 +358,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               final hoverImage =
                   entry.media.bannerImage ?? entry.media.coverImage?.display;
 
+              // Keyed by anime id in both branches: PLANNING <-> COMPLETED stays
+              // on the same card type (WatchlistCard), so without a key the
+              // Focus/DpadFocusable Element is reused by position across a tab
+              // switch and `autofocus: i == 0` never refires. (CURRENT switches
+              // happen to self-correct, since the card type itself changes
+              // between HeroCard and WatchlistCard — but keying unconditionally
+              // is simpler than relying on that as the mechanism.)
               if (isWatching) {
                 return Focus(
+                  key: ValueKey(entry.media.id),
                   canRequestFocus: false,
                   skipTraversal: true,
                   onFocusChange: (f) {
@@ -375,6 +383,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 );
               } else {
                 return Focus(
+                  key: ValueKey(entry.media.id),
                   canRequestFocus: false,
                   skipTraversal: true,
                   onFocusChange: (f) {
@@ -406,7 +415,12 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 32),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, i) {
+          // Keyed by anime id — every tab (CURRENT/PLANNING/COMPLETED) uses
+          // the same ListCard type here, so any tab switch reuses this
+          // Padding/Focus/ListCard by position without a key, and
+          // `autofocus: i == 0` never refires on the new top item.
           return Padding(
+            key: ValueKey(activeEntries[i].media.id),
             padding: const EdgeInsets.only(bottom: 16),
             child: Focus(
               canRequestFocus: false,
