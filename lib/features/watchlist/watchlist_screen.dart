@@ -21,6 +21,11 @@ class WatchlistScreen extends StatefulWidget {
   State<WatchlistScreen> createState() => _WatchlistScreenState();
 }
 
+class _HoverTarget {
+  final String url;
+  const _HoverTarget(this.url);
+}
+
 class _WatchlistScreenState extends State<WatchlistScreen> {
   late final WatchlistController _controller;
   final ScrollController _scrollController = ScrollController();
@@ -30,8 +35,20 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   // A ValueNotifier rather than plain State, so hovering a single card in
   // a 36-item grid only rebuilds the small ValueListenableBuilder wrapping
   // the background image below, not the whole screen (including the
-  // CustomScrollView's slivers).
-  final ValueNotifier<String?> _hoveredBanner = ValueNotifier<String?>(null);
+  // CustomScrollView's slivers). Wrapped in `_HoverTarget` rather than a
+  // bare `String?` so every commit is a distinct object even when the URL
+  // repeats — `AnimatedSwitcher` keys its outgoing/incoming children by
+  // this value, and re-hovering the same card before the previous
+  // cross-fade finished exiting would otherwise hand it a duplicate key.
+  final ValueNotifier<_HoverTarget?> _hoveredBanner =
+      ValueNotifier<_HoverTarget?>(null);
+
+  // Coalesces rapid hover in/out churn (a fast mouse sweep across the
+  // grid) into a single backdrop commit once the pointer settles, rather
+  // than firing a new cross-fade per card boundary crossed.
+  Timer? _hoverDebounceTimer;
+  String? _pendingHoverUrl;
+  static const _hoverDebounceDelay = Duration(milliseconds: 120);
 
   @override
   void initState() {
@@ -45,6 +62,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
+    _hoverDebounceTimer?.cancel();
     _hoveredBanner.dispose();
     super.dispose();
   }
@@ -71,11 +89,24 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   }
 
   void _handleHover(String? bannerUrl, bool isHovered) {
+    // Same stale-leave guard as before (only clear if this card is the
+    // one currently claiming hover) — just tracked against the pending
+    // intent instead of the already-committed value, since commits now
+    // lag behind intent by `_hoverDebounceDelay`.
     if (isHovered && bannerUrl != null) {
-      _hoveredBanner.value = bannerUrl;
-    } else if (!isHovered && _hoveredBanner.value == bannerUrl) {
-      _hoveredBanner.value = null;
+      _pendingHoverUrl = bannerUrl;
+    } else if (!isHovered && _pendingHoverUrl == bannerUrl) {
+      _pendingHoverUrl = null;
+    } else {
+      return;
     }
+
+    _hoverDebounceTimer?.cancel();
+    final target = _pendingHoverUrl;
+    _hoverDebounceTimer = Timer(_hoverDebounceDelay, () {
+      if (!mounted) return;
+      _hoveredBanner.value = target == null ? null : _HoverTarget(target);
+    });
   }
 
   Widget _buildEmptyState(String activeStatus) {
@@ -113,7 +144,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             // ValueListenableBuilder so hovering a card only rebuilds
             // this small subtree, never the grid/list below it.
             Positioned.fill(
-              child: ValueListenableBuilder<String?>(
+              child: ValueListenableBuilder<_HoverTarget?>(
                 valueListenable: _hoveredBanner,
                 builder: (context, hoveredBanner, _) {
                   return AnimatedSwitcher(
@@ -130,13 +161,20 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                     switchOutCurve: Curves.easeIn,
                     child:
                         (hoveredBanner != null &&
-                            hoveredBanner.trim().isNotEmpty)
+                            hoveredBanner.url.trim().isNotEmpty)
                         ? Stack(
-                            key: ValueKey(hoveredBanner),
+                            // Keyed by object identity, not the URL
+                            // string — see `_hoveredBanner`'s doc
+                            // comment above. A fresh `_HoverTarget` is
+                            // constructed on every commit, so
+                            // AnimatedSwitcher can never be asked to
+                            // reconcile two siblings sharing a key, even
+                            // when re-hovering the same card back-to-back.
+                            key: ObjectKey(hoveredBanner),
                             fit: StackFit.expand,
                             children: [
                               Image.network(
-                                hoveredBanner,
+                                hoveredBanner.url,
                                 fit: BoxFit.cover,
                                 // A full-screen backdrop that's
                                 // immediately heavily blurred (or fully
