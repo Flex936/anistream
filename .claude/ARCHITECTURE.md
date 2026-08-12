@@ -61,7 +61,7 @@ lib/
 ├── shared/                     # Reused by 2+ features. No single feature owns these.
 │   ├── widgets/                    anime_card.dart, app_network_image.dart, frosted_container.dart,
 │   │                                hover_focus_builder.dart, mouse_back_forward_listener.dart,
-│   │                                toast.dart, glass_toast_content.dart
+│   │                                selection_modal.dart, toast.dart, glass_toast_content.dart
 │   └── utils/                       html_utils.dart, anime_status_style.dart, perf_animations.dart
 │
 └── features/                   # One folder per screen/flow. Each owns its own widgets/services/controllers.
