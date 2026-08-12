@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/utils/perf_animations.dart';
 import '../../../shared/widgets/frosted_container.dart';
+import '../../../shared/widgets/glass_toast_content.dart';
 import '../services/streaming_controller_base.dart';
 
 class FrostedIconButton extends StatelessWidget {
@@ -115,6 +117,69 @@ class TheaterTopBar extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Theater's own in-flow status toast — the AniList "Progress saved"
+/// confirmation and the auto-skip "Skipping Opening in 2s..." countdown
+/// both render through this widget. It's a plain sibling of
+/// [TheaterTopBar] inside `theater_screen.dart`'s own `Stack`, positioned
+/// with enough vertical clearance (that file's `_kTopBarClearance`) to
+/// sit below the top bar rather than over it, and wrapped in
+/// [IgnorePointer] since a transient status message is never itself an
+/// interactive target — between the two, the back button in
+/// [TheaterTopBar] stays reachable regardless of whether a notification
+/// is currently showing.
+///
+/// [message] is null when nothing is currently showing; [icon]/
+/// [iconColor] are only meaningful while it's non-null and fall back to a
+/// neutral value otherwise, since they're invisible at that point anyway
+/// (the same fallback approach `theater_controls.dart`'s skip-chip takes
+/// for its own label text).
+class TheaterTopNotification extends StatelessWidget {
+  final String? message;
+  final IconData? icon;
+  final Color? iconColor;
+  final bool uiPerformanceMode;
+
+  const TheaterTopNotification({
+    super.key,
+    required this.message,
+    required this.icon,
+    required this.iconColor,
+    this.uiPerformanceMode = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = message != null;
+
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: AnimatedSlide(
+          offset: visible ? Offset.zero : const Offset(0, -1.5),
+          duration: perfDuration(
+            uiPerformanceMode,
+            const Duration(milliseconds: 400),
+          ),
+          curve: Curves.easeOutCubic,
+          child: AnimatedOpacity(
+            opacity: visible ? 1.0 : 0.0,
+            duration: perfDuration(
+              uiPerformanceMode,
+              const Duration(milliseconds: 300),
+            ),
+            child: GlassToastContent(
+              message: message ?? '',
+              icon: icon ?? Icons.info_outline_rounded,
+              iconColor: iconColor ?? AppPalette.primary,
+              uiPerformanceMode: uiPerformanceMode,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -15,7 +15,6 @@ import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
-import '../../shared/widgets/toast.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
 import 'services/playback_diagnostics.dart';
@@ -43,6 +42,21 @@ class TheaterRestartRequest {
   const TheaterRestartRequest({
     required this.resumeController,
     required this.resumePosition,
+  });
+}
+
+/// Carries the message/icon/color for Theater's own in-flow status toast
+/// — see [TheaterTopNotification]'s doc comment
+/// (widgets/theater_player.dart) for how this is rendered.
+class _TopNotification {
+  final String message;
+  final IconData icon;
+  final Color iconColor;
+
+  const _TopNotification({
+    required this.message,
+    required this.icon,
+    required this.iconColor,
   });
 }
 
@@ -123,6 +137,21 @@ class _TheaterScreenState extends State<TheaterScreen> {
   List<Chapter> _chapters = [];
   StreamSubscription<Duration>? _posSub;
 
+  // Theater's own in-flow status toast (AniList sync confirmation,
+  // auto-skip arming) — see TheaterTopNotification's doc comment
+  // (widgets/theater_player.dart) for why this renders as plain State/
+  // Positioned content in this screen's own Stack rather than through an
+  // Overlay-based toast.
+  _TopNotification? _topNotification;
+  Timer? _topNotificationTimer;
+  static const Duration _kTopNotificationDuration = Duration(seconds: 4);
+
+  // Vertical clearance TheaterTopNotification reserves below
+  // TheaterTopBar's own top offset (see _buildControlsOverlay), so the
+  // notification never visually overlaps the back button regardless of
+  // whether the controls overlay is currently shown or hidden.
+  static const double _kTopBarClearance = 64.0;
+
   @override
   void initState() {
     super.initState();
@@ -156,29 +185,19 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _autoSkipController = AutoSkipController(
       player: _player,
       isEnabled: () => _autoSkip,
-      onSkipArmed: (skipLabel) {
-        if (mounted) {
-          AppleTopSnackBar.show(
-            context: context,
-            message: 'Auto-skipping $skipLabel in 2s...',
-            icon: Icons.fast_forward_rounded,
-            iconColor: AppPalette.primary,
-          );
-        }
-      },
+      onSkipArmed: (skipLabel) => _showTopNotification(
+        message: 'Auto-skipping $skipLabel in 2s...',
+        icon: Icons.fast_forward_rounded,
+        iconColor: AppPalette.primary,
+      ),
     );
 
     _tracker = AnilistTrackerService(
-      onSuccess: () {
-        if (mounted) {
-          AppleTopSnackBar.show(
-            context: context,
-            message: 'Progress saved to AniList',
-            icon: Icons.check_circle_rounded,
-            iconColor: AppPalette.statusReleasing,
-          );
-        }
-      },
+      onSuccess: () => _showTopNotification(
+        message: 'Progress saved to AniList',
+        icon: Icons.check_circle_rounded,
+        iconColor: AppPalette.statusReleasing,
+      ),
     );
 
     // _initPlayerAndStream is Future<void> — initState can't be async,
@@ -343,6 +362,27 @@ class _TheaterScreenState extends State<TheaterScreen> {
         }),
       );
     }
+  }
+
+  // Top notification.
+
+  void _showTopNotification({
+    required String message,
+    required IconData icon,
+    required Color iconColor,
+  }) {
+    if (!mounted) return;
+    _topNotificationTimer?.cancel();
+    setState(() {
+      _topNotification = _TopNotification(
+        message: message,
+        icon: icon,
+        iconColor: iconColor,
+      );
+    });
+    _topNotificationTimer = Timer(_kTopNotificationDuration, () {
+      if (mounted) setState(() => _topNotification = null);
+    });
   }
 
   // Platform.
@@ -631,6 +671,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
+    _topNotificationTimer?.cancel();
     await _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
@@ -662,6 +703,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _autoSkipController.dispose();
     _playbackDiagnostics.dispose();
+    _topNotificationTimer?.cancel();
     await _posSub?.cancel();
     _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
@@ -703,6 +745,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _controlsVisibility.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
+    _topNotificationTimer?.cancel();
     final posSub = _posSub;
     if (posSub != null) {
       unawaited(posSub.cancel());
@@ -824,11 +867,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Widget build(BuildContext context) {
     final dpadModeActive = InputModeScope.of(context).dpadModeActive;
 
-    // The video texture, the settings-menu popup, and the loading/
-    // batch-picker overlay switcher don't depend on controls visibility
-    // at all — they're computed once per real setState() (video-ready,
-    // settings toggle, chapters loaded, etc.). Passed as the `child` of
-    // the ValueListenableBuilder below so this subtree is reused, not
+    // The video texture, the top notification, the settings-menu popup,
+    // and the loading/batch-picker overlay switcher don't depend on
+    // controls visibility at all — they're computed once per real
+    // setState() (video-ready, settings toggle, chapters loaded, a new
+    // notification arriving, etc.). Passed as the `child` of the
+    // ValueListenableBuilder below so this subtree is reused, not
     // rebuilt, on every controls-visibility transition.
     final staticLayer = Stack(
       fit: StackFit.expand,
@@ -857,6 +901,23 @@ class _TheaterScreenState extends State<TheaterScreen> {
               controls: NoVideoControls as Widget Function(VideoState)?,
               filterQuality: _getFilterQuality(),
             ),
+          ),
+        ),
+
+        // Rendered regardless of controls-overlay visibility, so a
+        // sync/skip status message stays reachable even while the
+        // controls bar has auto-hidden. Positioned _kTopBarClearance
+        // below TheaterTopBar's own top offset above, so the two can
+        // never occupy the same space.
+        Positioned(
+          top: 24 + MediaQuery.paddingOf(context).top + _kTopBarClearance,
+          left: 16,
+          right: 16,
+          child: TheaterTopNotification(
+            message: _topNotification?.message,
+            icon: _topNotification?.icon,
+            iconColor: _topNotification?.iconColor,
+            uiPerformanceMode: _uiPerformanceMode,
           ),
         ),
 
@@ -929,13 +990,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
           // ValueListenableBuilder scoped to controls visibility only —
           // MouseRegion's cursor and the controls overlay's opacity/
           // hit-testing both depend on it, but `staticLayer` above
-          // (video, settings menu, loading/batch-picker overlay) does
-          // not, and is passed as `child` so it's reused rather than
-          // reconstructed on every show/hide transition. registerActivity()
-          // writes to a ValueNotifier, which only notifies listeners on a
-          // genuine true→false/false→true transition — so hovering with
-          // controls already visible costs a cancelled+rescheduled
-          // Timer, not a rebuild of anything visual.
+          // (video, top notification, settings menu, loading/batch-picker
+          // overlay) does not, and is passed as `child` so it's reused
+          // rather than reconstructed on every show/hide transition.
+          // registerActivity() writes to a ValueNotifier, which only
+          // notifies listeners on a genuine true→false/false→true
+          // transition — so hovering with controls already visible
+          // costs a cancelled+rescheduled Timer, not a rebuild of
+          // anything visual.
           child: ValueListenableBuilder<bool>(
             valueListenable: _controlsVisibility.visible,
             child: staticLayer,
