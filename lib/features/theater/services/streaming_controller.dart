@@ -45,6 +45,14 @@ class StreamingController extends BaseStreamingController {
   int? _requestedEpisode;
   bool _filesResolved = false;
 
+  // Guards the window between a batch-file selection being requested and
+  // its stream actually reaching `_isReadyToPlay` — `selectBatchFile`'s
+  // existing `_isReadyToPlay` check only closes the window *after* that
+  // point, not during it, so a stray repeat tap (D-pad double-fire, a
+  // second pointer event) in between could otherwise call `_beginStream`
+  // twice and leave the first call's local stream/subscription orphaned.
+  bool _isMountingStream = false;
+
   @override
   Future<void> initialize(String magnetUri, {int? episodeNumber}) async {
     AppLogger.i(
@@ -149,8 +157,9 @@ class StreamingController extends BaseStreamingController {
       'StreamingController',
       'Batch torrent detected — ${_batchFiles.length} files',
     );
-    if (_torrentId == null || _isReadyToPlay) return;
+    if (_torrentId == null || _isReadyToPlay || _isMountingStream) return;
 
+    _isMountingStream = true;
     _needsManualSelection = false;
     _statusText = 'Initializing selected file…';
     notifyListeners();
@@ -158,6 +167,13 @@ class StreamingController extends BaseStreamingController {
   }
 
   void _beginStream(LibtorrentFlutter engine, {int? fileIndex}) {
+    // Tears down any previous subscription before mounting a new one —
+    // defensive even though `_isMountingStream`/`_isReadyToPlay` above
+    // already keep `selectBatchFile` from re-entering this method while
+    // one mount is in flight, since `_beginStream` also has the
+    // auto-resolved single-file call path in `_resolveFilesAndStartStream`.
+    unawaited(_streamSub?.cancel() ?? Future<void>.value());
+
     try {
       final streamInfo = fileIndex == null
           ? engine.startStream(_torrentId!)
@@ -189,13 +205,14 @@ class StreamingController extends BaseStreamingController {
 
           if (pct >= _kPreBufferThreshold) {
             _isReadyToPlay = true;
+            _isMountingStream = false;
             _statusText = 'Starting playback engine...';
             notifyListeners();
           }
         } catch (_) {
           // Stream entry not yet registered — silently wait.
         }
-      });
+      }, onError: (Object e) => _handleError('Stream engine error: $e'));
     } catch (e) {
       _handleError('Failed to mount stream: $e');
     }
@@ -215,6 +232,7 @@ class StreamingController extends BaseStreamingController {
 
   void _handleError(String error) {
     _hasError = true;
+    _isMountingStream = false;
     _statusText = error;
     notifyListeners();
     AppLogger.e('StreamingController', error);

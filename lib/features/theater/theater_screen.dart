@@ -198,6 +198,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
         icon: Icons.check_circle_rounded,
         iconColor: AppPalette.statusReleasing,
       ),
+      onFailure: (message) => _showTopNotification(
+        message: message,
+        icon: Icons.error_outline_rounded,
+        iconColor: AppPalette.statusCancelled,
+      ),
     );
 
     // _initPlayerAndStream is Future<void> — initState can't be async,
@@ -306,6 +311,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // Controller listener.
 
   void _onTorrentStateChanged() {
+    // Defensive guard alongside removing this listener as the first
+    // statement in _exitTheater/_handleRestartRequested below — a stray
+    // notifyListeners() landing in either method's own teardown sequence
+    // (a trailing FFI callback, a last remote-poll tick) should never be
+    // able to reopen or replay against a Player that's already being
+    // stopped and disposed.
+    if (_isClosing) return;
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
       // Listener callbacks (added via addListener) are synchronous —
@@ -651,6 +663,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _exitTheater() async {
     if (_isClosing) return;
     _isClosing = true;
+    // Removed before any `await` below so a stray notifyListeners() firing
+    // during this teardown sequence (a trailing FFI callback, a last
+    // remote-poll tick) can never re-enter _onTorrentStateChanged and
+    // reopen/replay against a Player that's about to be stopped and
+    // disposed.
+    _torrentController.removeListener(_onTorrentStateChanged);
 
     if (Platform.isAndroid || Platform.isIOS) {
       // Awaited here, matching _toggleFullscreen's pattern for the
@@ -673,7 +691,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _autoSkipController.dispose();
     _topNotificationTimer?.cancel();
     await _posSub?.cancel();
-    _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
     await _disposePlaybackResources();
     if (mounted) Navigator.pop(context);
@@ -695,6 +712,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _handleRestartRequested() async {
     if (_isClosing) return;
     _isClosing = true;
+    _torrentController.removeListener(_onTorrentStateChanged);
 
     final rawResumePosition = _player.state.position - _kFreezeRecoveryRewind;
     final resumePosition = rawResumePosition.isNegative
@@ -705,7 +723,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _playbackDiagnostics.dispose();
     _topNotificationTimer?.cancel();
     await _posSub?.cancel();
-    _torrentController.removeListener(_onTorrentStateChanged);
     _tracker.dispose();
 
     await _player.stop();
