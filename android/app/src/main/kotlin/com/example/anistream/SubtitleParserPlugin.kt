@@ -8,7 +8,7 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
-import android.util.Log
+import androidx.annotation.Nullable
 import androidx.media3.common.text.Cue
 import androidx.media3.extractor.text.CuesWithTiming
 import androidx.media3.extractor.text.SubtitleParser
@@ -16,6 +16,7 @@ import androidx.media3.extractor.text.ssa.SsaParser
 import androidx.media3.extractor.text.ttml.TtmlParser
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import android.util.Log
 
 /**
  * Bridges Media3's own subtitle decoders to Dart. TtmlParser/SsaParser
@@ -106,10 +107,38 @@ object SubtitleParserPlugin {
         "position" to unsetToNull(cue.position),
         "positionAnchor" to cue.positionAnchor, // same
         "textAlignment" to alignmentName(cue.textAlignment),
+        "textSize" to unsetToNull(cue.textSize),
+        "textSizeType" to textSizeTypeName(cue.textSize, cue.textSizeType),
     )
 
     private fun unsetToNull(value: Float): Double? =
         if (value == Cue.DIMEN_UNSET) null else value.toDouble()
+
+    /**
+     * Cue.textSizeType only means anything alongside an actual textSize
+     * — unlike line/position, the type constant has no distinct "unset"
+     * sentinel of its own, so this gates on the same DIMEN_UNSET check
+     * unsetToNull() already applies to textSize itself.
+     *
+     * Confirmed directly against Cue.java: TEXT_SIZE_TYPE_FRACTIONAL=0,
+     * TEXT_SIZE_TYPE_FRACTIONAL_IGNORE_PADDING=1, TEXT_SIZE_TYPE_ABSOLUTE=2.
+     * SsaParser.createCue() specifically emits the IGNORE_PADDING variant
+     * for a Style's Fontsize (confirmed by reading SsaParser.java) — both
+     * fractional variants are treated identically here since
+     * StyledSubtitleView has no separate padding concept to distinguish
+     * them by; it measures directly against the full video bounds either
+     * way, so both resolve to the same "fraction of the real video
+     * height" formula on the Dart side.
+     */
+    private fun textSizeTypeName(textSize: Float, type: Int): String? {
+        if (textSize == Cue.DIMEN_UNSET) return null
+        return when (type) {
+            Cue.TEXT_SIZE_TYPE_FRACTIONAL,
+            Cue.TEXT_SIZE_TYPE_FRACTIONAL_IGNORE_PADDING -> "fractional"
+            Cue.TEXT_SIZE_TYPE_ABSOLUTE -> "absolute"
+            else -> null
+        }
+    }
 
     private fun alignmentName(alignment: Layout.Alignment?): String? = when (alignment) {
         Layout.Alignment.ALIGN_NORMAL -> "start"
@@ -120,11 +149,19 @@ object SubtitleParserPlugin {
 
     /**
      * Slices [text] into non-overlapping runs, each with its own
-     * resolved style. TtmlParser/SsaParser attach real StyleSpan,
-     * UnderlineSpan, StrikethroughSpan, and Foreground/BackgroundColorSpan
-     * instances — confirmed via the ExoPlayer 2.14 release notes ("added
-     * support for bold, italic, underline, strikethrough, font size and
-     * color in SSA subtitles"). An unstyled Cue just comes back as one run.
+     * resolved per-run style. In practice, for SsaParser specifically,
+     * every span here comes from the cue's single named Style, applied
+     * uniformly across the whole cue (start=0 to end=length) — confirmed
+     * by reading SsaParser.java's createCue() directly. Inline override
+     * tags ({\b1}, {\c&H...&}, {\fs36}, etc.) are NOT read by SsaParser
+     * at all: SsaStyle.Overrides.parseFromDialogue() only recognizes
+     * \pos, \move, and \an — everything else inside a {...} block is
+     * matched and silently discarded by the same regex that strips the
+     * braces from the visible text. So a single SsaParser cue always
+     * produces exactly one run today; the boundary-based splitting below
+     * exists for TTML, whose per-node model can genuinely differ per
+     * run (confirmed via TtmlRenderUtil.java), and stays a harmless
+     * no-op against SsaParser's uniform whole-cue spans.
      */
     private fun extractRuns(text: CharSequence?): List<Map<String, Any?>> {
         if (text.isNullOrEmpty()) return emptyList()

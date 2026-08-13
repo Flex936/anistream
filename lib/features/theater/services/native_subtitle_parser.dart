@@ -47,6 +47,12 @@ class StyledTextRun {
 /// `alignmentName()`.
 enum CueTextAlignment { start, center, end }
 
+/// Mirrors Media3's `@Cue.TextSizeType` as sent by SubtitleParserPlugin's
+/// `textSizeTypeName()`. Only the two variants SsaParser can actually
+/// produce for us are represented here — see [StyledCue.fontSizeFraction]
+/// for why `absolute` is deliberately never treated as a usable size.
+enum CueTextSizeType { fractional, absolute }
+
 /// One subtitle cue with real timing, positioning, and per-run styling —
 /// what [NativeSubtitleParser] hands back from Media3's own TtmlParser/
 /// SsaParser. Deliberately NOT a video_player `Caption` — those only
@@ -67,6 +73,15 @@ class StyledCue {
 
   final CueTextAlignment? textAlignment;
 
+  /// Raw value from `Cue.textSize`, or null when Media3 resolved no
+  /// explicit size for this cue (`Cue.DIMEN_UNSET`). Meaningless without
+  /// [textSizeType] — read [fontSizeFraction] instead of this directly.
+  final double? textSize;
+
+  /// How [textSize] should be interpreted, or null alongside a null
+  /// [textSize]. See [fontSizeFraction].
+  final CueTextSizeType? textSizeType;
+
   const StyledCue({
     required this.start,
     required this.end,
@@ -74,6 +89,8 @@ class StyledCue {
     this.line,
     this.position,
     this.textAlignment,
+    this.textSize,
+    this.textSizeType,
   });
 
   factory StyledCue.fromMap(Map<Object?, Object?> map) {
@@ -86,13 +103,36 @@ class StyledCue {
       line: (map['line'] as num?)?.toDouble(),
       position: (map['position'] as num?)?.toDouble(),
       textAlignment: _alignmentFromName(map['textAlignment'] as String?),
+      textSize: (map['textSize'] as num?)?.toDouble(),
+      textSizeType: _textSizeTypeFromName(map['textSizeType'] as String?),
     );
   }
+
+  /// [textSize] as a 0.0-1.0 fraction of the video's height, or null if
+  /// there's nothing here worth trusting.
+  ///
+  /// Only [CueTextSizeType.fractional] is ever returned — ASS's own
+  /// Fontsize field is defined relative to the script's PlayResY, a
+  /// virtual reference resolution SsaParser has no way to reconcile
+  /// against a real device pixel value at parse time (parsing runs
+  /// against raw subtitle bytes alone, with no knowledge of the eventual
+  /// video/view size) — so a resolved `absolute` size has no reliable
+  /// meaning to multiply against anything on this side of the bridge.
+  /// Callers are better off falling back to their own default than
+  /// rendering a guess.
+  double? get fontSizeFraction =>
+      textSizeType == CueTextSizeType.fractional ? textSize : null;
 
   static CueTextAlignment? _alignmentFromName(String? name) => switch (name) {
     'start' => CueTextAlignment.start,
     'center' => CueTextAlignment.center,
     'end' => CueTextAlignment.end,
+    _ => null,
+  };
+
+  static CueTextSizeType? _textSizeTypeFromName(String? name) => switch (name) {
+    'fractional' => CueTextSizeType.fractional,
+    'absolute' => CueTextSizeType.absolute,
     _ => null,
   };
 }

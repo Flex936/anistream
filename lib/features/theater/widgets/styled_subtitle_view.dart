@@ -2,6 +2,26 @@ import 'package:flutter/material.dart';
 
 import '../services/native_subtitle_parser.dart';
 
+/// Fallback text size, as a fraction of the video's height, for a cue
+/// with no usable size info from Media3 — see [StyledCue.fontSizeFraction].
+/// Kept as a fraction rather than the flat px value this replaces, so
+/// subtitles stay roughly the same relative size across a phone window,
+/// a maximized desktop window, and a TV, instead of looking right only
+/// on whichever one the flat value happened to be tuned against. 0.045
+/// reproduces close to the old 18px constant at a typical phone-landscape
+/// video height (~400dp), while scaling up sensibly on a much taller TV
+/// display.
+const double _kDefaultFontSizeFraction = 0.045;
+
+/// Clamp bounds (logical px) for the resolved cue font size, regardless
+/// of whether it came from Media3 or [_kDefaultFontSizeFraction] — guards
+/// against an unusual release's Fontsize, or an unusual video aspect
+/// ratio, producing text that's unreadably small or large enough to
+/// meaningfully exceed the fixed cue-box height _positionCue's own
+/// estimatedCueBoxHeight assumes (see that constant's doc comment below).
+const double _kMinFontSize = 12.0;
+const double _kMaxFontSize = 48.0;
+
 /// Renders [StyledCue]s from [NativeSubtitleParser] — real positioning
 /// and per-run styling from Media3's own TtmlParser/SsaParser, not the
 /// single-fixed-style plain text video_player's `ClosedCaption` widget
@@ -17,6 +37,13 @@ import '../services/native_subtitle_parser.dart';
 /// [reservedBottom] is how this widget still avoids the controls: rather
 /// than shrinking its own bounds, it clamps individual cues away from
 /// that zone at layout time — see [_positionCue].
+///
+/// Font size is resolved per cue too, not just position — see
+/// [StyledCue.fontSizeFraction] and [_CueText]'s use of it. Still not
+/// per-run: an inline mid-line `\fs` override inside a single ASS cue
+/// isn't distinguished from the rest of that cue's text, only cue-level
+/// sizing (a Signs style rendering larger than Dialogue, the common
+/// case) is.
 class StyledSubtitleView extends StatelessWidget {
   final List<StyledCue> cues;
   final Duration position;
@@ -77,19 +104,22 @@ class StyledSubtitleView extends StatelessWidget {
         bottom: 24 + reservedBottom,
         child: Align(
           alignment: _horizontalAlignmentFor(cue.textAlignment),
-          child: _CueText(cue: cue),
+          child: _CueText(cue: cue, videoHeight: height),
         ),
       );
     }
 
     // Generous estimate for a cue box's own rendered height — enough
     // headroom for several wrapped/explicit-newline lines at _CueText's
-    // current font size. Not a real per-cue measurement (that would mean
+    // resolved font size. Not a real per-cue measurement (that would mean
     // laying the text out twice, once to measure and once to render, for
     // every active cue on every frame) — just enough to keep a
     // positioned sign's box from dipping into the reserved zone at all,
     // which is the actual bug being fixed here, not pixel-perfect
-    // placement for unusually tall cues.
+    // placement for unusually tall cues. A cue rendered at
+    // _kMaxFontSize and wrapped across several lines can still exceed
+    // this in principle — same known limitation as before automatic
+    // sizing, just worth re-flagging now that font size isn't fixed.
     const estimatedCueBoxHeight = 100.0;
     final maxAllowedTop =
         (height - reservedBottom - estimatedCueBoxHeight).clamp(0.0, height);
@@ -104,7 +134,7 @@ class StyledSubtitleView extends StatelessWidget {
           (cue.position ?? 0.5).clamp(0.0, 1.0) * 2 - 1,
           0,
         ),
-        child: _CueText(cue: cue),
+        child: _CueText(cue: cue, videoHeight: height),
       ),
     );
   }
@@ -119,17 +149,36 @@ class StyledSubtitleView extends StatelessWidget {
 
 class _CueText extends StatelessWidget {
   final StyledCue cue;
-  const _CueText({required this.cue});
+
+  /// The real video area's height, in the same logical-px space
+  /// [StyledSubtitleView]'s `LayoutBuilder` measures against — needed
+  /// here because [StyledCue.fontSizeFraction] is itself a fraction of
+  /// that same height, matching every other piece of Cue geometry this
+  /// pipeline already treats as video-relative rather than
+  /// screen-relative.
+  final double videoHeight;
+
+  const _CueText({required this.cue, required this.videoHeight});
+
+  /// Resolved once per cue, not per run — Media3 only gives us font
+  /// size at the cue level (see class doc) — and clamped so neither a
+  /// missing style nor an unusually large/small one in some release
+  /// produces unreadable or absurdly oversized text.
+  double get _resolvedFontSize {
+    final fraction = cue.fontSizeFraction ?? _kDefaultFontSizeFraction;
+    return (fraction * videoHeight).clamp(_kMinFontSize, _kMaxFontSize);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final fontSize = _resolvedFontSize;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       child: Text.rich(
         TextSpan(
           children: [
             for (final run in cue.runs)
-              TextSpan(text: run.text, style: _styleFor(run)),
+              TextSpan(text: run.text, style: _styleFor(run, fontSize)),
           ],
         ),
         textAlign: _textAlignFor(cue.textAlignment),
@@ -155,7 +204,7 @@ class _CueText extends StatelessWidget {
     Shadow(offset: Offset(0, 0), color: Colors.black, blurRadius: 3),
   ];
 
-  TextStyle _styleFor(StyledTextRun run) {
+  TextStyle _styleFor(StyledTextRun run, double fontSize) {
     final decorations = <TextDecoration>[
       if (run.underline) TextDecoration.underline,
       if (run.strikethrough) TextDecoration.lineThrough,
@@ -168,7 +217,7 @@ class _CueText extends StatelessWidget {
       decoration: decorations.isEmpty
           ? TextDecoration.none
           : TextDecoration.combine(decorations),
-      fontSize: 18,
+      fontSize: fontSize,
       shadows: _outline,
     );
   }
