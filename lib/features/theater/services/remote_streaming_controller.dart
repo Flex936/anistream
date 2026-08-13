@@ -43,6 +43,17 @@ class RemoteStreamingController extends BaseStreamingController {
   String? _sessionId;
   Timer? _pollTimer;
 
+  // Consecutive failed polls (a non-200 status, a timeout, or any other
+  // exception) before giving up and surfacing an error instead of
+  // polling forever. At the existing 500ms poll interval this is ~5
+  // seconds of continuous failure — enough to ride out a brief Wi-Fi
+  // drop or a momentary server hiccup without erroring out, but short
+  // enough that a genuinely dead server (process crashed, host rebooted)
+  // surfaces promptly instead of leaving the last-known status frozen on
+  // screen indefinitely.
+  static const int _kMaxConsecutiveFailures = 10;
+  int _consecutiveFailures = 0;
+
   RemoteStreamingController({required this.serverUrl}) : _http = http.Client();
 
   @override
@@ -163,7 +174,12 @@ class RemoteStreamingController extends BaseStreamingController {
         _setError('Session expired on server. Try restarting playback.');
         return;
       }
-      if (resp.statusCode != 200) return; // transient error, keep polling
+      if (resp.statusCode != 200) {
+        _registerPollFailure();
+        return;
+      }
+
+      _consecutiveFailures = 0;
 
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       final serverState = data['state'] as String? ?? 'error';
@@ -241,9 +257,27 @@ class RemoteStreamingController extends BaseStreamingController {
         notifyListeners();
       }
     } on TimeoutException {
-      // Network hiccup — silently retry on the next tick.
+      // Network hiccup — counted, but not immediately fatal; see
+      // _registerPollFailure.
+      _registerPollFailure();
     } catch (_) {
-      // Any other transient error — keep polling.
+      // Any other transient error — same treatment as a timeout.
+      _registerPollFailure();
+    }
+  }
+
+  /// Tracks a transient poll failure and gives up once
+  /// [_kMaxConsecutiveFailures] is reached in a row — see that constant's
+  /// doc comment for the reasoning behind the threshold. Reset to zero on
+  /// every successful poll in [_poll] above, so an isolated blip never
+  /// accumulates toward a cap it wouldn't otherwise be anywhere near.
+  void _registerPollFailure() {
+    _consecutiveFailures++;
+    if (_consecutiveFailures >= _kMaxConsecutiveFailures) {
+      _setError(
+        "Lost connection to the AniStream Server. Check it's still "
+        'running and reachable on your LAN, then try again.',
+      );
     }
   }
 
