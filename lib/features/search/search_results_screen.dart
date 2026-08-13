@@ -8,6 +8,7 @@ import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/widgets/anime_card.dart';
+import '../shell/widgets/navbar.dart';
 import 'widgets/search_filter_panel.dart';
 
 class SearchResultsScreen extends StatefulWidget {
@@ -154,7 +155,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 96),
+          // Matches AniStreamNavBar's real rendered height (nominal
+          // height plus the device's own top system-UI inset). 0 on
+          // Android TV/desktop.
+          SizedBox(
+            height:
+                AniStreamNavBar.barHeight + MediaQuery.paddingOf(context).top,
+          ),
 
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
@@ -280,7 +287,16 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                 return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(32, 8, 32, 48),
+                  // Bottom breathing room plus the device's own bottom
+                  // system-UI inset, so the final row isn't obscured by
+                  // a gesture bar / 3-button nav bar. 0 on Android
+                  // TV/desktop.
+                  padding: EdgeInsets.fromLTRB(
+                    32,
+                    8,
+                    32,
+                    48 + MediaQuery.paddingOf(context).bottom,
+                  ),
                   gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                     maxCrossAxisExtent: cardSizes.gridMaxWidth,
                     crossAxisSpacing: 20,

@@ -8,6 +8,7 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
+import '../shell/widgets/navbar.dart';
 import 'utils/schedule_grouping.dart';
 import 'widgets/calendar_card.dart';
 
@@ -133,10 +134,16 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
 
         return SingleChildScrollView(
           controller: _scrollController,
-          // Top 96px navbar clearance lives in the scroll view's own
-          // padding rather than as a sibling widget — same convention as
-          // home_screen.dart, per dpad's shelf-layout padding rule.
-          padding: const EdgeInsets.only(top: 96, bottom: 64),
+          // Top clearance matches AniStreamNavBar's real rendered height
+          // (nominal height plus the device's own top system-UI inset).
+          // Bottom padding adds the device's bottom inset on top of the
+          // fixed breathing-room constant so the final shelf isn't
+          // obscured by a gesture bar / 3-button nav bar. Both insets
+          // are 0 on Android TV and desktop.
+          padding: EdgeInsets.only(
+            top: AniStreamNavBar.barHeight + MediaQuery.paddingOf(context).top,
+            bottom: 64 + MediaQuery.paddingOf(context).bottom,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

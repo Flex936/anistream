@@ -42,8 +42,20 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
     this.onSubmitted,
   });
 
+  /// Nominal toolbar height, excluding the dynamic top system-UI inset.
+  /// Scaffold reserves `preferredSize.height + MediaQuery.paddingOf(
+  /// context).top` for the appBar slot regardless of what kind of
+  /// PreferredSizeWidget is passed in — build() below consumes that same
+  /// inset via SafeArea, so the toolbar row itself clears the status
+  /// bar/camera cutout instead of rendering underneath it. Screens that
+  /// reserve scroll padding to clear this bar (HomeScreen,
+  /// ScheduledScreen, WatchlistScreen, SearchResultsScreen,
+  /// HeroHeaderDelegate) add MediaQuery.paddingOf(context).top to this
+  /// constant rather than hardcoding a guessed total.
+  static const double barHeight = 72;
+
   @override
-  Size get preferredSize => const Size.fromHeight(72);
+  Size get preferredSize => const Size.fromHeight(barHeight);
 
   @override
   State<AniStreamNavBar> createState() => _AniStreamNavBarState();
@@ -144,6 +156,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
   @override
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.sizeOf(context).width < 600;
+    final topInset = MediaQuery.paddingOf(context).top;
 
     final content = AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
@@ -157,8 +170,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
     Widget buildFrame(double blurAmount) {
       final navContent = AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        height: widget.preferredSize.height,
-        padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
+        height: AniStreamNavBar.barHeight + topInset,
         decoration: BoxDecoration(
           color: widget.isScrolled
               ? AppPalette.base.withValues(
@@ -173,7 +185,19 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
             ),
           ),
         ),
-        child: content,
+        // SafeArea insets the toolbar row below the status bar/camera
+        // cutout instead of rendering underneath it. The
+        // AnimatedContainer above is grown by the same top inset —
+        // rather than left at a fixed barHeight — so the frosted
+        // background and bottom border still extend up behind the
+        // system UI instead of leaving a gap above the toolbar row.
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: isCompact ? 16 : 24),
+            child: content,
+          ),
+        ),
       );
 
       return FrostedContainer(

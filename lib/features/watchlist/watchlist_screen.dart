@@ -9,6 +9,7 @@ import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/utils/perf_animations.dart';
 import '../../shared/widgets/hover_focus_builder.dart';
+import '../shell/widgets/navbar.dart';
 import 'controllers/watchlist_controller.dart';
 import 'widgets/watchlist_cards.dart';
 
@@ -215,7 +216,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [
-                  const SliverToBoxAdapter(child: SizedBox(height: 96)),
+                  // Top clearance matches AniStreamNavBar's real
+                  // rendered height (nominal height plus the device's
+                  // own top system-UI inset). 0 on Android TV/desktop.
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height:
+                          AniStreamNavBar.barHeight +
+                          MediaQuery.paddingOf(context).top,
+                    ),
+                  ),
 
                   SliverToBoxAdapter(
                     child: Padding(
@@ -359,7 +369,15 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                       ),
                     ),
 
-                  const SliverToBoxAdapter(child: SizedBox(height: 48)),
+                  // Bottom breathing room plus the device's own bottom
+                  // system-UI inset, so the last row isn't obscured by a
+                  // gesture bar / 3-button nav bar. 0 on Android
+                  // TV/desktop.
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 48 + MediaQuery.paddingOf(context).bottom,
+                    ),
+                  ),
                 ],
               ),
             ),

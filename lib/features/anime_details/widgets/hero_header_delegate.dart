@@ -5,9 +5,18 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/utils/anime_status_style.dart';
+import '../../shell/widgets/navbar.dart';
 import 'hero_banner.dart';
 import 'hero_header_compact.dart';
 
+/// Static fallback used only as [HeroHeaderDelegate.minExtentValue]'s
+/// default parameter value (which must be a compile-time constant).
+/// `AnimeDetailsScreen` overrides this with a context-derived value —
+/// `AniStreamNavBar.barHeight + MediaQuery.paddingOf(context).top` — so
+/// the collapsed header always matches the navbar's real rendered
+/// height on the current device. `build()` below never reads this
+/// constant directly; it recomputes the same dynamic clearance locally
+/// from live `MediaQuery` data.
 const double kHeroHeaderNavBarClearance = 96;
 
 /// Precisely measured (not guessed) geometry for the full-state status
@@ -96,9 +105,15 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         ? (screenSize.width / 2) - 20
         : screenSize.width - 40;
 
+    // The navbar's real rendered footprint on this device — its nominal
+    // height plus whatever top system-UI inset (status bar, camera
+    // cutout) MediaQuery reports here. 0 on Android TV/desktop, so this
+    // collapses back to AniStreamNavBar.barHeight there.
+    final double navClearance =
+        AniStreamNavBar.barHeight + MediaQuery.paddingOf(context).top;
+
     const double compactBandHeight = 56;
-    const double compactBandCenterY =
-        kHeroHeaderNavBarClearance + compactBandHeight / 2;
+    final double compactBandCenterY = navClearance + compactBandHeight / 2;
 
     final Color statusColor =
         anime.status?.statusColor ?? AppPalette.statusDefault;
@@ -281,7 +296,7 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
 
           Positioned(
             left: 16,
-            top: kHeroHeaderNavBarClearance,
+            top: navClearance,
             height: compactBandHeight,
             child: Align(
               alignment: Alignment.centerLeft,

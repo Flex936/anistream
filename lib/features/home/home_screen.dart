@@ -4,6 +4,7 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
+import '../shell/widgets/navbar.dart';
 import 'widgets/anime_carousel.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -62,13 +63,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppPalette.base,
       body: SingleChildScrollView(
-        // Both the 96px navbar clearance and the 48px bottom breathing
-        // room live in the scroll view's own `padding` rather than as
-        // sibling widgets — dpad's shelf-layout convention treats
-        // scroll-into-view and scrollPadding as part of the scrollable's
-        // own content extent, so a focused card at either end can be
-        // scrolled flush against it instead of stopping just short.
-        padding: const EdgeInsets.only(top: 96, bottom: 48),
+        // Top clearance matches AniStreamNavBar's real rendered height
+        // (its nominal height plus the device's own top system-UI
+        // inset) so content never starts underneath the status bar or
+        // the navbar itself. Bottom padding adds the device's bottom
+        // inset on top of the fixed breathing-room constant so the last
+        // shelf isn't obscured by a gesture bar / 3-button nav bar.
+        // Both insets are 0 on Android TV and desktop, so this padding
+        // collapses back to the original fixed values there.
+        padding: EdgeInsets.only(
+          top: AniStreamNavBar.barHeight + MediaQuery.paddingOf(context).top,
+          bottom: 48 + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
