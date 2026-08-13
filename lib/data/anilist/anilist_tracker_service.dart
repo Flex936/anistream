@@ -7,7 +7,7 @@ import 'anilist_queries.dart';
 import 'anilist_query_service.dart';
 
 /// Watches playback position against the 90%-watched threshold and syncs
-/// progress to AniList once eligible — see API.md § 2 (Auto-tracking) for
+/// progress to AniList once eligible. See API.md § 2 (Auto-tracking) for
 /// the documented threshold/eligibility rules this class implements.
 class AnilistTrackerService {
   final AnilistQueryService _api = AnilistQueryService();
@@ -20,6 +20,11 @@ class AnilistTrackerService {
   bool _isEligible = false;
   bool _hasTracked = false;
   Timer? _delayTimer;
+
+  /// Upper bound on how long [flushPendingCommit] will wait for the
+  /// underlying request — see that method's doc comment for why this is
+  /// bounded at all.
+  static const Duration _kFlushTimeout = Duration(seconds: 3);
 
   final VoidCallback? onSuccess;
 
@@ -151,5 +156,26 @@ class AnilistTrackerService {
 
   void dispose() {
     _delayTimer?.cancel();
+  }
+
+  /// Immediately attempts a commit if one is currently armed
+  /// (`_delayTimer` active) but hasn't fired yet — call this before
+  /// [dispose] on any exit path, so backing out right after crossing the
+  /// 90% threshold doesn't silently drop that episode's sync the way
+  /// letting [dispose] cancel the timer outright would.
+  ///
+  /// Bounded to [_kFlushTimeout] rather than left to the request's normal
+  /// completion time: unlike a commit armed mid-playback (which can just
+  /// retry on the next qualifying position tick if it fails), there's no
+  /// "next tick" once the screen is closing, so this can't be allowed to
+  /// block an exit indefinitely on a slow or hung connection. The
+  /// underlying request isn't cancelled on timeout — Dart futures can't
+  /// be cancelled — it's left to complete in the background and still
+  /// calls [onSuccess]/[onFailure] if it resolves after this method has
+  /// already returned; this only stops waiting on it.
+  Future<void> flushPendingCommit() async {
+    if (_delayTimer == null || !_delayTimer!.isActive) return;
+    _delayTimer!.cancel();
+    await _commitToAnilist().timeout(_kFlushTimeout, onTimeout: () {});
   }
 }

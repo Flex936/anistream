@@ -691,6 +691,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _autoSkipController.dispose();
     _topNotificationTimer?.cancel();
     await _posSub?.cancel();
+    // Fires an armed-but-not-yet-committed AniList sync immediately
+    // instead of letting _tracker.dispose() below silently cancel it —
+    // see flushPendingCommit's doc comment.
+    await _tracker.flushPendingCommit();
     _tracker.dispose();
     await _disposePlaybackResources();
     if (mounted) Navigator.pop(context);
@@ -723,6 +727,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _playbackDiagnostics.dispose();
     _topNotificationTimer?.cancel();
     await _posSub?.cancel();
+    // The replacement TheaterScreen constructs a brand-new
+    // AnilistTrackerService that re-fetches status from scratch — an
+    // armed commit on this instance has to fire now or it's gone for
+    // good, not just delayed to a "next tick" the way it would be if
+    // this were an ordinary mid-playback timer.
+    await _tracker.flushPendingCommit();
     _tracker.dispose();
 
     await _player.stop();
@@ -768,6 +778,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
       unawaited(posSub.cancel());
     }
     _torrentController.removeListener(_onTorrentStateChanged);
+    // Fire-and-forget, matching this method's existing pattern for
+    // unavoidably-async cleanup — dispose() can't await. Idempotent if
+    // _exitTheater/_handleRestartRequested already flushed: their own
+    // call already cancelled _delayTimer, so this one just no-ops. Only
+    // meaningfully fires if this State is torn down through some path
+    // that bypasses both of those (e.g. an ancestor route popping this
+    // screen directly), which would otherwise drop an armed commit with
+    // no flush at all.
+    unawaited(_tracker.flushPendingCommit());
     _tracker.dispose();
 
     if (!_isClosing) {
