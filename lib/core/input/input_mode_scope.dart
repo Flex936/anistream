@@ -47,3 +47,24 @@ class _InputModeInherited extends InheritedNotifier<InputModeController> {
 
   InputModeController get controller => notifier!;
 }
+
+/// Convenience accessors for D-Pad/TV-mode-gated behavior. Autofocus and
+/// focus-ring visibility both need the same "is this actually a TV/D-Pad
+/// session" check (DESIGN.md § 4), so it's centralized here rather than
+/// re-reading InputModeScope.of(context) at every call site.
+extension DpadModeContext on BuildContext {
+  /// Read with `listen: false` — [InputModeController.dpadModeActive] is
+  /// a one-time platform check, sticky for the process lifetime (see
+  /// that class's own doc comment), so there's nothing to rebuild for
+  /// after the first frame and no reason to subscribe every consumer to
+  /// it.
+  bool get dpadModeActive =>
+      InputModeScope.of(this, listen: false).dpadModeActive;
+
+  /// Gates [condition] behind [dpadModeActive] — autofocus should never
+  /// silently steal focus on Desktop or Mobile, where there's no remote
+  /// driving screen-to-screen navigation. Route every `autofocus:` value
+  /// through this instead of passing a raw condition to `DpadFocusable`/
+  /// `Focus`/`FocusableActionDetector` directly.
+  bool dpadAutofocus(bool condition) => condition && dpadModeActive;
+}

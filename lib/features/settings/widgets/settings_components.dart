@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
+import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
 
 class SettingsSection extends StatelessWidget {
@@ -116,51 +117,55 @@ class SettingRowTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final typography = context.appTypography;
+    final dpadModeActive = context.dpadModeActive;
 
     return DpadFocusable(
-      autofocus: autofocus,
+      autofocus: autofocus && dpadModeActive,
       onSelect: () => onChanged(!value),
-      builder: (context, state, child) => AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: state.focused
-              ? AppPalette.white.withValues(alpha: 0.06)
-              : AppPalette.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 150),
-                    style: typography.compactHeading.copyWith(
-                      color: state.focused
-                          ? AppPalette.white
-                          : AppPalette.textMain,
+      builder: (context, state, child) {
+        final bool visuallyFocused = state.focused && dpadModeActive;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: visuallyFocused
+                ? AppPalette.white.withValues(alpha: 0.06)
+                : AppPalette.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 150),
+                      style: typography.compactHeading.copyWith(
+                        color: visuallyFocused
+                            ? AppPalette.white
+                            : AppPalette.textMain,
+                      ),
+                      child: Text(title),
                     ),
-                    child: Text(title),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: typography.tileSubtitle.copyWith(
-                      color: AppPalette.textMuted,
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: typography.tileSubtitle.copyWith(
+                        color: AppPalette.textMuted,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            ToggleSwitch(value: value),
-          ],
-        ),
-      ),
+              const SizedBox(width: 16),
+              ToggleSwitch(value: value),
+            ],
+          ),
+        );
+      },
       child: const SizedBox.shrink(),
     );
   }
@@ -180,33 +185,27 @@ class SettingsDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // excludeChildFocus: false — DropdownButton needs to keep handling
-    // its own taps/opens internally (it manages its own overlay menu),
-    // so it can't be fully subsumed by DpadFocusable's own onSelect
-    // model the way a plain icon button can. DpadFocusable here exists
-    // purely to make this reachable via D-Pad directional navigation and
-    // to drive the border/background from state.focused; the actual
-    // dropdown interaction stays with DropdownButton itself. The
-    // DropdownButton doesn't visually depend on state.focused, so it's
-    // passed through `child` rather than rebuilt inside `builder`.
     return DpadFocusable(
       excludeChildFocus: false,
-      builder: (context, state, child) => AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: state.focused
-              ? AppPalette.white.withValues(alpha: 0.1)
-              : AppPalette.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: state.focused
-                ? AppPalette.white.withValues(alpha: 0.2)
-                : AppPalette.white.withValues(alpha: 0.1),
+      builder: (context, state, child) {
+        final bool visuallyFocused = state.focused && context.dpadModeActive;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: visuallyFocused
+                ? AppPalette.white.withValues(alpha: 0.1)
+                : AppPalette.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: visuallyFocused
+                  ? AppPalette.white.withValues(alpha: 0.2)
+                  : AppPalette.white.withValues(alpha: 0.1),
+            ),
           ),
-        ),
-        child: child,
-      ),
+          child: child,
+        );
+      },
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
@@ -216,9 +215,6 @@ class SettingsDropdown extends StatelessWidget {
             color: AppPalette.textMuted,
           ),
           isExpanded: true,
-          // Distinct from compactHeading (14/w600) — a dropdown's own
-          // selected-value text is deliberately a step lighter than a
-          // section heading.
           style: const TextStyle(
             color: AppPalette.textMain,
             fontSize: 14,
@@ -398,21 +394,24 @@ class SettingsCloseButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return DpadFocusable(
       onSelect: onPressed,
-      builder: (context, state, child) => AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: state.focused
-              ? AppPalette.white.withValues(alpha: 0.1)
-              : AppPalette.transparent,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.close_rounded,
-          size: 22,
-          color: state.focused ? AppPalette.white : AppPalette.textMuted,
-        ),
-      ),
+      builder: (context, state, child) {
+        final bool visuallyFocused = state.focused && context.dpadModeActive;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: visuallyFocused
+                ? AppPalette.white.withValues(alpha: 0.1)
+                : AppPalette.transparent,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.close_rounded,
+            size: 22,
+            color: visuallyFocused ? AppPalette.white : AppPalette.textMuted,
+          ),
+        );
+      },
       child: const SizedBox.shrink(),
     );
   }

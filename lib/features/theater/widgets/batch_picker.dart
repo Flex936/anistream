@@ -1,6 +1,7 @@
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/selection_modal.dart';
 import '../services/streaming_controller.dart';
@@ -68,17 +69,14 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
           final isSuggested =
               requestedEpisode != null && f.guessedEpisode == requestedEpisode;
           final hasDistinctTitle = f.guessedEpisode != null;
+          final dpadModeActive = context.dpadModeActive;
 
-          // Built as a plain Container+Row instead of wrapping ListTile,
-          // same reasoning as theater_settings.dart's _Tile — avoids
-          // reconciling ListTile's own internal focus/tap mechanics with
-          // DpadFocusable's.
           return DpadFocusable(
-            autofocus: i == 0,
+            autofocus: i == 0 && dpadModeActive,
             onSelect: () => onSelect(f.index),
             builder: (context, state, child) => Container(
               decoration: BoxDecoration(
-                color: state.focused
+                color: (state.focused && dpadModeActive)
                     ? AppPalette.white.withValues(alpha: 0.1)
                     : AppPalette.transparent,
                 borderRadius: BorderRadius.circular(8),

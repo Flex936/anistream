@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
+import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 
@@ -215,7 +216,7 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
             const SizedBox(height: 12),
             Focus(
               focusNode: _statusFocusNode,
-              autofocus: true,
+              autofocus: context.dpadAutofocus(true),
               child: CupertinoSlidingSegmentedControl<String>(
                 backgroundColor: AppPalette.surface,
                 thumbColor: AppPalette.primary,

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/settings/settings_scope.dart';
@@ -29,17 +28,6 @@ class _AppShellState extends State<AppShell> {
   final _auth = AnilistAuthService();
   late final NavigationController _nav;
 
-  // Dedicated focus scope for the routed page content, kept separate from
-  // the nav bar's own ambient scope. Flutter autofocus only activates
-  // when nothing else in a widget's nearest scope is already focused —
-  // this boundary is what lets each page's own autofocus:true target
-  // (HomeScreen's first carousel card, AnimeDetailsScreen's up-next
-  // episode, etc.) win focus on every navigation, regardless of which
-  // nav bar control was pressed to get here.
-  final FocusScopeNode _bodyFocusScope = FocusScopeNode(
-    debugLabel: 'AppShellBody',
-  );
-
   bool _isLoggedIn = false;
   bool _loginBusy = false;
   String _searchQuery = '';
@@ -51,25 +39,35 @@ class _AppShellState extends State<AppShell> {
     _nav = NavigationController(
       buildHome: () => HomeScreen(onSelectAnime: _handleSelectAnime),
     );
-    _nav.addListener(_focusNewPage);
+    _nav.addListener(_clearFocusForNewPage);
     unawaited(_restoreSession());
   }
 
-  // Runs after every navigation, once the new page's widgets have
-  // actually mounted, so its own autofocus target exists to receive
-  // focus. requestFocus() on a scope with no currently-focused child
-  // defers to normal autofocus resolution among its descendants — see
-  // the field doc comment above.
-  void _focusNewPage() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _bodyFocusScope.requestFocus();
-    });
+  // Clears whatever currently holds focus — typically the navbar control
+  // just pressed to trigger this navigation — before the new page's
+  // widgets mount. Flutter's autofocus only fires when nothing in a
+  // widget's nearest focus scope is already focused; without this, that
+  // navbar control would still hold focus by the time the new page's own
+  // autofocus:true target checks for it, and autofocus would silently
+  // lose. Deliberately synchronous, not a post-frame callback:
+  // notifyListeners() runs this before the setState-driven rebuild that
+  // actually mounts the new page happens, so the clear is guaranteed to
+  // land first.
+  //
+  // Doing this via an explicit unfocus, rather than a dedicated
+  // FocusScopeNode around the body, keeps the body in the same focus
+  // scope as AniStreamNavBar. Flutter's own directional traversal — which
+  // DpadRegion's escape behavior builds on — only considers candidates
+  // within the nearest enclosing focus scope, so a scope boundary around
+  // the body would cap every DpadRegion inside it from ever escaping past
+  // it, regardless of how those regions are nested.
+  void _clearFocusForNewPage() {
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   @override
   void dispose() {
-    _nav.removeListener(_focusNewPage);
-    _bodyFocusScope.dispose();
+    _nav.removeListener(_clearFocusForNewPage);
     _nav.dispose();
     super.dispose();
   }
@@ -191,29 +189,19 @@ class _AppShellState extends State<AppShell> {
                     }
                     return false;
                   },
-                  // Bare DpadRegion — default leave/leave edge behavior on
-                  // both axes is what's wanted here: Up from the top of
-                  // whichever screen is showing escapes this region
-                  // entirely and lands on the best candidate outside it
-                  // (AniStreamNavBar's own region, wrapped in navbar.dart),
-                  // while Down/Left/Right with nothing beyond this region
-                  // to find just no-op harmlessly. No memoryKey: _nav.current
-                  // is a completely different widget subtree per section
-                  // (Home's carousels vs. Watchlist's grid vs. Schedule's
-                  // shelves), so a single "remembered position" at this
-                  // outer level wouldn't mean anything — that memory
-                  // belongs inside each screen's own regions instead (see
-                  // HomeScreen).
-                  //
-                  // Wrapped in its own FocusScope (_bodyFocusScope, set
-                  // above) so this region's focus state is independent of
-                  // AniStreamNavBar's — see that field's doc comment for
-                  // why that separation is what makes each page's own
-                  // autofocus target actually win focus on navigation.
-                  child: FocusScope(
-                    node: _bodyFocusScope,
-                    child: DpadRegion(child: _nav.current),
-                  ),
+                  // _nav.current sits directly here — no FocusScope, no
+                  // DpadRegion. Sharing the same focus scope
+                  // AniStreamNavBar lives in is what lets directional
+                  // escape reach 'navbar' from a screen's topmost region,
+                  // the same single-hop way shelf-to-shelf escape already
+                  // works: Flutter's own traversal only considers
+                  // candidates within the nearest enclosing focus scope,
+                  // so a scope boundary here would cap every DpadRegion
+                  // inside it from ever escaping past it, regardless of
+                  // nesting. See _clearFocusForNewPage's doc comment for
+                  // how new-page autofocus still correctly wins over a
+                  // stale navbar focus without that boundary.
+                  child: _nav.current,
                 ),
               ),
             );

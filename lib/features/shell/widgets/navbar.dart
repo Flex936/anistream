@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
+import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/anilist/models/anime.dart';
 import '../../../shared/widgets/frosted_container.dart';
@@ -552,25 +553,15 @@ class _NavLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The inner Padding+Text is focus-independent — only the wrapping
-    // AnimatedDefaultTextStyle's color depends on state.focused — so it's
-    // passed as `child` and reused across focus-state rebuilds instead
-    // of being reconstructed inside `builder` every time.
-    //
-    // autofocus: true — the navbar's designated default focus target
-    // (DESIGN.md § 4's "exactly one autofocus per region" convention): a
-    // cold entry into the 'navbar' DpadRegion, with nothing else in this
-    // scope yet focused, lands here. Once the user has focused something
-    // else in the navbar, memoryKey: 'navbar' (see AniStreamNavBar's
-    // build method) restores that instead — this only governs the
-    // memory-less first visit.
     return DpadFocusable(
-      autofocus: true,
+      autofocus: context.dpadAutofocus(true),
       onSelect: () => onTap?.call(),
       builder: (context, state, child) => AnimatedDefaultTextStyle(
         duration: const Duration(milliseconds: 150),
         style: TextStyle(
-          color: state.focused ? AppPalette.primary : AppPalette.textMain,
+          color: (state.focused && context.dpadModeActive)
+              ? AppPalette.primary
+              : AppPalette.textMain,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           letterSpacing: -0.5,
@@ -615,7 +606,9 @@ class _NavIconButton extends StatelessWidget {
           child: Icon(
             icon,
             size: 22,
-            color: state.focused ? AppPalette.primary : AppPalette.textMuted,
+            color: (state.focused && context.dpadModeActive)
+                ? AppPalette.primary
+                : AppPalette.textMuted,
           ),
         ),
         child: const SizedBox.shrink(),
@@ -637,13 +630,14 @@ class _UserButton extends StatelessWidget {
       child: DpadFocusable(
         onSelect: () => onPressed?.call(),
         builder: (context, state, child) {
+          final bool visuallyFocused = state.focused && context.dpadModeActive;
           Color iconColor;
           if (isLoggedIn) {
-            iconColor = state.focused
+            iconColor = visuallyFocused
                 ? AppPalette.statusCancelled
                 : AppPalette.statusReleasing;
           } else {
-            iconColor = state.focused
+            iconColor = visuallyFocused
                 ? AppPalette.textMain
                 : AppPalette.textMuted;
           }
@@ -691,7 +685,7 @@ class _WindowButton extends StatelessWidget {
           alignment: Alignment.center,
           child: Icon(
             icon,
-            color: state.focused
+            color: (state.focused && context.dpadModeActive)
                 ? (hoverColor ?? AppPalette.textMain)
                 : AppPalette.textMuted,
             size: 20,

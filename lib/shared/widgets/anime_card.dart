@@ -4,6 +4,7 @@ import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/extensions/build_context_extensions.dart';
+import '../../core/input/input_mode_scope.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
@@ -36,6 +37,7 @@ class AnimeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
+    final dpadModeActive = context.dpadModeActive;
 
     final typography = context.appTypography;
     final radii = context.appRadii;
@@ -49,12 +51,12 @@ class AnimeCard extends StatelessWidget {
           // AppCardSizes's doc comment for why this is the shared
           // canonical ratio rather than a per-screen crop.
           aspectRatio: cardSizes.posterAspectRatio,
-          // The poster's hover overlay (_HoverOverlay) depends on focus
-          // state, so there's no focus-independent subtree worth passing
-          // through `child` — builder rebuilds the whole visual tree,
-          // keyed off state.focused.
+          // The poster's hover overlay (_HoverOverlay) depends on
+          // visuallyFocused, so there's no focus-independent subtree
+          // worth passing through `child` — builder rebuilds the whole
+          // visual tree, keyed off state.focused && dpadModeActive.
           child: DpadFocusable(
-            autofocus: autofocus,
+            autofocus: autofocus && dpadModeActive,
             onSelect: () {
               if (onSelect != null) {
                 onSelect!(anime);
@@ -69,83 +71,75 @@ class AnimeCard extends StatelessWidget {
                 );
               }
             },
-            builder: (context, state, child) => AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(radii.small),
-                border: Border.all(
-                  color: state.focused
-                      ? AppPalette.primary.withValues(alpha: 0.55)
-                      : AppPalette.border,
+            builder: (context, state, child) {
+              // Visible only in confirmed D-Pad/TV mode (DESIGN.md § 4)
+              // — DpadFocusable's own state.focused doesn't distinguish
+              // a real TV remote from an incidental keyboard Tab, so
+              // that distinction is made here instead.
+              final bool visuallyFocused = state.focused && dpadModeActive;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(radii.small),
+                  border: Border.all(
+                    color: visuallyFocused
+                        ? AppPalette.primary.withValues(alpha: 0.55)
+                        : AppPalette.border,
+                  ),
+                  boxShadow: (visuallyFocused && !uiPerformanceMode)
+                      ? [
+                          BoxShadow(
+                            color: AppPalette.primary.withValues(alpha: 0.18),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                          ),
+                        ]
+                      : const [],
                 ),
-                boxShadow: (state.focused && !uiPerformanceMode)
-                    ? [
-                        BoxShadow(
-                          color: AppPalette.primary.withValues(alpha: 0.18),
-                          blurRadius: 24,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : const [],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(radii.small),
-                // Clip.hardEdge under Performant mode instead of the
-                // ClipRRect default (Clip.antiAlias) — a sampled,
-                // anti-aliased clip on every single poster in every
-                // carousel/grid is exactly the kind of complex clipping
-                // path Performant mode exists to strip.
-                clipBehavior: uiPerformanceMode
-                    ? Clip.hardEdge
-                    : Clip.antiAlias,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // This is the single most-instantiated poster widget
-                    // in the app (every carousel and grid), so
-                    // cacheWidth matters: 450 covers up to ~2.6x device
-                    // pixel ratio at the widest width this card is
-                    // actually used at, rather than decoding AniList's
-                    // full-resolution `extraLarge` variant for a ~170dp
-                    // card.
-                    AppNetworkImage(
-                      url: anime.coverImage?.extraLarge,
-                      cacheWidth: 450,
-                      uiPerformanceMode: uiPerformanceMode,
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: _PosterGradient(score: anime.averageScore),
-                    ),
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: _StatusBadge(
-                        label: anime.status?.statusLabel ?? 'UNKNOWN',
-                        color:
-                            anime.status?.statusColor ??
-                            AppPalette.statusDefault,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(radii.small),
+                  clipBehavior: uiPerformanceMode
+                      ? Clip.hardEdge
+                      : Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AppNetworkImage(
+                        url: anime.coverImage?.extraLarge,
+                        cacheWidth: 450,
                         uiPerformanceMode: uiPerformanceMode,
                       ),
-                    ),
-                    _HoverOverlay(
-                      visible: state.focused,
-                      uiPerformanceMode: uiPerformanceMode,
-                    ),
-                  ],
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _PosterGradient(score: anime.averageScore),
+                      ),
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: _StatusBadge(
+                          label: anime.status?.statusLabel ?? 'UNKNOWN',
+                          color:
+                              anime.status?.statusColor ??
+                              AppPalette.statusDefault,
+                          uiPerformanceMode: uiPerformanceMode,
+                        ),
+                      ),
+                      _HoverOverlay(
+                        visible: visuallyFocused,
+                        uiPerformanceMode: uiPerformanceMode,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
             child: const SizedBox.shrink(),
           ),
         ),
         const SizedBox(height: 10),
-        // Plain Text, not a second focusable — nothing below the poster
-        // is interactive, so nothing below it should be a D-Pad focus
-        // target or show a focus ring.
         Text(
           anime.title.display,
           maxLines: 1,

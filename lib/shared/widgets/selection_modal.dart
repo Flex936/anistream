@@ -2,6 +2,7 @@ import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/extensions/build_context_extensions.dart';
+import '../../core/input/input_mode_scope.dart';
 import '../../core/theme/app_palette.dart';
 import 'frosted_container.dart';
 
@@ -158,7 +159,7 @@ class _ModalHeader extends StatelessWidget {
               builder: (context, state, child) => Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: state.focused
+                  color: (state.focused && context.dpadModeActive)
                       ? AppPalette.white.withValues(alpha: 0.1)
                       : AppPalette.transparent,
                   shape: BoxShape.circle,

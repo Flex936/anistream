@@ -47,17 +47,16 @@ class _HoverFocusBuilderState extends State<HoverFocusBuilder> {
   void _reportCombined() {
     final callback = widget.onHoverChanged;
     if (callback == null) return;
-    final dpadActive = InputModeScope.of(context, listen: false).dpadModeActive;
-    callback(_hovered || (_focused && dpadActive));
+    callback(_hovered || (_focused && context.dpadModeActive));
   }
 
   @override
   Widget build(BuildContext context) {
-    final dpadActive = InputModeScope.of(context).dpadModeActive;
+    final dpadActive = context.dpadModeActive;
     final isVisiblyHighlighted = _hovered || (_focused && dpadActive);
 
     final Widget child = FocusableActionDetector(
-      autofocus: widget.autofocus,
+      autofocus: widget.autofocus && dpadActive,
       onShowHoverHighlight: _setHovered,
       onShowFocusHighlight: _setFocused,
       actions: widget.onTap == null

@@ -2,6 +2,7 @@ import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
+import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/streaming_controller_base.dart';
@@ -42,7 +43,7 @@ class FrostedIconButton extends StatelessWidget {
             ),
             shape: BoxShape.circle,
             border: Border.all(
-              color: state.focused
+              color: (state.focused && context.dpadModeActive)
                   ? AppPalette.primary
                   : AppPalette.transparent,
               width: 2,

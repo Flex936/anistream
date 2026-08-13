@@ -40,6 +40,24 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 
 ---
 
+### 10. Extend `dpad` spatial navigation to AnimeDetailsScreen and WatchlistScreen
+
+**Priority:** Medium-High · **Size:** Large · **Ref:** none — see context below
+
+**Context:** Neither `AnimeDetailsScreen` nor `WatchlistScreen` wraps its content in a `DpadRegion`, and the widgets they're built from — `EpisodeTile`, `HeroHeaderBackButton`, `ExternalLinkButton`, `AnimeSynopsisSection`'s toggle, and every card in `watchlist_cards.dart` (`HeroCard`, `ListCard`, `WatchlistCard`) — use `HoverFocusBuilder` (a plain Flutter `FocusableActionDetector`), not `DpadFocusable`. Arrow-key movement on these two screens falls back entirely to Flutter's own default directional traversal, which doesn't cross scope boundaries the way `dpad`'s region-escape does — spatial navigation between these screens and `AniStreamNavBar` doesn't work the way it does on `HomeScreen`/`ScheduledScreen`. This wasn't found by the original design-system audit this backlog is drawn from — it surfaced during a separate D-Pad navbar-escape bug fix — so unlike the items above it has no pre-existing `DESIGN.md` § 5 entry to reference.
+
+**Acceptance criteria:**
+
+- [ ] Decide the approach: wrap each screen in scoped `DpadRegion`(s) while keeping `HoverFocusBuilder`, or migrate the affected widgets to `DpadFocusable` (the latter converges with Issue #1's semantics work on the same widgets)
+- [ ] `AnimeDetailsScreen`'s episode list gets a `DpadRegion` with a stable `memoryKey`
+- [ ] `WatchlistScreen`'s grid and list layouts get `DpadRegion` wrapping, consistent with how `AnimeCarousel`/`ScheduledScreen`'s shelves are scoped
+- [ ] Confirm Up/directional escape reaches `AniStreamNavBar` from both screens (real TV, or via `Dpad.wrap`'s `debugOverlay`)
+- [ ] Add a `DESIGN.md` § 5 debt entry (or fold into § 4) once the approach is decided, so this stops being an undocumented gap
+
+**Affected files:** `anime_details_screen.dart`, `episode_tile.dart`, `hero_header_compact.dart`, `external_link_buttons.dart`, `anime_synopsis_section.dart`, `watchlist_screen.dart`, `watchlist_cards.dart`
+
+---
+
 ## Structure
 
 ### 3. Add a Home-screen billboard / spotlight component

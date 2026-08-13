@@ -1,6 +1,7 @@
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../data/torrent/models/torrent.dart';
 import '../../../shared/widgets/selection_modal.dart';
@@ -139,6 +140,7 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dpadModeActive = context.dpadModeActive;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Column(
@@ -157,28 +159,36 @@ class _ErrorState extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           DpadFocusable(
-            autofocus: true,
+            autofocus: dpadModeActive,
             onSelect: () => Navigator.of(context).pop(),
-            builder: (context, state, child) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: state.focused
-                    ? AppPalette.primary.withValues(alpha: 0.15)
-                    : AppPalette.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: state.focused ? AppPalette.primary : AppPalette.border,
+            builder: (context, state, child) {
+              final bool visuallyFocused = state.focused && dpadModeActive;
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
                 ),
-              ),
-              child: const Text(
-                'Close',
-                style: TextStyle(
-                  color: AppPalette.textMain,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                decoration: BoxDecoration(
+                  color: visuallyFocused
+                      ? AppPalette.primary.withValues(alpha: 0.15)
+                      : AppPalette.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: visuallyFocused
+                        ? AppPalette.primary
+                        : AppPalette.border,
+                  ),
                 ),
-              ),
-            ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    color: AppPalette.textMain,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              );
+            },
             child: const SizedBox.shrink(),
           ),
         ],

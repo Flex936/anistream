@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
+import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/track_name_parser.dart';
@@ -211,15 +212,13 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Built as a plain Container+Row rather than wrapping ListTile —
-    // ListTile manages its own focus/tap mechanics internally, which
-    // would otherwise need reconciling with DpadFocusable's.
+    final dpadModeActive = context.dpadModeActive;
     return DpadFocusable(
-      autofocus: autofocus,
+      autofocus: autofocus && dpadModeActive,
       onSelect: onTap,
       builder: (context, state, child) => Container(
         decoration: BoxDecoration(
-          color: state.focused
+          color: (state.focused && dpadModeActive)
               ? AppPalette.white.withValues(alpha: 0.1)
               : AppPalette.transparent,
           borderRadius: BorderRadius.circular(8),
@@ -259,12 +258,13 @@ class _Back extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dpadModeActive = context.dpadModeActive;
     return DpadFocusable(
-      autofocus: autofocus,
+      autofocus: autofocus && dpadModeActive,
       onSelect: onTap,
       builder: (context, state, child) => Container(
         decoration: BoxDecoration(
-          color: state.focused
+          color: (state.focused && dpadModeActive)
               ? AppPalette.white.withValues(alpha: 0.1)
               : AppPalette.transparent,
           borderRadius: BorderRadius.circular(8),
@@ -303,7 +303,7 @@ class _TrackTile extends StatelessWidget {
       onSelect: onTap,
       builder: (context, state, child) => Container(
         decoration: BoxDecoration(
-          color: state.focused
+          color: (state.focused && context.dpadModeActive)
               ? AppPalette.white.withValues(alpha: 0.1)
               : AppPalette.transparent,
           borderRadius: BorderRadius.circular(8),

@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
+import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/theater_data.dart';
@@ -575,17 +576,18 @@ class _TheaterIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dpadModeActive = context.dpadModeActive;
     return Tooltip(
       message: tooltip,
       child: DpadFocusable(
-        autofocus: autofocus,
+        autofocus: autofocus && dpadModeActive,
         onSelect: onPressed,
         builder: (context, state, child) => AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: state.focused
+              color: (state.focused && dpadModeActive)
                   ? AppPalette.primary
                   : AppPalette.transparent,
               width: 2,
