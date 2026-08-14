@@ -121,8 +121,8 @@ class StyledSubtitleView extends StatelessWidget {
     // this in principle — same known limitation as before automatic
     // sizing, just worth re-flagging now that font size isn't fixed.
     const estimatedCueBoxHeight = 100.0;
-    final maxAllowedTop =
-        (height - reservedBottom - estimatedCueBoxHeight).clamp(0.0, height);
+    final maxAllowedTop = (height - reservedBottom - estimatedCueBoxHeight)
+        .clamp(0.0, height);
     final rawTop = (cue.line ?? 0.85).clamp(0.0, 1.0) * height;
 
     return Positioned(
@@ -130,10 +130,7 @@ class StyledSubtitleView extends StatelessWidget {
       left: 0,
       width: width,
       child: Align(
-        alignment: Alignment(
-          (cue.position ?? 0.5).clamp(0.0, 1.0) * 2 - 1,
-          0,
-        ),
+        alignment: Alignment((cue.position ?? 0.5).clamp(0.0, 1.0) * 2 - 1, 0),
         child: _CueText(cue: cue, videoHeight: height),
       ),
     );
@@ -192,25 +189,57 @@ class _CueText extends StatelessWidget {
   // small, near-zero-blur shadows stacked around each glyph fake a
   // solid-looking outline instead — the standard way to get ASS-style
   // readability in Flutter, since Text has no native stroke support
-  // outside a custom Paint. Always black: the real per-line outline
-  // color (\3c) isn't available to us any more than \c is, so this is a
-  // reasonable universal stand-in, not a faithful reproduction of
-  // whatever color a given line's outline actually specifies.
-  static const List<Shadow> _outline = [
-    Shadow(offset: Offset(-1, -1), color: Colors.black),
-    Shadow(offset: Offset(1, -1), color: Colors.black),
-    Shadow(offset: Offset(-1, 1), color: Colors.black),
-    Shadow(offset: Offset(1, 1), color: Colors.black),
-    Shadow(offset: Offset(0, 0), color: Colors.black, blurRadius: 3),
+  // outside a custom Paint. The real per-line outline color (\3c) isn't
+  // available to us any more than \c is, so rather than one universal
+  // stand-in, the outline picks between black and white based on the
+  // run's own resolved text color (see _outlineFor) — not a faithful
+  // reproduction of whatever color a given line's outline actually
+  // specifies either way, just a legible one against both light and
+  // dark text.
+  static const List<Shadow> _blackOutline = [
+    Shadow(offset: Offset(-1, -1)),
+    Shadow(offset: Offset(1, -1)),
+    Shadow(offset: Offset(-1, 1)),
+    Shadow(offset: Offset(1, 1)),
+    Shadow(blurRadius: 3),
   ];
+
+  static const List<Shadow> _whiteOutline = [
+    Shadow(offset: Offset(-1, -1), color: Colors.white),
+    Shadow(offset: Offset(1, -1), color: Colors.white),
+    Shadow(offset: Offset(-1, 1), color: Colors.white),
+    Shadow(offset: Offset(1, 1), color: Colors.white),
+    Shadow(color: Colors.white, blurRadius: 3),
+  ];
+
+  /// Below this, [Color.computeLuminance]'s relative-luminance value (the
+  /// standard WCAG formula — 0.0 for black, 1.0 for white) is treated as
+  /// dark enough that a black outline would blend into it, which is
+  /// exactly the failure mode this switch exists to avoid: a dark
+  /// PrimaryColour style (black, or a deep saturated Signs color like a
+  /// dark red or navy) rendered with the old always-black outline could
+  /// vanish entirely against dark footage. 0.4 sits comfortably above
+  /// black/near-black and the common dark saturated Signs colors, and
+  /// comfortably below white, yellow, and other light Dialogue colors —
+  /// tune this constant directly if a real release's colors land
+  /// somewhere this doesn't handle well.
+  static const double _darkTextLuminanceThreshold = 0.4;
+
+  /// Picks [_whiteOutline] for a dark [textColor], [_blackOutline]
+  /// otherwise — see [_darkTextLuminanceThreshold].
+  List<Shadow> _outlineFor(Color textColor) =>
+      textColor.computeLuminance() < _darkTextLuminanceThreshold
+      ? _whiteOutline
+      : _blackOutline;
 
   TextStyle _styleFor(StyledTextRun run, double fontSize) {
     final decorations = <TextDecoration>[
       if (run.underline) TextDecoration.underline,
       if (run.strikethrough) TextDecoration.lineThrough,
     ];
+    final color = run.foregroundColor ?? Colors.white;
     return TextStyle(
-      color: run.foregroundColor ?? Colors.white,
+      color: color,
       backgroundColor: run.backgroundColor,
       fontWeight: run.bold ? FontWeight.bold : FontWeight.normal,
       fontStyle: run.italic ? FontStyle.italic : FontStyle.normal,
@@ -218,7 +247,7 @@ class _CueText extends StatelessWidget {
           ? TextDecoration.none
           : TextDecoration.combine(decorations),
       fontSize: fontSize,
-      shadows: _outline,
+      shadows: _outlineFor(color),
     );
   }
 
