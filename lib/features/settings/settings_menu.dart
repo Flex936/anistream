@@ -224,265 +224,91 @@ class _SettingsMenuState extends State<SettingsMenu> {
                         ),
                       ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(32, 32, 24, 24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Shares panelHeader with navbar.dart's mobile
-                        // menu header, so both panel titles render at
-                        // the same size and weight.
-                        Text(
-                          'Settings',
-                          style: typography.panelHeader.copyWith(
-                            color: AppPalette.textMain,
+              child: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(32, 32, 24, 24),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Shares panelHeader with navbar.dart's mobile
+                          // menu header, so both panel titles render at
+                          // the same size and weight.
+                          Text(
+                            'Settings',
+                            style: typography.panelHeader.copyWith(
+                              color: AppPalette.textMain,
+                            ),
                           ),
-                        ),
-                        SettingsCloseButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ],
+                          SettingsCloseButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
 
-                  Expanded(
-                    // Values are hydrated synchronously in
-                    // didChangeDependencies, before the first build, so
-                    // no loading-spinner state is needed here —
-                    // SettingsScope already holds the data.
-                    child: ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
-                        SettingsSection(
-                          label: 'Content Preferences',
-                          children: [
-                            SettingRowTile(
-                              title: 'Filter Ecchi',
-                              subtitle:
-                                  'Automatically hide borderline adult content from search results.',
-                              value: _filterEcchi,
-                              onChanged: (v) =>
-                                  setState(() => _filterEcchi = v),
-                              autofocus: true,
-                            ),
-                          ],
-                        ),
-
-                        SettingsSection(
-                          label: 'Playback Preferences',
-                          showDividerAbove: true,
-                          children: [
-                            SettingRowTile(
-                              title: 'Auto-Play',
-                              subtitle:
-                                  'Skip the release list and instantly stream the highest-rated torrent.',
-                              value: _autoPlayEnabled,
-                              onChanged: (v) =>
-                                  setState(() => _autoPlayEnabled = v),
-                            ),
-                            SettingRowTile(
-                              title: 'Auto-Skip',
-                              subtitle:
-                                  'Skip the Openings and Endings of anime if available.',
-                              value: _autoSkip,
-                              onChanged: (v) => setState(() => _autoSkip = v),
-                            ),
-                            SettingRowTile(
-                              title: 'Show Freeze Recovery Button',
-                              subtitle:
-                                  "Adds a manual restart button to the player, for a rare frozen-frame bug seen on some Linux/NVIDIA setups. Tap it if the video ever freezes after resuming from a long pause — it reloads the player and resumes a few seconds before where you left off.",
-                              value: _showFreezeRecoveryButton,
-                              onChanged: (v) =>
-                                  setState(() => _showFreezeRecoveryButton = v),
-                            ),
-                            SettingRowTile(
-                              title: 'UI Performance Mode',
-                              subtitle:
-                                  'Disables frosted glass, blurs, and animations. Highly recommended for Android TVs.',
-                              value: _uiPerformanceMode,
-                              onChanged: (v) =>
-                                  setState(() => _uiPerformanceMode = v),
-                            ),
-                            const SizedBox(height: 16),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Shares compactHeading with this
-                                  // file's other sub-headers below, plus
-                                  // settings_components.dart's
-                                  // SettingRowTile.title and
-                                  // search_input.dart's dropdown row
-                                  // title.
-                                  Text(
-                                    'Video Scaling Quality',
-                                    style: typography.compactHeading.copyWith(
-                                      color: AppPalette.textMain,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  // Shares tileSubtitle with the
-                                  // Hardware Decoding and Android
-                                  // Decoding captions below.
-                                  Text(
-                                    'Determines how the GPU scales video frames. Set to "None" if 1080p stutters on your TV.',
-                                    style: typography.tileSubtitle.copyWith(
-                                      color: AppPalette.textMuted,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: SettingsDropdown(
-                                value: _videoFilterQuality,
-                                items: const [
-                                  DropdownMenuItem(
-                                    value: 'high',
-                                    child: Text('High (Best Anti-Aliasing)'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'medium',
-                                    child: Text('Medium'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'low',
-                                    child: Text('Low (Flutter Default)'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'none',
-                                    child: Text('None (Raw Pixels / Best FPS)'),
-                                  ),
-                                ],
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    setState(() => _videoFilterQuality = val);
-                                  }
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        SettingsSection(
-                          label: 'Remote Server',
-                          showDividerAbove: true,
-                          children: [
-                            SettingRowTile(
-                              title: 'Use Remote Server',
-                              subtitle:
-                                  'Offload torrenting to a PC or NAS on your LAN. The TV only decodes and renders video.',
-                              value: _serverMode,
-                              onChanged: (v) => setState(() => _serverMode = v),
-                            ),
-                            AnimatedSize(
-                              duration: const Duration(milliseconds: 250),
-                              curve: Curves.easeOutCubic,
-                              child: _serverMode
-                                  ? Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        16,
-                                        8,
-                                        16,
-                                        0,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          SettingsTextField(
-                                            controller: _serverUrlController,
-                                            hint: 'http://192.168.1.100:7878',
-                                            label: 'Server URL',
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: OutlinedButton.icon(
-                                                  onPressed: _pinging
-                                                      ? null
-                                                      : _pingServer,
-                                                  icon: _pinging
-                                                      ? const SizedBox(
-                                                          width: 14,
-                                                          height: 14,
-                                                          child: CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                            valueColor:
-                                                                AlwaysStoppedAnimation(
-                                                                  AppPalette
-                                                                      .primary,
-                                                                ),
-                                                          ),
-                                                        )
-                                                      : const Icon(
-                                                          Icons
-                                                              .wifi_find_rounded,
-                                                          size: 16,
-                                                        ),
-                                                  label: Text(
-                                                    _pinging
-                                                        ? 'Checking…'
-                                                        : 'Test Connection',
-                                                  ),
-                                                  style: OutlinedButton.styleFrom(
-                                                    foregroundColor:
-                                                        AppPalette.primary,
-                                                    side: const BorderSide(
-                                                      color: AppPalette.primary,
-                                                    ),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            10,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          // Left as a plain literal — 11pt
-                                          // with 1.5 line height doesn't
-                                          // match any existing typography
-                                          // token (the nearest candidate,
-                                          // tileSubtitle, uses a
-                                          // different height).
-                                          Text(
-                                            'Run anistream-server on any PC, NAS, or Raspberry Pi on your LAN. '
-                                            'See anistream_server/README.md for build instructions.',
-                                            style: TextStyle(
-                                              color: AppPalette.textMuted
-                                                  .withValues(alpha: 0.7),
-                                              fontSize: 11,
-                                              height: 1.5,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-                          ],
-                        ),
-
-                        if (_isDesktop)
+                    Expanded(
+                      // Values are hydrated synchronously in
+                      // didChangeDependencies, before the first build, so
+                      // no loading-spinner state is needed here —
+                      // SettingsScope already holds the data.
+                      child: ListView(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        children: [
                           SettingsSection(
-                            label: 'Desktop Playback Engine',
+                            label: 'Content Preferences',
+                            children: [
+                              SettingRowTile(
+                                title: 'Filter Ecchi',
+                                subtitle:
+                                    'Automatically hide borderline adult content from search results.',
+                                value: _filterEcchi,
+                                onChanged: (v) =>
+                                    setState(() => _filterEcchi = v),
+                                autofocus: true,
+                              ),
+                            ],
+                          ),
+
+                          SettingsSection(
+                            label: 'Playback Preferences',
                             showDividerAbove: true,
                             children: [
+                              SettingRowTile(
+                                title: 'Auto-Play',
+                                subtitle:
+                                    'Skip the release list and instantly stream the highest-rated torrent.',
+                                value: _autoPlayEnabled,
+                                onChanged: (v) =>
+                                    setState(() => _autoPlayEnabled = v),
+                              ),
+                              SettingRowTile(
+                                title: 'Auto-Skip',
+                                subtitle:
+                                    'Skip the Openings and Endings of anime if available.',
+                                value: _autoSkip,
+                                onChanged: (v) => setState(() => _autoSkip = v),
+                              ),
+                              SettingRowTile(
+                                title: 'Show Freeze Recovery Button',
+                                subtitle:
+                                    "Adds a manual restart button to the player, for a rare frozen-frame bug seen on some Linux/NVIDIA setups. Tap it if the video ever freezes after resuming from a long pause — it reloads the player and resumes a few seconds before where you left off.",
+                                value: _showFreezeRecoveryButton,
+                                onChanged: (v) => setState(
+                                  () => _showFreezeRecoveryButton = v,
+                                ),
+                              ),
+                              SettingRowTile(
+                                title: 'UI Performance Mode',
+                                subtitle:
+                                    'Disables frosted glass, blurs, and animations. Highly recommended for Android TVs.',
+                                value: _uiPerformanceMode,
+                                onChanged: (v) =>
+                                    setState(() => _uiPerformanceMode = v),
+                              ),
+                              const SizedBox(height: 16),
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -490,19 +316,24 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Shares compactHeading with the
-                                    // sub-headers above.
+                                    // Shares compactHeading with this
+                                    // file's other sub-headers below, plus
+                                    // settings_components.dart's
+                                    // SettingRowTile.title and
+                                    // search_input.dart's dropdown row
+                                    // title.
                                     Text(
-                                      'Hardware Decoding',
+                                      'Video Scaling Quality',
                                       style: typography.compactHeading.copyWith(
                                         color: AppPalette.textMain,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     // Shares tileSubtitle with the
-                                    // captions above.
+                                    // Hardware Decoding and Android
+                                    // Decoding captions below.
                                     Text(
-                                      'Use your GPU to decode video streams for vastly improved performance and lower battery usage.',
+                                      'Determines how the GPU scales video frames. Set to "None" if 1080p stutters on your TV.',
                                       style: typography.tileSubtitle.copyWith(
                                         color: AppPalette.textMuted,
                                       ),
@@ -516,34 +347,30 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                   horizontal: 16,
                                 ),
                                 child: SettingsDropdown(
-                                  value: _hardwareDecoding,
+                                  value: _videoFilterQuality,
                                   items: const [
                                     DropdownMenuItem(
-                                      value: 'auto',
-                                      child: Text('Auto (Safe Default)'),
+                                      value: 'high',
+                                      child: Text('High (Best Anti-Aliasing)'),
                                     ),
                                     DropdownMenuItem(
-                                      value: 'cuda-copy',
-                                      child: Text('NVIDIA (CUDA)'),
+                                      value: 'medium',
+                                      child: Text('Medium'),
                                     ),
                                     DropdownMenuItem(
-                                      value: 'd3d11va-copy',
-                                      child: Text('Windows Native (D3D11VA)'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'videotoolbox-copy',
-                                      child: Text(
-                                        'Apple Silicon (VideoToolbox)',
-                                      ),
+                                      value: 'low',
+                                      child: Text('Low (Flutter Default)'),
                                     ),
                                     DropdownMenuItem(
                                       value: 'none',
-                                      child: Text('Software Only (CPU)'),
+                                      child: Text(
+                                        'None (Raw Pixels / Best FPS)',
+                                      ),
                                     ),
                                   ],
                                   onChanged: (val) {
                                     if (val != null) {
-                                      setState(() => _hardwareDecoding = val);
+                                      setState(() => _videoFilterQuality = val);
                                     }
                                   },
                                 ),
@@ -551,119 +378,303 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             ],
                           ),
 
-                        if (Platform.isAndroid)
                           SettingsSection(
-                            label: 'Android Playback Engine',
+                            label: 'Remote Server',
                             showDividerAbove: true,
                             children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Shares compactHeading with the
-                                    // sub-headers above.
-                                    Text(
-                                      'Hardware Decoding (Android)',
-                                      style: typography.compactHeading.copyWith(
-                                        color: AppPalette.textMain,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    // Shares tileSubtitle with the
-                                    // captions above.
-                                    Text(
-                                      'Phones run best on "mediacodec" (Zero-Copy). Android TVs with weak drivers may crash and require "mediacodec-copy".',
-                                      style: typography.tileSubtitle.copyWith(
-                                        color: AppPalette.textMuted,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              SettingRowTile(
+                                title: 'Use Remote Server',
+                                subtitle:
+                                    'Offload torrenting to a PC or NAS on your LAN. The TV only decodes and renders video.',
+                                value: _serverMode,
+                                onChanged: (v) =>
+                                    setState(() => _serverMode = v),
                               ),
-                              const SizedBox(height: 16),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: SettingsDropdown(
-                                  value: _androidHwDec,
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'mediacodec-copy',
-                                      child: Text(
-                                        'mediacodec-copy (Safe / TV Mode)',
-                                      ),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'mediacodec',
-                                      child: Text(
-                                        'mediacodec (Zero-Copy / Fast)',
-                                      ),
-                                    ),
-                                  ],
-                                  onChanged: (val) {
-                                    if (val != null) {
-                                      setState(() => _androidHwDec = val);
-                                    }
-                                  },
-                                ),
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 250),
+                                curve: Curves.easeOutCubic,
+                                child: _serverMode
+                                    ? Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          16,
+                                          8,
+                                          16,
+                                          0,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            SettingsTextField(
+                                              controller: _serverUrlController,
+                                              hint: 'http://192.168.1.100:7878',
+                                              label: 'Server URL',
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: OutlinedButton.icon(
+                                                    onPressed: _pinging
+                                                        ? null
+                                                        : _pingServer,
+                                                    icon: _pinging
+                                                        ? const SizedBox(
+                                                            width: 14,
+                                                            height: 14,
+                                                            child: CircularProgressIndicator(
+                                                              strokeWidth: 2,
+                                                              valueColor:
+                                                                  AlwaysStoppedAnimation(
+                                                                    AppPalette
+                                                                        .primary,
+                                                                  ),
+                                                            ),
+                                                          )
+                                                        : const Icon(
+                                                            Icons
+                                                                .wifi_find_rounded,
+                                                            size: 16,
+                                                          ),
+                                                    label: Text(
+                                                      _pinging
+                                                          ? 'Checking…'
+                                                          : 'Test Connection',
+                                                    ),
+                                                    style: OutlinedButton.styleFrom(
+                                                      foregroundColor:
+                                                          AppPalette.primary,
+                                                      side: const BorderSide(
+                                                        color:
+                                                            AppPalette.primary,
+                                                      ),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              10,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            // Left as a plain literal — 11pt
+                                            // with 1.5 line height doesn't
+                                            // match any existing typography
+                                            // token (the nearest candidate,
+                                            // tileSubtitle, uses a
+                                            // different height).
+                                            Text(
+                                              'Run anistream-server on any PC, NAS, or Raspberry Pi on your LAN. '
+                                              'See anistream_server/README.md for build instructions.',
+                                              style: TextStyle(
+                                                color: AppPalette.textMuted
+                                                    .withValues(alpha: 0.7),
+                                                fontSize: 11,
+                                                height: 1.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
                               ),
                             ],
                           ),
 
-                        const SizedBox(height: 40),
-                      ],
-                    ),
-                  ),
+                          if (_isDesktop)
+                            SettingsSection(
+                              label: 'Desktop Playback Engine',
+                              showDividerAbove: true,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Shares compactHeading with the
+                                      // sub-headers above.
+                                      Text(
+                                        'Hardware Decoding',
+                                        style: typography.compactHeading
+                                            .copyWith(
+                                              color: AppPalette.textMain,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      // Shares tileSubtitle with the
+                                      // captions above.
+                                      Text(
+                                        'Use your GPU to decode video streams for vastly improved performance and lower battery usage.',
+                                        style: typography.tileSubtitle.copyWith(
+                                          color: AppPalette.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: SettingsDropdown(
+                                    value: _hardwareDecoding,
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'auto',
+                                        child: Text('Auto (Safe Default)'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'cuda-copy',
+                                        child: Text('NVIDIA (CUDA)'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'd3d11va-copy',
+                                        child: Text('Windows Native (D3D11VA)'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'videotoolbox-copy',
+                                        child: Text(
+                                          'Apple Silicon (VideoToolbox)',
+                                        ),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'none',
+                                        child: Text('Software Only (CPU)'),
+                                      ),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() => _hardwareDecoding = val);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
 
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: AppPalette.base.withValues(alpha: 0.4),
-                      border: Border(
-                        top: BorderSide(
-                          color: AppPalette.white.withValues(alpha: 0.05),
-                        ),
+                          if (Platform.isAndroid)
+                            SettingsSection(
+                              label: 'Android Playback Engine',
+                              showDividerAbove: true,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Shares compactHeading with the
+                                      // sub-headers above.
+                                      Text(
+                                        'Hardware Decoding (Android)',
+                                        style: typography.compactHeading
+                                            .copyWith(
+                                              color: AppPalette.textMain,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      // Shares tileSubtitle with the
+                                      // captions above.
+                                      Text(
+                                        'Phones run best on "mediacodec" (Zero-Copy). Android TVs with weak drivers may crash and require "mediacodec-copy".',
+                                        style: typography.tileSubtitle.copyWith(
+                                          color: AppPalette.textMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  child: SettingsDropdown(
+                                    value: _androidHwDec,
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'mediacodec-copy',
+                                        child: Text(
+                                          'mediacodec-copy (Safe / TV Mode)',
+                                        ),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'mediacodec',
+                                        child: Text(
+                                          'mediacodec (Zero-Copy / Fast)',
+                                        ),
+                                      ),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() => _androidHwDec = val);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                          const SizedBox(height: 40),
+                        ],
                       ),
                     ),
-                    child: FilledButton(
-                      onPressed: _saving ? null : _handleSave,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppPalette.primary,
-                        foregroundColor: AppPalette.white,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppPalette.base.withValues(alpha: 0.4),
+                        border: Border(
+                          top: BorderSide(
+                            color: AppPalette.white.withValues(alpha: 0.05),
+                          ),
                         ),
                       ),
-                      child: _saving
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(
-                                  AppPalette.white,
+                      child: FilledButton(
+                        onPressed: _saving ? null : _handleSave,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppPalette.primary,
+                          foregroundColor: AppPalette.white,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(
+                                    AppPalette.white,
+                                  ),
+                                ),
+                              )
+                            // Left as a plain literal — a deliberate 1pt
+                            // step up from toastMessage (14/w600/0.2) for
+                            // this primary CTA button.
+                            : const Text(
+                                'Save Changes',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
                                 ),
                               ),
-                            )
-                          // Left as a plain literal — a deliberate 1pt
-                          // step up from toastMessage (14/w600/0.2) for
-                          // this primary CTA button.
-                          : const Text(
-                              'Save Changes',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

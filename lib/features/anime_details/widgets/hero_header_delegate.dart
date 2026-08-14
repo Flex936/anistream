@@ -124,7 +124,15 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         anime.title.english != null &&
         anime.title.english != anime.title.romaji;
 
-    const double atRestTop = 168;
+    // Sits just below the back button's own band (navClearance to
+    // navClearance + compactBandHeight), with the same 16px breathing
+    // gap the original fixed value (96 + 56 + 16 = 168) had baked in —
+    // but derived from navClearance now, so it tracks the real device
+    // inset instead of assuming a status bar height that may not match
+    // this device. Left as a bare constant, a large enough top inset
+    // pushes the back button's bottom edge at or past this position,
+    // visually colliding with the at-rest title text below it.
+    final double atRestTop = navClearance + compactBandHeight + 16;
     final TextPainter titlePainter = TextPainter(
       text: TextSpan(
         text: anime.title.display,
