@@ -92,7 +92,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _videoController = VideoController(_player, configuration: videoConfig);
 
     _controlsVisibility = ControlsVisibilityController(
-      player: _player,
+      playingStream: _player.stream.playing,
+      isPlaying: () => _player.state.playing,
       isSubMenuOpen: () => _isSettingsOpen,
     );
     _playbackDiagnostics = PlaybackDiagnostics(player: _player);
@@ -739,7 +740,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
           Positioned(
             bottom: 110,
             right: 32,
-            child: TheaterSettingsMenu(
+            child: DesktopTheaterSettingsMenu(
               player: _player,
               uiPerformanceMode: _uiPerformanceMode,
               onClose: () => setState(() => _isSettingsOpen = false),
