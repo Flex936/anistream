@@ -18,12 +18,14 @@ import '../../data/torrent/models/torrent.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
 import 'services/playback_diagnostics.dart';
+import 'services/playback_stall_controller.dart';
 import 'services/player_configurator.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
 import 'services/theater_data.dart';
 import 'widgets/batch_picker.dart';
+import 'widgets/playback_stall_indicator.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_settings.dart';
@@ -105,6 +107,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // behavior.
   late final PlaybackDiagnostics _playbackDiagnostics;
 
+  // Drives the mid-playback "Buffering…" indicator off mpv's own
+  // buffering signal — see playback_stall_controller.dart's class doc.
+  late final PlaybackStallController _playbackStallController;
+
   /// A same-position pause before a manual restart, below which a
   /// restart wouldn't meaningfully rewind anything.
   static const Duration _kFreezeRecoveryRewind = Duration(seconds: 5);
@@ -166,6 +172,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       isSubMenuOpen: () => _isSettingsOpen,
     );
     _playbackDiagnostics = PlaybackDiagnostics(player: _player);
+    _playbackStallController = PlaybackStallController(player: _player);
 
     if (Platform.isAndroid || Platform.isIOS) {
       // initState can't be async — SystemChrome's setters return
@@ -606,6 +613,25 @@ class _TheaterScreenState extends State<TheaterScreen> {
     setState(() => _isSettingsOpen = !_isSettingsOpen);
   }
 
+  // Interaction brackets (seekbar/volume drag).
+  //
+  // A seekbar or volume-slider drag needs to suspend two independent
+  // controllers at once — ControlsVisibilityController (so the bar
+  // doesn't auto-hide mid-drag) and PlaybackStallController (so the
+  // buffering blip a seek itself triggers never reads as a stall). These
+  // two thin wrappers are what TheaterControls' onInteractionStart/
+  // onInteractionEnd actually call, so both controllers stay in lockstep
+  // without either one needing to know the other exists.
+  void _handleInteractionStart() {
+    _controlsVisibility.beginInteraction();
+    _playbackStallController.beginInteraction();
+  }
+
+  void _handleInteractionEnd() {
+    _controlsVisibility.endInteraction();
+    _playbackStallController.endInteraction();
+  }
+
   // Background gesture.
 
   void _handleBackgroundTap() {
@@ -689,6 +715,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
+    _playbackStallController.dispose();
     _topNotificationTimer?.cancel();
     await _posSub?.cancel();
     // Fires an armed-but-not-yet-committed AniList sync immediately
@@ -725,6 +752,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _autoSkipController.dispose();
     _playbackDiagnostics.dispose();
+    _playbackStallController.dispose();
     _topNotificationTimer?.cancel();
     await _posSub?.cancel();
     // The replacement TheaterScreen constructs a brand-new
@@ -772,6 +800,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _controlsVisibility.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
+    _playbackStallController.dispose();
     _topNotificationTimer?.cancel();
     final posSub = _posSub;
     if (posSub != null) {
@@ -880,8 +909,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       dpadModeActive: dpadModeActive,
                       onToggleFullscreen: _toggleFullscreen,
                       onInteract: _controlsVisibility.registerActivity,
-                      onInteractionStart: _controlsVisibility.beginInteraction,
-                      onInteractionEnd: _controlsVisibility.endInteraction,
+                      onInteractionStart: _handleInteractionStart,
+                      onInteractionEnd: _handleInteractionEnd,
                       onToggleSettings: () =>
                           setState(() => _isSettingsOpen = !_isSettingsOpen),
                       onSeekbarFocusChange: (f) => _seekbarFocused = f,
@@ -939,6 +968,26 @@ class _TheaterScreenState extends State<TheaterScreen> {
             ),
           ),
         ),
+
+        // Gated on _videoInitialized rather than shown unconditionally —
+        // PlaybackStallController starts observing mpv in initState, well
+        // before Player.open()/.play() are ever called, so without this
+        // gate a slow initial buffer-up could theoretically race the
+        // fade from TheaterLoadingOverlay into the video and show both
+        // at once. Independent of controls-bar visibility on purpose: a
+        // stall needs to stay visible even while the user is watching
+        // hands-off with the control bar auto-hidden, so this reads
+        // directly off PlaybackStallController.visible via its own small
+        // ValueListenableBuilder rather than living inside
+        // _buildControlsOverlay's opacity-gated subtree.
+        if (_videoInitialized)
+          ValueListenableBuilder<bool>(
+            valueListenable: _playbackStallController.visible,
+            builder: (context, stalled, _) => PlaybackStallIndicator(
+              visible: stalled,
+              uiPerformanceMode: _uiPerformanceMode,
+            ),
+          ),
 
         // Rendered regardless of controls-overlay visibility, so a
         // sync/skip status message stays reachable even while the
