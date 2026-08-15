@@ -136,6 +136,22 @@ class AnilistQueryService {
         .timeout(const Duration(seconds: 15));
   }
 
+  /// Executes [query] and returns the decoded `data` map, applying the
+  /// same HTTP-status and GraphQL-`errors` validation every dedicated
+  /// query method below gets via [_query] — unlike [executeRaw], which is
+  /// a bare transport call with no validation of its own. AniList can
+  /// return HTTP 200 with a GraphQL `errors` array in the body (an
+  /// expired token mid-session, a mutation validation failure); a plain
+  /// status-code check can't tell that apart from a genuine success.
+  ///
+  /// For callers (`AnilistTrackerService`) that need a query/mutation not
+  /// modeled as its own method here, and therefore can't go through
+  /// [_cachedQuery] or a `select`-based [_query] call directly.
+  Future<Map<String, dynamic>> executeChecked(
+    String query,
+    Map<String, dynamic> variables,
+  ) => _query(query, variables, (data) => data);
+
   /// Generic "POST → assert success → decode → select" pipeline. Every
   /// method below just supplies a [select] callback for the slice of the
   /// decoded body it cares about; the transport/error handling lives here

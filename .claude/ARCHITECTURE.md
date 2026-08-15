@@ -78,10 +78,12 @@ lib/
     ├── theater/                      theater_screen.dart,
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,
-    │                                 auto_skip_controller, playback_diagnostics, theater_data,
+    │                                 auto_skip_controller, playback_diagnostics,
+    │                                 playback_stall_controller, theater_data,
     │                                 track_name_parser}.dart,
     │                                 widgets/{theater_controls, theater_player, seekbar,
-    │                                 theater_settings, batch_picker}.dart
+    │                                 theater_settings, batch_picker,
+    │                                 playback_stall_indicator}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
 ```
