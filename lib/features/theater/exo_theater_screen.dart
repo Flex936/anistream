@@ -9,6 +9,7 @@ import 'package:video_player/video_player.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
+import '../../data/anilist/anilist_tracker_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../shared/utils/perf_animations.dart';
@@ -28,28 +29,30 @@ import 'widgets/styled_subtitle_view.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_settings.dart';
 
-// Branch-experiment screen, reachable in production via the
-// "Experimental Video Engine" toggle (Settings → Playback Preferences,
-// mobile/TV only — see settings_menu.dart), which maps to
-// AppSettings.useExperimentalPlayer. That flag defaults to false, so
-// TheaterScreen is still what every session gets unless a user opts in
-// — this remains a branch experiment in spirit, just no longer an
-// unreachable one.
+// Branch-experiment screen, reachable in production via the "ExoPlayer
+// Video Engine" toggle (Settings → Playback Preferences, mobile/TV only
+// — see settings_menu.dart), which maps to AppSettings.useExoPlayer.
+// That flag defaults to false, so TheaterScreen is still what every
+// session gets unless a user opts in — this remains a branch experiment
+// in spirit, just no longer an unreachable one.
 //
 // Tests one specific, isolated hypothesis from the media_kit-vs-ExoPlayer
 // discussion: does swapping the actual decode/render engine fix the
 // stutter/crashes we see on weak Android TV boxes? The player widget
-// itself stays the isolated part of that test — AniList tracking is
-// still out of scope, and D-Pad/TV-remote focus navigation is a
-// separate, not-yet-started piece of work. Chapters and auto-skip ARE
-// wired up (see the "Chapters + auto-skip" section below) via Media3's
-// own Chapter metadata support rather than anything torrent/server-side
-// — media_kit/mpv gets chapters natively from whatever stream it's
-// given, but video_player exposes no such thing, so
-// ChapterMetadataPlugin reads them directly off the container the same
-// stream URL points at, working identically in local and server-mode
-// streaming. Everything else — a full mobile-oriented control bar
-// (MobileTheaterControls), auto-hide-on-inactivity,
+// itself stays the isolated part of that test — D-Pad/TV-remote focus
+// navigation is a separate, not-yet-started piece of work. Chapters,
+// auto-skip, and AniList progress tracking are all wired up (see the
+// "Chapters + auto-skip" section below, and _tracker): chapters and
+// auto-skip via Media3's own Chapter metadata support rather than
+// anything torrent/server-side — media_kit/mpv gets chapters natively
+// from whatever stream it's given, but video_player exposes no such
+// thing, so ChapterMetadataPlugin reads them directly off the container
+// the same stream URL points at, working identically in local and
+// server-mode streaming — and AniList tracking via the same
+// player-agnostic AnilistTrackerService TheaterScreen uses, fed from
+// this screen's own position stream instead of media_kit's
+// Player.stream.position. Everything else — a full mobile-oriented
+// control bar (MobileTheaterControls), auto-hide-on-inactivity,
 // background-tap-to-toggle, keyboard shortcuts, and immersive system UI
 // + landscape lock on enter/exit — matches TheaterScreen's own behavior,
 // sharing SkipChip, Seekbar, and TheaterSettingsMenu with it directly
@@ -153,6 +156,14 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   List<Chapter> _chapters = [];
   StreamSubscription<Duration>? _posSub;
 
+  // Player-agnostic AniList progress tracker — the same class
+  // TheaterScreen uses, fed from this screen's own position stream
+  // (_posSub, above) instead of media_kit's Player.stream.position.
+  // Auto-updates the viewer's AniList progress once playback crosses
+  // 90% of the episode; see AnilistTrackerService's own class doc for
+  // the eligibility and debounce rules.
+  late final AnilistTrackerService _tracker;
+
   // ── Subtitles (added) ────────────────────────────────────────────────
   int? _selectedSubtitleIndex;
   bool _subtitleFetchTriggered = false;
@@ -209,6 +220,19 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       },
     );
 
+    _tracker = AnilistTrackerService(
+      onSuccess: () {
+        if (mounted) {
+          AppleTopSnackBar.show(
+            context: context,
+            message: 'Progress saved to AniList',
+            icon: Icons.check_circle_rounded,
+            iconColor: AppPalette.statusReleasing,
+          );
+        }
+      },
+    );
+
     // initState can't be async — _initStreamAndPlayer() returns
     // Future<void>, so the fire-and-forget intent is made explicit
     // instead of silently dropped (unawaited_futures).
@@ -243,6 +267,18 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     _torrentController.initialize(
       widget.torrent.magnetLink,
       episodeNumber: widget.episode,
+    );
+
+    // Runs concurrently with the streaming controller's own buffering
+    // above rather than waiting on video readiness — the tracker's
+    // eligibility fetch has no dependency on the player, and
+    // updateProgress() itself already no-ops until that fetch resolves,
+    // so there's nothing to gain by deferring this until playback
+    // starts.
+    await _tracker.init(
+      mediaId: widget.anime.id,
+      episode: widget.episode,
+      totalEpisodes: widget.anime.episodes,
     );
   }
 
@@ -332,12 +368,16 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     });
     controlsVisibility.registerActivity();
 
-    // AutoSkipController needs position ticks the same way TheaterScreen
-    // feeds it via _player.stream.position — nothing in this State
-    // subscribed to position before now, since MobileTheaterControls'
-    // own internal timeline (a separate State object) is the only other
-    // position listener, and it doesn't expose ticks back up to here.
-    _posSub = handle.positionStream.listen(_autoSkipController.onPosition);
+    // AutoSkipController and the AniList tracker both need position
+    // ticks the same way TheaterScreen feeds them via
+    // _player.stream.position — nothing in this State subscribed to
+    // position before now, since MobileTheaterControls' own internal
+    // timeline (a separate State object) is the only other position
+    // listener, and it doesn't expose ticks back up to here.
+    _posSub = handle.positionStream.listen((pos) {
+      _tracker.updateProgress(pos, handle.duration);
+      _autoSkipController.onPosition(pos);
+    });
 
     unawaited(_fetchChapters(url, handle));
   }
@@ -675,6 +715,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     _playbackHandle?.dispose();
     _subtitleContentTimer?.cancel();
     _autoSkipController.dispose();
+    _tracker.dispose();
     unawaited(_posSub?.cancel() ?? Future<void>.value());
     super.dispose();
   }
