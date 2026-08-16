@@ -29,19 +29,19 @@ The app is built entirely in **Flutter and Dart** (well, technically, optionally
 
 ## 2. Features
 
-* **P2P Playback:** Click on an episode, and streaming begins within seconds. The app utilizes a high-performance C++ torrent engine (`libtorrent`) with time-critical piece deadlines to stream data sequentially.
-* **Progress Tracker:** You can log in via OAuth2 into your AniList account. Watching an episode past the **90% mark** triggers an automated progress update to your AniList account/library.
-* **AniList Library:** The app automatically pulls your current **Watching** and **Plan to Watch** and **Watched** lists into a personalized library view.
-* **Calendar:** You can view weekly upcoming animes.
-* **Hardware Acceleration:** Powered by the `media_kit` package, the video player taps directly into your OS graphics pipeline for decoding with near-zero CPU usage.
+- **P2P Playback:** Click on an episode, and streaming begins within seconds. The app utilizes a high-performance C++ torrent engine (`libtorrent`) with time-critical piece deadlines to stream data sequentially.
+- **Progress Tracker:** Log in to your AniList account via OAuth2. Watching an episode past the **90% mark** triggers an automated progress update to your AniList library.
+- **AniList Library:** The app automatically pulls your current **Watching**, **Plan to Watch**, and **Watched** lists into a personalized library view.
+- **Calendar:** View weekly upcoming anime.
+- **Hardware Acceleration:** Powered by the `media_kit` package, the video player taps directly into your OS graphics pipeline for decoding with near-zero CPU usage.
 
 ---
 
 ## 3. How It Works
 
-1. **The Scraper:** When you select an episode, a background Dart isolate queries **Nyaa.si RSS feeds**, cross-references it with the AniList GraphQL metadata, and assigns a weighted quality score to find the absolute best torrent. *(Full scoring rubric and query details: [API.md](.claude/API.md).)*
-2. **The Streaming Pipeline:** The chosen magnet link is fed into `libtorrent_flutter`. Instead of downloading randomly, the engine creates a highly optimized local HTTP streaming server and requests sequential piece deadlines from peers. *(Or, optionally, offloaded to the companion Go server — see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § 6.)*
-3. **The Native Player:** The local stream URL is passed directly to `media_kit`. Because Flutter renders UI using its own 2D graphics engine (Impeller), the video frames and the UI overlays are composited onto the exact same native OS window simultaneously, entirely eliminating Z-index bugs and OS rendering conflicts.
+1. **The Scraper:** When you select an episode, a background Dart isolate queries **Nyaa.si RSS feeds**, cross-references the results with AniList's GraphQL metadata, and assigns a weighted quality score to find the best torrent. *(Full scoring rubric and query details: [API.md](.claude/API.md).)*
+2. **The Streaming Pipeline:** The chosen magnet link is fed into `libtorrent_flutter`, which creates a local HTTP streaming server and requests sequential piece deadlines from peers instead of downloading randomly. *(Or, optionally, offloaded to the companion Go server — see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § 6.)*
+3. **The Native Player:** The local stream URL is passed directly to `media_kit`. Because Flutter renders UI with its own 2D graphics engine (Impeller), the video frames and the UI overlays composite onto the exact same native OS window — no separate video-view Z-index bugs, no OS rendering conflicts.
 
 ---
 
@@ -140,7 +140,7 @@ flutter pub get
 
 ### 2. Launch the App in Live Development Mode
 
-Flutter handles live hot-reloading automatically. When you save a `.dart` file, the UI will update instantly without losing its state.
+Flutter handles live hot-reloading automatically. When you save a `.dart` file, the UI updates instantly without losing its state.
 
 *For Linux:*
 
@@ -164,52 +164,44 @@ flutter run -d macos
 
 ## 6. Production Builds
 
-To compile a highly optimized, production-ready, standalone binary utilizing the AOT (Ahead-of-Time) compiler, execute:
+Compile an optimized, production-ready binary via Flutter's AOT (Ahead-of-Time) compiler — strips debug symbols, aggressively tree-shakes unused code, and needs no external VM or browser to run.
 
-*For Linux:*
+**Linux** → `build/linux/x64/release/bundle/`
 
 ```bash
 flutter build linux --release
 ```
 
-*Outputs to: `build/linux/x64/release/bundle/*`
-
-*For Windows:*
+**Windows** → `build/windows/x64/runner/Release/`
 
 ```bash
 flutter build windows --release
 ```
 
-*Outputs to: `build/windows/x64/runner/Release/*`
-
-These commands strip debug symbols, aggressively tree-shake unused code, and output a native executable that requires no external VMs or browsers to run.
-
----
-
-*For Android (Phone or AndroidTV):*
+**Android (phone or TV)** → `build/app/outputs/flutter-apk/`
 
 ```bash
 flutter build apk --release
 ```
 
-*Outputs to: `build/app/outputs/flutter-apk/*`
+> Android TV builds don't yet use the TV's own decode unit — a weak-GPU TV model most likely won't run 1080p footage well.
 
-These commands strip debug symbols, aggressively tree-shake unused code, and output a native executable that requires no external VMs or browsers to run.
-
-> Note: AndroidTV currently doesn't use your TV's built in DPU, so if your TV model has a weak GPU it most likely won't run 1080p footage well.
 ---
 
 ## 7. AniStream Remote Server
 
-AniStream ships an optional companion **Go server** (`anistream_server/`) designed for thin clients — Android TV boxes, phones, or weak laptops — that lack the hardware muscle to run a full BitTorrent engine locally. Instead of seeding and downloading on-device, the Flutter app sends a magnet link to the server over the LAN. The server (running on a PC, NAS, or Raspberry Pi) handles all torrent activity and exposes the resulting video as an HTTP range-request stream that MPV opens directly, giving you remote-playback quality without any of the client-side overhead.
+AniStream ships an optional companion Go server (`anistream_server/`) for thin clients — Android TV boxes, phones, weak laptops — that lack the hardware to run a full BitTorrent engine locally.
 
-For full setup instructions, CLI flags, the REST API reference, and systemd service configuration, see the **[AniStream Server README](anistream_server/README.md)**. For how this fits into the rest of the app's architecture, see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § 6.
+- The Flutter app sends a magnet link to the server over the LAN instead of downloading on-device.
+- The server (PC, NAS, or Raspberry Pi) handles all torrent activity and exposes the result as an HTTP range-request stream that MPV opens directly — remote-playback quality with none of the client-side overhead.
+
+Full setup instructions, CLI flags, the REST API reference, and systemd service configuration: [AniStream Server README](anistream_server/README.md). How this fits the rest of the app's architecture: [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § 6.
 
 ---
 
 ## 8. Contributing
 
-Contributions are welcome — bug reports, features, design work, and documentation fixes alike. Please read [CONTRIBUTING.md](.claude/CONTRIBUTING.md) before opening a PR; it covers the coding standards ([CODING_RULES.md](.claude/CODING_RULES.md)), the design system ([DESIGN.md](.claude/DESIGN.md)), and the PR checklist (CONTRIBUTING.md § 6).
+Contributions are welcome — bug reports, features, design work, and documentation fixes alike. Read [CONTRIBUTING.md](.claude/CONTRIBUTING.md) before opening a PR; it covers the coding standards ([CODING_RULES.md](.claude/CODING_RULES.md)), the design system ([DESIGN.md](.claude/DESIGN.md)), and the PR checklist (CONTRIBUTING.md § 6).
 
 ---
 
@@ -224,4 +216,4 @@ AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)**; see
 AniStream is an open-source architectural proof-of-concept designed as a personal utility. Users assume complete liability for the metadata aggregation parameters, torrent tracking hashes, and compliance with local legal frameworks governing peer-to-peer data transfers. No copyright-infringing media files are hosted, stored, or distributed on this codebase. However, while you are streaming, you will become a seeder for that duration.
 
 ---
-*Last reviewed against the codebase: 2026-08-10. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*
+*Last reviewed against the codebase: 2026-08-16. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*

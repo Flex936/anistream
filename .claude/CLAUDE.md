@@ -58,7 +58,7 @@ Every doc in this suite — this file included — follows the rules below. Foun
 - No editing-process narrative (§ 1 above already covers this — it's law, not a style preference).
 - Tables for anything with 3+ parallel rows, instead of prose enumerating them.
 - Keep the nav bar, the bold self-reference, and the "Last reviewed" footer on every doc that has them.
-- [README.md](../README.md)'s Overview/Features/How-it-works sections, and [CONTRIBUTING.md](CONTRIBUTING.md) § 7 (Code of Conduct), stay prose — those are about tone, not density, and clipping them into imperative bullets reads cold. Everything else in the suite follows every rule above.
+- Three sections get no more than a grammar pass, never a restructure: [README.md](../README.md) § 1's origin-story/description prose and § 10 (Legal Disclaimer), and [CONTRIBUTING.md](CONTRIBUTING.md) § 7 (Code of Conduct) — tone, and for § 10 legal precision, matter more than density there. README § 2 (Features) and § 3 (How It Works) can tighten lightly for redundancy, but keep their voice — they're closer to reference content than storytelling. Everything else in the suite follows every rule above.
 - If a rewrite makes a doc longer, that's a defect. The goal is density, not volume.
 
 ---
