@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent"
+	"golang.org/x/time/rate"
 )
 
 // ── State machine ─────────────────────────────────────────────────────────────
@@ -236,10 +237,11 @@ func (s *session) status(streamBase string) statusResp {
 // ── HTTP server ───────────────────────────────────────────────────────────────
 
 type srv struct {
-	client   *torrent.Client
-	mu       sync.RWMutex
-	sessions map[string]*session
-	port     int
+	client         *torrent.Client
+	mu             sync.RWMutex
+	sessions       map[string]*session
+	port           int
+	readaheadBytes int64
 }
 
 func newID() string {
@@ -423,7 +425,7 @@ func (sv *srv) serveVideo(w http.ResponseWriter, r *http.Request, id string) {
 	// read position — this is what makes seeking feel instant even at low
 	// buffer percentages.
 	reader.SetResponsive()
-	reader.SetReadahead(10 * 1024 * 1024) // 10 MB look-ahead
+	reader.SetReadahead(sv.readaheadBytes)
 
 	// http.ServeContent handles Accept-Ranges, Content-Range, Content-Length,
 	// ETag, and conditional GETs automatically. MPV's range-request seeking
@@ -470,6 +472,8 @@ func (sv *srv) reap() {
 func main() {
 	port := flag.Int("port", 7878, "port to listen on")
 	dataDir := flag.String("data", filepath.Join(os.TempDir(), "anistream-server"), "directory for downloaded torrent data")
+	readaheadBytes := flag.Int64("readahead-bytes", 10*1024*1024, "per-stream torrent read-ahead in bytes (lower this on memory-constrained servers, e.g. a Raspberry Pi)")
+	uploadLimitKBps := flag.Int("upload-limit-kbps", 0, "cap upload/seeding bandwidth in KB/s (0 = unlimited)")
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0o755); err != nil {
@@ -480,6 +484,12 @@ func main() {
 	cfg.DataDir = *dataDir
 	// Keep seeding so the swarm stays healthy after we finish downloading.
 	cfg.NoUpload = false
+	if *uploadLimitKBps > 0 {
+		// Burst is left at 0 — ClientConfig.UploadRateLimiter's own doc
+		// comment says anacrolix/torrent will pick a chunk-sized burst
+		// itself in that case, rather than needing one guessed here.
+		cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(*uploadLimitKBps*1024), 0)
+	}
 
 	client, err := torrent.NewClient(cfg)
 	if err != nil {
@@ -488,9 +498,10 @@ func main() {
 	defer client.Close()
 
 	server := &srv{
-		client:   client,
-		sessions: make(map[string]*session),
-		port:     *port,
+		client:         client,
+		sessions:       make(map[string]*session),
+		port:           *port,
+		readaheadBytes: *readaheadBytes,
 	}
 	go server.reap()
 
