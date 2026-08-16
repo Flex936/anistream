@@ -10,7 +10,6 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
-import '../shell/widgets/navbar.dart';
 import '../theater/services/streaming_controller_base.dart';
 import '../theater/theater_screen.dart';
 import 'widgets/anime_synopsis_section.dart';
@@ -218,15 +217,13 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                   onBack: widget.onBack,
                   uiPerformanceMode: uiPerformanceMode,
                   // Matches the navbar's real rendered height on this
-                  // device (nominal height plus its top system-UI
-                  // inset) rather than the delegate's own zero-inset
-                  // default, so the collapsed header's back button and
-                  // status dot always clear the status bar/camera
-                  // cutout. 0 additional inset on Android TV/desktop.
-                  minExtentValue:
-                      AniStreamNavBar.barHeight +
-                      MediaQuery.paddingOf(context).top +
-                      56,
+                  // device via MediaQuery.paddingOf(context).top alone
+                  // — Scaffold's extendBodyBehindAppBar already folds
+                  // the navbar's full height into that value for any
+                  // body descendant, this screen included, so no
+                  // separate navbar-height term is added here. 0
+                  // additional inset on Android TV/desktop.
+                  minExtentValue: MediaQuery.paddingOf(context).top + 56,
                 ),
               ),
               SliverToBoxAdapter(

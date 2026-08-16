@@ -8,7 +8,6 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
-import '../shell/widgets/navbar.dart';
 import 'utils/schedule_grouping.dart';
 import 'widgets/calendar_card.dart';
 
@@ -134,14 +133,16 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
 
         return SingleChildScrollView(
           controller: _scrollController,
-          // Top clearance matches AniStreamNavBar's real rendered height
-          // (nominal height plus the device's own top system-UI inset).
-          // Bottom padding adds the device's bottom inset on top of the
-          // fixed breathing-room constant so the final shelf isn't
-          // obscured by a gesture bar / 3-button nav bar. Both insets
-          // are 0 on Android TV and desktop.
+          // Top clearance is just the device's own top system-UI inset —
+          // Scaffold's extendBodyBehindAppBar injects an inner MediaQuery
+          // for the body whose padding.top already equals the navbar's
+          // full rendered height, so no separate navbar-height term is
+          // needed here. Bottom padding adds the device's bottom inset
+          // on top of the fixed breathing-room constant, since no
+          // equivalent mechanism covers the bottom edge. Both insets are
+          // 0 on Android TV and desktop.
           padding: EdgeInsets.only(
-            top: AniStreamNavBar.barHeight + MediaQuery.paddingOf(context).top,
+            top: MediaQuery.paddingOf(context).top,
             bottom: 64 + MediaQuery.paddingOf(context).bottom,
           ),
           child: Column(

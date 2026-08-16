@@ -9,7 +9,6 @@ import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/utils/perf_animations.dart';
 import '../../shared/widgets/hover_focus_builder.dart';
-import '../shell/widgets/navbar.dart';
 import 'controllers/watchlist_controller.dart';
 import 'widgets/watchlist_cards.dart';
 
@@ -216,15 +215,14 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
               child: CustomScrollView(
                 controller: _scrollController,
                 slivers: [
-                  // Top clearance matches AniStreamNavBar's real
-                  // rendered height (nominal height plus the device's
-                  // own top system-UI inset). 0 on Android TV/desktop.
+                  // Top clearance is just the device's own top system-UI
+                  // inset — Scaffold's extendBodyBehindAppBar injects an
+                  // inner MediaQuery for the body whose padding.top
+                  // already equals the navbar's full rendered height, so
+                  // no separate navbar-height term is needed here. 0 on
+                  // Android TV/desktop.
                   SliverToBoxAdapter(
-                    child: SizedBox(
-                      height:
-                          AniStreamNavBar.barHeight +
-                          MediaQuery.paddingOf(context).top,
-                    ),
+                    child: SizedBox(height: MediaQuery.paddingOf(context).top),
                   ),
 
                   SliverToBoxAdapter(

@@ -43,15 +43,22 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
   });
 
   /// Nominal toolbar height, excluding the dynamic top system-UI inset.
-  /// Scaffold reserves `preferredSize.height + MediaQuery.paddingOf(
-  /// context).top` for the appBar slot regardless of what kind of
-  /// PreferredSizeWidget is passed in — build() below consumes that same
-  /// inset via SafeArea, so the toolbar row itself clears the status
-  /// bar/camera cutout instead of rendering underneath it. Screens that
-  /// reserve scroll padding to clear this bar (HomeScreen,
+  /// build() below grows this widget's own rendered height by
+  /// `MediaQuery.paddingOf(context).top` and consumes that same inset
+  /// via SafeArea, so the toolbar row itself clears the status bar/
+  /// camera cutout instead of rendering underneath it — Scaffold gives
+  /// the appBar slot a loose height constraint and measures whatever
+  /// height the widget actually renders at, rather than forcing it to
+  /// `preferredSize.height`.
+  ///
+  /// Because `AppShell`'s Scaffold sets `extendBodyBehindAppBar: true`,
+  /// it also folds that measured height into `MediaQuery.paddingOf(
+  /// context).top` for every descendant of its `body:` — so a screen
+  /// reserving scroll clearance for this bar (HomeScreen,
   /// ScheduledScreen, WatchlistScreen, SearchResultsScreen,
-  /// HeroHeaderDelegate) add MediaQuery.paddingOf(context).top to this
-  /// constant rather than hardcoding a guessed total.
+  /// HeroHeaderDelegate) should read `MediaQuery.paddingOf(context).top`
+  /// directly, with no separate `barHeight` term. Scaffold has already
+  /// added it there; adding `barHeight` again double-counts it.
   static const double barHeight = 72;
 
   @override

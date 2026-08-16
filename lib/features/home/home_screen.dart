@@ -4,7 +4,6 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
-import '../shell/widgets/navbar.dart';
 import 'widgets/anime_carousel.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -63,16 +62,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: AppPalette.base,
       body: SingleChildScrollView(
-        // Top clearance matches AniStreamNavBar's real rendered height
-        // (its nominal height plus the device's own top system-UI
-        // inset) so content never starts underneath the status bar or
-        // the navbar itself. Bottom padding adds the device's bottom
-        // inset on top of the fixed breathing-room constant so the last
-        // shelf isn't obscured by a gesture bar / 3-button nav bar.
-        // Both insets are 0 on Android TV and desktop, so this padding
-        // collapses back to the original fixed values there.
+        // Top clearance is just the device's own top system-UI inset —
+        // Scaffold's extendBodyBehindAppBar injects an inner MediaQuery
+        // for the body whose padding.top already equals the navbar's
+        // full rendered height (barHeight + real inset), specifically so
+        // a descendant doesn't need to add the navbar's height itself.
+        // Bottom padding adds the device's bottom inset on top of the
+        // fixed breathing-room constant, since no equivalent mechanism
+        // exists for the bottom edge here. Both insets are 0 on Android
+        // TV and desktop, so this padding collapses to the original
+        // fixed values there.
         padding: EdgeInsets.only(
-          top: AniStreamNavBar.barHeight + MediaQuery.paddingOf(context).top,
+          top: MediaQuery.paddingOf(context).top,
           bottom: 48 + MediaQuery.paddingOf(context).bottom,
         ),
         child: Column(

@@ -8,7 +8,6 @@ import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/widgets/anime_card.dart';
-import '../shell/widgets/navbar.dart';
 import 'widgets/search_filter_panel.dart';
 
 class SearchResultsScreen extends StatefulWidget {
@@ -155,13 +154,12 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Matches AniStreamNavBar's real rendered height (nominal
-          // height plus the device's own top system-UI inset). 0 on
-          // Android TV/desktop.
-          SizedBox(
-            height:
-                AniStreamNavBar.barHeight + MediaQuery.paddingOf(context).top,
-          ),
+          // Top clearance is just the device's own top system-UI inset —
+          // Scaffold's extendBodyBehindAppBar injects an inner MediaQuery
+          // for the body whose padding.top already equals the navbar's
+          // full rendered height, so no separate navbar-height term is
+          // needed here. 0 additional inset on Android TV/desktop.
+          SizedBox(height: MediaQuery.paddingOf(context).top),
 
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 0, 32, 16),
