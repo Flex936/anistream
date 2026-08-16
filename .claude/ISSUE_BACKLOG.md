@@ -100,10 +100,9 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 **Acceptance criteria:**
 
 - [ ] `calendar_card.dart`: replace the raw `Color(0x4D000000)` shadow with `AppPalette.black.withValues(alpha: ...)`
-- [ ] `episode_tile.dart`: route its two hardcoded durations (150ms, 250ms) through `perfDuration(uiPerformanceMode, ...)`
+- [ ] `episode_tile.dart`: route its hardcoded 150ms duration through `perfDuration(uiPerformanceMode, ...)`
 - [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `settings_menu.dart`, `navbar.dart`
 - [ ] `navbar.dart`: bump `_NavIconButton` from 44×44 to the documented 48×48 minimum
-- [ ] `search_filter_panel.dart`: remove `autofocus: true` from two of the three `ChoiceChip`s, keeping exactly one
 
 ## Platform & Playback
 
