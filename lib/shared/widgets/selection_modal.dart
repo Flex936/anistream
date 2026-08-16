@@ -107,15 +107,28 @@ class SelectionModal extends StatelessWidget {
       ),
     );
 
+    // Material(color: Colors.transparent): not a visual change — cardContent's
+    // own BoxDecoration already paints the real surface — but it gives every
+    // Text under this card, including whatever `body` renders, a genuine
+    // DefaultTextStyle. Without it, Text falls back to the un-Material'd
+    // WidgetsApp default, which paints with a double underline. Established
+    // here rather than left to the caller because SelectionModal is reached
+    // from two different ancestries: TorrentSearchModal pushes it via
+    // showGeneralDialog (no Material of its own), while
+    // BatchEpisodePickerOverlay mounts inline inside TheaterScreen's
+    // existing Scaffold.
     final card = Center(
-      child: useGlassEffect
-          ? FrostedContainer(
-              uiPerformanceMode: uiPerformanceMode,
-              sigma: context.appMaterials.standard,
-              borderRadius: BorderRadius.circular(16),
-              child: cardContent,
-            )
-          : cardContent,
+      child: Material(
+        color: Colors.transparent,
+        child: useGlassEffect
+            ? FrostedContainer(
+                uiPerformanceMode: uiPerformanceMode,
+                sigma: context.appMaterials.standard,
+                borderRadius: BorderRadius.circular(16),
+                child: cardContent,
+              )
+            : cardContent,
+      ),
     );
 
     return Stack(
