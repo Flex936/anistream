@@ -204,9 +204,14 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     final bool uiPerformanceMode = settings.uiPerformanceMode;
     final materials = context.appMaterials;
 
-    return Scaffold(
-      backgroundColor: AppPalette.base,
-      body: Stack(
+    // Material, not Scaffold: this screen always renders inside AppShell's
+    // own Scaffold via NavigationController, which already supplies the
+    // AppBar/backdrop chrome this screen never uses. Material still gives
+    // the subtree below correct Text/ink styling on its own, independent
+    // of whatever ancestor it's mounted under.
+    return Material(
+      color: AppPalette.base,
+      child: Stack(
         children: [
           CustomScrollView(
             slivers: [

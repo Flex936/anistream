@@ -18,8 +18,11 @@
   - FORBIDDEN: Provider, Riverpod, Bloc, Redux, or any other state-management package. This two-tier pattern is a deliberate architectural choice, not an oversight to "fix."
 - ALWAYS offload blocking I/O and heavy parsing (Regex/XML/JSON) to `compute()` or `Isolate.run()`.
 - ALWAYS cache network requests with an in-memory TTL. ALWAYS serve remote assets through a cached image provider.
+- Reserve `Scaffold` for `AppShell`'s persistent chrome and the root of a screen pushed via its own `Navigator.push` route with no ancestor `Scaffold`/`Material` (`TheaterScreen`) — everything else needing `DefaultTextStyle`/ink but not `AppBar`/`Drawer`/FAB/bottom-sheet chrome uses `Material` instead.
+  - Applies to screens embedded inside `AppShell`'s existing `Scaffold` (`HomeScreen`, `AnimeDetailsScreen`) and to transient overlays (`showGeneralDialog`/`OverlayEntry` modals — `SelectionModal`) alike.
+  - NEVER add a second `Scaffold`/`Material` to a widget that already renders inside an ancestor providing one — check the call chain first.
 
-**What `flutter analyze` actually catches here** — the `flutter_lints` base set in `analysis_options.yaml` gives real analyzer backing to exactly one rule above. The other six are architectural conventions with no static-analysis equivalent, enforced by review only — [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist is written to reflect this split, not to imply a clean `flutter analyze` run covers all seven.
+**What `flutter analyze` actually catches here** — the `flutter_lints` base set in `analysis_options.yaml` gives real analyzer backing to exactly one rule above. The other seven are architectural conventions with no static-analysis equivalent, enforced by review only — [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist is written to reflect this split, not to imply a clean `flutter analyze` run covers all eight.
 
 | Rule | Analyzer-enforced? |
 | --- | --- |
@@ -30,6 +33,7 @@
 | `StatelessWidget` by default | No |
 | Two-tier state pattern (including the rejected-package list) | No |
 | Offloaded I/O/parsing, TTL caching | No |
+| `Scaffold` reserved for screen roots, `Material` elsewhere | No |
 
 ## 2. Code Quality Directives
 
@@ -48,4 +52,4 @@ This file is Flutter/Dart only. The optional companion server (`anistream_server
 Before considering any non-trivial change finished, check it against [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule — a change that adds a dependency, a folder, a cache, a native bridge, or a design token isn't done until the matching doc is updated (or flagged) alongside it.
 
 ---
-*Governed by [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule. Last reviewed against the codebase: 2026-08-15. Changed a performance rule, a caching guideline, or a code-quality directive? Update this file — and check whether [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist needs the same update.*
+*Governed by [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule. Last reviewed against the codebase: 2026-08-16. Changed a performance rule, a caching guideline, or a code-quality directive? Update this file — and check whether [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist needs the same update.*

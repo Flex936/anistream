@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
@@ -7,7 +5,6 @@ import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
-import '../../features/anime_details/anime_details_screen.dart';
 import '../utils/anime_status_style.dart';
 import '../utils/perf_animations.dart';
 import 'app_network_image.dart';
@@ -15,6 +12,12 @@ import 'frosted_container.dart';
 
 class AnimeCard extends StatelessWidget {
   final Anime anime;
+
+  /// Called when the card is selected. Every current call site
+  /// (`AnimeCarousel`, `SearchResultsScreen`) supplies this, tracing back
+  /// to `AppShell._handleSelectAnime` — selecting the card is a safe
+  /// no-op if it's ever omitted, rather than navigating anywhere on its
+  /// own.
   final ValueChanged<Anime>? onSelect;
   final bool autofocus;
 
@@ -55,20 +58,7 @@ class AnimeCard extends StatelessWidget {
           // keyed off state.focused.
           child: DpadFocusable(
             autofocus: autofocus,
-            onSelect: () {
-              if (onSelect != null) {
-                onSelect!(anime);
-              } else {
-                unawaited(
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => AnimeDetailsScreen(anime: anime),
-                    ),
-                  ),
-                );
-              }
-            },
+            onSelect: () => onSelect?.call(anime),
             builder: (context, state, child) => AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOut,

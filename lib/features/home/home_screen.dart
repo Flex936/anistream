@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../core/settings/settings_scope.dart';
-import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import 'widgets/anime_carousel.dart';
@@ -59,48 +58,49 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
-    return Scaffold(
-      backgroundColor: AppPalette.base,
-      body: SingleChildScrollView(
-        // Both the 96px navbar clearance and the 48px bottom breathing
-        // room live in the scroll view's own `padding` rather than as
-        // sibling widgets — dpad's shelf-layout convention treats
-        // scroll-into-view and scrollPadding as part of the scrollable's
-        // own content extent, so a focused card at either end can be
-        // scrolled flush against it instead of stopping just short.
-        padding: const EdgeInsets.only(top: 96, bottom: 48),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AnimeCarousel(
-              title: 'Trending Now',
-              future: _trendingFuture,
-              uiPerformanceMode: uiPerformanceMode,
-              onSelectAnime: widget.onSelectAnime,
-              onRetry: _loadTrending,
-              autofocusFirst: true,
-              memoryKey: 'home.trending',
-            ),
+    // No Scaffold: HomeScreen is only ever built by
+    // NavigationController.buildHome, always rendered inside AppShell's
+    // own Scaffold (app_shell.dart), which already paints the identical
+    // AppPalette.base background beneath it.
+    return SingleChildScrollView(
+      // Both the 96px navbar clearance and the 48px bottom breathing
+      // room live in the scroll view's own `padding` rather than as
+      // sibling widgets — dpad's shelf-layout convention treats
+      // scroll-into-view and scrollPadding as part of the scrollable's
+      // own content extent, so a focused card at either end can be
+      // scrolled flush against it instead of stopping just short.
+      padding: const EdgeInsets.only(top: 96, bottom: 48),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimeCarousel(
+            title: 'Trending Now',
+            future: _trendingFuture,
+            uiPerformanceMode: uiPerformanceMode,
+            onSelectAnime: widget.onSelectAnime,
+            onRetry: _loadTrending,
+            autofocusFirst: true,
+            memoryKey: 'home.trending',
+          ),
 
-            AnimeCarousel(
-              title: 'Popular This Season',
-              future: _seasonPopularFuture,
-              uiPerformanceMode: uiPerformanceMode,
-              onSelectAnime: widget.onSelectAnime,
-              onRetry: _loadSeasonPopular,
-              memoryKey: 'home.season_popular',
-            ),
+          AnimeCarousel(
+            title: 'Popular This Season',
+            future: _seasonPopularFuture,
+            uiPerformanceMode: uiPerformanceMode,
+            onSelectAnime: widget.onSelectAnime,
+            onRetry: _loadSeasonPopular,
+            memoryKey: 'home.season_popular',
+          ),
 
-            AnimeCarousel(
-              title: 'All Time Popular',
-              future: _allTimePopularFuture,
-              uiPerformanceMode: uiPerformanceMode,
-              onSelectAnime: widget.onSelectAnime,
-              onRetry: _loadAllTimePopular,
-              memoryKey: 'home.all_time_popular',
-            ),
-          ],
-        ),
+          AnimeCarousel(
+            title: 'All Time Popular',
+            future: _allTimePopularFuture,
+            uiPerformanceMode: uiPerformanceMode,
+            onSelectAnime: widget.onSelectAnime,
+            onRetry: _loadAllTimePopular,
+            memoryKey: 'home.all_time_popular',
+          ),
+        ],
       ),
     );
   }
