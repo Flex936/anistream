@@ -12,12 +12,16 @@ import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../shared/utils/perf_animations.dart';
+import '../../shared/widgets/toast.dart';
+import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
+import 'services/native_chapter_parser.dart';
 import 'services/native_subtitle_parser.dart';
 import 'services/playback_handle.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
+import 'services/theater_data.dart';
 import 'widgets/batch_picker.dart';
 import 'widgets/mobile_theater_controls.dart';
 import 'widgets/styled_subtitle_view.dart';
@@ -35,23 +39,21 @@ import 'widgets/theater_settings.dart';
 // Tests one specific, isolated hypothesis from the media_kit-vs-ExoPlayer
 // discussion: does swapping the actual decode/render engine fix the
 // stutter/crashes we see on weak Android TV boxes? The player widget
-// itself stays the isolated part of that test — chapters, auto-skip, and
-// AniList tracking are still out of scope, and D-Pad/TV-remote focus
-// navigation is a separate, not-yet-started piece of work. Everything
-// else — a full mobile-oriented control bar (MobileTheaterControls),
-// auto-hide-on-inactivity, background-tap-to-toggle, keyboard shortcuts,
-// and immersive system UI + landscape lock on enter/exit — now matches
-// TheaterScreen's own behavior, sharing SkipChip, Seekbar, and
-// TheaterSettingsMenu with it directly instead of duplicating them.
-//
-// What's reused directly, unmodified: the real torrent/server streaming
-// flow (StreamingController / RemoteStreamingController resolve a
-// streamUrl the same way regardless of which player opens it), the
-// batch picker overlay, and the loading overlay. What's genuinely
-// separate: the low-level player widget (video_player vs. media_kit,
-// bridged for the control bar via PlaybackHandle) and
-// MobileTheaterControls' own layout, purpose-built for a single narrow
-// column rather than reusing TheaterControls' wide desktop row.
+// itself stays the isolated part of that test — AniList tracking is
+// still out of scope, and D-Pad/TV-remote focus navigation is a
+// separate, not-yet-started piece of work. Chapters and auto-skip ARE
+// wired up (see the "Chapters + auto-skip" section below) via Media3's
+// own Chapter metadata support rather than anything torrent/server-side
+// — media_kit/mpv gets chapters natively from whatever stream it's
+// given, but video_player exposes no such thing, so
+// ChapterMetadataPlugin reads them directly off the container the same
+// stream URL points at, working identically in local and server-mode
+// streaming. Everything else — a full mobile-oriented control bar
+// (MobileTheaterControls), auto-hide-on-inactivity,
+// background-tap-to-toggle, keyboard shortcuts, and immersive system UI
+// + landscape lock on enter/exit — matches TheaterScreen's own behavior,
+// sharing SkipChip, Seekbar, and TheaterSettingsMenu with it directly
+// instead of duplicating them.
 //
 // ── The kUseHardwareOverlay flag — this is the actual experiment ──
 //
@@ -137,6 +139,20 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   // against.
   bool _seekbarFocused = false;
 
+  // ── Chapters + auto-skip (added) ────────────────────────────────────
+  //
+  // Fetched once per session via ChapterMetadataPlugin.kt, which reads
+  // Media3's own Chapter metadata entries off a throwaway ExoPlayer
+  // pointed at the same stream URL the real player opens — see
+  // _fetchChapters. AutoSkipController itself is player-engine-agnostic
+  // (it only needs a seek callback), so this is the same class
+  // TheaterScreen uses, just wired to PlaybackHandle.seek instead of
+  // media_kit's Player.seek directly.
+  late final AutoSkipController _autoSkipController;
+  bool _autoSkip = false;
+  List<Chapter> _chapters = [];
+  StreamSubscription<Duration>? _posSub;
+
   // ── Subtitles (added) ────────────────────────────────────────────────
   int? _selectedSubtitleIndex;
   bool _subtitleFetchTriggered = false;
@@ -171,6 +187,28 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
 
     HardwareKeyboard.instance.addHandler(_onKeyEvent);
 
+    // onSeek defers to whatever _playbackHandle currently is rather than
+    // capturing it at construction time — this runs before
+    // _openVideoPlayer has ever created one. AutoSkipController itself
+    // never calls onSeek before chapters exist, and chapters are only
+    // ever set once _playbackHandle is already non-null (see
+    // _fetchChapters), so the null-coalescing here is a defensive
+    // fallback, not a path expected to actually run.
+    _autoSkipController = AutoSkipController(
+      onSeek: (position) => _playbackHandle?.seek(position) ?? Future.value(),
+      isEnabled: () => _autoSkip,
+      onSkipArmed: (skipLabel) {
+        if (mounted) {
+          AppleTopSnackBar.show(
+            context: context,
+            message: 'Auto-skipping $skipLabel in 2s...',
+            icon: Icons.fast_forward_rounded,
+            iconColor: AppPalette.primary,
+          );
+        }
+      },
+    );
+
     // initState can't be async — _initStreamAndPlayer() returns
     // Future<void>, so the fire-and-forget intent is made explicit
     // instead of silently dropped (unawaited_futures).
@@ -185,7 +223,10 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     if (!mounted) return;
     final s = SettingsScope.of(context, listen: false).settings;
 
-    setState(() => _uiPerformanceMode = s.uiPerformanceMode);
+    setState(() {
+      _uiPerformanceMode = s.uiPerformanceMode;
+      _autoSkip = s.autoSkip;
+    });
 
     final BaseStreamingController newController =
         (s.serverMode && s.serverUrl.isNotEmpty)
@@ -290,6 +331,59 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       _videoInitialized = true;
     });
     controlsVisibility.registerActivity();
+
+    // AutoSkipController needs position ticks the same way TheaterScreen
+    // feeds it via _player.stream.position — nothing in this State
+    // subscribed to position before now, since MobileTheaterControls'
+    // own internal timeline (a separate State object) is the only other
+    // position listener, and it doesn't expose ticks back up to here.
+    _posSub = handle.positionStream.listen(_autoSkipController.onPosition);
+
+    unawaited(_fetchChapters(url, handle));
+  }
+
+  // ── Chapters + auto-skip (added) ────────────────────────────────────
+  //
+  // ChapterMetadataPlugin.kt opens a throwaway ExoPlayer against [url]
+  // purely to read whatever Chapter metadata entries Media3's own
+  // extractors attach to the container — this is independent of
+  // video_player's own player instance (there's no supported way to
+  // reach into another plugin's internal ExoPlayer), so it necessarily
+  // opens the stream a second time. Confirmed safe against
+  // anistream-server's video endpoint, which already hands out an
+  // independent reader per HTTP request for exactly this kind of
+  // concurrent-range-request case.
+  //
+  // Deliberately fire-and-forget from _openVideoPlayer's perspective —
+  // chapters are supplementary, not required for playback to start, the
+  // same way subtitle fetching doesn't block anything above.
+  Future<void> _fetchChapters(String url, PlaybackHandle handle) async {
+    try {
+      final raw = await NativeChapterParser.extractChapters(url);
+      if (!mounted) return;
+
+      // Chapter.isHidden() means "should not be shown in a table of
+      // contents UI" per its own doc comment — SkipChip is exactly that
+      // kind of UI, so hidden markers are dropped here rather than
+      // reaching buildChaptersFromRaw at all.
+      final markers = raw
+          .where((m) => !m.hidden)
+          .map(
+            (m) => RawChapterMarker(
+              title: m.title ?? 'Chapter',
+              start: Duration(milliseconds: m.startMs),
+            ),
+          )
+          .toList();
+
+      final chapters = buildChaptersFromRaw(markers, handle.duration);
+      if (!mounted) return;
+
+      setState(() => _chapters = chapters);
+      _autoSkipController.chapters = chapters;
+    } catch (e) {
+      AppLogger.w('ExoTheaterScreen', 'Chapter probe failed: $e');
+    }
   }
 
   // ── Subtitles (added) ────────────────────────────────────────────────
@@ -418,15 +512,19 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   // Keyboard shortcuts.
   //
   // Same shape as TheaterScreen's own _onKeyEvent, minus the pieces that
-  // depend on features this screen doesn't have: no Shift+seek
-  // chapter-jump (no chapters here), no F/fullscreen key (this screen
-  // has no toggleable windowed state to escape — see initState/
-  // _exitTheater for the always-on immersive handling instead), and no
-  // dpadModeActive gate (this screen doesn't wire D-Pad focus at all, so
-  // there's no competing input scheme for these keys to defer to).
-  // _seekbarFocused mirrors TheaterScreen's exact guard: Seekbar keeps
-  // its own Focus.onKeyEvent for Left/Right when it holds keyboard
-  // focus, so this handler defers to it instead of double-seeking.
+  // depend on features this screen doesn't have: no F/fullscreen key
+  // (this screen has no toggleable windowed state to escape — see
+  // initState/_exitTheater for the always-on immersive handling
+  // instead), and no dpadModeActive gate (this screen doesn't wire
+  // D-Pad focus at all, so there's no competing input scheme for these
+  // keys to defer to). Chapters exist here now (see "Chapters +
+  // auto-skip" above), but Shift+seek chapter-jump was never asked for
+  // on this screen and isn't wired up — SkipChip covers the
+  // skip-a-chapter case; nothing currently covers manual jump-to-chapter
+  // outside of it. _seekbarFocused mirrors TheaterScreen's exact guard:
+  // Seekbar keeps its own Focus.onKeyEvent for Left/Right when it holds
+  // keyboard focus, so this handler defers to it instead of
+  // double-seeking.
   bool _onKeyEvent(KeyEvent event) {
     if (!mounted) return false;
     if (event is! KeyDownEvent) return false;
@@ -576,6 +674,8 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     _videoController?.dispose();
     _playbackHandle?.dispose();
     _subtitleContentTimer?.cancel();
+    _autoSkipController.dispose();
+    unawaited(_posSub?.cancel() ?? Future<void>.value());
     super.dispose();
   }
 
@@ -608,6 +708,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
             right: 0,
             child: MobileTheaterControls(
               playback: _playbackHandle!,
+              chapterMetadata: _chapters,
               uiPerformanceMode: _uiPerformanceMode,
               onInteract: cv.registerActivity,
               onInteractionStart: cv.beginInteraction,

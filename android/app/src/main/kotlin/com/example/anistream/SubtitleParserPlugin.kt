@@ -17,7 +17,6 @@ import androidx.media3.extractor.text.ttml.TtmlParser
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.util.Log
-
 /**
  * Bridges Media3's own subtitle decoders to Dart. TtmlParser/SsaParser
  * are both real, standalone SubtitleParser implementations in

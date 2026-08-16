@@ -8,6 +8,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.anistream.app.SubtitleParserPlugin
+import com.anistream.app.ChapterMetadataPlugin
 
 class MainActivity : FlutterActivity() {
     private val channelName = "anistream/device_mode"
@@ -15,6 +16,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         SubtitleParserPlugin.register(flutterEngine)
+        ChapterMetadataPlugin.register(flutterEngine, applicationContext)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->

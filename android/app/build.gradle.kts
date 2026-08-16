@@ -4,8 +4,10 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 dependencies{
-    implementation("androidx.media3:media3-common:1.5.1")
-    implementation("androidx.media3:media3-extractor:1.5.1")
+    implementation("androidx.media3:media3-common:1.11.0")
+    implementation("androidx.media3:media3-extractor:1.11.0")
+    implementation("androidx.media3:media3-inspector:1.11.0")
+    implementation("androidx.media3:media3-exoplayer:1.11.0")
 }
 android {
     namespace = "com.example.anistream"

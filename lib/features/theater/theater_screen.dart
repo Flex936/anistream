@@ -18,6 +18,7 @@ import '../../data/torrent/models/torrent.dart';
 import '../../shared/widgets/toast.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
+import 'services/mpv_chapter_loader.dart';
 import 'services/playback_diagnostics.dart';
 import 'services/player_configurator.dart';
 import 'services/remote_streaming_controller.dart';
@@ -113,8 +114,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
       );
     }
 
-    /*_autoSkipController = AutoSkipController(
-
+    _autoSkipController = AutoSkipController(
+      onSeek: (position) => _player.seek(position),
       isEnabled: () => _autoSkip,
       onSkipArmed: (skipLabel) {
         if (mounted) {
@@ -126,7 +127,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
           );
         }
       },
-    );*/
+    );
 
     _tracker = AnilistTrackerService(
       onSuccess: () {

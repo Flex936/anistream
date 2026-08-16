@@ -294,7 +294,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                               SettingRowTile(
                                 title: 'ExoPlayer Video Engine',
                                 subtitle:
-                                    'Uses an alternate ExoPlayer engine instead of the default. May help with stutter on some Android TV hardware, but chapters, auto-skip, and AniList tracking are unavailable while this is on.',
+                                    'Uses an alternate ExoPlayer engine instead of the default. May help with stutter on some Android TV hardware. AniList tracking is still unavailable while this is on.',
                                 value: _useExoPlayer,
                                 onChanged: (v) =>
                                     setState(() => _useExoPlayer = v),
