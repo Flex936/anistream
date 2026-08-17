@@ -23,6 +23,7 @@ import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
 import 'services/theater_data.dart';
+import 'services/track_name_parser.dart';
 import 'widgets/batch_picker.dart';
 import 'widgets/mobile_theater_controls.dart';
 import 'widgets/styled_subtitle_view.dart';
@@ -177,6 +178,20 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   // Re-fetches the selected track's content periodically while the
   // server hasn't yet marked it complete — see _applySubtitleTrack.
   Timer? _subtitleContentTimer;
+
+  // ── Audio tracks (added) ────────────────────────────────────────────
+  //
+  // Unlike subtitles, these come straight from video_player's own
+  // getAudioTracks() (ExoPlayer's container-level track list via Media3's
+  // DefaultTrackSelector) — no server round-trip, no growing-file polling
+  // — so this is a single fetch right after the player starts playing
+  // (see _fetchAudioTracks), not a repeated-trigger guard the way
+  // subtitles need. Empty on any engine/platform PlaybackHandle doesn't
+  // implement this for (see playback_handle.dart's default) — today that
+  // means Android only, which matches this whole screen's TV/Android-
+  // first scope; iOS isn't a target for it.
+  List<VideoAudioTrack> _audioTracks = [];
+  String? _selectedAudioTrackId;
 
   @override
   void initState() {
@@ -380,6 +395,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     });
 
     unawaited(_fetchChapters(url, handle));
+    unawaited(_fetchAudioTracks(handle));
   }
 
   // ── Chapters + auto-skip (added) ────────────────────────────────────
@@ -424,6 +440,89 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     } catch (e) {
       AppLogger.w('ExoTheaterScreen', 'Chapter probe failed: $e');
     }
+  }
+
+  // ── Audio tracks (added) ────────────────────────────────────────────
+  //
+  // One-shot fetch, run alongside _fetchChapters right after the player
+  // starts playing — see the _audioTracks field doc comment for why this
+  // doesn't need subtitle-style re-polling. Picks whichever track
+  // ExoPlayer itself reports as isSelected as the initial selection,
+  // rather than assuming index 0 — that's whatever the container/
+  // DefaultTrackSelector already chose by default before this ever runs.
+  Future<void> _fetchAudioTracks(PlaybackHandle handle) async {
+    try {
+      final tracks = await handle.getAudioTracks();
+      if (!mounted) return;
+
+      VideoAudioTrack? selected;
+      for (final t in tracks) {
+        if (t.isSelected) {
+          selected = t;
+          break;
+        }
+      }
+
+      setState(() {
+        _audioTracks = tracks;
+        _selectedAudioTrackId = selected?.id;
+      });
+    } catch (e) {
+      AppLogger.w('ExoTheaterScreen', 'Audio track probe failed: $e');
+    }
+  }
+
+  // Optimistically updates _selectedAudioTrackId on success rather than
+  // re-fetching _fetchAudioTracks to confirm — mirrors _applySubtitleTrack's
+  // own optimistic setState below for the same reason: selectAudioTrack
+  // already throws if the platform rejects the selection, so there's
+  // nothing a re-fetch would catch that this try/catch doesn't already.
+  Future<void> _selectAudioTrack(String trackId) async {
+    final handle = _playbackHandle;
+    if (handle == null) return;
+    try {
+      await handle.selectAudioTrack(trackId);
+      if (!mounted) return;
+      setState(() => _selectedAudioTrackId = trackId);
+    } catch (e) {
+      AppLogger.w(
+        'ExoTheaterScreen',
+        'Failed to select audio track $trackId: $e',
+      );
+    }
+  }
+
+  // Settings popup data (added). Mirrors _subtitlePreview()/
+  // _subtitleOptions() below exactly, but with no "Off"/no-track entry —
+  // ExoPlayer always reports one of _audioTracks as isSelected once
+  // loaded, so unlike subtitles there's no real "nothing selected" state
+  // to represent, and no platform hook was found to clear a selection
+  // back to some "auto" default once a real one has been applied.
+  String _audioPreview() {
+    for (final t in _audioTracks) {
+      if (t.id == _selectedAudioTrackId) {
+        return TrackNameParser.parseAudio(
+          title: t.label,
+          language: t.language,
+        ).mainTitle;
+      }
+    }
+    return 'Audio Track';
+  }
+
+  List<SettingsTrackOption> _audioOptions() {
+    return _audioTracks.map((t) {
+      final parsed = TrackNameParser.parseAudio(
+        title: t.label,
+        language: t.language,
+      );
+      return SettingsTrackOption(
+        mainTitle: parsed.mainTitle,
+        subTitle: parsed.subTitle,
+        selected: t.id == _selectedAudioTrackId,
+        onSelect: () => unawaited(_selectAudioTrack(t.id)),
+      );
+    }).toList();
   }
 
   // ── Subtitles (added) ────────────────────────────────────────────────
@@ -755,12 +854,14 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               onInteractionStart: cv.beginInteraction,
               onInteractionEnd: cv.endInteraction,
               isSettingsOpen: _isSettingsOpen,
-              onToggleSettings: _torrentController.subtitleTracks.isEmpty
-                  ? null
-                  : () {
-                      cv.registerActivity();
-                      setState(() => _isSettingsOpen = !_isSettingsOpen);
-                    },
+              onToggleSettings:
+                  (_torrentController.subtitleTracks.isEmpty &&
+                          _audioTracks.isEmpty)
+                      ? null
+                      : () {
+                          cv.registerActivity();
+                          setState(() => _isSettingsOpen = !_isSettingsOpen);
+                        },
               onSeekbarFocusChange: (f) => _seekbarFocused = f,
             ),
           ),
@@ -830,6 +931,8 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               onClose: () => setState(() => _isSettingsOpen = false),
               subtitlePreview: _subtitlePreview(),
               subtitleOptions: _subtitleOptions(),
+              audioPreview: _audioTracks.isEmpty ? null : _audioPreview(),
+              audioOptions: _audioTracks.isEmpty ? null : _audioOptions(),
             ),
           ),
 

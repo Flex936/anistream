@@ -37,6 +37,25 @@ abstract class PlaybackHandle {
   Future<void> seek(Duration position);
   Future<void> setVolume(double volume);
 
+  /// Available audio tracks for this session, or an empty list on an
+  /// engine that doesn't expose audio-track switching. Concrete with a
+  /// safe default here — like `BaseStreamingController`'s subtitle
+  /// methods — rather than added to the abstract contract above, since
+  /// only `VideoPlayerPlaybackHandle` can meaningfully implement it
+  /// today. Unlike everything else on this interface this is a plain
+  /// one-shot `Future`, not a stream: video_player's own tracks API has
+  /// no change-notification of its own, so a caller that needs this
+  /// available before first paint (the mobile control bar's own
+  /// settings-button visibility, mirroring how subtitle availability
+  /// already works) fetches it once after the player is ready and
+  /// caches the result itself, the same way `ExoTheaterScreen` already
+  /// does for subtitles.
+  Future<List<VideoAudioTrack>> getAudioTracks() async => const [];
+
+  /// Selects an audio track by the id [getAudioTracks] reported for it.
+  /// No-op on an engine that doesn't support audio-track switching.
+  Future<void> selectAudioTrack(String trackId) async {}
+
   /// Releases this handle's own listeners/stream controllers. Never
   /// disposes the underlying player/controller — the caller that
   /// constructed it still owns that lifecycle.
@@ -154,6 +173,13 @@ class VideoPlayerPlaybackHandle implements PlaybackHandle {
   @override
   Future<void> setVolume(double volume) =>
       _controller.setVolume((volume / 100).clamp(0.0, 1.0));
+
+  @override
+  Future<List<VideoAudioTrack>> getAudioTracks() => _controller.getAudioTracks();
+
+  @override
+  Future<void> selectAudioTrack(String trackId) =>
+      _controller.selectAudioTrack(trackId);
 
   @override
   void dispose() {

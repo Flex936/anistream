@@ -389,7 +389,7 @@ class _DesktopTheaterSettingsMenuState
 
   List<SettingsTrackOption> _audioOptions() {
     return _tracks.audio.map((t) {
-      final parsed = TrackNameParser.parseAudio(t);
+      final parsed = TrackNameParser.parseAudio(title: t.title, language: t.language);
       return SettingsTrackOption(
         mainTitle: parsed.mainTitle,
         subTitle: parsed.subTitle,
@@ -401,12 +401,18 @@ class _DesktopTheaterSettingsMenuState
 
   @override
   Widget build(BuildContext context) {
+    final activeAudio = _activeAudio;
     return TheaterSettingsMenu(
       uiPerformanceMode: widget.uiPerformanceMode,
       onClose: widget.onClose,
       subtitlePreview: TrackNameParser.parseSubtitle(_activeSubtitle).mainTitle,
       subtitleOptions: _subtitleOptions(),
-      audioPreview: TrackNameParser.parseAudio(_activeAudio).mainTitle,
+      audioPreview: activeAudio == null
+          ? 'Auto'
+          : TrackNameParser.parseAudio(
+              title: activeAudio.title,
+              language: activeAudio.language,
+            ).mainTitle,
       audioOptions: _audioOptions(),
     );
   }
