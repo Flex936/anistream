@@ -242,6 +242,7 @@ type srv struct {
 	sessions       map[string]*session
 	port           int
 	readaheadBytes int64
+	dataDir        string
 }
 
 func newID() string {
@@ -433,11 +434,32 @@ func (sv *srv) serveVideo(w http.ResponseWriter, r *http.Request, id string) {
 	http.ServeContent(w, r, filepath.Base(f.DisplayPath()), time.Now(), reader)
 }
 
+// removeSessionData deletes this torrent's downloaded data from disk.
+// t.Drop() stops the torrent and closes it, but per anacrolix/torrent's
+// own storage docs, never deletes anything from storage — that's left to
+// the caller. The default file storage this server uses (no DefaultStorage
+// override in main()) lays each torrent's data out directly under dataDir,
+// keyed by the torrent's own declared name (Info.Name), so that's the path
+// removed here. info is nil for a session that never got past metadata
+// resolution, in which case nothing was ever written to disk to begin
+// with.
+func (sv *srv) removeSessionData(t *torrent.Torrent) {
+	info := t.Info()
+	if info == nil {
+		return
+	}
+	path := filepath.Join(sv.dataDir, info.Name)
+	if err := os.RemoveAll(path); err != nil {
+		log.Printf("[cleanup] failed to remove %q: %v", path, err)
+	}
+}
+
 func (sv *srv) dropStream(w http.ResponseWriter, id string) {
 	sv.mu.Lock()
 	s, ok := sv.sessions[id]
 	if ok {
 		s.t.Drop()
+		sv.removeSessionData(s.t)
 		delete(sv.sessions, id)
 	}
 	sv.mu.Unlock()
@@ -459,6 +481,7 @@ func (sv *srv) reap() {
 			s.mu.RUnlock()
 			if idle > 30*time.Minute {
 				s.t.Drop()
+				sv.removeSessionData(s.t)
 				delete(sv.sessions, id)
 				log.Printf("[reap] dropped idle session %s (idle %v)", id, idle.Round(time.Second))
 			}
@@ -502,6 +525,7 @@ func main() {
 		sessions:       make(map[string]*session),
 		port:           *port,
 		readaheadBytes: *readaheadBytes,
+		dataDir:        *dataDir,
 	}
 	go server.reap()
 
