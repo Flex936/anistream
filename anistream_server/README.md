@@ -51,6 +51,8 @@ GOOS=windows GOARCH=amd64 go build -o anistream-server.exe .
 | --- | --- | --- |
 | `-port` | `7878` | TCP port to listen on |
 | `-data` | `$TMPDIR/anistream-server` | Directory for downloaded pieces |
+| `-readahead-bytes` | `10485760` (~10 MB) | Per-stream torrent read-ahead size in bytes. Lower this on memory-constrained servers, e.g. a Raspberry Pi — this bounds *this machine's* memory use, not the client device's |
+| `-upload-limit-kbps` | `0` | Caps upload/seeding bandwidth in KB/s. `0` means unlimited, matching the server's long-standing default of seeding at full speed after a download completes |
 
 The server prints its address on startup — copy that IP into the Flutter app's Settings → Remote Server → Server URL field.
 
@@ -139,11 +141,12 @@ sudo systemctl enable --now anistream-server
 
 ## 7. Notes
 
-- Idle sessions (no requests for 30 minutes) are cleaned up automatically.
+- Idle sessions (no requests for 30 minutes) are cleaned up automatically, including deleting their downloaded data from `-data`.
 - The server keeps seeding after download so the swarm stays healthy.
+- **Known caveat:** the default file storage lays each torrent's data out under `-data` keyed by the torrent's own declared name, not by info-hash. Two different torrents that happen to declare the same file/folder name can collide — and now that sessions delete this data on drop, dropping one could remove data a second, unrelated active session is still reading. Pre-existing in how `anacrolix/torrent`'s default storage lays files out, not introduced by cleanup — flagged here rather than left silent.
 - **No auth, CORS fully open** (`Access-Control-Allow-Origin: *`) — required so any LAN device can reach it.
   - Trusted-LAN use only. NEVER expose this directly to the internet — put it behind a firewall or VPN.
   - CORS here is not a security boundary. Don't treat it as one.
 
 ---
-*Last reviewed against the codebase: 2026-08-14. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) § 6's condensed summary needs the same update (see [CLAUDE.md](../.claude/CLAUDE.md) § 2).*
+*Last reviewed against the codebase: 2026-08-17. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) § 6's condensed summary needs the same update (see [CLAUDE.md](../.claude/CLAUDE.md) § 2).*

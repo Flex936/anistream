@@ -11,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../core/input/input_mode_scope.dart';
 import '../../core/settings/settings_scope.dart';
+import '../../core/settings/settings_service.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
 import '../../data/anilist/models/anime.dart';
@@ -161,7 +162,21 @@ class _TheaterScreenState extends State<TheaterScreen> {
   @override
   void initState() {
     super.initState();
-    _player = Player(configuration: const PlayerConfiguration(libass: true));
+    // Read via SettingsCache, not SettingsScope: this runs synchronously,
+    // before _initPlayerAndStream's awaited SettingsScope read below has
+    // landed, and Player() needs bufferSize at construction time.
+    // SettingsCache is this codebase's existing no-BuildContext mechanism
+    // for exactly that (see settings_service.dart). The value matches
+    // what PlayerConfigurator.configureForTheater sets demuxer-max-bytes
+    // to moments later, so the demuxer cache is never briefly at one size
+    // and then a different one.
+    final earlyUiPerformanceMode = SettingsCache.current.uiPerformanceMode;
+    _player = Player(
+      configuration: PlayerConfiguration(
+        libass: true,
+        bufferSize: earlyUiPerformanceMode ? 70000000 : 150000000,
+      ),
+    );
     const videoConfig = VideoControllerConfiguration(
       androidAttachSurfaceAfterVideoParameters: true,
     );

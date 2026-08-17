@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:libtorrent_flutter/libtorrent_flutter.dart';
 
 import '../../../core/logging/app_logger.dart';
+import '../../../core/settings/settings_service.dart';
 import '../../../data/torrent/services/torrent_parser.dart';
 import 'streaming_controller_base.dart';
 
@@ -197,9 +198,35 @@ class StreamingController extends BaseStreamingController {
     unawaited(_streamSub?.cancel() ?? Future<void>.value());
 
     try {
-      final streamInfo = fileIndex == null
-          ? engine.startStream(_torrentId!)
-          : engine.startStream(_torrentId!, fileIndex: fileIndex);
+      // maxCacheBytes bounds the engine's own RAM piece cache — left
+      // unbounded normally, capped under uiPerformanceMode (the flag
+      // this app already uses to mean "treat this device as
+      // memory-constrained", most commonly an Android TV box; see
+      // DESIGN.md § 2). Read via SettingsCache rather than SettingsScope:
+      // StreamingController has no BuildContext of its own to walk up to
+      // SettingsScope, the same reason AnilistQueryService reads
+      // filterEcchi this way — see settings_service.dart.
+      final uiPerformanceMode = SettingsCache.current.uiPerformanceMode;
+
+      // fileIndex and maxCacheBytes are both non-nullable int parameters
+      // on startStream() — passing null for either is a type error.
+      // Getting default behavior (auto-selected file, unbounded cache)
+      // requires omitting the named argument entirely, hence branching
+      // on inclusion here rather than passing a null/sentinel value.
+      final StreamInfo streamInfo;
+      if (fileIndex != null) {
+        streamInfo = uiPerformanceMode
+            ? engine.startStream(
+                _torrentId!,
+                fileIndex: fileIndex,
+                maxCacheBytes: 100 * 1024 * 1024,
+              )
+            : engine.startStream(_torrentId!, fileIndex: fileIndex);
+      } else {
+        streamInfo = uiPerformanceMode
+            ? engine.startStream(_torrentId!, maxCacheBytes: 100 * 1024 * 1024)
+            : engine.startStream(_torrentId!);
+      }
 
       _streamUrl = streamInfo.url;
       _updateStatus('Buffering… 0.0%');
