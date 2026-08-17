@@ -10,6 +10,7 @@ AniStream's design language is a deliberate four-layer hybrid — each layer bor
 ### 1.1 Foundation — Material widgets + `dpad`
 
 - Every interactive control (buttons, sliders, dropdowns, toggles, text fields) is a Flutter Material widget underneath, for its built-in focus behavior and accessibility semantics — NEVER restyled to just *look* like Material. Known exceptions (hand-built focusables missing semantics) are tracked in § 5.1.
+- Mutually-exclusive option groups (status filters, tab switchers) use the shared `AppSegmentedControl` widget (`shared/widgets/app_segmented_control.dart`), a `SegmentedButton` wrapper — NEVER `CupertinoSlidingSegmentedControl` or another hand-rolled tab-row widget.
 - Spatial navigation on top of individual controls — shelf position memory, directional focus traversal, escape-to-navbar behavior — comes from the `dpad` package (`DpadRegion`/`DpadFocusable`), not from Material. See § 4 for the full spatial-navigation ruleset; this subsection just names it as part of the Foundation.
 - Shared responsive infrastructure (`Breakpoints`, `context.isMobile` in `build_context_extensions.dart`) belongs here too — see § 3.
 
