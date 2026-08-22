@@ -9,6 +9,7 @@ import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/theater_data.dart';
+import 'playback_action_chip.dart';
 import 'seekbar.dart';
 
 class TheaterControls extends StatefulWidget {
@@ -418,58 +419,15 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: AnimatedOpacity(
-            opacity: skipTarget != null ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
-            child: AnimatedSlide(
-              offset: skipTarget != null ? Offset.zero : const Offset(0, 0.5),
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutBack,
-              child: IgnorePointer(
-                ignoring: skipTarget == null,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Material(
-                    color: AppPalette.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () {
-                        if (skipTarget != null) {
-                          unawaited(widget.player.seek(skipTarget.end));
-                          widget.onInteract();
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              skipTarget?.skipLabel ?? 'Skip',
-                              style: const TextStyle(
-                                color: AppPalette.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.skip_next_rounded,
-                              color: AppPalette.white,
-                              size: 18,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          child: PlaybackActionChip(
+            visible: skipTarget != null,
+            label: skipTarget?.skipLabel ?? 'Skip',
+            onTap: () {
+              if (skipTarget != null) {
+                unawaited(widget.player.seek(skipTarget.end));
+                widget.onInteract();
+              }
+            },
           ),
         ),
 

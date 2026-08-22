@@ -82,7 +82,7 @@ lib/
     │                                 auto_skip_controller, playback_diagnostics, theater_data,
     │                                 track_name_parser}.dart,
     │                                 widgets/{theater_controls, theater_player, seekbar,
-    │                                 theater_settings, batch_picker}.dart
+    │                                 theater_settings, batch_picker, playback_action_chip}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
 ```
@@ -197,4 +197,4 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
   - **Still open:** not yet filed upstream against `media-kit/media-kit` — worth doing regardless of the mitigation, since the confirmed root cause lives entirely in the plugin's native Linux rendering path and this codebase can't fix it directly.
 
 ---
-*Last reviewed against the codebase: 2026-08-15. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-22. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
