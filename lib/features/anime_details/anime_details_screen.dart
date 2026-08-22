@@ -34,7 +34,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   int? _userProgress;
 
   bool _isFetchingSource = false;
-  int _autoPlayTargetEpisode = -1;
+  int _autoTorrentTargetEpisode = -1;
 
   @override
   void initState() {
@@ -63,30 +63,38 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     () => _scraper.fetchTorrents(widget.anime, ep),
   );
 
-  /// Tap entry point for an episode row. With autoplay off, this always
-  /// opens [TorrentSearchModal]. With autoplay on, it silently tries the
-  /// top result first, falling back to the same modal on either an empty
-  /// result or a thrown exception.
+  /// Tap entry point for an episode row. With auto-torrent-selection off,
+  /// this always opens [TorrentSearchModal]. With it on, it silently
+  /// tries the top result first, falling back to the same modal on either
+  /// an empty result or a thrown exception. Governs torrent *selection*
+  /// only — see `AppSettings.autoTorrentEnabled`'s doc comment for how
+  /// this is distinct from episode-to-episode autoplay.
   void _toggleEpisode(int ep) {
     if (_isFetchingSource) return;
 
-    final bool autoPlayEnabled = SettingsScope.of(
+    final bool autoTorrentEnabled = SettingsScope.of(
       context,
       listen: false,
-    ).settings.autoPlayEnabled;
+    ).settings.autoTorrentEnabled;
 
-    if (!autoPlayEnabled) {
+    if (!autoTorrentEnabled) {
       unawaited(_openTorrentModal(ep));
       return;
     }
 
-    unawaited(_autoPlayEpisode(ep));
+    unawaited(_autoSelectTopTorrentAndStream(ep));
   }
 
-  Future<void> _autoPlayEpisode(int ep) async {
+  /// Fetches sources for [ep] and streams the top-scored result directly,
+  /// falling back to [_openTorrentModal] on an empty result or a thrown
+  /// exception. Reused by both [_toggleEpisode] (a fresh tap on an
+  /// episode row with auto-torrent-selection on) and the episode-autoplay
+  /// transition flow, which resolves next-episode sources exactly the
+  /// same way once it decides to auto-advance.
+  Future<void> _autoSelectTopTorrentAndStream(int ep) async {
     setState(() {
       _isFetchingSource = true;
-      _autoPlayTargetEpisode = ep;
+      _autoTorrentTargetEpisode = ep;
     });
 
     try {
@@ -106,7 +114,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
           if (mounted) {
             setState(() {
               _isFetchingSource = false;
-              _autoPlayTargetEpisode = -1;
+              _autoTorrentTargetEpisode = -1;
             });
           }
         });
@@ -116,9 +124,10 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
   /// Opens [TorrentSearchModal] for [ep], reusing the same memoized
   /// [Future] `_futureFor` already produces — including one that's
-  /// already settled by the time this is called (e.g. autoplay's
-  /// fallback path), so the modal never triggers a second network
-  /// request for a search that already ran.
+  /// already settled by the time this is called (e.g.
+  /// [_autoSelectTopTorrentAndStream]'s fallback path), so the modal
+  /// never triggers a second network request for a search that already
+  /// ran.
   ///
   /// Awaits the modal's own pop result rather than handing it a callback
   /// that pops and immediately pushes TheaterScreen: [TorrentSearchModal]
@@ -148,8 +157,8 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   /// Pushes TheaterScreen and refreshes AniList progress once the whole
   /// viewing session ends. Deliberately does NOT pop anything itself —
   /// it's called both from [_openTorrentModal] (once the modal's own pop
-  /// has already resolved) AND from [_autoPlayEpisode]'s direct success
-  /// path (where no modal was ever opened).
+  /// has already resolved) AND from [_autoSelectTopTorrentAndStream]'s
+  /// direct success path (where no modal was ever opened).
   ///
   /// Loops rather than a single push/pop: TheaterScreen normally pops
   /// with `null` (a real exit), but pops with a [TheaterRestartRequest]
@@ -289,7 +298,8 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         userProgress: _userProgress,
                         isUpNext: isUpNext,
                         isCurrentlyLoading:
-                            _isFetchingSource && _autoPlayTargetEpisode == ep,
+                            _isFetchingSource &&
+                            _autoTorrentTargetEpisode == ep,
                         uiPerformanceMode: uiPerformanceMode,
                         onToggle: () => _toggleEpisode(ep),
                       );
@@ -326,7 +336,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                             ),
                             const SizedBox(height: 24),
                             Text(
-                              'Finding best source for Episode $_autoPlayTargetEpisode...',
+                              'Finding best source for Episode $_autoTorrentTargetEpisode...',
                               style: const TextStyle(
                                 color: AppPalette.textMain,
                                 fontSize: 16,
