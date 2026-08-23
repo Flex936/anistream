@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
@@ -7,7 +5,6 @@ import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
-import '../../features/anime_details/anime_details_screen.dart';
 import '../utils/anime_status_style.dart';
 import '../utils/perf_animations.dart';
 import 'app_network_image.dart';
@@ -15,8 +12,22 @@ import 'frosted_container.dart';
 
 class AnimeCard extends StatelessWidget {
   final Anime anime;
+
+  /// Called when the card is selected. Every current call site
+  /// (`AnimeCarousel`, `SearchResultsScreen`) supplies this, tracing back
+  /// to `AppShell._handleSelectAnime` — selecting the card is a safe
+  /// no-op if it's ever omitted, rather than navigating anywhere on its
+  /// own.
   final ValueChanged<Anime>? onSelect;
   final bool autofocus;
+
+  /// Fixed height of the text block below the poster — the title line
+  /// (cardTitleCompact) plus its surrounding spacing, plus the
+  /// episode-count line. Grid callers that size their own
+  /// `SliverGridDelegateWithMaxCrossAxisExtent` (SearchResultsScreen) need
+  /// this on top of the width-driven poster height to size the cell
+  /// without clipping the text.
+  static const double kTextBlockHeight = 48;
 
   const AnimeCard({
     super.key,
@@ -31,31 +42,23 @@ class AnimeCard extends StatelessWidget {
 
     final typography = context.appTypography;
     final radii = context.appRadii;
+    final cardSizes = context.appCardSizes;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
+        AspectRatio(
+          // Matches AniList's own coverImage art (2:3) — see
+          // AppCardSizes's doc comment for why this is the shared
+          // canonical ratio rather than a per-screen crop.
+          aspectRatio: cardSizes.posterAspectRatio,
           // The poster's hover overlay (_HoverOverlay) depends on focus
           // state, so there's no focus-independent subtree worth passing
           // through `child` — builder rebuilds the whole visual tree,
           // keyed off state.focused.
           child: DpadFocusable(
             autofocus: autofocus,
-            onSelect: () {
-              if (onSelect != null) {
-                onSelect!(anime);
-              } else {
-                unawaited(
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => AnimeDetailsScreen(anime: anime),
-                    ),
-                  ),
-                );
-              }
-            },
+            onSelect: () => onSelect?.call(anime),
             builder: (context, state, child) => AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOut,

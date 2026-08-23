@@ -11,6 +11,7 @@ import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
 import '../theater/exo_theater_screen.dart';
+import '../theater/services/streaming_controller_base.dart';
 import '../theater/theater_screen.dart';
 import 'widgets/anime_synopsis_section.dart';
 import 'widgets/episode_tile.dart';
@@ -76,7 +77,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     ).settings.autoPlayEnabled;
 
     if (!autoPlayEnabled) {
-      _openTorrentModal(ep);
+      unawaited(_openTorrentModal(ep));
       return;
     }
 
@@ -96,10 +97,10 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       if (torrents.isNotEmpty) {
         await _streamTorrent(ep, torrents.first);
       } else if (mounted) {
-        _openTorrentModal(ep);
+        unawaited(_openTorrentModal(ep));
       }
     } catch (_) {
-      if (mounted) _openTorrentModal(ep);
+      if (mounted) unawaited(_openTorrentModal(ep));
     } finally {
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -119,52 +120,91 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   /// already settled by the time this is called (e.g. autoplay's
   /// fallback path), so the modal never triggers a second network
   /// request for a search that already ran.
-  void _openTorrentModal(int ep) {
+  ///
+  /// Awaits the modal's own pop result rather than handing it a callback
+  /// that pops and immediately pushes TheaterScreen: [TorrentSearchModal]
+  /// is an animated route, so popping it doesn't remove it from the
+  /// Overlay synchronously. Pushing TheaterScreen in the same call stack
+  /// as that pop races the two routes' Overlay entries against each
+  /// other. Awaiting [TorrentSearchModal.show] defers the push to a later
+  /// microtask, after the modal's own exit has actually resolved.
+  Future<void> _openTorrentModal(int ep) async {
     final bool uiPerformanceMode = SettingsScope.of(
       context,
       listen: false,
     ).settings.uiPerformanceMode;
 
-    unawaited(
-      TorrentSearchModal.show(
-        context: context,
-        episodeNumber: ep,
-        torrentsFuture: _futureFor(ep),
-        uiPerformanceMode: uiPerformanceMode,
-        onSelectTorrent: (torrent) {
-          // Closes the modal itself — see the note above _streamTorrent
-          // for why that responsibility lives here and not there.
-          Navigator.of(context).pop();
-          unawaited(_streamTorrent(ep, torrent));
-        },
-      ),
+    final torrent = await TorrentSearchModal.show(
+      context: context,
+      episodeNumber: ep,
+      torrentsFuture: _futureFor(ep),
+      uiPerformanceMode: uiPerformanceMode,
     );
+
+    if (torrent != null && mounted) {
+      unawaited(_streamTorrent(ep, torrent));
+    }
   }
 
-  /// Pushes TheaterScreen or ExoTheaterScreen and refreshes AniList progress on return.
-  /// Deliberately does NOT pop anything itself — it's called both from
-  /// [_openTorrentModal]'s onSelectTorrent (which pops the modal before
-  /// calling this) AND from [_autoPlayEpisode]'s direct success path
-  /// (where no modal was ever opened). Popping unconditionally here
-  /// would incorrectly pop AnimeDetailsScreen itself off the stack on a
-  /// successful autoplay stream.
+  /// Pushes TheaterScreen or ExoTheaterScreen and refreshes AniList progress
+  /// once the whole viewing session ends. Deliberately does NOT pop anything
+  /// itself — it's called both from [_openTorrentModal] (once the modal's own
+  /// pop has already resolved) AND from [_autoPlayEpisode]'s direct success
+  /// path (where no modal was ever opened).
+  ///
+  /// When [useExoPlayer] is true, delegates to [ExoTheaterScreen] via a single
+  /// push/pop (ExoPlayer handles its own lifecycle; no restart loop is needed).
+  ///
+  /// When [useExoPlayer] is false, uses [TheaterScreen] with a restart loop:
+  /// TheaterScreen normally pops with `null` (a real exit), but pops with a
+  /// [TheaterRestartRequest] instead when the user taps its freeze-recovery
+  /// restart button (Settings → Playback Preferences → "Show Freeze Recovery
+  /// Button"). Each such result immediately re-pushes a fresh TheaterScreen
+  /// against the same still-buffered [BaseStreamingController] carried in the
+  /// result, rather than starting the torrent over from scratch. The loop —
+  /// and therefore _fetchProgress() — only runs once TheaterScreen pops with a
+  /// genuine `null`, so a restart never triggers a premature progress refresh.
   Future<void> _streamTorrent(int ep, Torrent torrent) async {
     final bool useExoPlayer = SettingsScope.of(
       context,
       listen: false,
     ).settings.useExoPlayer;
-    await Navigator.push(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) => useExoPlayer
-            ? ExoTheaterScreen(
-                anime: widget.anime,
-                episode: ep,
-                torrent: torrent,
-              )
-            : TheaterScreen(anime: widget.anime, episode: ep, torrent: torrent),
-      ),
-    );
+
+    if (useExoPlayer) {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ExoTheaterScreen(
+            anime: widget.anime,
+            episode: ep,
+            torrent: torrent,
+          ),
+        ),
+      );
+    } else {
+      BaseStreamingController? resumeController;
+      Duration? resumePosition;
+
+      while (true) {
+        final result = await Navigator.push<TheaterRestartRequest?>(
+          context,
+          MaterialPageRoute<TheaterRestartRequest?>(
+            builder: (_) => TheaterScreen(
+              anime: widget.anime,
+              episode: ep,
+              torrent: torrent,
+              resumeController: resumeController,
+              resumePosition: resumePosition,
+            ),
+          ),
+        );
+
+        if (result == null) break;
+        resumeController = result.resumeController;
+        resumePosition = result.resumePosition;
+      }
+    }
+
     if (mounted) {
       await _fetchProgress();
     }
@@ -184,9 +224,14 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     final bool uiPerformanceMode = settings.uiPerformanceMode;
     final materials = context.appMaterials;
 
-    return Scaffold(
-      backgroundColor: AppPalette.base,
-      body: Stack(
+    // Material, not Scaffold: this screen always renders inside AppShell's
+    // own Scaffold via NavigationController, which already supplies the
+    // AppBar/backdrop chrome this screen never uses. Material still gives
+    // the subtree below correct Text/ink styling on its own, independent
+    // of whatever ancestor it's mounted under.
+    return Material(
+      color: AppPalette.base,
+      child: Stack(
         children: [
           CustomScrollView(
             slivers: [

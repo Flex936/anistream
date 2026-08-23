@@ -8,8 +8,7 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/utils/perf_animations.dart';
-import '../../shared/utils/responsive_grid.dart';
-import '../../shared/widgets/hover_focus_builder.dart';
+import '../../shared/widgets/app_segmented_control.dart';
 import 'controllers/watchlist_controller.dart';
 import 'widgets/watchlist_cards.dart';
 
@@ -22,6 +21,11 @@ class WatchlistScreen extends StatefulWidget {
   State<WatchlistScreen> createState() => _WatchlistScreenState();
 }
 
+class _HoverTarget {
+  final String url;
+  const _HoverTarget(this.url);
+}
+
 class _WatchlistScreenState extends State<WatchlistScreen> {
   late final WatchlistController _controller;
   final ScrollController _scrollController = ScrollController();
@@ -31,8 +35,20 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   // A ValueNotifier rather than plain State, so hovering a single card in
   // a 36-item grid only rebuilds the small ValueListenableBuilder wrapping
   // the background image below, not the whole screen (including the
-  // CustomScrollView's slivers).
-  final ValueNotifier<String?> _hoveredBanner = ValueNotifier<String?>(null);
+  // CustomScrollView's slivers). Wrapped in `_HoverTarget` rather than a
+  // bare `String?` so every commit is a distinct object even when the URL
+  // repeats — `AnimatedSwitcher` keys its outgoing/incoming children by
+  // this value, and re-hovering the same card before the previous
+  // cross-fade finished exiting would otherwise hand it a duplicate key.
+  final ValueNotifier<_HoverTarget?> _hoveredBanner =
+      ValueNotifier<_HoverTarget?>(null);
+
+  // Coalesces rapid hover in/out churn (a fast mouse sweep across the
+  // grid) into a single backdrop commit once the pointer settles, rather
+  // than firing a new cross-fade per card boundary crossed.
+  Timer? _hoverDebounceTimer;
+  String? _pendingHoverUrl;
+  static const _hoverDebounceDelay = Duration(milliseconds: 120);
 
   @override
   void initState() {
@@ -46,6 +62,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
+    _hoverDebounceTimer?.cancel();
     _hoveredBanner.dispose();
     super.dispose();
   }
@@ -72,11 +89,24 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   }
 
   void _handleHover(String? bannerUrl, bool isHovered) {
+    // Same stale-leave guard as before (only clear if this card is the
+    // one currently claiming hover) — just tracked against the pending
+    // intent instead of the already-committed value, since commits now
+    // lag behind intent by `_hoverDebounceDelay`.
     if (isHovered && bannerUrl != null) {
-      _hoveredBanner.value = bannerUrl;
-    } else if (!isHovered && _hoveredBanner.value == bannerUrl) {
-      _hoveredBanner.value = null;
+      _pendingHoverUrl = bannerUrl;
+    } else if (!isHovered && _pendingHoverUrl == bannerUrl) {
+      _pendingHoverUrl = null;
+    } else {
+      return;
     }
+
+    _hoverDebounceTimer?.cancel();
+    final target = _pendingHoverUrl;
+    _hoverDebounceTimer = Timer(_hoverDebounceDelay, () {
+      if (!mounted) return;
+      _hoveredBanner.value = target == null ? null : _HoverTarget(target);
+    });
   }
 
   Widget _buildEmptyState(String activeStatus) {
@@ -114,7 +144,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             // ValueListenableBuilder so hovering a card only rebuilds
             // this small subtree, never the grid/list below it.
             Positioned.fill(
-              child: ValueListenableBuilder<String?>(
+              child: ValueListenableBuilder<_HoverTarget?>(
                 valueListenable: _hoveredBanner,
                 builder: (context, hoveredBanner, _) {
                   return AnimatedSwitcher(
@@ -131,13 +161,20 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                     switchOutCurve: Curves.easeIn,
                     child:
                         (hoveredBanner != null &&
-                            hoveredBanner.trim().isNotEmpty)
+                            hoveredBanner.url.trim().isNotEmpty)
                         ? Stack(
-                            key: ValueKey(hoveredBanner),
+                            // Keyed by object identity, not the URL
+                            // string — see `_hoveredBanner`'s doc
+                            // comment above. A fresh `_HoverTarget` is
+                            // constructed on every commit, so
+                            // AnimatedSwitcher can never be asked to
+                            // reconcile two siblings sharing a key, even
+                            // when re-hovering the same card back-to-back.
+                            key: ObjectKey(hoveredBanner),
                             fit: StackFit.expand,
                             children: [
                               Image.network(
-                                hoveredBanner,
+                                hoveredBanner.url,
                                 fit: BoxFit.cover,
                                 // A full-screen backdrop that's
                                 // immediately heavily blurred (or fully
@@ -232,44 +269,26 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                   ],
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: AppPalette.surface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppPalette.border),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _TabButton(
-                                      icon: Icons.play_arrow_rounded,
-                                      label: 'Watching',
-                                      active:
-                                          _controller.activeStatus == 'CURRENT',
-                                      onTap: () =>
-                                          _controller.switchTab('CURRENT'),
-                                    ),
-                                    _TabButton(
-                                      icon: Icons.calendar_today_outlined,
-                                      label: 'Planning',
-                                      active:
-                                          _controller.activeStatus ==
-                                          'PLANNING',
-                                      onTap: () =>
-                                          _controller.switchTab('PLANNING'),
-                                    ),
-                                    _TabButton(
-                                      icon: Icons.check_circle_outline_rounded,
-                                      label: 'Watched',
-                                      active:
-                                          _controller.activeStatus ==
-                                          'COMPLETED',
-                                      onTap: () =>
-                                          _controller.switchTab('COMPLETED'),
-                                    ),
-                                  ],
-                                ),
+                              AppSegmentedControl<String>(
+                                items: const [
+                                  AppSegmentedControlItem(
+                                    value: 'CURRENT',
+                                    label: 'Watching',
+                                    icon: Icons.play_arrow_rounded,
+                                  ),
+                                  AppSegmentedControlItem(
+                                    value: 'PLANNING',
+                                    label: 'Planning',
+                                    icon: Icons.calendar_today_outlined,
+                                  ),
+                                  AppSegmentedControlItem(
+                                    value: 'COMPLETED',
+                                    label: 'Watched',
+                                    icon: Icons.check_circle_outline_rounded,
+                                  ),
+                                ],
+                                groupValue: _controller.activeStatus,
+                                onValueChanged: _controller.switchTab,
                               ),
                             ],
                           ),
@@ -336,30 +355,66 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     final activeStatus = _controller.activeStatus;
     final activeEntries = _controller.activeEntries;
     final isWatching = activeStatus == 'CURRENT';
+    final cardSizes = context.appCardSizes;
+
+    final double maxCrossAxisExtent = isWatching
+        ? cardSizes.heroGridMaxWidth
+        : cardSizes.gridMaxWidth;
+
+    final SliverGridDelegateWithMaxCrossAxisExtent gridDelegate = isWatching
+        ? SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: maxCrossAxisExtent,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 24,
+            // HeroCard has no separate text block below the art — every
+            // pixel of its box is the Stack.expand poster/overlay
+            // itself — so a plain childAspectRatio is exact at any
+            // column width, unlike the offset-height calculation the
+            // poster-card branch below needs.
+            childAspectRatio: 16 / 9,
+          )
+        : SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: maxCrossAxisExtent,
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 24,
+            // See SearchResultsScreen's identical calculation —
+            // WatchlistCard shares the same width-driven-poster-plus-
+            // fixed-text-block shape as AnimeCard.
+            mainAxisExtent:
+                cardSizes.gridMaxWidth / cardSizes.posterAspectRatio +
+                WatchlistCard.kTextBlockHeight,
+          );
 
     return SliverLayoutBuilder(
       builder: (context, constraints) {
-        final cols = isWatching
-            ? landscapeGridColumns(constraints.crossAxisExtent)
-            : verticalGridColumns(constraints.crossAxisExtent);
-        final aspectRatio = isWatching ? 1.77 : 0.52;
+        // Mirrors SliverGridDelegateWithMaxCrossAxisExtent's own
+        // column-count formula — used only to know which items sit in
+        // the first visual row, so focusing one of them scrolls it clear
+        // of the pinned nav bar. The grid's actual sizing comes from
+        // gridDelegate above, not from this value.
+        final cols = (constraints.crossAxisExtent / (maxCrossAxisExtent + 20))
+            .ceil()
+            .clamp(1, activeEntries.length);
 
         return SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           sliver: SliverGrid(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: cols,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 24,
-              childAspectRatio: aspectRatio,
-            ),
+            gridDelegate: gridDelegate,
             delegate: SliverChildBuilderDelegate((context, i) {
               final entry = activeEntries[i];
               final hoverImage =
                   entry.media.bannerImage ?? entry.media.coverImage?.display;
 
+              // Keyed by anime id in both branches: PLANNING <-> COMPLETED stays
+              // on the same card type (WatchlistCard), so without a key the
+              // Focus/DpadFocusable Element is reused by position across a tab
+              // switch and `autofocus: i == 0` never refires. (CURRENT switches
+              // happen to self-correct, since the card type itself changes
+              // between HeroCard and WatchlistCard — but keying unconditionally
+              // is simpler than relying on that as the mechanism.)
               if (isWatching) {
                 return Focus(
+                  key: ValueKey(entry.media.id),
                   canRequestFocus: false,
                   skipTraversal: true,
                   onFocusChange: (f) {
@@ -375,6 +430,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 );
               } else {
                 return Focus(
+                  key: ValueKey(entry.media.id),
                   canRequestFocus: false,
                   skipTraversal: true,
                   onFocusChange: (f) {
@@ -406,7 +462,12 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 32),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, i) {
+          // Keyed by anime id — every tab (CURRENT/PLANNING/COMPLETED) uses
+          // the same ListCard type here, so any tab switch reuses this
+          // Padding/Focus/ListCard by position without a key, and
+          // `autofocus: i == 0` never refires on the new top item.
           return Padding(
+            key: ValueKey(activeEntries[i].media.id),
             padding: const EdgeInsets.only(bottom: 16),
             child: Focus(
               canRequestFocus: false,
@@ -430,74 +491,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
           );
         }, childCount: activeEntries.length),
       ),
-    );
-  }
-}
-
-class _TabButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _TabButton({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final typography = context.appTypography;
-
-    return HoverFocusBuilder(
-      onTap: onTap,
-      builder: (context, hovered) {
-        final bgColor = active
-            ? AppPalette.primary
-            : (hovered
-                  ? AppPalette.white.withValues(alpha: 0.08)
-                  : AppPalette.transparent);
-        final contentColor = active
-            ? AppPalette.white
-            : (hovered ? AppPalette.textMain : AppPalette.textMuted);
-
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: AppPalette.primary.withValues(alpha: 0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : const [],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: contentColor),
-              const SizedBox(width: 6),
-              // cardTitleCompact (13/w600) is reused here for the tab
-              // label — the token's height is inconsequential for a
-              // single line of text; see app_typography.dart's class doc
-              // comment on token-name drift.
-              Text(
-                label,
-                style: typography.cardTitleCompact.copyWith(
-                  color: contentColor,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/anacrolix/torrent"
+	"golang.org/x/time/rate"
 )
 
 // ── State machine ─────────────────────────────────────────────────────────────
@@ -334,7 +335,8 @@ type srv struct {
 	// ffmpegReady is resolved once at startup rather than on every
 	// request/poll — FFmpegAvailable() shells out to exec.LookPath twice,
 	// and the answer can't change during a single run of the server.
-	ffmpegReady bool
+	ffmpegReady    bool
+	readaheadBytes int64
 }
 
 func newID() string {
@@ -551,7 +553,7 @@ func (sv *srv) serveVideo(w http.ResponseWriter, r *http.Request, id string) {
 	// read position — this is what makes seeking feel instant even at low
 	// buffer percentages.
 	reader.SetResponsive()
-	reader.SetReadahead(10 * 1024 * 1024) // 10 MB look-ahead
+	reader.SetReadahead(sv.readaheadBytes)
 
 	// http.ServeContent handles Accept-Ranges, Content-Range, Content-Length,
 	// ETag, and conditional GETs automatically. MPV's range-request seeking
@@ -761,11 +763,32 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 	http.ServeFile(w, r, destPath)
 }
 
+// removeSessionData deletes this torrent's downloaded data from disk.
+// t.Drop() stops the torrent and closes it, but per anacrolix/torrent's
+// own storage docs, never deletes anything from storage — that's left to
+// the caller. The default file storage this server uses (no DefaultStorage
+// override in main()) lays each torrent's data out directly under dataDir,
+// keyed by the torrent's own declared name (Info.Name), so that's the path
+// removed here. info is nil for a session that never got past metadata
+// resolution, in which case nothing was ever written to disk to begin
+// with.
+func (sv *srv) removeSessionData(t *torrent.Torrent) {
+	info := t.Info()
+	if info == nil {
+		return
+	}
+	path := filepath.Join(sv.dataDir, info.Name)
+	if err := os.RemoveAll(path); err != nil {
+		log.Printf("[cleanup] failed to remove %q: %v", path, err)
+	}
+}
+
 func (sv *srv) dropStream(w http.ResponseWriter, id string) {
 	sv.mu.Lock()
 	s, ok := sv.sessions[id]
 	if ok {
 		s.t.Drop()
+		sv.removeSessionData(s.t)
 		delete(sv.sessions, id)
 	}
 	sv.mu.Unlock()
@@ -789,6 +812,7 @@ func (sv *srv) reap() {
 			if idle > 30*time.Minute {
 				s.t.Drop()
 				s.cleanupSubtitleFiles()
+				sv.removeSessionData(s.t)
 				delete(sv.sessions, id)
 				log.Printf("[reap] dropped idle session %s (idle %v)", id, idle.Round(time.Second))
 			}
@@ -802,6 +826,8 @@ func (sv *srv) reap() {
 func main() {
 	port := flag.Int("port", 7878, "port to listen on")
 	dataDir := flag.String("data", filepath.Join(os.TempDir(), "anistream-server"), "directory for downloaded torrent data")
+	readaheadBytes := flag.Int64("readahead-bytes", 10*1024*1024, "per-stream torrent read-ahead in bytes (lower this on memory-constrained servers, e.g. a Raspberry Pi)")
+	uploadLimitKBps := flag.Int("upload-limit-kbps", 0, "cap upload/seeding bandwidth in KB/s (0 = unlimited)")
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0o755); err != nil {
@@ -812,6 +838,12 @@ func main() {
 	cfg.DataDir = *dataDir
 	// Keep seeding so the swarm stays healthy after we finish downloading.
 	cfg.NoUpload = false
+	if *uploadLimitKBps > 0 {
+		// Burst is left at 0 — ClientConfig.UploadRateLimiter's own doc
+		// comment says anacrolix/torrent will pick a chunk-sized burst
+		// itself in that case, rather than needing one guessed here.
+		cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(*uploadLimitKBps*1024), 0)
+	}
 
 	client, err := torrent.NewClient(cfg)
 	if err != nil {
@@ -825,11 +857,12 @@ func main() {
 	}
 
 	server := &srv{
-		client:      client,
-		sessions:    make(map[string]*session),
-		port:        *port,
-		dataDir:     *dataDir,
-		ffmpegReady: ffmpegReady,
+		client:         client,
+		sessions:       make(map[string]*session),
+		port:           *port,
+		dataDir:        *dataDir,
+		ffmpegReady:    ffmpegReady,
+		readaheadBytes: *readaheadBytes,
 	}
 	go server.reap()
 

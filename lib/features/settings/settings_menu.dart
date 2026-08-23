@@ -41,9 +41,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
   bool _saving = false;
   bool _pinging = false;
 
-  // Seeded from SettingsScope in didChangeDependencies — the values are
-  // already sitting in the app-wide scope by the time this dialog opens,
-  // so there's no need for a second, independent load.
+  // Seeded from SettingsScope in didChangeDependencies instead of a
+  // second, independent SettingsService().load() call — the values
+  // already sit in the app-wide scope by the time this dialog opens.
   bool _hydrated = false;
 
   late bool _filterEcchi;
@@ -51,12 +51,20 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late String _androidHwDec;
   late bool _autoPlayEnabled;
   late bool _autoSkip;
+  late bool _showFreezeRecoveryButton;
   late bool _uiPerformanceMode;
   late String _videoFilterQuality;
   late bool _useExoPlayer;
 
   late bool _serverMode;
   late final TextEditingController _serverUrlController;
+
+  // Preserves the settings list's ScrollPosition (and any other state
+  // inside FrostedContainer's child) across a live UI Performance Mode
+  // toggle, which otherwise changes FrostedContainer's internal ancestor
+  // chain (bare / ClipRRect / ClipRRect+BackdropFilter) and would force a
+  // full subtree remount — see frosted_container.dart's own doc comment.
+  final GlobalKey _frostedBodyKey = GlobalKey();
 
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
@@ -79,6 +87,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     _androidHwDec = s.androidHwDec;
     _autoPlayEnabled = s.autoPlayEnabled;
     _autoSkip = s.autoSkip;
+    _showFreezeRecoveryButton = s.showFreezeRecoveryButton;
     _uiPerformanceMode = s.uiPerformanceMode;
     _videoFilterQuality = s.videoFilterQuality;
     _useExoPlayer = s.useExoPlayer;
@@ -102,6 +111,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           androidHwDec: _androidHwDec,
           autoPlayEnabled: _autoPlayEnabled,
           autoSkip: _autoSkip,
+          showFreezeRecoveryButton: _showFreezeRecoveryButton,
           uiPerformanceMode: _uiPerformanceMode,
           videoFilterQuality: _videoFilterQuality,
           useExoPlayer: _useExoPlayer,
@@ -188,12 +198,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
         child: SizedBox(
           width: isMobile ? MediaQuery.sizeOf(context).width : 450,
           height: double.infinity,
-          // Routed through the same FrostedContainer every other glass
-          // surface in the app uses, so this panel drops its own blur
-          // under uiPerformanceMode and updates live as the setting is
-          // toggled below, before it's even saved.
           child: FrostedContainer(
             uiPerformanceMode: _uiPerformanceMode,
+            preservationKey: _frostedBodyKey,
             sigma: materials.prominent,
             borderRadius: isMobile
                 ? BorderRadius.zero
@@ -228,6 +235,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
+                        // Shares panelHeader with navbar.dart's mobile
+                        // menu header, so both panel titles render at
+                        // the same size and weight.
                         Text(
                           'Settings',
                           style: typography.panelHeader.copyWith(
@@ -244,7 +254,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
                   Expanded(
                     // Values are hydrated synchronously in
                     // didChangeDependencies, before the first build, so
-                    // there's no loading-spinner state to show here.
+                    // no loading-spinner state is needed here —
+                    // SettingsScope already holds the data.
                     child: ListView(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
@@ -283,6 +294,14 @@ class _SettingsMenuState extends State<SettingsMenu> {
                               onChanged: (v) => setState(() => _autoSkip = v),
                             ),
                             SettingRowTile(
+                              title: 'Show Freeze Recovery Button',
+                              subtitle:
+                                  "Adds a manual restart button to the player, for a rare frozen-frame bug seen on some Linux/NVIDIA setups. Tap it if the video ever freezes after resuming from a long pause — it reloads the player and resumes a few seconds before where you left off.",
+                              value: _showFreezeRecoveryButton,
+                              onChanged: (v) =>
+                                  setState(() => _showFreezeRecoveryButton = v),
+                            ),
+                            SettingRowTile(
                               title: 'UI Performance Mode',
                               subtitle:
                                   'Disables frosted glass, blurs, and animations. Highly recommended for Android TVs.',
@@ -307,6 +326,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // Shares compactHeading with this
+                                  // file's other sub-headers below, plus
+                                  // settings_components.dart's
+                                  // SettingRowTile.title and
+                                  // search_input.dart's dropdown row
+                                  // title.
                                   Text(
                                     'Video Scaling Quality',
                                     style: typography.compactHeading.copyWith(
@@ -314,6 +339,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
+                                  // Shares tileSubtitle with the
+                                  // Hardware Decoding and Android
+                                  // Decoding captions below.
                                   Text(
                                     'Determines how the GPU scales video frames. Set to "None" if 1080p stutters on your TV.',
                                     style: typography.tileSubtitle.copyWith(
@@ -438,11 +466,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          // Left as a plain literal (11pt,
-                                          // height 1.5) — doesn't belong
-                                          // to any typography token, and
-                                          // its line-height differs from
-                                          // tileSubtitle's.
+                                          // Left as a plain literal — 11pt
+                                          // with 1.5 line height doesn't
+                                          // match any existing typography
+                                          // token (the nearest candidate,
+                                          // tileSubtitle, uses a
+                                          // different height).
                                           Text(
                                             'Run anistream-server on any PC, NAS, or Raspberry Pi on your LAN. '
                                             'See anistream_server/README.md for build instructions.',
@@ -473,6 +502,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // Shares compactHeading with the
+                                    // sub-headers above.
                                     Text(
                                       'Hardware Decoding',
                                       style: typography.compactHeading.copyWith(
@@ -480,6 +511,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
+                                    // Shares tileSubtitle with the
+                                    // captions above.
                                     Text(
                                       'Use your GPU to decode video streams for vastly improved performance and lower battery usage.',
                                       style: typography.tileSubtitle.copyWith(
@@ -542,6 +575,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    // Shares compactHeading with the
+                                    // sub-headers above.
                                     Text(
                                       'Hardware Decoding (Android)',
                                       style: typography.compactHeading.copyWith(
@@ -549,6 +584,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
+                                    // Shares tileSubtitle with the
+                                    // captions above.
                                     Text(
                                       'Phones run best on "mediacodec" (Zero-Copy). Android TVs with weak drivers may crash and require "mediacodec-copy".',
                                       style: typography.tileSubtitle.copyWith(
@@ -625,11 +662,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 ),
                               ),
                             )
-                          // Left as a plain literal (15/w600/0.2
-                          // spacing) — close to toastMessage (14/w600/0.2)
-                          // but a deliberately distinct size for this
-                          // primary CTA button, not routed through that
-                          // token.
+                          // Left as a plain literal — a deliberate 1pt
+                          // step up from toastMessage (14/w600/0.2) for
+                          // this primary CTA button.
                           : const Text(
                               'Save Changes',
                               style: TextStyle(

@@ -6,10 +6,12 @@ import 'package:media_kit/media_kit.dart';
 import '../../../core/settings/settings_service.dart';
 
 /// Shared mpv property configuration for the theater window — respects the
-/// user's saved hardware-decoding preference per platform.
+/// user's saved hardware-decoding preference per platform, and scales
+/// demuxer buffer size and software-decode thread count down under
+/// `uiPerformanceMode` (see DESIGN.md § 2).
 abstract final class PlayerConfigurator {
   /// Returns `Future<void>` and is awaited by callers: `NativePlayer.
-  /// setProperty` itself returns `Future<void>`, and each property set
+  /// setProperty` itself returns `Future\<void>\`, and each property set
   /// below needs to complete before the next one is meaningful, so the
   /// whole sequence is awaited rather than fired fire-and-forget.
   static Future<void> configureForTheater(
@@ -31,13 +33,42 @@ abstract final class PlayerConfigurator {
     } else if (hwdec != 'none') {
       await platform.setProperty('hwdec', hwdec);
     }
-    await _applyStreamingTuning(platform);
+    await _applyStreamingTuning(platform, settings.uiPerformanceMode);
   }
 
-  static Future<void> _applyStreamingTuning(NativePlayer platform) async {
+  static Future<void> _applyStreamingTuning(
+    NativePlayer platform,
+    bool uiPerformanceMode,
+  ) async {
     await platform.setProperty('cache', 'yes');
-    await platform.setProperty('demuxer-max-bytes', '150000000');
-    await platform.setProperty('demuxer-readahead-secs', '120');
+
+    // Demuxer cache/readahead is smaller under uiPerformanceMode — the
+    // flag this app already uses to mean "treat this device as
+    // memory/GPU-constrained" (most commonly an Android TV box; see
+    // DESIGN.md § 2). A smaller window still keeps mpv comfortably ahead
+    // of a sequentially-downloaded torrent stream, at a fraction of the
+    // resident memory cost of the value used elsewhere. Matches the
+    // bufferSize theater_screen.dart passes into PlayerConfiguration at
+    // Player construction, so the demuxer cache is never briefly at one
+    // size and then a different one moments later.
+    await platform.setProperty(
+      'demuxer-max-bytes',
+      uiPerformanceMode ? '70000000' : '150000000',
+    );
+    await platform.setProperty(
+      'demuxer-readahead-secs',
+      uiPerformanceMode ? '45' : '120',
+    );
+
+    // Caps software-decode thread count under uiPerformanceMode. Only
+    // reachable via mpv's software-decode fallback path — hwdec never
+    // touches this property — so this only matters once hardware decode
+    // has already failed. A weak TV SoC falling back to software
+    // shouldn't also be left to spin up mpv's own default thread count
+    // and compete with the UI isolate for CPU.
+    if (uiPerformanceMode) {
+      await platform.setProperty('vd-lavc-threads', '2');
+    }
 
     // HTTP reconnect tuning.
     //

@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 /// Tracks whether the app should currently present itself as a TV / D-Pad
@@ -8,47 +7,30 @@ import 'package:flutter/services.dart';
 /// traversal inside the theater controls, remote-style key shortcuts —
 /// versus a normal mouse/touch/keyboard interface (desktop, phone, tablet).
 ///
-/// Two independent signals feed [dpadModeActive]:
+/// [dpadModeActive] is driven by exactly one signal: [isTvPlatform], a
+/// one-time platform check (Android TV / Google TV "leanback" mode, via a
+/// MethodChannel to native Android — see the accompanying MainActivity.kt
+/// snippet below). Sticky for the process lifetime: a TV's remote is its
+/// only input, so there's nothing to "detect switching away from."
 ///
-///  1. [isTvPlatform] — a one-time platform check (Android TV / Google TV
-///     "leanback" mode, via a MethodChannel to native Android — see the
-///     accompanying MainActivity.kt snippet below). Sticky for the process
-///     lifetime: a TV's remote is its only input, so there's nothing to
-///     "detect switching away from."
-///  2. Live input sniffing — the moment we see a directional/remote key
-///     (D-Pad arrows, select, a gamepad face button, the TV "back" key)
-///     [dpadModeActive] flips on; the moment we see a pointer-down (mouse
-///     click or touch) it flips back off. This is what lets a desktop with a
-///     connected gamepad, or a phone paired with a bluetooth remote, get the
-///     same treatment as a real TV — and lets a TV box with a mouse attached
-///     fall back to pointer-style UI.
+/// Desktop, Android phone, and iOS never enter D-Pad mode, regardless of
+/// connected keyboards, gamepads, or Bluetooth remotes — a directional key
+/// or gamepad button is ordinary keyboard/pointer input on those
+/// platforms, not a TV navigation signal, and is never treated as one.
 ///
 /// This intentionally does NOT reuse [FocusManager.instance.highlightMode]
 /// — that value defaults to "traditional" (rings visible) on desktop
-/// platforms from the very first frame, before any real input has happened,
-/// which is exactly the "D-Pad bleeding onto PC" bug this class exists to
-/// fix. [dpadModeActive] instead starts `false` everywhere except a
-/// confirmed TV, and only turns on after D-Pad-shaped input is actually
-/// observed.
+/// platforms from the very first frame, before any real input has
+/// happened, which is exactly the "D-Pad bleeding onto PC" bug this class
+/// exists to fix. [dpadModeActive] is `true` if and only if the app is
+/// running on a confirmed TV.
 class InputModeController extends ChangeNotifier {
   InputModeController._();
   static final InputModeController instance = InputModeController._();
 
   static const MethodChannel _channel = MethodChannel('anistream/device_mode');
 
-  static final Set<LogicalKeyboardKey> _dpadKeys = {
-    LogicalKeyboardKey.arrowUp,
-    LogicalKeyboardKey.arrowDown,
-    LogicalKeyboardKey.arrowLeft,
-    LogicalKeyboardKey.arrowRight,
-    LogicalKeyboardKey.select,
-    LogicalKeyboardKey.gameButtonA,
-    LogicalKeyboardKey.gameButtonB,
-    LogicalKeyboardKey.goBack,
-  };
-
   bool _isTvPlatform = false;
-  bool _dpadRecentlyUsed = false;
   bool _initialized = false;
 
   /// True on a confirmed Android TV / Google TV device. Sticky for the
@@ -56,10 +38,9 @@ class InputModeController extends ChangeNotifier {
   bool get isTvPlatform => _isTvPlatform;
 
   /// True whenever the D-Pad/remote-control interaction model should drive
-  /// visuals and key handling: either we're on a TV, or the most recent
-  /// input event we saw was a directional/remote-style key rather than a
-  /// pointer.
-  bool get dpadModeActive => _isTvPlatform || _dpadRecentlyUsed;
+  /// visuals and key handling. Equivalent to [isTvPlatform] — see the
+  /// class doc comment for why no other platform ever sets this.
+  bool get dpadModeActive => _isTvPlatform;
 
   /// Call once, early (see [InputModeScope]). Safe to call more than once —
   /// later calls are no-ops.
@@ -68,10 +49,6 @@ class InputModeController extends ChangeNotifier {
     _initialized = true;
 
     _isTvPlatform = await _detectTv();
-
-    HardwareKeyboard.instance.addHandler(_onKeyEvent);
-    GestureBinding.instance.pointerRouter.addGlobalRoute(_onPointerEvent);
-
     if (_isTvPlatform) notifyListeners();
   }
 
@@ -87,22 +64,6 @@ class InputModeController extends ChangeNotifier {
       return false;
     } on PlatformException {
       return false;
-    }
-  }
-
-  bool _onKeyEvent(KeyEvent event) {
-    if (event is! KeyDownEvent) return false;
-    if (_dpadKeys.contains(event.logicalKey) && !_dpadRecentlyUsed) {
-      _dpadRecentlyUsed = true;
-      notifyListeners();
-    }
-    return false; // Passive observer only — never consume the event.
-  }
-
-  void _onPointerEvent(PointerEvent event) {
-    if (event is PointerDownEvent && _dpadRecentlyUsed) {
-      _dpadRecentlyUsed = false;
-      notifyListeners();
     }
   }
 

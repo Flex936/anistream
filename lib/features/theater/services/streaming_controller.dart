@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:libtorrent_flutter/libtorrent_flutter.dart';
 
 import '../../../core/logging/app_logger.dart';
+import '../../../core/settings/settings_service.dart';
 import '../../../data/torrent/services/torrent_parser.dart';
 import 'streaming_controller_base.dart';
 
@@ -45,6 +46,26 @@ class StreamingController extends BaseStreamingController {
   int? _requestedEpisode;
   bool _filesResolved = false;
 
+  // Guards the window between a batch-file selection being requested and
+  // its stream actually reaching `_isReadyToPlay` — `selectBatchFile`'s
+  // existing `_isReadyToPlay` check only closes the window *after* that
+  // point, not during it, so a stray repeat tap (D-pad double-fire, a
+  // second pointer event) in between could otherwise call `_beginStream`
+  // twice and leave the first call's local stream/subscription orphaned.
+  bool _isMountingStream = false;
+
+  // Ceiling on each phase of reaching `_isReadyToPlay` — started in
+  // `initialize()` to cover metadata resolution (no peers hold this info
+  // hash), then restarted fresh in `_beginStream` to cover the buffering
+  // phase separately (a dried-up swarm after file selection), so time
+  // spent on the batch picker in between never eats into the buffering
+  // budget. Matches the companion Go server's own documented 3-minute
+  // metadata timeout (ARCHITECTURE.md § 6) so an on-device session fails
+  // out on a comparable timescale instead of spinning on the loading
+  // overlay forever with no path to `_hasError`.
+  static const Duration _kStreamTimeout = Duration(minutes: 3);
+  Timer? _streamTimeoutTimer;
+
   @override
   Future<void> initialize(String magnetUri, {int? episodeNumber}) async {
     AppLogger.i(
@@ -66,6 +87,7 @@ class StreamingController extends BaseStreamingController {
       );
 
       _torrentId = engine.addMagnet(magnetUri);
+      _streamTimeoutTimer = Timer(_kStreamTimeout, _handleStreamTimeout);
     } catch (e) {
       _handleError('Failed to initialize engine: $e');
     }
@@ -149,8 +171,9 @@ class StreamingController extends BaseStreamingController {
       'StreamingController',
       'Batch torrent detected — ${_batchFiles.length} files',
     );
-    if (_torrentId == null || _isReadyToPlay) return;
+    if (_torrentId == null || _isReadyToPlay || _isMountingStream) return;
 
+    _isMountingStream = true;
     _needsManualSelection = false;
     _statusText = 'Initializing selected file…';
     notifyListeners();
@@ -158,10 +181,52 @@ class StreamingController extends BaseStreamingController {
   }
 
   void _beginStream(LibtorrentFlutter engine, {int? fileIndex}) {
+    // Restarts the ceiling fresh for the buffering phase. The timer
+    // `initialize()` started only needs to cover metadata resolution —
+    // for a batch torrent, the user may spend any amount of time
+    // browsing BatchEpisodePickerOverlay before selecting a file, and
+    // that decision time shouldn't eat into the budget the swarm gets to
+    // actually deliver sequential bytes afterward.
+    _streamTimeoutTimer?.cancel();
+    _streamTimeoutTimer = Timer(_kStreamTimeout, _handleStreamTimeout);
+
+    // Tears down any previous subscription before mounting a new one —
+    // defensive even though `_isMountingStream`/`_isReadyToPlay` above
+    // already keep `selectBatchFile` from re-entering this method while
+    // one mount is in flight, since `_beginStream` also has the
+    // auto-resolved single-file call path in `_resolveFilesAndStartStream`.
+    unawaited(_streamSub?.cancel() ?? Future<void>.value());
+
     try {
-      final streamInfo = fileIndex == null
-          ? engine.startStream(_torrentId!)
-          : engine.startStream(_torrentId!, fileIndex: fileIndex);
+      // maxCacheBytes bounds the engine's own RAM piece cache — left
+      // unbounded normally, capped under uiPerformanceMode (the flag
+      // this app already uses to mean "treat this device as
+      // memory-constrained", most commonly an Android TV box; see
+      // DESIGN.md § 2). Read via SettingsCache rather than SettingsScope:
+      // StreamingController has no BuildContext of its own to walk up to
+      // SettingsScope, the same reason AnilistQueryService reads
+      // filterEcchi this way — see settings_service.dart.
+      final uiPerformanceMode = SettingsCache.current.uiPerformanceMode;
+
+      // fileIndex and maxCacheBytes are both non-nullable int parameters
+      // on startStream() — passing null for either is a type error.
+      // Getting default behavior (auto-selected file, unbounded cache)
+      // requires omitting the named argument entirely, hence branching
+      // on inclusion here rather than passing a null/sentinel value.
+      final StreamInfo streamInfo;
+      if (fileIndex != null) {
+        streamInfo = uiPerformanceMode
+            ? engine.startStream(
+                _torrentId!,
+                fileIndex: fileIndex,
+                maxCacheBytes: 100 * 1024 * 1024,
+              )
+            : engine.startStream(_torrentId!, fileIndex: fileIndex);
+      } else {
+        streamInfo = uiPerformanceMode
+            ? engine.startStream(_torrentId!, maxCacheBytes: 100 * 1024 * 1024)
+            : engine.startStream(_torrentId!);
+      }
 
       _streamUrl = streamInfo.url;
       _updateStatus('Buffering… 0.0%');
@@ -189,13 +254,15 @@ class StreamingController extends BaseStreamingController {
 
           if (pct >= _kPreBufferThreshold) {
             _isReadyToPlay = true;
+            _isMountingStream = false;
+            _streamTimeoutTimer?.cancel();
             _statusText = 'Starting playback engine...';
             notifyListeners();
           }
         } catch (_) {
           // Stream entry not yet registered — silently wait.
         }
-      });
+      }, onError: (Object e) => _handleError('Stream engine error: $e'));
     } catch (e) {
       _handleError('Failed to mount stream: $e');
     }
@@ -204,6 +271,19 @@ class StreamingController extends BaseStreamingController {
   int? _guessEpisodeNumber(String rawName) {
     final meta = TorrentParser.parse(rawName);
     return meta.episode != -1 ? meta.episode : null;
+  }
+
+  /// Fires after [_kStreamTimeout] if the stream still isn't playable —
+  /// no-ops if it already succeeded or failed for some other reason in
+  /// the meantime (the timer isn't reliably cancelable from every one of
+  /// those paths, so this checks state directly rather than assuming the
+  /// timer was already stopped).
+  void _handleStreamTimeout() {
+    if (_isReadyToPlay || _hasError) return;
+    _handleError(
+      'Timed out waiting for a playable stream — no peers found, or the '
+      'swarm never reached a usable download speed.',
+    );
   }
 
   void _updateStatus(String text) {
@@ -215,6 +295,8 @@ class StreamingController extends BaseStreamingController {
 
   void _handleError(String error) {
     _hasError = true;
+    _isMountingStream = false;
+    _streamTimeoutTimer?.cancel();
     _statusText = error;
     notifyListeners();
     AppLogger.e('StreamingController', error);
@@ -222,6 +304,7 @@ class StreamingController extends BaseStreamingController {
 
   @override
   void dispose() {
+    _streamTimeoutTimer?.cancel();
     unawaited(_torrentSub?.cancel() ?? Future<void>.value());
     unawaited(_streamSub?.cancel() ?? Future<void>.value());
 

@@ -59,6 +59,10 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 
 ---
 
+  *Items #4 and #5 previously tracked here have since been resolved — removed from this list accordingly.*
+
+---
+
 ### 6. Add genre/mood-based shelves to Home
 
 **Priority:** Low · **Size:** Medium · **Ref:** `DESIGN.md` § 5.2
@@ -96,8 +100,12 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 **Acceptance criteria:**
 
 - [ ] `calendar_card.dart`: replace the raw `Color(0x4D000000)` shadow with `AppPalette.black.withValues(alpha: ...)`
-- [ ] `episode_tile.dart`: route its header row's hardcoded 150ms `AnimatedContainer` duration through `perfDuration(uiPerformanceMode, ...)`
-- [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `navbar.dart`
+- [ ] `episode_tile.dart`: route its hardcoded 150ms duration through `perfDuration(uiPerformanceMode, ...)`
+- [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `settings_menu.dart`, `navbar.dart`
 - [ ] `navbar.dart`: bump `_NavIconButton` from 44×44 to the documented 48×48 minimum
 
-*(Two items previously listed here are resolved: `episode_tile.dart`'s second, 250ms duration lived on an `Expansible` that no longer exists — the tile no longer expands/collapses; and `settings_menu.dart` already uses `context.isMobile`. `search_filter_panel.dart`'s `ChoiceChip` autofocus item, formerly listed here too, is also resolved — the status filter is now a single-autofocus `CupertinoSlidingSegmentedControl` — and has been dropped from this list accordingly.)*
+## Platform & Playback
+
+*Unlike the sections above, this one isn't drawn from the design-system audit — it doesn't reference a `DESIGN.md` § 5 entry, since the issue lives in native playback internals, not the design system. Tracked here per explicit request rather than in a separate document; refs point to `ARCHITECTURE.md` § 7 instead.*
+
+*Item 9 (replace the ineffective automatic freeze mitigation with a manual restart button) has since shipped — see `ARCHITECTURE.md` § 7 for the current mitigation. Removed from this list accordingly. Filing the upstream `media-kit/media-kit` issue described there remains outstanding — worth its own tracked item if this backlog gets a general pass later.*

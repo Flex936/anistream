@@ -7,11 +7,23 @@ class AppSettings {
   final bool autoPlayEnabled;
   final bool autoSkip;
 
-  // Performance
+  /// Gates a manual "restart player" button shown in the theater top bar
+  /// — a recovery action for a confirmed Linux/NVIDIA/Wayland video-freeze
+  /// bug in media_kit_video's texture delivery after a long pause, where
+  /// full player recreation is the only recovery (see ARCHITECTURE.md
+  /// § 7 for the diagnostic trail, including two automatic mitigations
+  /// that were tried and confirmed ineffective before landing here).
+  /// Defaults to `false`: the bug is confirmed on that one platform
+  /// combination only, and the button is a deliberate, user-triggered
+  /// action rather than anything automatic, since no mpv property
+  /// distinguishes a frozen frame from a healthy one.
+  final bool showFreezeRecoveryButton;
+
+  // ── PERFORMANCE ──
   final bool uiPerformanceMode;
   final String videoFilterQuality;
 
-  // Remote server
+  // ── REMOTE SERVER ──
   /// When true, [TheaterScreen] uses [RemoteStreamingController] instead of
   /// the on-device libtorrent engine.
   final bool serverMode;
@@ -33,6 +45,7 @@ class AppSettings {
     this.androidHwDec = 'mediacodec-copy',
     this.autoPlayEnabled = false,
     this.autoSkip = false,
+    this.showFreezeRecoveryButton = false,
     this.uiPerformanceMode = false,
     this.videoFilterQuality = 'low',
     this.serverMode = false,
@@ -46,19 +59,20 @@ class AppSettings {
 /// Services with no [BuildContext] — [AnilistQueryService] is instantiated
 /// fresh in `HomeScreen`, `SearchResultsScreen`, `WatchlistController`,
 /// `ScheduledScreen`, etc., none of which have an ambient widget tree to
-/// walk up to [SettingsScope] — need a way to read a setting (currently
-/// just `filterEcchi`) without a `BuildContext`.
+/// walk up to [SettingsScope] — previously worked around this by re-reading
+/// `shared_preferences` directly on every call. That direct read is what
+/// caused the "Filter Ecchi" bug: it went through `SharedPreferencesAsync`,
+/// a *different* underlying native store than [SettingsService] wrote
+/// through (`SharedPreferences.getInstance()`, the legacy singleton API).
+/// As of shared_preferences 2.3+, those two APIs are not guaranteed to
+/// share a backend — the setting looked saved, but nothing that read it
+/// through the other API ever saw the new value.
 ///
-/// [SettingsController] is the only writer (on both
-/// [SettingsController.reload] and [SettingsController.update]), so any
-/// non-widget service reads the exact same in-memory value a widget under
-/// [SettingsScope] would. This matters specifically because
-/// `shared_preferences`' `SharedPreferencesAsync` API and its legacy
-/// `SharedPreferences.getInstance()` singleton are not guaranteed to share
-/// a backend as of shared_preferences 2.3+ — reading a setting through a
-/// different API than it was written through can silently return a stale
-/// value. Routing every read through this single in-memory cache sidesteps
-/// that entirely: there is only one store, and only one writer.
+/// [SettingsCache] fixes this at the root: [SettingsController] is the only
+/// writer (on both [SettingsController.reload] and [SettingsController.update]),
+/// so any non-widget service reads the exact same in-memory value a widget
+/// under [SettingsScope] would — no second disk round-trip, no second store
+/// to silently drift out of sync with the first.
 abstract final class SettingsCache {
   static AppSettings _current = const AppSettings();
   static AppSettings get current => _current;
@@ -74,6 +88,7 @@ class SettingsService {
   static const String kAndroidHwDec = 'android_hwdec';
   static const String kAutoPlayEnabled = 'autoplay_enabled';
   static const String kAutoSkip = 'auto_skip';
+  static const String kShowFreezeRecoveryButton = 'show_freeze_recovery_button';
   static const String kUiPerformanceMode = 'ui_performance_mode';
   static const String kVideoFilterQuality = 'video_filter_quality';
   static const String kServerMode = 'server_mode';
@@ -84,10 +99,11 @@ class SettingsService {
   /// per install, not on every cold start.
   static const String _kMigrationDoneKey = 'settings_migrated_to_async_v1';
 
-  // Every read/write in this service goes through the same
-  // shared_preferences API the rest of the app standardizes on
-  // (AnilistAuthService's token, TheaterControls' saved volume) — see
-  // SettingsCache's doc comment above for why mixing APIs is unsafe.
+  // ── Every read/write in this service now goes through the SAME
+  // shared_preferences API the rest of the app already standardized on
+  // (AnilistAuthService's token, TheaterControls' saved volume). Mixing the
+  // legacy singleton API with this new one was the actual bug — see
+  // SettingsCache's doc comment above. ──
   final SharedPreferencesAsync _prefs;
 
   SettingsService({SharedPreferencesAsync? prefs})
@@ -102,6 +118,8 @@ class SettingsService {
       androidHwDec: await _prefs.getString(kAndroidHwDec) ?? 'mediacodec-copy',
       autoPlayEnabled: await _prefs.getBool(kAutoPlayEnabled) ?? false,
       autoSkip: await _prefs.getBool(kAutoSkip) ?? false,
+      showFreezeRecoveryButton:
+          await _prefs.getBool(kShowFreezeRecoveryButton) ?? false,
       uiPerformanceMode: await _prefs.getBool(kUiPerformanceMode) ?? false,
       videoFilterQuality: await _prefs.getString(kVideoFilterQuality) ?? 'low',
       serverMode: await _prefs.getBool(kServerMode) ?? false,
@@ -112,15 +130,19 @@ class SettingsService {
   }
 
   Future<void> save(AppSettings settings) async {
-    // Fired concurrently — these are independent keys, so there's no
+    // ── Fired concurrently — these are independent keys, so there's no
     // ordering dependency between them, and the settings menu shouldn't
-    // block on 9 sequential awaits just to close the dialog.
+    // block on 9 sequential awaits just to close the dialog. ──
     await Future.wait([
       _prefs.setBool(kFilterEcchi, settings.filterEcchi),
       _prefs.setString(kHwDec, settings.hardwareDecoding),
       _prefs.setString(kAndroidHwDec, settings.androidHwDec),
       _prefs.setBool(kAutoPlayEnabled, settings.autoPlayEnabled),
       _prefs.setBool(kAutoSkip, settings.autoSkip),
+      _prefs.setBool(
+        kShowFreezeRecoveryButton,
+        settings.showFreezeRecoveryButton,
+      ),
       _prefs.setBool(kUiPerformanceMode, settings.uiPerformanceMode),
       _prefs.setString(kVideoFilterQuality, settings.videoFilterQuality),
       _prefs.setBool(kServerMode, settings.serverMode),
@@ -133,7 +155,7 @@ class SettingsService {
   /// `SharedPreferences.getInstance()` API into the async store this class
   /// now reads/writes exclusively, so upgrading users don't silently lose
   /// settings they'd already configured (Filter Ecchi being the one that
-  /// actually matters, since it's the only key another service also reads
+  /// actually mattered, since it's the only key another service also read
   /// independently — but every key is migrated for safety).
   Future<void> _migrateLegacyPrefsIfNeeded() async {
     final alreadyMigrated = await _prefs.getBool(_kMigrationDoneKey) ?? false;
@@ -162,6 +184,7 @@ class SettingsService {
         migrateString(kAndroidHwDec),
         migrateBool(kAutoPlayEnabled),
         migrateBool(kAutoSkip),
+        migrateBool(kShowFreezeRecoveryButton),
         migrateBool(kUiPerformanceMode),
         migrateString(kVideoFilterQuality),
         migrateBool(kServerMode),

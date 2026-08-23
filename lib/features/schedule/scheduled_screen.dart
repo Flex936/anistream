@@ -179,6 +179,13 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
                     }
 
                     return _DayShelf(
+                      // Keyed by the stable weekday name so a real
+                      // midnight rollover mid-session (a TV box left
+                      // running) — which shifts which day sits at this
+                      // list position — replaces this Element instead of
+                      // updating it in place with a different day's data
+                      // under the old one's identity.
+                      key: ValueKey(dayName),
                       // The stable weekday name, not displayTitle —
                       // "Today"/"Tomorrow" describe the same underlying
                       // weekday differently depending on the current
@@ -217,6 +224,7 @@ class _DayShelf extends StatelessWidget {
   final bool uiPerformanceMode;
 
   const _DayShelf({
+    super.key,
     required this.regionKey,
     required this.title,
     required this.items,
@@ -230,6 +238,13 @@ class _DayShelf extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final typography = context.appTypography;
+    final cardSizes = context.appCardSizes;
+    // Same width-driven-poster + fixed-text-block calculation
+    // AnimeCarousel uses, keeping every shelf's height in sync with the
+    // shared card-sizing tokens.
+    final shelfHeight =
+        cardSizes.shelfWidth / cardSizes.posterAspectRatio +
+        CalendarCard.kTextBlockHeight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +272,7 @@ class _DayShelf extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 300,
+          height: shelfHeight,
           // DpadRegion: this shelf is its own visual section, matching
           // the Home carousels' convention. memoryKey uses the stable
           // regionKey (weekday name) so the last-focused card in a given
@@ -282,7 +297,7 @@ class _DayShelf extends StatelessWidget {
                   // rebuild, complementing DpadRegion's own memoryKey
                   // (which remembers which index was focused).
                   key: ValueKey(items[i].id),
-                  width: 160,
+                  width: cardSizes.shelfWidth,
                   child: CalendarCard(
                     anime: items[i],
                     formatLocalTime: formatLocalTime,
