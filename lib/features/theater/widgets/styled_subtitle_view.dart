@@ -4,13 +4,12 @@ import '../services/native_subtitle_parser.dart';
 
 /// Fallback text size, as a fraction of the video's height, for a cue
 /// with no usable size info from Media3 — see [StyledCue.fontSizeFraction].
-/// Kept as a fraction rather than the flat px value this replaces, so
-/// subtitles stay roughly the same relative size across a phone window,
-/// a maximized desktop window, and a TV, instead of looking right only
-/// on whichever one the flat value happened to be tuned against. 0.045
-/// reproduces close to the old 18px constant at a typical phone-landscape
-/// video height (~400dp), while scaling up sensibly on a much taller TV
-/// display.
+/// Kept as a fraction rather than a flat px value so subtitles stay
+/// roughly the same relative size across a phone window, a maximized
+/// desktop window, and a TV, instead of looking right only on whichever
+/// one a flat value happened to be tuned against. 0.045 lands close to
+/// an 18px reference size at a typical phone-landscape video height
+/// (~400dp), while scaling up sensibly on a much taller TV display.
 const double _kDefaultFontSizeFraction = 0.045;
 
 /// Clamp bounds (logical px) for the resolved cue font size, regardless
@@ -23,11 +22,11 @@ const double _kMinFontSize = 12.0;
 const double _kMaxFontSize = 48.0;
 
 /// Renders [StyledCue]s from [NativeSubtitleParser] — real positioning
-/// and per-run styling from Media3's own TtmlParser/SsaParser, not the
-/// single-fixed-style plain text video_player's `ClosedCaption` widget
-/// is limited to. Sits in the same spot `ClosedCaption` used to (see
-/// ExoTheaterScreen), driven the same way: rebuilt on every position
-/// tick via a `ValueListenableBuilder`.
+/// and per-run styling from Media3's own TtmlParser/SsaParser, unlike
+/// the single-fixed-style plain text video_player's `ClosedCaption`
+/// widget is limited to. Occupies the same spot a `ClosedCaption` widget
+/// would (see ExoTheaterScreen), rebuilt the same way too: on every
+/// position tick via a `ValueListenableBuilder`.
 ///
 /// Must be given the video's true, full-height bounds (not pre-shrunk to
 /// dodge the controls bar) — `Cue.line`/`Cue.position` are fractions of
@@ -91,9 +90,9 @@ class StyledSubtitleView extends StatelessWidget {
   /// if a release that leans on them shows up visibly off.
   ///
   /// Both branches keep cues clear of [reservedBottom] (the controls
-  /// bar) explicitly, now that this widget is measured against the
-  /// video's true full height rather than a pre-shrunk area — nothing
-  /// upstream reserves that space on this widget's behalf anymore.
+  /// bar) explicitly — this widget is measured against the video's true
+  /// full height, so nothing upstream reserves that space on its
+  /// behalf; each cue has to clear it on its own.
   Widget _positionCue(StyledCue cue, double width, double height) {
     final hasPosition = cue.line != null || cue.position != null;
 
@@ -111,15 +110,14 @@ class StyledSubtitleView extends StatelessWidget {
 
     // Generous estimate for a cue box's own rendered height — enough
     // headroom for several wrapped/explicit-newline lines at _CueText's
-    // resolved font size. Not a real per-cue measurement (that would mean
-    // laying the text out twice, once to measure and once to render, for
-    // every active cue on every frame) — just enough to keep a
-    // positioned sign's box from dipping into the reserved zone at all,
-    // which is the actual bug being fixed here, not pixel-perfect
-    // placement for unusually tall cues. A cue rendered at
+    // resolved font size. Not a real per-cue measurement (that would
+    // mean laying the text out twice, once to measure and once to
+    // render, for every active cue on every frame) — just enough to
+    // keep a positioned sign's box clear of the reserved zone, not
+    // pixel-perfect placement for unusually tall cues. A cue rendered at
     // _kMaxFontSize and wrapped across several lines can still exceed
-    // this in principle — same known limitation as before automatic
-    // sizing, just worth re-flagging now that font size isn't fixed.
+    // this estimate in principle — an accepted limitation given each
+    // cue's font size varies rather than being fixed.
     const estimatedCueBoxHeight = 100.0;
     final maxAllowedTop = (height - reservedBottom - estimatedCueBoxHeight)
         .clamp(0.0, height);
@@ -214,15 +212,14 @@ class _CueText extends StatelessWidget {
 
   /// Below this, [Color.computeLuminance]'s relative-luminance value (the
   /// standard WCAG formula — 0.0 for black, 1.0 for white) is treated as
-  /// dark enough that a black outline would blend into it, which is
-  /// exactly the failure mode this switch exists to avoid: a dark
-  /// PrimaryColour style (black, or a deep saturated Signs color like a
-  /// dark red or navy) rendered with the old always-black outline could
-  /// vanish entirely against dark footage. 0.4 sits comfortably above
-  /// black/near-black and the common dark saturated Signs colors, and
-  /// comfortably below white, yellow, and other light Dialogue colors —
-  /// tune this constant directly if a real release's colors land
-  /// somewhere this doesn't handle well.
+  /// dark enough that a black outline would blend into it — exactly the
+  /// failure mode this switch exists to avoid: a dark PrimaryColour style
+  /// (black, or a deep saturated Signs color like a dark red or navy)
+  /// needs a light outline, or it vanishes entirely against dark
+  /// footage. 0.4 sits comfortably above black/near-black and the common
+  /// dark saturated Signs colors, and comfortably below white, yellow,
+  /// and other light Dialogue colors — tune this constant directly if a
+  /// real release's colors land somewhere this doesn't handle well.
   static const double _darkTextLuminanceThreshold = 0.4;
 
   /// Picks [_whiteOutline] for a dark [textColor], [_blackOutline]

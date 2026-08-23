@@ -11,7 +11,7 @@
 //  GET  /api/stream/:id                    → status (state, buffer_pct, stream_url, files …)
 //  POST /api/stream/:id/select {file_index}→ pick a file from a batch torrent
 //  GET  /api/stream/:id/video              → HTTP range-request video stream (MPV opens this)
-//  GET  /api/stream/:id/subtitles          → embedded subtitle tracks (only once fully downloaded)
+//  GET  /api/stream/:id/subtitles          → embedded subtitle tracks (once ≥5% downloaded)
 //  GET  /api/stream/:id/subtitles/:index   → that track, ?format=vtt|ass|ttml (default vtt)
 // DELETE /api/stream/:id                   → explicit cleanup
 
@@ -70,7 +70,6 @@ type statusResp struct {
 	Files      []fileInfo `json:"files,omitempty"`
 	Error      string     `json:"error,omitempty"`
 
-	// ── Subtitles (added) ──────────────────────────────────────────────
 	// SubtitlesAvailable: true once it's worth the client even trying —
 	// see subtitleProbeEligible's doc comment for why this is a low bar,
 	// not "fully downloaded".
@@ -98,7 +97,6 @@ type session struct {
 	active     *torrent.File   // the file currently being streamed
 	lastAccess time.Time
 
-	// ── Subtitles (added) ──────────────────────────────────────────────
 	// subtitleTracks caches the last successful probe so repeat polls of
 	// /subtitles don't re-shell ffprobe every time. Left nil (not an
 	// empty slice) until the first successful probe — a genuinely
@@ -112,15 +110,15 @@ type session struct {
 	// it was produced — lets repeat requests skip re-running ffmpeg/
 	// astisub when nothing new has arrived, while still re-extracting
 	// (to pick up newly-downloaded cues) once it has. Keyed by format as
-	// well as track index (added) — the same track re-requested as ass
-	// vs ttml must not be served a stale result cached for the other
-	// format. See extractedSubtitle.
+	// well as track index — the same track re-requested as ass vs ttml
+	// must not be served a stale result cached for the other format. See
+	// extractedSubtitle.
 	extractedSubtitles map[subtitleCacheKey]*extractedSubtitle
 }
 
 // subtitleCacheKey identifies one (track, output format) pair in
-// session.extractedSubtitles. Added alongside format-aware subtitle
-// extraction — see SubtitleFormat in subtitle_extractor.go.
+// session.extractedSubtitles — see SubtitleFormat in
+// subtitle_extractor.go.
 type subtitleCacheKey struct {
 	index  int
 	format SubtitleFormat
@@ -261,14 +259,13 @@ func (s *session) watchBuffer(f *torrent.File) {
 }
 
 // subtitleProbeEligible reports whether f has enough downloaded to be
-// worth attempting a probe/extraction against at all. Deliberately as low
-// as bufferThreshold — verified directly (see chat notes) that ffmpeg's
-// Matroska demuxer handles a partially-downloaded file gracefully: it
-// reads the Tracks header (near the front of the file, not the tail) plus
-// however many complete Clusters have arrived, then stops cleanly at the
-// first gap rather than hanging or corrupting output. That means a probe
-// attempted early just returns less content, not garbage — there's no
-// need to hold off the way there was before this was tested.
+// worth attempting a probe/extraction against at all. Deliberately as
+// low as bufferThreshold: ffmpeg's Matroska demuxer handles a
+// partially-downloaded file gracefully — it reads the Tracks header
+// (near the front of the file, not the tail) plus however many complete
+// Clusters have arrived, then stops cleanly at the first gap rather than
+// hanging or corrupting output. A probe attempted early just returns
+// less content, not garbage.
 func subtitleProbeEligible(f *torrent.File) bool {
 	if f.Length() == 0 {
 		return false
@@ -354,8 +351,9 @@ func newID() string {
 // otherwise never has to treat as untrusted filesystem input — video
 // serving always goes through torrent.Reader's safe io.ReadSeeker
 // interface, never a raw OS path. Shelling out to ffprobe/ffmpeg against
-// a literal path is new, so this containment check is added specifically
-// for that new exposure.
+// a literal path is the one place untrusted input reaches the
+// filesystem directly, so this containment check exists specifically
+// for that exposure.
 func (sv *srv) filePath(f *torrent.File) (string, error) {
 	full := filepath.Join(sv.dataDir, f.Path())
 
@@ -652,10 +650,9 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 
-	// ── Format selection (added) ────────────────────────────────────────
-	// Defaults to vtt so any client that predates this — including
-	// video_player's Dart-side WebVTT-text path — keeps working with zero
-	// changes. ass/ttml are the new native-parser paths — see
+	// Defaults to vtt so a client that never specifies a format —
+	// including video_player's Dart-side WebVTT-text path — keeps
+	// working unchanged. ass/ttml are the native-parser paths — see
 	// native_subtitle_parser.dart / SubtitleParserPlugin.kt on the
 	// Flutter side.
 	format := SubtitleFormat(r.URL.Query().Get("format"))

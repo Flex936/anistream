@@ -91,9 +91,10 @@ These are documented as-is per the Living Documentation Rule — **do not silent
 
 - **Hand-built focusables lack accessibility semantics.** `AnimeCard`, `CalendarCard`, `EpisodeTile`'s header, `TorrentTile`, and similar widgets are `AnimatedContainer` + `DpadFocusable`/`GestureDetector` compositions rather than real Material controls. `dpad` gives them correct D-pad/keyboard focus behavior, but none carry an explicit `Semantics(button: true, label: ...)`, so screen readers (TalkBack/VoiceOver) announce nothing meaningful when focus lands on them.
 - **System text-scaling hasn't been explicitly verified.** No `MediaQuery`/`TextScaler` override exists today, which likely means the OS text-size setting is respected by default — unconfirmed on-device across Settings, Watchlist, and Anime Details.
-- **The `< 600` → `context.isMobile`/`Breakpoints` migration (§ 3) is incomplete.** `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `settings_menu.dart`, and `navbar.dart` still inline `MediaQuery.sizeOf(context).width < 600` — versus `episode_tile.dart`, `hero_banner.dart`, `torrent_tile.dart`, `search_results_screen.dart`, and `watchlist_cards.dart`'s `ListCard`, which already use `context.isMobile`. Migrate the remaining call sites opportunistically rather than in one sweeping PR.
+- **The `< 600` → `context.isMobile`/`Breakpoints` migration (§ 3) is incomplete.** `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, and `navbar.dart` still inline `MediaQuery.sizeOf(context).width < 600` — versus `episode_tile.dart`, `hero_banner.dart`, `torrent_tile.dart`, `search_results_screen.dart`, `settings_menu.dart`, and `watchlist_cards.dart`'s `ListCard`, which already use `context.isMobile`. Migrate the remaining call sites opportunistically rather than in one sweeping PR.
 - **`navbar.dart`'s `_NavIconButton`** (the mobile Search/Menu buttons) is a fixed 44×44, short of § 3's 48×48 minimum mobile touch target.
-- **`search_filter_panel.dart`** sets `autofocus: true` on all three `ChoiceChip`s in its status-filter `.map()`, rather than exactly one per § 4's autofocus rule.
+
+*(`search_filter_panel.dart`'s triple `autofocus: true` on its status-filter `ChoiceChip`s, previously listed here, no longer applies — that control is now a single `CupertinoSlidingSegmentedControl` with one `autofocus: true`, already compliant with § 4's rule. Removed accordingly.)*
 
 ### 5.2 Structure
 
@@ -110,12 +111,14 @@ These are documented as-is per the Living Documentation Rule — **do not silent
 
   *(`CalendarCard`, the watchlist screen's `ListCard`, and `HeroCard` previously listed here have since converged onto `AppRadii.small`/`AppRadii.tag` — removed from this list accordingly.)*
 - **Hardcoded colors:** `hero_banner.dart`'s AniList/MyAnimeList external-link buttons use raw third-party brand colors (`Color(0xFF3DB4F2)`, `Color(0xFF2E51A2)`) rather than `AppPalette` — accepted as-is, since these represent another product's brand identity rather than this app's own palette. Separately, `calendar_card.dart`'s card shadow uses a raw `Color(0x4D000000)` instead of `AppPalette.black.withValues(...)` — this one is a genuine gap, not an intentional exception.
-- **`episode_tile.dart`** hardcodes two animation durations instead of routing them through `perfDuration(uiPerformanceMode, ...)` per § 2's Animation duration rule — the header's `AnimatedContainer` (150ms) and its `Expansible`'s `AnimationStyle` (250ms).
-- **`BatchEpisodePickerOverlay` predates the `AppMaterials` tiers** (§ 1.4) and still uses a raw `sigma` literal rather than `context.appMaterials.standard` — an outlier to the new centered-modal pattern `TorrentSearchModal` establishes, not yet migrated.
+- **`episode_tile.dart`** hardcodes its header row's `AnimatedContainer` duration (150ms) instead of routing it through `perfDuration(uiPerformanceMode, ...)` per § 2's Animation duration rule.
+
+  *(An `Expansible`/`AnimationStyle` (250ms) previously listed here no longer exists — the tile no longer expands/collapses, so that half of the item is resolved by removal rather than migration.)*
+- **`BatchEpisodePickerOverlay` doesn't use `FrostedContainer`/blur at all today** — flat, semi-transparent `Container`s throughout, rather than the glassmorphic backdrop+card treatment § 1.4 establishes as the canonical centered-modal pattern (see `TorrentSearchModal`). A bigger gap than previously tracked here (a mismatched `sigma` literal), not a smaller one.
 
 ### 5.4 Accent
 
 *(Formerly tracked two items here — "blur sigma has no named tiers" and `anime_carousel.dart`'s `_NavArrow` bypassing `FrostedContainer` — both resolved via the `AppMaterials` tiers introduced in `core/theme/app_materials.dart`; see § 1.4. Removed from this list accordingly.)*
 
 ---
-*Last reviewed against the codebase: 2026-08-03. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-20. Added a palette color, a blur/radius value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

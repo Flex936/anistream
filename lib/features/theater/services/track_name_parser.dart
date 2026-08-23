@@ -34,14 +34,12 @@ class TrackNameParser {
   /// this exact naming logic, instead of `ExoTheaterScreen` carrying a
   /// second copy of it.
   ///
-  /// Deliberately says nothing about "no track selected yet" — the old
-  /// null-`AudioTrack?` short-circuit that used to return 'Auto' here —
-  /// since that's a selection-state concern each caller already has to
-  /// handle for its own engine (mpv genuinely has an "auto" track mode;
-  /// ExoPlayer's reported tracks always have exactly one selected once
-  /// loaded), not something a track-naming helper should guess at from a
-  /// track that might legitimately just have no title or language of
-  /// its own.
+  /// Deliberately says nothing about "no track selected yet" — that's a
+  /// selection-state concern each caller already handles for its own
+  /// engine (mpv genuinely has an "auto" track mode; ExoPlayer's
+  /// reported tracks always have exactly one selected once loaded), not
+  /// something a track-naming helper should guess at from a track that
+  /// might legitimately just have no title or language of its own.
   static ParsedTrack parseAudio({String? title, String? language}) {
     String trimmedTitle = title?.trim() ?? '';
     final lang = _normalizeLanguage(language?.trim() ?? '');

@@ -14,8 +14,8 @@ enum _MenuPage { main, subtitles, audio }
 /// One selectable row inside [TheaterSettingsMenu]'s subtitle/audio list
 /// pages — deliberately player-agnostic, so the same menu shell renders
 /// media_kit's tracks (via [DesktopTheaterSettingsMenu]) and this app's
-/// own `RemoteSubtitleTrack` model (via `MobileTheaterControls`'s
-/// caller) with no knowledge of either.
+/// own `RemoteSubtitleTrack`/audio-track models (via `ExoTheaterScreen`)
+/// with no knowledge of either engine.
 class SettingsTrackOption {
   final String mainTitle;
   final String? subTitle;
@@ -35,8 +35,8 @@ class SettingsTrackOption {
 /// state; the actual track data is supplied by the caller as plain
 /// props, so this widget has no dependency on any particular playback
 /// engine. [audioOptions] left null omits the Audio tile entirely —
-/// used by the mobile control bar, since video_player exposes no
-/// audio-track switching to offer.
+/// used while no audio tracks have been fetched yet (or the container
+/// genuinely only has one).
 class TheaterSettingsMenu extends StatefulWidget {
   final String subtitlePreview;
   final List<SettingsTrackOption> subtitleOptions;

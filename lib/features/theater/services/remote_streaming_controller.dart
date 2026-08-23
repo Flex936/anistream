@@ -12,8 +12,9 @@ import 'streaming_controller_base.dart';
 /// Connects to the AniStream Go server instead of running libtorrent
 /// locally.
 ///
-/// Usage is identical to [StreamingController] — [TheaterScreen] receives this
-/// as a [BaseStreamingController] and never touches server-specific details.
+/// Usage is identical to [StreamingController] — TheaterScreen and
+/// ExoTheaterScreen both receive this as a [BaseStreamingController] and
+/// never touch server-specific details.
 ///
 /// Flow:
 ///  1. [initialize] POSTs the magnet link to the server → gets a session ID.
@@ -24,19 +25,18 @@ import 'streaming_controller_base.dart';
 ///     (seeking) are handled server-side via http.ServeContent.
 ///  4. On dispose, DELETE /api/stream/:id frees server resources.
 ///
-/// Subtitles (added)
-/// ──────────────────
 /// A separate, slower poll starts once step 3 completes, checking
-/// subtitles_available independently — that flag needs the WHOLE file
-/// downloaded (not just the 5% buffer threshold that unlocks playback),
-/// so it can flip true well after the main poll loop above has already
-/// stopped for good reason (stream_url never changes again). See
+/// subtitles_available independently — the main poll above stops the
+/// instant state first reports "ready" (stream_url never changes
+/// again), but subtitles_available is computed fresh per request rather
+/// than cached, so anything that would still flip it true needs its own
+/// poll instead of reusing a loop that's already stopped. See
 /// _startSubtitleAvailabilityPoll.
 class RemoteStreamingController extends BaseStreamingController {
   final String serverUrl; // e.g. "http://192.168.1.5:7878"
   final http.Client _http;
 
-  // State exposed to TheaterScreen.
+  // State exposed to whichever theater screen owns this controller.
   String _statusText = 'Connecting to AniStream Server…';
   String? _streamUrl;
   bool _isReadyToPlay = false;
@@ -62,7 +62,7 @@ class RemoteStreamingController extends BaseStreamingController {
   // what is really a single state change.
   bool _pollInFlight = false;
 
-  // ── Subtitles (added) ──────────────────────────────────────────────────
+  // Subtitles.
   bool _subtitlesAvailable = false;
   List<RemoteSubtitleTrack> _subtitleTracks = [];
   bool _fetchingSubtitleTracks = false;
@@ -171,7 +171,7 @@ class RemoteStreamingController extends BaseStreamingController {
     );
   }
 
-  // ── Subtitles (added) ─────────────────────────────────────────────────────
+  // Subtitles.
 
   @override
   Future<void> fetchSubtitleTracks() async {
@@ -222,10 +222,10 @@ class RemoteStreamingController extends BaseStreamingController {
 
       if (resp.statusCode != 200) return null;
 
-      // ── The server re-extracts as more of the file downloads and
-      // tells us via this header whether THIS response is final —
-      // tracked per track since the user could have multiple tracks in
-      // flight across track switches within one session. ──
+      // The server re-extracts as more of the file downloads and tells
+      // us via this header whether THIS response is final — tracked per
+      // track since the user could have multiple tracks in flight
+      // across track switches within one session.
       final completeHeader = resp.headers['x-subtitle-complete'];
       _subtitleTrackComplete[streamIndex] = completeHeader == 'true';
 
@@ -286,10 +286,10 @@ class RemoteStreamingController extends BaseStreamingController {
   /// Deliberately separate from the main 500ms _pollTimer above, which
   /// intentionally stops once state first reaches "ready" — stream_url
   /// never changes after that, so there's nothing left for it to watch.
-  /// subtitles_available is different: the server can't confirm it until
-  /// the WHOLE file has downloaded, which routinely happens well after
-  /// playback has already started off the 5% buffer threshold. Idempotent
-  /// — safe to call more than once, only ever arms one timer.
+  /// subtitles_available is different: it's computed fresh on every
+  /// request rather than cached or pushed, so this poll exists purely to
+  /// keep asking after the main loop has already stopped. Idempotent —
+  /// safe to call more than once, only ever arms one timer.
   void _startSubtitleAvailabilityPoll() {
     _subtitlePollTimer ??= Timer.periodic(
       const Duration(seconds: 5),
@@ -322,7 +322,7 @@ class RemoteStreamingController extends BaseStreamingController {
     }
   }
 
-  // ── Internal ──────────────────────────────────────────────────────────────
+  // Internal.
 
   /// Awaits [future] and silently discards any error. Used for best-effort
   /// network calls (batch-file selection, session teardown) where the
@@ -409,12 +409,10 @@ class RemoteStreamingController extends BaseStreamingController {
             // Stop polling — the stream URL won't change again.
             _pollTimer?.cancel();
             _pollTimer = null;
-            // ── Subtitles (added): subtitles_available can still flip
-            // true much later than this — it needs the whole file, not
-            // just the 5% buffer threshold that got us here. Handed off
-            // to its own slower, self-stopping poll rather than keeping
-            // this 500ms loop alive for a value that's usually still
-            // false at exactly this moment. ──
+            // Handed off to its own slower, self-stopping poll rather
+            // than keeping this 500ms loop alive for a value that's
+            // computed fresh per request (not cached) and might not yet
+            // be true in this exact response.
             if (!_subtitlesAvailable) {
               _startSubtitleAvailabilityPoll();
             }

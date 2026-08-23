@@ -44,12 +44,11 @@ type ffprobeOutput struct {
 // if the file simply has no subtitle tracks — that's a normal outcome
 // for some releases, not a failure.
 //
-// path must be something ffprobe can open directly. For a torrent
-// session that's still downloading, only call this once enough of the
-// file is available for ffprobe to read the container's own index —
-// unlike video, which your sequential-piece-prioritization already keeps
-// the front of available, subtitle data isn't guaranteed to be reachable
-// until much more of the file has arrived.
+// path must be something ffprobe can open directly. ffprobe/ffmpeg
+// handle a partially-downloaded Matroska file gracefully — they read
+// whatever complete Clusters have arrived and stop cleanly at the first
+// gap — so this only needs the same low buffer threshold video playback
+// itself waits for (see subtitleProbeEligible), not a fuller download.
 func ProbeSubtitleTracks(ctx context.Context, path string) ([]SubtitleTrack, error) {
 	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "quiet",
@@ -85,17 +84,16 @@ func ProbeSubtitleTracks(ctx context.Context, path string) ([]SubtitleTrack, err
 }
 
 // SubtitleFormat is the wire/output format ExtractSubtitleTrack
-// produces. Added alongside native TTML/ASS parsing on the Flutter side
-// (see native_subtitle_parser.dart) — the server now hands back more
-// than just WebVTT text.
+// produces — vtt for video_player's plain-text captions, or ass/ttml
+// for native TTML/ASS parsing on the Flutter side (see
+// native_subtitle_parser.dart).
 type SubtitleFormat string
 
 const (
-	// FormatWebVTT is the original, always-transcoded-via-ffmpeg
-	// behavior, consumed by video_player's Dart-side ClosedCaptionFile
-	// mechanism. Stays the default for callers that don't specify a
-	// format (see main.go's serveSubtitleTrack), so anything that
-	// predates this change keeps working unchanged.
+	// FormatWebVTT is always transcoded via ffmpeg, consumed by
+	// video_player's Dart-side ClosedCaptionFile mechanism. The default
+	// for callers that don't specify a format (see main.go's
+	// serveSubtitleTrack).
 	FormatWebVTT SubtitleFormat = "vtt"
 
 	// FormatASS extracts the track's ORIGINAL bytes via stream copy — no
@@ -129,11 +127,11 @@ func (f SubtitleFormat) IsNativeCodec(codecName string) bool {
 // ProbeSubtitleTracks) out of sourcePath and writes it to destPath in
 // the requested format.
 //
-//   - FormatWebVTT: ffmpeg re-encodes to WebVTT (unchanged from before —
-//     the only format-conversion path that still goes through ffmpeg).
-//     This intentionally does not attempt to preserve ASS styling —
-//     verified directly that override tags like \pos and \move are
-//     discarded cleanly rather than leaking into the output.
+//   - FormatWebVTT: ffmpeg re-encodes to WebVTT — the only
+//     format-conversion path that goes through ffmpeg. Intentionally
+//     does not attempt to preserve ASS styling — verified directly that
+//     override tags like \pos and \move are discarded cleanly rather
+//     than leaking into the output.
 //   - FormatASS: ffmpeg stream-copies the track's own bytes untouched.
 //     Caller (see main.go's serveSubtitleTrack) must have already
 //     confirmed IsNativeCodec — this function does not re-validate

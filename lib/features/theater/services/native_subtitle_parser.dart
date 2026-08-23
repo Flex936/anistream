@@ -1,6 +1,3 @@
-import 'dart:typed_data';
-import 'dart:ui' show Color;
-
 import 'package:flutter/services.dart';
 
 /// One contiguous, identically-styled run of text within a [StyledCue].

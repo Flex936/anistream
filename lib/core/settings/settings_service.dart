@@ -19,14 +19,12 @@ class AppSettings {
   /// Base URL of the AniStream Go server, e.g. "http://192.168.1.5:7878".
   final String serverUrl;
 
-  // ── EXPERIMENTAL PLAYER ──
   /// When true (mobile/TV only — see [SettingsMenu]'s platform gate),
   /// episode playback goes through [ExoTheaterScreen] (video_player, an
   /// ExoPlayer/AVPlayer-backed engine) instead of the default
   /// [TheaterScreen] (media_kit/mpv-backed). Deliberately independent of
   /// [uiPerformanceMode] — that setting is scoped to UI chrome (blur,
-  /// animations) and should never have doubled as the player-engine switch
-  /// it silently was before this field existed.
+  /// animations), not which decode/render engine plays the video.
   final bool useExoPlayer;
 
   const AppSettings({

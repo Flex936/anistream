@@ -2,16 +2,16 @@ import 'dart:async';
 
 import 'package:video_player/video_player.dart';
 
-/// Minimal, player-engine-agnostic surface that a control-bar widget
-/// needs: current playing/position/duration/buffer/volume plus the
-/// handful of methods that change them. `TheaterControls` (desktop)
-/// stays wired directly to media_kit's `Player`, unaffected by this —
-/// this exists specifically so `MobileTheaterControls` can drive either
-/// engine without depending on either package directly.
+/// Minimal, player-engine-agnostic surface a control-bar widget needs:
+/// current playing/position/duration/buffer/volume, plus the methods
+/// that change them. `TheaterControls` (desktop) stays wired directly to
+/// media_kit's `Player`, unaffected by this — the interface exists so
+/// `MobileTheaterControls` doesn't depend on either player package
+/// directly, and a future media_kit-backed implementation could slot in
+/// as a thin pass-through rather than a redesign.
 ///
-/// Streams mirror media_kit's own `Player.stream.*` shape deliberately,
-/// so a future `Player`-backed implementation of this interface is a
-/// thin pass-through rather than a redesign.
+/// Streams mirror media_kit's own `Player.stream.*` shape for exactly
+/// that reason.
 abstract class PlaybackHandle {
   bool get isPlaying;
   Stream<bool> get playingStream;
@@ -39,17 +39,12 @@ abstract class PlaybackHandle {
 
   /// Available audio tracks for this session, or an empty list on an
   /// engine that doesn't expose audio-track switching. Concrete with a
-  /// safe default here — like `BaseStreamingController`'s subtitle
-  /// methods — rather than added to the abstract contract above, since
-  /// only `VideoPlayerPlaybackHandle` can meaningfully implement it
-  /// today. Unlike everything else on this interface this is a plain
-  /// one-shot `Future`, not a stream: video_player's own tracks API has
-  /// no change-notification of its own, so a caller that needs this
-  /// available before first paint (the mobile control bar's own
-  /// settings-button visibility, mirroring how subtitle availability
-  /// already works) fetches it once after the player is ready and
-  /// caches the result itself, the same way `ExoTheaterScreen` already
-  /// does for subtitles.
+  /// safe default — like `BaseStreamingController`'s subtitle methods —
+  /// since only `VideoPlayerPlaybackHandle` implements it today. A plain
+  /// one-shot `Future`, not a stream: video_player's tracks API has no
+  /// change-notification of its own, so a caller fetches this once after
+  /// the player is ready and caches the result, the same way
+  /// `ExoTheaterScreen` already does for subtitles.
   Future<List<VideoAudioTrack>> getAudioTracks() async => const [];
 
   /// Selects an audio track by the id [getAudioTracks] reported for it.
@@ -68,8 +63,8 @@ abstract class PlaybackHandle {
 /// with no per-field streams of its own, so this listens once and fans
 /// out into the separate broadcast streams [PlaybackHandle] exposes,
 /// each only emitting when that specific field actually changed —
-/// matching how a single combined listener would otherwise notify on
-/// every unrelated field change too.
+/// unlike a single combined listener, which would notify on every
+/// unrelated field change too.
 class VideoPlayerPlaybackHandle implements PlaybackHandle {
   final VideoPlayerController _controller;
 

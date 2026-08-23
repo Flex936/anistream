@@ -81,8 +81,12 @@ lib/
     ├── theater/                      theater_screen.dart, exo_theater_screen.dart,
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,
-    │                                 auto_skip_controller, theater_data, track_name_parser}.dart,
-    │                                 widgets/{theater_controls, theater_player, seekbar,
+    │                                 controls_visibility_controller, auto_skip_controller,
+    │                                 playback_diagnostics, theater_data, track_name_parser,
+    │                                 playback_handle, mpv_chapter_loader, native_chapter_parser,
+    │                                 native_subtitle_parser}.dart,
+    │                                 widgets/{theater_controls, mobile_theater_controls,
+    │                                 theater_player, seekbar, skip_chip, styled_subtitle_view,
     │                                 theater_settings, batch_picker}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
@@ -118,8 +122,13 @@ There is no Provider, Riverpod, Bloc, or Redux dependency in `pubspec.yaml` — 
 
 Two distinct native-integration mechanisms are in use — new performance-sensitive native work should extend the second, not add more of the first:
 
-1. **A single `MethodChannel`** (`anistream/device_mode`, method `isTelevision`) — used exactly once, by `InputModeController`, to ask the native Android side a one-time yes/no question at boot. Fails safe to `false` (not a TV) if the platform channel isn't implemented, so a build without the native handler wired up simply never activates TV mode rather than crashing. This is only one of two signals feeding `dpadModeActive` — the other (live D-pad/pointer input sniffing) is pure Dart, has no native bridge of its own, and is documented in [DESIGN.md](DESIGN.md) § 4.
-2. **FFI plugins** — `libtorrent_flutter` (the torrent engine, all platforms) and its supporting `jni` / `jni_flutter` / `objective_c` packages (cross-platform native interop — not Android-only despite the `jni` name). This is the mechanism for anything performance-critical; the app deliberately keeps custom `MethodChannel` surface area to the single case above.
+1. **`MethodChannel`s** — three today, all registered in `MainActivity.kt`:
+   - `anistream/device_mode` (method `isTelevision`) — used once, by `InputModeController`, to ask the native Android side a one-time yes/no question at boot. Fails safe to `false` (not a TV) if the platform channel isn't implemented, so a build without the native handler wired up simply never activates TV mode rather than crashing. This is only one of two signals feeding `dpadModeActive` — the other (live D-pad/pointer input sniffing) is pure Dart, has no native bridge of its own, and is documented in [DESIGN.md](DESIGN.md) § 4.
+   - `anistream/chapter_parser` (method `extractChapters`) — `ChapterMetadataPlugin.kt` / `native_chapter_parser.dart`, used only on the ExoPlayer path (`ExoTheaterScreen`). Opens a throwaway `ExoPlayer` against the stream URL purely to read whatever Chapter metadata entries Media3's own extractors attach to the container — `video_player` exposes no chapter API of its own, unlike media_kit/mpv on `TheaterScreen`, which gets chapters natively.
+   - `anistream/subtitle_parser` (method `parseSubtitle`) — `SubtitleParserPlugin.kt` / `native_subtitle_parser.dart`, also ExoPlayer-path-only. Hands raw subtitle bytes to Media3's own `TtmlParser`/`SsaParser` and returns real cue timing, positioning, and per-run styling, instead of `video_player`'s plain-text-only `ClosedCaptionFile` mechanism.
+
+   All three are Android-only, with no iOS/macOS equivalent wired up for any of them.
+2. **FFI plugins** — `libtorrent_flutter` (the torrent engine, all platforms) and its supporting `jni` / `jni_flutter` / `objective_c` packages (cross-platform native interop — not Android-only despite the `jni` name). This remains the mechanism for anything performance-critical; the `MethodChannel`s above are one-shot metadata/parsing calls, not sustained high-throughput work.
 
 ### Android
 
@@ -191,4 +200,4 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
 - **macOS/iOS Release entitlements are an unconfirmed gap, not a fix.** § 4 (macOS / iOS) flags that `Release.entitlements` may be missing `com.apple.security.network.client`/`.server` relative to `DebugProfile.entitlements` — unconfirmed whether this actually breaks AniList OAuth's loopback server or on-device torrenting in signed/notarized Release builds, just noted as an untested gap. Cross-referenced here so this section remains the complete index of open items.
 
 ---
-*Last reviewed against the codebase: 2026-08-16. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
+*Last reviewed against the codebase: 2026-08-20. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*

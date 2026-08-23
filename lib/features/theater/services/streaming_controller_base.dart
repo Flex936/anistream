@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 
 import 'native_subtitle_parser.dart';
@@ -28,10 +26,11 @@ class BatchFileOption {
 /// that endpoint's JSON shape directly (see anistream_server's
 /// subtitle_extractor.go).
 ///
-/// Only ever populated via [RemoteStreamingController] today — local
-/// on-device streaming has no subtitle-extraction path yet (see project
-/// chat notes: that needs either a native Media3 bridge or a ported
-/// MKV-subtitle parser, neither built).
+/// Only ever populated via [RemoteStreamingController] today — the
+/// on-device libtorrent path has no subtitle-extraction step of its own;
+/// that would need either a native Media3 bridge that probes and demuxes
+/// a local file directly, or a ported MKV-subtitle parser, neither of
+/// which exists yet.
 class RemoteSubtitleTrack {
   final int streamIndex;
   final String codec;
@@ -71,15 +70,16 @@ class RemoteSubtitleTrack {
 ///  • [StreamingController]       — runs libtorrent_flutter on-device
 ///  • [RemoteStreamingController] — delegates to the AniStream Go server
 ///
-/// [TheaterScreen] only talks to this contract, so it never needs to know
-/// which mode is active.
+/// [TheaterScreen] and [ExoTheaterScreen] only talk to this contract, so
+/// neither needs to know which mode is active.
 abstract class BaseStreamingController extends ChangeNotifier {
   /// Human-readable status shown in the loading overlay.
   String get statusText;
 
-  /// The URL handed to media_kit once the stream is ready.
-  /// Local mode: http://127.0.0.1:\<port\>/...
-  /// Server mode: http://\<server-ip\>:7878/api/stream/\<id\>/video
+  /// The URL handed to whichever player is active once the stream is
+  /// ready — media_kit, or video_player on the ExoPlayer path.
+  /// Local mode: `http://127.0.0.1:<port>/...`
+  /// Server mode: `http://<server-ip>:7878/api/stream/<id>/video`
   String? get streamUrl;
 
   /// True once enough data has been buffered to hand the URL to the player.
@@ -100,7 +100,6 @@ abstract class BaseStreamingController extends ChangeNotifier {
   /// Called when the user picks a file from the batch picker.
   void selectBatchFile(int fileIndex);
 
-  // ── Subtitles (added) ────────────────────────────────────────────────
   // Concrete (non-abstract) with no-op defaults rather than added to the
   // abstract contract above — StreamingController (on-device) has no
   // subtitle-extraction path yet, and forcing it to implement a feature

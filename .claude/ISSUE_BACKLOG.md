@@ -96,7 +96,8 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 **Acceptance criteria:**
 
 - [ ] `calendar_card.dart`: replace the raw `Color(0x4D000000)` shadow with `AppPalette.black.withValues(alpha: ...)`
-- [ ] `episode_tile.dart`: route its two hardcoded durations (150ms, 250ms) through `perfDuration(uiPerformanceMode, ...)`
-- [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `settings_menu.dart`, `navbar.dart`
+- [ ] `episode_tile.dart`: route its header row's hardcoded 150ms `AnimatedContainer` duration through `perfDuration(uiPerformanceMode, ...)`
+- [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `navbar.dart`
 - [ ] `navbar.dart`: bump `_NavIconButton` from 44×44 to the documented 48×48 minimum
-- [ ] `search_filter_panel.dart`: remove `autofocus: true` from two of the three `ChoiceChip`s, keeping exactly one
+
+*(Two items previously listed here are resolved: `episode_tile.dart`'s second, 250ms duration lived on an `Expansible` that no longer exists — the tile no longer expands/collapses; and `settings_menu.dart` already uses `context.isMobile`. `search_filter_panel.dart`'s `ChoiceChip` autofocus item, formerly listed here too, is also resolved — the status filter is now a single-autofocus `CupertinoSlidingSegmentedControl` — and has been dropped from this list accordingly.)*

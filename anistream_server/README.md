@@ -20,6 +20,7 @@ MPV on the TV then opens the stream URL directly. HTTP range requests
 
 - Go 1.23 or later — <https://go.dev/dl/> (matches the floor declared in `go.mod`)
 - The server and the TV must be on the same LAN (or connected via VPN)
+- `ffmpeg` and `ffprobe` on `PATH` — optional. Video streaming works without them; without them, subtitle extraction is unavailable (see § 7)
 
 ## 3. Build
 
@@ -94,6 +95,8 @@ sudo systemctl enable --now anistream-server
 | GET | `/api/stream/:id` | `StatusResponse` (see below) |
 | POST | `/api/stream/:id/select` | `{file_index}` → `{ok:true}` |
 | GET | `/api/stream/:id/video` | HTTP range-request video stream (for MPV) |
+| GET | `/api/stream/:id/subtitles` | `{tracks: [...]}` — embedded subtitle tracks (needs `ffmpeg`/`ffprobe`, see § 2) |
+| GET | `/api/stream/:id/subtitles/:index` | That track's content, `?format=vtt\|ass\|ttml` (default `vtt`) — see `X-Subtitle-Complete` response header, § 7 |
 | DELETE | `/api/stream/:id` | 204 No Content |
 
 ### StatusResponse
@@ -119,9 +122,13 @@ sudo systemctl enable --now anistream-server
   "status_text": "Ready",
   "buffer_pct": 5.2,
   "peers": 24,
-  "stream_url": "http://192.168.1.5:7878/api/stream/abc123/video"
+  "stream_url": "http://192.168.1.5:7878/api/stream/abc123/video",
+  "subtitles_available": true,
+  "subtitles_complete": false
 }
 ````
+
+`subtitles_available`/`subtitles_complete` only ever appear once `state` is `"ready"`, and — like `stream_url`/`files` — are omitted entirely (not sent as `false`) rather than shown as `false`. `subtitles_available` needs `ffmpeg`/`ffprobe` on `PATH` (§ 2) and the same ≥5% buffer threshold that unlocks `stream_url`, not a full download. `subtitles_complete` only flips `true` once the whole file has finished downloading, at which point the client can stop re-fetching a given track.
 
 **`needs_selection`** — a batch torrent; `files` appears only now, and the client is expected to `POST` back to `/select` with a chosen `file_index`:
 
@@ -144,7 +151,8 @@ sudo systemctl enable --now anistream-server
 
 - Idle sessions (no requests for 30 minutes) are cleaned up automatically.
 - The server keeps seeding after download so the swarm stays healthy.
+- If `ffmpeg`/`ffprobe` aren't found on `PATH` at startup, the server logs a warning and degrades gracefully — video streaming is unaffected, but every `/subtitles` request returns `501 Not Implemented` and `subtitles_available` never turns true.
 - **No authentication and fully open CORS** (`Access-Control-Allow-Origin: *`, needed so any device on the LAN can reach it) — intended for trusted LAN use only. Use a firewall or VPN if you expose it to the internet; don't treat the CORS policy as a security boundary, since it isn't one here.
 
 ---
-*Last reviewed against the codebase: 2026-07-28. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*
+*Last reviewed against the codebase: 2026-08-20. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*

@@ -90,11 +90,11 @@ class RawChapterMarker {
 ///
 /// [raw] is explicitly NOT assumed to already be sorted by start time —
 /// confirmed against a real Media3 probe that `Format.metadata` does not
-/// come back in chronological order — so this always sorts first. Two
-/// chapter sources with an identical start/end derivation bug waiting to
-/// happen if that sort is ever dropped: an unsorted list would pair each
-/// marker with whatever happened to be adjacent in the original order,
-/// not its real chronological neighbor.
+/// come back in chronological order — so this always sorts first. Both
+/// chapter sources share this same latent bug if the sort is ever
+/// dropped: an unsorted list would pair each marker with whatever
+/// happens to sit next to it in the original order, not its real
+/// chronological neighbor.
 List<Chapter> buildChaptersFromRaw(
   List<RawChapterMarker> raw,
   Duration totalDuration,

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,7 +25,8 @@ class MobileTheaterControls extends StatefulWidget {
   final VoidCallback onInteractionEnd;
 
   /// Null hides the settings button entirely — used while there's
-  /// nothing yet for it to open (e.g. subtitle tracks haven't loaded).
+  /// nothing yet for it to open (e.g. neither subtitle nor audio tracks
+  /// have loaded).
   final VoidCallback? onToggleSettings;
   final bool isSettingsOpen;
   final List<Chapter> chapterMetadata;
