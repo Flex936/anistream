@@ -11,20 +11,24 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../core/input/input_mode_scope.dart';
 import '../../core/settings/settings_scope.dart';
+import '../../core/settings/settings_service.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
-import '../../shared/widgets/toast.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
+import 'services/mpv_chapter_loader.dart';
 import 'services/playback_diagnostics.dart';
+import 'services/playback_stall_controller.dart';
 import 'services/player_configurator.dart';
 import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
 import 'services/theater_data.dart';
+import 'services/top_notification_controller.dart';
 import 'widgets/batch_picker.dart';
+import 'widgets/playback_stall_indicator.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_settings.dart';
@@ -91,6 +95,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // behavior.
   late final PlaybackDiagnostics _playbackDiagnostics;
 
+  // Drives the mid-playback "Buffering…" indicator off mpv's own
+  // buffering signal — see playback_stall_controller.dart's class doc.
+  late final PlaybackStallController _playbackStallController;
+
   /// A same-position pause before a manual restart, below which a
   /// restart wouldn't meaningfully rewind anything.
   static const Duration _kFreezeRecoveryRewind = Duration(seconds: 5);
@@ -123,20 +131,46 @@ class _TheaterScreenState extends State<TheaterScreen> {
   List<Chapter> _chapters = [];
   StreamSubscription<Duration>? _posSub;
 
+  // Theater's own in-flow status toast (AniList sync confirmation,
+  // auto-skip arming) — see TheaterTopNotification's doc comment
+  // (widgets/theater_player.dart) for why this renders as plain
+  // Positioned content in this screen's own Stack rather than through an
+  // Overlay-based toast, and TopNotificationController's own doc comment
+  // (services/top_notification_controller.dart) for why the same
+  // controller also drives ExoTheaterScreen's identical toast.
+  final TopNotificationController _topNotificationController =
+      TopNotificationController();
+
   @override
   void initState() {
     super.initState();
-    _player = Player(configuration: const PlayerConfiguration(libass: true));
+    // Read via SettingsCache, not SettingsScope: this runs synchronously,
+    // before _initPlayerAndStream's awaited SettingsScope read below has
+    // landed, and Player() needs bufferSize at construction time.
+    // SettingsCache is this codebase's existing no-BuildContext mechanism
+    // for exactly that (see settings_service.dart). The value matches
+    // what PlayerConfigurator.configureForTheater sets demuxer-max-bytes
+    // to moments later, so the demuxer cache is never briefly at one size
+    // and then a different one.
+    final earlyUiPerformanceMode = SettingsCache.current.uiPerformanceMode;
+    _player = Player(
+      configuration: PlayerConfiguration(
+        libass: true,
+        bufferSize: earlyUiPerformanceMode ? 70000000 : 150000000,
+      ),
+    );
     const videoConfig = VideoControllerConfiguration(
       androidAttachSurfaceAfterVideoParameters: true,
     );
     _videoController = VideoController(_player, configuration: videoConfig);
 
     _controlsVisibility = ControlsVisibilityController(
-      player: _player,
+      playingStream: _player.stream.playing,
+      isPlaying: () => _player.state.playing,
       isSubMenuOpen: () => _isSettingsOpen,
     );
     _playbackDiagnostics = PlaybackDiagnostics(player: _player);
+    _playbackStallController = PlaybackStallController(player: _player);
 
     if (Platform.isAndroid || Platform.isIOS) {
       // initState can't be async — SystemChrome's setters return
@@ -154,12 +188,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
 
     _autoSkipController = AutoSkipController(
-      player: _player,
+      onSeek: (position) => _player.seek(position),
       isEnabled: () => _autoSkip,
       onSkipArmed: (skipLabel) {
         if (mounted) {
-          AppleTopSnackBar.show(
-            context: context,
+          _topNotificationController.show(
             message: 'Auto-skipping $skipLabel in 2s...',
             icon: Icons.fast_forward_rounded,
             iconColor: AppPalette.primary,
@@ -171,11 +204,19 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _tracker = AnilistTrackerService(
       onSuccess: () {
         if (mounted) {
-          AppleTopSnackBar.show(
-            context: context,
+          _topNotificationController.show(
             message: 'Progress saved to AniList',
             icon: Icons.check_circle_rounded,
             iconColor: AppPalette.statusReleasing,
+          );
+        }
+      },
+      onFailure: (message) {
+        if (mounted) {
+          _topNotificationController.show(
+            message: message,
+            icon: Icons.error_outline_rounded,
+            iconColor: AppPalette.statusCancelled,
           );
         }
       },
@@ -287,6 +328,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // Controller listener.
 
   void _onTorrentStateChanged() {
+    // Defensive guard alongside removing this listener as the first
+    // statement in _exitTheater/_handleRestartRequested below — a stray
+    // notifyListeners() landing in either method's own teardown sequence
+    // (a trailing FFI callback, a last remote-poll tick) should never be
+    // able to reopen or replay against a Player that's already being
+    // stopped and disposed.
+    if (_isClosing) return;
     if (_torrentController.isReadyToPlay && !_videoInitialized) {
       setState(() => _videoInitialized = true);
       // Listener callbacks (added via addListener) are synchronous —
@@ -554,6 +602,25 @@ class _TheaterScreenState extends State<TheaterScreen> {
     setState(() => _isSettingsOpen = !_isSettingsOpen);
   }
 
+  // Interaction brackets (seekbar/volume drag).
+  //
+  // A seekbar or volume-slider drag needs to suspend two independent
+  // controllers at once — ControlsVisibilityController (so the bar
+  // doesn't auto-hide mid-drag) and PlaybackStallController (so the
+  // buffering blip a seek itself triggers never reads as a stall). These
+  // two thin wrappers are what TheaterControls' onInteractionStart/
+  // onInteractionEnd actually call, so both controllers stay in lockstep
+  // without either one needing to know the other exists.
+  void _handleInteractionStart() {
+    _controlsVisibility.beginInteraction();
+    _playbackStallController.beginInteraction();
+  }
+
+  void _handleInteractionEnd() {
+    _controlsVisibility.endInteraction();
+    _playbackStallController.endInteraction();
+  }
+
   // Background gesture.
 
   void _handleBackgroundTap() {
@@ -611,6 +678,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _exitTheater() async {
     if (_isClosing) return;
     _isClosing = true;
+    // Removed before any `await` below so a stray notifyListeners() firing
+    // during this teardown sequence (a trailing FFI callback, a last
+    // remote-poll tick) can never re-enter _onTorrentStateChanged and
+    // reopen/replay against a Player that's about to be stopped and
+    // disposed.
+    _torrentController.removeListener(_onTorrentStateChanged);
 
     if (Platform.isAndroid || Platform.isIOS) {
       // Awaited here, matching _toggleFullscreen's pattern for the
@@ -631,8 +704,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
+    _playbackStallController.dispose();
+    _topNotificationController.cancelPendingHide();
     await _posSub?.cancel();
-    _torrentController.removeListener(_onTorrentStateChanged);
+    // Fires an armed-but-not-yet-committed AniList sync immediately
+    // instead of letting _tracker.dispose() below silently cancel it —
+    // see flushPendingCommit's doc comment.
+    await _tracker.flushPendingCommit();
     _tracker.dispose();
     await _disposePlaybackResources();
     if (mounted) Navigator.pop(context);
@@ -654,6 +732,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _handleRestartRequested() async {
     if (_isClosing) return;
     _isClosing = true;
+    _torrentController.removeListener(_onTorrentStateChanged);
 
     final rawResumePosition = _player.state.position - _kFreezeRecoveryRewind;
     final resumePosition = rawResumePosition.isNegative
@@ -662,8 +741,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     _autoSkipController.dispose();
     _playbackDiagnostics.dispose();
+    _playbackStallController.dispose();
+    _topNotificationController.cancelPendingHide();
     await _posSub?.cancel();
-    _torrentController.removeListener(_onTorrentStateChanged);
+    // The replacement TheaterScreen constructs a brand-new
+    // AnilistTrackerService that re-fetches status from scratch — an
+    // armed commit on this instance has to fire now or it's gone for
+    // good, not just delayed to a "next tick" the way it would be if
+    // this were an ordinary mid-playback timer.
+    await _tracker.flushPendingCommit();
     _tracker.dispose();
 
     await _player.stop();
@@ -703,11 +789,22 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _controlsVisibility.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
+    _playbackStallController.dispose();
+    _topNotificationController.dispose();
     final posSub = _posSub;
     if (posSub != null) {
       unawaited(posSub.cancel());
     }
     _torrentController.removeListener(_onTorrentStateChanged);
+    // Fire-and-forget, matching this method's existing pattern for
+    // unavoidably-async cleanup — dispose() can't await. Idempotent if
+    // _exitTheater/_handleRestartRequested already flushed: their own
+    // call already cancelled _delayTimer, so this one just no-ops. Only
+    // meaningfully fires if this State is torn down through some path
+    // that bypasses both of those (e.g. an ancestor route popping this
+    // screen directly), which would otherwise drop an armed commit with
+    // no flush at all.
+    unawaited(_tracker.flushPendingCommit());
     _tracker.dispose();
 
     if (!_isClosing) {
@@ -801,8 +898,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       dpadModeActive: dpadModeActive,
                       onToggleFullscreen: _toggleFullscreen,
                       onInteract: _controlsVisibility.registerActivity,
-                      onInteractionStart: _controlsVisibility.beginInteraction,
-                      onInteractionEnd: _controlsVisibility.endInteraction,
+                      onInteractionStart: _handleInteractionStart,
+                      onInteractionEnd: _handleInteractionEnd,
                       onToggleSettings: () =>
                           setState(() => _isSettingsOpen = !_isSettingsOpen),
                       onSeekbarFocusChange: (f) => _seekbarFocused = f,
@@ -824,12 +921,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Widget build(BuildContext context) {
     final dpadModeActive = InputModeScope.of(context).dpadModeActive;
 
-    // The video texture, the settings-menu popup, and the loading/
-    // batch-picker overlay switcher don't depend on controls visibility
-    // at all — they're computed once per real setState() (video-ready,
-    // settings toggle, chapters loaded, etc.). Passed as the `child` of
-    // the ValueListenableBuilder below so this subtree is reused, not
-    // rebuilt, on every controls-visibility transition.
+    // The video texture, the top notification, the settings-menu popup,
+    // and the loading/batch-picker overlay switcher don't depend on
+    // controls visibility at all — they're computed once per real
+    // setState() (video-ready, settings toggle, chapters loaded, etc.).
+    // Passed as the `child` of the ValueListenableBuilder below so this
+    // subtree is reused, not rebuilt, on every controls-visibility
+    // transition.
     final staticLayer = Stack(
       fit: StackFit.expand,
       children: [
@@ -860,11 +958,54 @@ class _TheaterScreenState extends State<TheaterScreen> {
           ),
         ),
 
+        // Gated on _videoInitialized rather than shown unconditionally —
+        // PlaybackStallController starts observing mpv in initState, well
+        // before Player.open()/.play() are ever called, so without this
+        // gate a slow initial buffer-up could theoretically race the
+        // fade from TheaterLoadingOverlay into the video and show both
+        // at once. Independent of controls-bar visibility on purpose: a
+        // stall needs to stay visible even while the user is watching
+        // hands-off with the control bar auto-hidden, so this reads
+        // directly off PlaybackStallController.visible via its own small
+        // ValueListenableBuilder rather than living inside
+        // _buildControlsOverlay's opacity-gated subtree.
+        if (_videoInitialized)
+          ValueListenableBuilder<bool>(
+            valueListenable: _playbackStallController.visible,
+            builder: (context, stalled, _) => PlaybackStallIndicator(
+              visible: stalled,
+              uiPerformanceMode: _uiPerformanceMode,
+            ),
+          ),
+
+        // Rendered regardless of controls-overlay visibility, so a
+        // sync/skip status message stays reachable even while the
+        // controls bar has auto-hidden. TopNotificationController's own
+        // ValueNotifier drives this small subtree independently, so a
+        // toast never triggers a rebuild of the rest of the screen.
+        Positioned(
+          top:
+              24 +
+              MediaQuery.paddingOf(context).top +
+              TheaterTopNotification.kTopBarClearance,
+          left: 16,
+          right: 16,
+          child: ValueListenableBuilder<TopNotificationData?>(
+            valueListenable: _topNotificationController.notification,
+            builder: (context, data, _) => TheaterTopNotification(
+              message: data?.message,
+              icon: data?.icon,
+              iconColor: data?.iconColor,
+              uiPerformanceMode: _uiPerformanceMode,
+            ),
+          ),
+        ),
+
         if (_isSettingsOpen)
           Positioned(
             bottom: 110,
             right: 32,
-            child: TheaterSettingsMenu(
+            child: DesktopTheaterSettingsMenu(
               player: _player,
               uiPerformanceMode: _uiPerformanceMode,
               onClose: () => setState(() => _isSettingsOpen = false),
@@ -929,13 +1070,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
           // ValueListenableBuilder scoped to controls visibility only —
           // MouseRegion's cursor and the controls overlay's opacity/
           // hit-testing both depend on it, but `staticLayer` above
-          // (video, settings menu, loading/batch-picker overlay) does
-          // not, and is passed as `child` so it's reused rather than
-          // reconstructed on every show/hide transition. registerActivity()
-          // writes to a ValueNotifier, which only notifies listeners on a
-          // genuine true→false/false→true transition — so hovering with
-          // controls already visible costs a cancelled+rescheduled
-          // Timer, not a rebuild of anything visual.
+          // (video, top notification, settings menu, loading/batch-picker
+          // overlay) does not, and is passed as `child` so it's reused
+          // rather than reconstructed on every show/hide transition.
+          // registerActivity() writes to a ValueNotifier, which only
+          // notifies listeners on a genuine true→false/false→true
+          // transition — so hovering with controls already visible
+          // costs a cancelled+rescheduled Timer, not a rebuild of
+          // anything visual.
           child: ValueListenableBuilder<bool>(
             valueListenable: _controlsVisibility.visible,
             child: staticLayer,

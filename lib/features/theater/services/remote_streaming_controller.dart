@@ -1,17 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
 import '../../../core/logging/app_logger.dart';
 import '../../../data/torrent/services/torrent_parser.dart';
+import 'native_subtitle_parser.dart';
 import 'streaming_controller_base.dart';
 
 /// Connects to the AniStream Go server instead of running libtorrent
 /// locally.
 ///
-/// Usage is identical to [StreamingController] — [TheaterScreen] receives this
-/// as a [BaseStreamingController] and never touches server-specific details.
+/// Usage is identical to [StreamingController] — TheaterScreen and
+/// ExoTheaterScreen both receive this as a [BaseStreamingController] and
+/// never touch server-specific details.
 ///
 /// Flow:
 ///  1. [initialize] POSTs the magnet link to the server → gets a session ID.
@@ -21,11 +24,19 @@ import 'streaming_controller_base.dart';
 ///     /video endpoint. MPV opens that URL directly; all range requests
 ///     (seeking) are handled server-side via http.ServeContent.
 ///  4. On dispose, DELETE /api/stream/:id frees server resources.
+///
+/// A separate, slower poll starts once step 3 completes, checking
+/// subtitles_available independently — the main poll above stops the
+/// instant state first reports "ready" (stream_url never changes
+/// again), but subtitles_available is computed fresh per request rather
+/// than cached, so anything that would still flip it true needs its own
+/// poll instead of reusing a loop that's already stopped. See
+/// _startSubtitleAvailabilityPoll.
 class RemoteStreamingController extends BaseStreamingController {
   final String serverUrl; // e.g. "http://192.168.1.5:7878"
   final http.Client _http;
 
-  // State exposed to TheaterScreen.
+  // State exposed to whichever theater screen owns this controller.
   String _statusText = 'Connecting to AniStream Server…';
   String? _streamUrl;
   bool _isReadyToPlay = false;
@@ -43,6 +54,27 @@ class RemoteStreamingController extends BaseStreamingController {
   String? _sessionId;
   Timer? _pollTimer;
 
+  // Subtitles.
+  bool _subtitlesAvailable = false;
+  List<RemoteSubtitleTrack> _subtitleTracks = [];
+  bool _fetchingSubtitleTracks = false;
+  Timer? _subtitlePollTimer;
+  // Per-track "was the last fetch already final" — see
+  // fetchSubtitleContent/isSubtitleTrackComplete. Absent key means "never
+  // fetched", read as false (not known complete, worth trying).
+  final Map<int, bool> _subtitleTrackComplete = {};
+
+  // Consecutive failed polls (a non-200 status, a timeout, or any other
+  // exception) before giving up and surfacing an error instead of
+  // polling forever. At the existing 500ms poll interval this is ~5
+  // seconds of continuous failure — enough to ride out a brief Wi-Fi
+  // drop or a momentary server hiccup without erroring out, but short
+  // enough that a genuinely dead server (process crashed, host rebooted)
+  // surfaces promptly instead of leaving the last-known status frozen on
+  // screen indefinitely.
+  static const int _kMaxConsecutiveFailures = 10;
+  int _consecutiveFailures = 0;
+
   RemoteStreamingController({required this.serverUrl}) : _http = http.Client();
 
   @override
@@ -57,6 +89,10 @@ class RemoteStreamingController extends BaseStreamingController {
   bool get needsManualSelection => _needsManualSelection;
   @override
   List<BatchFileOption> get batchFiles => _batchFiles;
+  @override
+  bool get subtitlesAvailable => _subtitlesAvailable;
+  @override
+  List<RemoteSubtitleTrack> get subtitleTracks => _subtitleTracks;
 
   // Public API.
 
@@ -138,6 +174,157 @@ class RemoteStreamingController extends BaseStreamingController {
     );
   }
 
+  // Subtitles.
+
+  @override
+  Future<void> fetchSubtitleTracks() async {
+    if (!_subtitlesAvailable ||
+        _subtitleTracks.isNotEmpty ||
+        _fetchingSubtitleTracks ||
+        _sessionId == null) {
+      return;
+    }
+    _fetchingSubtitleTracks = true;
+    try {
+      final resp = await _http
+          .get(Uri.parse('$serverUrl/api/stream/$_sessionId/subtitles'))
+          .timeout(const Duration(seconds: 10));
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final rawTracks = data['tracks'] as List<dynamic>? ?? [];
+        _subtitleTracks = rawTracks
+            .map((t) => RemoteSubtitleTrack.fromJson(t as Map<String, dynamic>))
+            .toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      AppLogger.w(
+        'RemoteStreamingController',
+        'Failed to fetch subtitle tracks: $e',
+      );
+      // Best-effort — leave _subtitleTracks empty; the caller (the
+      // theater screen) can call fetchSubtitleTracks() again later,
+      // since the guard above only skips while tracks are still empty.
+    } finally {
+      _fetchingSubtitleTracks = false;
+    }
+  }
+
+  @override
+  Future<String?> fetchSubtitleContent(int streamIndex) async {
+    if (_sessionId == null) return null;
+    try {
+      final resp = await _http
+          .get(
+            Uri.parse(
+              '$serverUrl/api/stream/$_sessionId/subtitles/$streamIndex',
+            ),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (resp.statusCode != 200) return null;
+
+      // The server re-extracts as more of the file downloads and tells
+      // us via this header whether THIS response is final — tracked per
+      // track since the user could have multiple tracks in flight
+      // across track switches within one session.
+      final completeHeader = resp.headers['x-subtitle-complete'];
+      _subtitleTrackComplete[streamIndex] = completeHeader == 'true';
+
+      return resp.body;
+    } catch (e) {
+      AppLogger.w(
+        'RemoteStreamingController',
+        'Failed to fetch subtitle content for track $streamIndex: $e',
+      );
+      return null;
+    }
+  }
+
+  /// Fetches a subtitle track's raw bytes in [format] ('ass'/'ttml') via
+  /// the server's `?format=` query param (see anistream_server's
+  /// subtitle_extractor.go / main.go) — the native-parser counterpart to
+  /// [fetchSubtitleContent] above, which only ever asks for (and
+  /// returns) WebVTT text. Same growing-file polling contract: the
+  /// x-subtitle-complete header and [_subtitleTrackComplete] map are
+  /// shared with the WebVTT path above, since a given track is only ever
+  /// fetched in one format per session.
+  @override
+  Future<Uint8List?> fetchSubtitleBytes(
+    int streamIndex,
+    NativeSubtitleFormat format,
+  ) async {
+    if (_sessionId == null) return null;
+    try {
+      final resp = await _http
+          .get(
+            Uri.parse(
+              '$serverUrl/api/stream/$_sessionId/subtitles/$streamIndex'
+              '?format=${format.wireValue}',
+            ),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (resp.statusCode != 200) return null;
+
+      final completeHeader = resp.headers['x-subtitle-complete'];
+      _subtitleTrackComplete[streamIndex] = completeHeader == 'true';
+
+      return resp.bodyBytes;
+    } catch (e) {
+      AppLogger.w(
+        'RemoteStreamingController',
+        'Failed to fetch subtitle bytes for track $streamIndex ($format): $e',
+      );
+      return null;
+    }
+  }
+
+  @override
+  bool isSubtitleTrackComplete(int streamIndex) =>
+      _subtitleTrackComplete[streamIndex] ?? false;
+
+  /// Starts a slow (5s), self-stopping poll purely for subtitles_available.
+  /// Deliberately separate from the main 500ms _pollTimer above, which
+  /// intentionally stops once state first reaches "ready" — stream_url
+  /// never changes after that, so there's nothing left for it to watch.
+  /// subtitles_available is different: it's computed fresh on every
+  /// request rather than cached or pushed, so this poll exists purely to
+  /// keep asking after the main loop has already stopped. Idempotent —
+  /// safe to call more than once, only ever arms one timer.
+  void _startSubtitleAvailabilityPoll() {
+    _subtitlePollTimer ??= Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => unawaited(_pollSubtitleAvailability()),
+    );
+  }
+
+  Future<void> _pollSubtitleAvailability() async {
+    if (_sessionId == null || _subtitlesAvailable) {
+      _subtitlePollTimer?.cancel();
+      _subtitlePollTimer = null;
+      return;
+    }
+    try {
+      final resp = await _http
+          .get(Uri.parse('$serverUrl/api/stream/$_sessionId'))
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return; // transient — retry next tick
+
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final available = data['subtitles_available'] as bool? ?? false;
+      if (available) {
+        _subtitlesAvailable = true;
+        _subtitlePollTimer?.cancel();
+        _subtitlePollTimer = null;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Transient — try again next tick.
+    }
+  }
+
   // Internal.
 
   /// Awaits [future] and silently discards any error. Used for best-effort
@@ -163,7 +350,12 @@ class RemoteStreamingController extends BaseStreamingController {
         _setError('Session expired on server. Try restarting playback.');
         return;
       }
-      if (resp.statusCode != 200) return; // transient error, keep polling
+      if (resp.statusCode != 200) {
+        _registerPollFailure();
+        return;
+      }
+
+      _consecutiveFailures = 0;
 
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       final serverState = data['state'] as String? ?? 'error';
@@ -224,6 +416,13 @@ class RemoteStreamingController extends BaseStreamingController {
             // Stop polling — the stream URL won't change again.
             _pollTimer?.cancel();
             _pollTimer = null;
+            // Handed off to its own slower, self-stopping poll rather
+            // than keeping this 500ms loop alive for a value that's
+            // computed fresh per request (not cached) and might not yet
+            // be true in this exact response.
+            if (!_subtitlesAvailable) {
+              _startSubtitleAvailabilityPoll();
+            }
           }
 
         case 'error':
@@ -241,9 +440,27 @@ class RemoteStreamingController extends BaseStreamingController {
         notifyListeners();
       }
     } on TimeoutException {
-      // Network hiccup — silently retry on the next tick.
+      // Network hiccup — counted, but not immediately fatal; see
+      // _registerPollFailure.
+      _registerPollFailure();
     } catch (_) {
-      // Any other transient error — keep polling.
+      // Any other transient error — same treatment as a timeout.
+      _registerPollFailure();
+    }
+  }
+
+  /// Tracks a transient poll failure and gives up once
+  /// [_kMaxConsecutiveFailures] is reached in a row — see that constant's
+  /// doc comment for the reasoning behind the threshold. Reset to zero on
+  /// every successful poll in [_poll] above, so an isolated blip never
+  /// accumulates toward a cap it wouldn't otherwise be anywhere near.
+  void _registerPollFailure() {
+    _consecutiveFailures++;
+    if (_consecutiveFailures >= _kMaxConsecutiveFailures) {
+      _setError(
+        "Lost connection to the AniStream Server. Check it's still "
+        'running and reachable on your LAN, then try again.',
+      );
     }
   }
 
@@ -272,6 +489,8 @@ class RemoteStreamingController extends BaseStreamingController {
     _statusText = msg;
     _pollTimer?.cancel();
     _pollTimer = null;
+    _subtitlePollTimer?.cancel();
+    _subtitlePollTimer = null;
     notifyListeners();
     AppLogger.e('RemoteStreamingController', msg);
   }
@@ -279,6 +498,7 @@ class RemoteStreamingController extends BaseStreamingController {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _subtitlePollTimer?.cancel();
     if (_sessionId != null) {
       // Best-effort cleanup; errors don't need to bubble up during
       // disposal — see _fireAndForget above.

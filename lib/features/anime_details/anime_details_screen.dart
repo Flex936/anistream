@@ -10,6 +10,7 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
+import '../theater/exo_theater_screen.dart';
 import '../theater/services/streaming_controller_base.dart';
 import '../theater/theater_screen.dart';
 import 'widgets/anime_synopsis_section.dart';
@@ -145,44 +146,63 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     }
   }
 
-  /// Pushes TheaterScreen and refreshes AniList progress once the whole
-  /// viewing session ends. Deliberately does NOT pop anything itself —
-  /// it's called both from [_openTorrentModal] (once the modal's own pop
-  /// has already resolved) AND from [_autoPlayEpisode]'s direct success
+  /// Pushes TheaterScreen or ExoTheaterScreen and refreshes AniList progress
+  /// once the whole viewing session ends. Deliberately does NOT pop anything
+  /// itself — it's called both from [_openTorrentModal] (once the modal's own
+  /// pop has already resolved) AND from [_autoPlayEpisode]'s direct success
   /// path (where no modal was ever opened).
   ///
-  /// Loops rather than a single push/pop: TheaterScreen normally pops
-  /// with `null` (a real exit), but pops with a [TheaterRestartRequest]
-  /// instead when the user taps its freeze-recovery restart button
-  /// (Settings → Playback Preferences → "Show Freeze Recovery Button").
-  /// Each such result immediately re-pushes a fresh TheaterScreen against
-  /// the same still-buffered [BaseStreamingController] carried in the
-  /// result, rather than starting the torrent over from scratch. The loop
-  /// — and therefore _fetchProgress() — only runs once TheaterScreen pops
-  /// with a genuine `null`, so a restart never triggers a premature
-  /// progress refresh mid-episode the way popping AnimeDetailsScreen's
-  /// own route early would.
+  /// When [useExoPlayer] is true, delegates to [ExoTheaterScreen] via a single
+  /// push/pop (ExoPlayer handles its own lifecycle; no restart loop is needed).
+  ///
+  /// When [useExoPlayer] is false, uses [TheaterScreen] with a restart loop:
+  /// TheaterScreen normally pops with `null` (a real exit), but pops with a
+  /// [TheaterRestartRequest] instead when the user taps its freeze-recovery
+  /// restart button (Settings → Playback Preferences → "Show Freeze Recovery
+  /// Button"). Each such result immediately re-pushes a fresh TheaterScreen
+  /// against the same still-buffered [BaseStreamingController] carried in the
+  /// result, rather than starting the torrent over from scratch. The loop —
+  /// and therefore _fetchProgress() — only runs once TheaterScreen pops with a
+  /// genuine `null`, so a restart never triggers a premature progress refresh.
   Future<void> _streamTorrent(int ep, Torrent torrent) async {
-    BaseStreamingController? resumeController;
-    Duration? resumePosition;
+    final bool useExoPlayer = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.useExoPlayer;
 
-    while (true) {
-      final result = await Navigator.push<TheaterRestartRequest?>(
+    if (useExoPlayer) {
+      await Navigator.push<void>(
         context,
-        MaterialPageRoute<TheaterRestartRequest?>(
-          builder: (_) => TheaterScreen(
+        MaterialPageRoute<void>(
+          builder: (_) => ExoTheaterScreen(
             anime: widget.anime,
             episode: ep,
             torrent: torrent,
-            resumeController: resumeController,
-            resumePosition: resumePosition,
           ),
         ),
       );
+    } else {
+      BaseStreamingController? resumeController;
+      Duration? resumePosition;
 
-      if (result == null) break;
-      resumeController = result.resumeController;
-      resumePosition = result.resumePosition;
+      while (true) {
+        final result = await Navigator.push<TheaterRestartRequest?>(
+          context,
+          MaterialPageRoute<TheaterRestartRequest?>(
+            builder: (_) => TheaterScreen(
+              anime: widget.anime,
+              episode: ep,
+              torrent: torrent,
+              resumeController: resumeController,
+              resumePosition: resumePosition,
+            ),
+          ),
+        );
+
+        if (result == null) break;
+        resumeController = result.resumeController;
+        resumePosition = result.resumePosition;
+      }
     }
 
     if (mounted) {
@@ -204,9 +224,14 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     final bool uiPerformanceMode = settings.uiPerformanceMode;
     final materials = context.appMaterials;
 
-    return Scaffold(
-      backgroundColor: AppPalette.base,
-      body: Stack(
+    // Material, not Scaffold: this screen always renders inside AppShell's
+    // own Scaffold via NavigationController, which already supplies the
+    // AppBar/backdrop chrome this screen never uses. Material still gives
+    // the subtree below correct Text/ink styling on its own, independent
+    // of whatever ancestor it's mounted under.
+    return Material(
+      color: AppPalette.base,
+      child: Stack(
         children: [
           CustomScrollView(
             slivers: [

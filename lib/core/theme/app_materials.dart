@@ -19,8 +19,9 @@ class AppMaterials extends ThemeExtension<AppMaterials> {
   /// Content surfaces — dropdowns, popups, menus, full-screen loading
   /// overlays. Used by `search_input.dart`'s dropdown,
   /// `theater_settings.dart`'s `TheaterSettingsMenu`,
-  /// `anime_details_screen.dart`'s loading overlay, and `navbar.dart`'s
-  /// scroll-driven animated blur.
+  /// `anime_details_screen.dart`'s loading overlay, `navbar.dart`'s
+  /// scroll-driven animated blur, and `playback_stall_indicator.dart`'s
+  /// mid-playback buffering indicator.
   final double standard;
 
   /// Large panels — side drawers, control bars. Used by

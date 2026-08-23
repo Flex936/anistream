@@ -1,10 +1,9 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/extensions/build_context_extensions.dart';
-import '../../../core/input/input_mode_scope.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../shared/widgets/app_segmented_control.dart';
 import '../../../shared/widgets/frosted_container.dart';
 
 class SearchFilterPanel extends StatefulWidget {
@@ -32,9 +31,6 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
   late String _selectedStatus;
   late double _selectedYear;
 
-  // Segmented status control focus node.
-  late final FocusNode _statusFocusNode;
-
   // Bug fix: Material's stock Slider binds
   // ALL FOUR arrow keys internally via its own Shortcuts/Actions
   // (Up/Right = increase, Down/Left = decrease) and always returns
@@ -52,7 +48,8 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
   // pointer-based, not focus-based). A thin outer Focus becomes the real
   // reachable target, handling Left/Right locally and ignoring everything
   // else so Up/Down bubble past this slider instead of being swallowed —
-  // same shape as _handleStatusKey below.
+  // same shape as AppSegmentedControl's own key handler
+  // (shared/widgets/app_segmented_control.dart).
   late final FocusNode _minScoreFocusNode;
   late final FocusNode _minScoreSliderInternalFocusNode;
   late final FocusNode _yearFocusNode;
@@ -66,9 +63,6 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
     _minScore = widget.initialMinScore;
     _selectedStatus = widget.initialStatus;
     _selectedYear = widget.initialYear;
-
-    _statusFocusNode = FocusNode(debugLabel: 'StatusSegmentedControl')
-      ..onKeyEvent = _handleStatusKey;
 
     _minScoreFocusNode = FocusNode(debugLabel: 'MinScoreSlider')
       ..onKeyEvent = _handleMinScoreKey;
@@ -89,41 +83,11 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
 
   @override
   void dispose() {
-    _statusFocusNode.dispose();
     _minScoreFocusNode.dispose();
     _minScoreSliderInternalFocusNode.dispose();
     _yearFocusNode.dispose();
     _yearSliderInternalFocusNode.dispose();
     super.dispose();
-  }
-
-  // Left/Right always move the segment selection, even at the first/
-  // last option — unlike SettingsTextField's cursor-position boundary
-  // check, a 3-item enumerated control has no "content" to keep moving
-  // through, so there's no case where handing off to spatial traversal on
-  // this axis makes sense. Up/Down are always ignored, letting the
-  // ambient FocusTraversalPolicy move focus to the Minimum Score slider
-  // below.
-  KeyEventResult _handleStatusKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-
-    final currentIndex = _statusOptions.indexOf(_selectedStatus);
-
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      if (currentIndex > 0) {
-        setState(() => _selectedStatus = _statusOptions[currentIndex - 1]);
-      }
-      return KeyEventResult.handled;
-    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      if (currentIndex < _statusOptions.length - 1) {
-        setState(() => _selectedStatus = _statusOptions[currentIndex + 1]);
-      }
-      return KeyEventResult.handled;
-    }
-
-    return KeyEventResult.ignored;
   }
 
   // Left/Right nudge the score by 1, clamped to [0, 100] — the same
@@ -214,31 +178,15 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
               ),
             ),
             const SizedBox(height: 12),
-            Focus(
-              focusNode: _statusFocusNode,
-              autofocus: context.dpadAutofocus(true),
-              child: CupertinoSlidingSegmentedControl<String>(
-                backgroundColor: AppPalette.surface,
-                thumbColor: AppPalette.primary,
-                groupValue: _selectedStatus,
-                children: {
-                  for (final status in _statusOptions)
-                    status: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Text(
-                        status,
-                        style: const TextStyle(
-                          color: AppPalette.textMain,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                },
-                onValueChanged: (value) {
-                  if (value != null) setState(() => _selectedStatus = value);
-                },
-              ),
+            AppSegmentedControl<String>(
+              autofocus: true,
+              items: [
+                for (final status in _statusOptions)
+                  AppSegmentedControlItem(value: status, label: status),
+              ],
+              groupValue: _selectedStatus,
+              onValueChanged: (value) =>
+                  setState(() => _selectedStatus = value),
             ),
             const SizedBox(height: 32),
 

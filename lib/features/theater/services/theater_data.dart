@@ -1,5 +1,3 @@
-import 'package:media_kit/media_kit.dart';
-
 class Chapter {
   final String title;
   final Duration start;
@@ -14,6 +12,26 @@ class Chapter {
     this.isSkippable = false,
     this.skipLabel,
   });
+
+  /// Builds a [Chapter] with [isSkippable]/[skipLabel] derived from
+  /// [title] via the shared classification heuristic below — the single
+  /// place every chapter source (mpv's native chapter-list property,
+  /// Media3's Chapter metadata entries) goes through, so the same title
+  /// is classified identically regardless of which engine found it.
+  factory Chapter.fromTitle({
+    required String title,
+    required Duration start,
+    required Duration end,
+  }) {
+    final skippable = _isChapterSkippable(title);
+    return Chapter(
+      title: title,
+      start: start,
+      end: end,
+      isSkippable: skippable,
+      skipLabel: skippable ? _getSkipLabel(title) : null,
+    );
+  }
 }
 
 // Chapter-skippability classification.
@@ -50,54 +68,49 @@ String _getSkipLabel(String title) {
   return 'Skip';
 }
 
-// MKV chapter metadata extraction.
+/// One raw (title, start) marker as reported by whichever engine found
+/// it — mpv's own `chapter-list` property, or Media3's Chapter metadata
+/// entries. Deliberately carries no end time — see
+/// [buildChaptersFromRaw]'s doc comment for why that's derived centrally
+/// instead of by each source individually.
+class RawChapterMarker {
+  final String title;
+  final Duration start;
 
-Future<List<Chapter>> loadChapters(Player player) async {
-  final platform = player.platform;
-  if (platform is! NativePlayer) return [];
+  const RawChapterMarker({required this.title, required this.start});
+}
 
-  try {
-    final countStr = await platform.getProperty('chapter-list/count');
-    final count = int.tryParse(countStr) ?? 0;
-    if (count == 0) return [];
+/// Turns a set of (title, start) markers into fully-classified [Chapter]s
+/// with real end times, regardless of which engine supplied [raw].
+///
+/// Neither mpv's chapter-list property nor Media3's Chapter metadata
+/// entries reliably report an end time — most real-world releases only
+/// set a chapter's start, leaving players to infer the end from whichever
+/// chapter comes next (or the video's own duration, for the last one).
+///
+/// [raw] is explicitly NOT assumed to already be sorted by start time —
+/// confirmed against a real Media3 probe that `Format.metadata` does not
+/// come back in chronological order — so this always sorts first. Both
+/// chapter sources share this same latent bug if the sort is ever
+/// dropped: an unsorted list would pair each marker with whatever
+/// happens to sit next to it in the original order, not its real
+/// chronological neighbor.
+List<Chapter> buildChaptersFromRaw(
+  List<RawChapterMarker> raw,
+  Duration totalDuration,
+) {
+  final sorted = [...raw]..sort((a, b) => a.start.compareTo(b.start));
 
-    final chapters = <Chapter>[];
-    for (var i = 0; i < count; i++) {
-      final title = await platform.getProperty('chapter-list/$i/title');
-      final timeStr = await platform.getProperty('chapter-list/$i/time');
-      final seconds = double.tryParse(timeStr) ?? 0.0;
-
-      final isSkippable = _isChapterSkippable(title);
-      final skipLabel = isSkippable ? _getSkipLabel(title) : null;
-
-      chapters.add(
-        Chapter(
-          title: title,
-          start: Duration(milliseconds: (seconds * 1000).round()),
-          end: Duration.zero, // We will calculate this in the next pass
-          isSkippable: isSkippable,
-          skipLabel: skipLabel,
-        ),
-      );
-    }
-
-    // Calculate end times by looking at the start time of the next chapter
-    for (int i = 0; i < chapters.length; i++) {
-      final end = (i < chapters.length - 1)
-          ? chapters[i + 1].start
-          : player.state.duration;
-
-      chapters[i] = Chapter(
-        title: chapters[i].title,
-        start: chapters[i].start,
+  final chapters = <Chapter>[];
+  for (var i = 0; i < sorted.length; i++) {
+    final end = i < sorted.length - 1 ? sorted[i + 1].start : totalDuration;
+    chapters.add(
+      Chapter.fromTitle(
+        title: sorted[i].title,
+        start: sorted[i].start,
         end: end,
-        isSkippable: chapters[i].isSkippable,
-        skipLabel: chapters[i].skipLabel,
-      );
-    }
-
-    return chapters;
-  } catch (_) {
-    return [];
+      ),
+    );
   }
+  return chapters;
 }

@@ -12,14 +12,46 @@ import '../services/track_name_parser.dart';
 
 enum _MenuPage { main, subtitles, audio }
 
+/// One selectable row inside [TheaterSettingsMenu]'s subtitle/audio list
+/// pages — deliberately player-agnostic, so the same menu shell renders
+/// media_kit's tracks (via [DesktopTheaterSettingsMenu]) and this app's
+/// own `RemoteSubtitleTrack`/audio-track models (via `ExoTheaterScreen`)
+/// with no knowledge of either engine.
+class SettingsTrackOption {
+  final String mainTitle;
+  final String? subTitle;
+  final bool selected;
+  final VoidCallback onSelect;
+
+  const SettingsTrackOption({
+    required this.mainTitle,
+    this.subTitle,
+    required this.selected,
+    required this.onSelect,
+  });
+}
+
+/// Popup settings shell shared by the desktop and mobile theater
+/// screens. Owns only page navigation (main -> subtitles/audio) as local
+/// state; the actual track data is supplied by the caller as plain
+/// props, so this widget has no dependency on any particular playback
+/// engine. [audioOptions] left null omits the Audio tile entirely —
+/// used while no audio tracks have been fetched yet (or the container
+/// genuinely only has one).
 class TheaterSettingsMenu extends StatefulWidget {
-  final Player player;
+  final String subtitlePreview;
+  final List<SettingsTrackOption> subtitleOptions;
+  final String? audioPreview;
+  final List<SettingsTrackOption>? audioOptions;
   final VoidCallback onClose;
   final bool uiPerformanceMode;
 
   const TheaterSettingsMenu({
     super.key,
-    required this.player,
+    required this.subtitlePreview,
+    required this.subtitleOptions,
+    this.audioPreview,
+    this.audioOptions,
     required this.onClose,
     this.uiPerformanceMode = false,
   });
@@ -30,44 +62,8 @@ class TheaterSettingsMenu extends StatefulWidget {
 
 class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
   _MenuPage _currentPage = _MenuPage.main;
-  late Tracks _tracks;
-  AudioTrack? _activeAudio;
-  SubtitleTrack? _activeSubtitle;
 
-  late final StreamSubscription<Tracks> _tracksSub;
-  late final StreamSubscription<Track> _trackSub;
-
-  @override
-  void initState() {
-    super.initState();
-    _tracks = widget.player.state.tracks;
-    _activeAudio = widget.player.state.track.audio;
-    _activeSubtitle = widget.player.state.track.subtitle;
-
-    _tracksSub = widget.player.stream.tracks.listen((t) {
-      if (mounted) setState(() => _tracks = t);
-    });
-    _trackSub = widget.player.stream.track.listen((t) {
-      if (mounted) {
-        setState(() {
-          _activeAudio = t.audio;
-          _activeSubtitle = t.subtitle;
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    unawaited(_tracksSub.cancel());
-    unawaited(_trackSub.cancel());
-    super.dispose();
-  }
-
-  String _getAudioPreview(AudioTrack? t) =>
-      TrackNameParser.parseAudio(t).mainTitle;
-  String _getSubtitlePreview(SubtitleTrack? t) =>
-      TrackNameParser.parseSubtitle(t).mainTitle;
+  bool get _hasAudio => widget.audioOptions != null;
 
   @override
   Widget build(BuildContext context) {
@@ -87,8 +83,8 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
           duration: const Duration(milliseconds: 200),
           child: switch (_currentPage) {
             _MenuPage.main => _buildMain(),
-            _MenuPage.subtitles => _buildSubtitles(),
-            _MenuPage.audio => _buildAudio(),
+            _MenuPage.subtitles => _buildList(widget.subtitleOptions),
+            _MenuPage.audio => _buildList(widget.audioOptions ?? const []),
           },
         ),
       ),
@@ -116,55 +112,22 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
         _Tile(
           icon: Icons.subtitles_outlined,
           title: 'Subtitles',
-          sub: _getSubtitlePreview(_activeSubtitle),
+          sub: widget.subtitlePreview,
           onTap: () => setState(() => _currentPage = _MenuPage.subtitles),
           autofocus: true,
         ),
-        _Tile(
-          icon: Icons.audiotrack_outlined,
-          title: 'Audio',
-          sub: _getAudioPreview(_activeAudio),
-          onTap: () => setState(() => _currentPage = _MenuPage.audio),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSubtitles() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _Back(
-          onTap: () => setState(() => _currentPage = _MenuPage.main),
-          autofocus: true,
-        ),
-        const Divider(color: AppPalette.border, height: 1),
-        Flexible(
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: _tracks.subtitle.length,
-            itemBuilder: (context, index) {
-              final t = _tracks.subtitle[index];
-              return _TrackTile(
-                track: TrackNameParser.parseSubtitle(t),
-                selected: t.id == _activeSubtitle?.id,
-                onTap: () {
-                  // Player.setSubtitleTrack returns a Future<void> — this
-                  // onTap is a synchronous VoidCallback, so the
-                  // fire-and-forget intent is made explicit instead of
-                  // silently dropped (unawaited_futures).
-                  unawaited(widget.player.setSubtitleTrack(t));
-                  widget.onClose();
-                },
-              );
-            },
+        if (_hasAudio)
+          _Tile(
+            icon: Icons.audiotrack_outlined,
+            title: 'Audio',
+            sub: widget.audioPreview ?? '',
+            onTap: () => setState(() => _currentPage = _MenuPage.audio),
           ),
-        ),
       ],
     );
   }
 
-  Widget _buildAudio() {
+  Widget _buildList(List<SettingsTrackOption> options) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -176,14 +139,15 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
         Flexible(
           child: ListView.builder(
             shrinkWrap: true,
-            itemCount: _tracks.audio.length,
+            itemCount: options.length,
             itemBuilder: (context, index) {
-              final t = _tracks.audio[index];
+              final option = options[index];
               return _TrackTile(
-                track: TrackNameParser.parseAudio(t),
-                selected: t.id == _activeAudio?.id,
+                mainTitle: option.mainTitle,
+                subTitle: option.subTitle,
+                selected: option.selected,
                 onTap: () {
-                  unawaited(widget.player.setAudioTrack(t));
+                  option.onSelect();
                   widget.onClose();
                 },
               );
@@ -287,12 +251,14 @@ class _Back extends StatelessWidget {
 }
 
 class _TrackTile extends StatelessWidget {
-  final ParsedTrack track;
+  final String mainTitle;
+  final String? subTitle;
   final bool selected;
   final VoidCallback onTap;
 
   const _TrackTile({
-    required this.track,
+    required this.mainTitle,
+    this.subTitle,
     required this.selected,
     required this.onTap,
   });
@@ -317,7 +283,7 @@ class _TrackTile extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    track.mainTitle,
+                    mainTitle,
                     style: TextStyle(
                       color: selected
                           ? AppPalette.primary
@@ -328,10 +294,10 @@ class _TrackTile extends StatelessWidget {
                           : FontWeight.normal,
                     ),
                   ),
-                  if (track.subTitle != null) ...[
+                  if (subTitle != null) ...[
                     const SizedBox(height: 2),
                     Text(
-                      track.subTitle!,
+                      subTitle!,
                       style: TextStyle(
                         color: AppPalette.textMuted.withValues(alpha: 0.8),
                         fontSize: 11,
@@ -347,6 +313,107 @@ class _TrackTile extends StatelessWidget {
         ),
       ),
       child: const SizedBox.shrink(),
+    );
+  }
+}
+
+/// Wires [TheaterSettingsMenu] to media_kit's `Player` — subscribes to
+/// its track list and active-track streams and turns them into the
+/// plain [SettingsTrackOption] rows the shared menu shell renders. The
+/// one place in the settings popup that depends on media_kit directly;
+/// everything above is player-agnostic.
+class DesktopTheaterSettingsMenu extends StatefulWidget {
+  final Player player;
+  final VoidCallback onClose;
+  final bool uiPerformanceMode;
+
+  const DesktopTheaterSettingsMenu({
+    super.key,
+    required this.player,
+    required this.onClose,
+    this.uiPerformanceMode = false,
+  });
+
+  @override
+  State<DesktopTheaterSettingsMenu> createState() =>
+      _DesktopTheaterSettingsMenuState();
+}
+
+class _DesktopTheaterSettingsMenuState
+    extends State<DesktopTheaterSettingsMenu> {
+  late Tracks _tracks;
+  AudioTrack? _activeAudio;
+  SubtitleTrack? _activeSubtitle;
+
+  late final StreamSubscription<Tracks> _tracksSub;
+  late final StreamSubscription<Track> _trackSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _tracks = widget.player.state.tracks;
+    _activeAudio = widget.player.state.track.audio;
+    _activeSubtitle = widget.player.state.track.subtitle;
+
+    _tracksSub = widget.player.stream.tracks.listen((t) {
+      if (mounted) setState(() => _tracks = t);
+    });
+    _trackSub = widget.player.stream.track.listen((t) {
+      if (mounted) {
+        setState(() {
+          _activeAudio = t.audio;
+          _activeSubtitle = t.subtitle;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_tracksSub.cancel());
+    unawaited(_trackSub.cancel());
+    super.dispose();
+  }
+
+  List<SettingsTrackOption> _subtitleOptions() {
+    return _tracks.subtitle.map((t) {
+      final parsed = TrackNameParser.parseSubtitle(t);
+      return SettingsTrackOption(
+        mainTitle: parsed.mainTitle,
+        subTitle: parsed.subTitle,
+        selected: t.id == _activeSubtitle?.id,
+        onSelect: () => unawaited(widget.player.setSubtitleTrack(t)),
+      );
+    }).toList();
+  }
+
+  List<SettingsTrackOption> _audioOptions() {
+    return _tracks.audio.map((t) {
+      final parsed = TrackNameParser.parseAudio(title: t.title, language: t.language);
+      return SettingsTrackOption(
+        mainTitle: parsed.mainTitle,
+        subTitle: parsed.subTitle,
+        selected: t.id == _activeAudio?.id,
+        onSelect: () => unawaited(widget.player.setAudioTrack(t)),
+      );
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeAudio = _activeAudio;
+    return TheaterSettingsMenu(
+      uiPerformanceMode: widget.uiPerformanceMode,
+      onClose: widget.onClose,
+      subtitlePreview: TrackNameParser.parseSubtitle(_activeSubtitle).mainTitle,
+      subtitleOptions: _subtitleOptions(),
+      audioPreview: activeAudio == null
+          ? 'Auto'
+          : TrackNameParser.parseAudio(
+              title: activeAudio.title,
+              language: activeAudio.language,
+            ).mainTitle,
+      audioOptions: _audioOptions(),
     );
   }
 }

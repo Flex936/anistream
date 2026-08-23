@@ -8,7 +8,7 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/utils/perf_animations.dart';
-import '../../shared/widgets/hover_focus_builder.dart';
+import '../../shared/widgets/app_segmented_control.dart';
 import 'controllers/watchlist_controller.dart';
 import 'widgets/watchlist_cards.dart';
 
@@ -269,44 +269,26 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                   ],
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: AppPalette.surface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppPalette.border),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _TabButton(
-                                      icon: Icons.play_arrow_rounded,
-                                      label: 'Watching',
-                                      active:
-                                          _controller.activeStatus == 'CURRENT',
-                                      onTap: () =>
-                                          _controller.switchTab('CURRENT'),
-                                    ),
-                                    _TabButton(
-                                      icon: Icons.calendar_today_outlined,
-                                      label: 'Planning',
-                                      active:
-                                          _controller.activeStatus ==
-                                          'PLANNING',
-                                      onTap: () =>
-                                          _controller.switchTab('PLANNING'),
-                                    ),
-                                    _TabButton(
-                                      icon: Icons.check_circle_outline_rounded,
-                                      label: 'Watched',
-                                      active:
-                                          _controller.activeStatus ==
-                                          'COMPLETED',
-                                      onTap: () =>
-                                          _controller.switchTab('COMPLETED'),
-                                    ),
-                                  ],
-                                ),
+                              AppSegmentedControl<String>(
+                                items: const [
+                                  AppSegmentedControlItem(
+                                    value: 'CURRENT',
+                                    label: 'Watching',
+                                    icon: Icons.play_arrow_rounded,
+                                  ),
+                                  AppSegmentedControlItem(
+                                    value: 'PLANNING',
+                                    label: 'Planning',
+                                    icon: Icons.calendar_today_outlined,
+                                  ),
+                                  AppSegmentedControlItem(
+                                    value: 'COMPLETED',
+                                    label: 'Watched',
+                                    icon: Icons.check_circle_outline_rounded,
+                                  ),
+                                ],
+                                groupValue: _controller.activeStatus,
+                                onValueChanged: _controller.switchTab,
                               ),
                             ],
                           ),
@@ -509,74 +491,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
           );
         }, childCount: activeEntries.length),
       ),
-    );
-  }
-}
-
-class _TabButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _TabButton({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final typography = context.appTypography;
-
-    return HoverFocusBuilder(
-      onTap: onTap,
-      builder: (context, hovered) {
-        final bgColor = active
-            ? AppPalette.primary
-            : (hovered
-                  ? AppPalette.white.withValues(alpha: 0.08)
-                  : AppPalette.transparent);
-        final contentColor = active
-            ? AppPalette.white
-            : (hovered ? AppPalette.textMain : AppPalette.textMuted);
-
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: AppPalette.primary.withValues(alpha: 0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : const [],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: contentColor),
-              const SizedBox(width: 6),
-              // cardTitleCompact (13/w600) is reused here for the tab
-              // label — the token's height is inconsequential for a
-              // single line of text; see app_typography.dart's class doc
-              // comment on token-name drift.
-              Text(
-                label,
-                style: typography.cardTitleCompact.copyWith(
-                  color: contentColor,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

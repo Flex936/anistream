@@ -11,6 +11,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/theater_data.dart';
 import 'seekbar.dart';
+import 'skip_chip.dart';
 
 class TheaterControls extends StatefulWidget {
   final Player player;
@@ -398,82 +399,20 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
     widget.onInteract();
   }
 
-  Chapter? get _activeSkipChapter {
-    for (final c in widget.chapterMetadata) {
-      if (c.isSkippable &&
-          _position >= c.start &&
-          _position < (c.end - const Duration(seconds: 1))) {
-        return c;
-      }
-    }
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final skipTarget = _activeSkipChapter;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: AnimatedOpacity(
-            opacity: skipTarget != null ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
-            child: AnimatedSlide(
-              offset: skipTarget != null ? Offset.zero : const Offset(0, 0.5),
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutBack,
-              child: IgnorePointer(
-                ignoring: skipTarget == null,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Material(
-                    color: AppPalette.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () {
-                        if (skipTarget != null) {
-                          unawaited(widget.player.seek(skipTarget.end));
-                          widget.onInteract();
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              skipTarget?.skipLabel ?? 'Skip',
-                              style: const TextStyle(
-                                color: AppPalette.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.skip_next_rounded,
-                              color: AppPalette.white,
-                              size: 18,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+        SkipChip(
+          chapters: widget.chapterMetadata,
+          position: _position,
+          onSkip: (target) {
+            unawaited(widget.player.seek(target));
+            widget.onInteract();
+          },
         ),
-
         Seekbar(
           position: _position,
           duration: _duration,
