@@ -50,6 +50,17 @@ class TheaterControls extends StatefulWidget {
   final ValueChanged<bool>? onSeekbarFocusChange;
   final ValueChanged<bool>? onVolumeFocusChange;
 
+  /// False once `episode >= totalEpisodes` — see `TheaterScreen`'s own
+  /// `totalEpisodes` doc comment. Hides the Next Episode chip entirely
+  /// and (via `_PlaybackTimeline`) leaves completion with nothing to
+  /// trigger.
+  final bool hasNextEpisode;
+
+  /// Fired by both the Next Episode chip's tap and, independently,
+  /// `TheaterScreen`'s own `Player.stream.completed` listener — see
+  /// `TheaterScreen._requestNextEpisodeTransition`.
+  final VoidCallback onNextEpisode;
+
   const TheaterControls({
     super.key,
     required this.player,
@@ -61,6 +72,8 @@ class TheaterControls extends StatefulWidget {
     required this.isSettingsOpen,
     required this.isFullscreen,
     required this.isDesktop,
+    required this.hasNextEpisode,
+    required this.onNextEpisode,
     this.uiPerformanceMode = false,
     this.dpadModeActive = false,
     this.chapterMetadata = const [],
@@ -178,6 +191,8 @@ class _TheaterControlsState extends State<TheaterControls> {
             onInteractionStart: widget.onInteractionStart,
             onInteractionEnd: widget.onInteractionEnd,
             onSeekbarFocusChange: widget.onSeekbarFocusChange,
+            hasNextEpisode: widget.hasNextEpisode,
+            onNextEpisode: widget.onNextEpisode,
           ),
           const SizedBox(height: 12),
 
@@ -334,6 +349,8 @@ class _PlaybackTimeline extends StatefulWidget {
   final VoidCallback onInteractionStart;
   final VoidCallback onInteractionEnd;
   final ValueChanged<bool>? onSeekbarFocusChange;
+  final bool hasNextEpisode;
+  final VoidCallback onNextEpisode;
 
   const _PlaybackTimeline({
     required this.player,
@@ -344,6 +361,8 @@ class _PlaybackTimeline extends StatefulWidget {
     required this.onInteractionStart,
     required this.onInteractionEnd,
     this.onSeekbarFocusChange,
+    required this.hasNextEpisode,
+    required this.onNextEpisode,
   });
 
   @override
@@ -409,9 +428,46 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
     return null;
   }
 
+  // Deliberately tighter than NextEpisodePrefetchController's 85%
+  // background-prefetch arm threshold (Stage 4) — prefetching starts
+  // quietly first, well before this chip has any reason to appear;
+  // showing it only once the episode is genuinely almost over keeps it
+  // from crowding the OP/ED/preview skip chip's own usual window.
+  static const double _kNextEpisodeChipThreshold = 0.95;
+
+  // Never true at the same time as _activeSkipChapter != null — the two
+  // chips share one slot below (see build()), so this and the skip
+  // check together are what keeps them mutually exclusive.
+  bool get _showNextEpisodeChip {
+    if (!widget.hasNextEpisode) return false;
+    if (_activeSkipChapter != null) return false;
+    if (_duration <= Duration.zero) return false;
+    return (_position.inMilliseconds / _duration.inMilliseconds) >=
+        _kNextEpisodeChipThreshold;
+  }
+
   @override
   Widget build(BuildContext context) {
     final skipTarget = _activeSkipChapter;
+    final showNextEpisode = _showNextEpisodeChip;
+
+    final bool chipVisible = showNextEpisode || skipTarget != null;
+    final String chipLabel = showNextEpisode
+        ? 'Next Episode'
+        : (skipTarget?.skipLabel ?? 'Skip');
+    // Next Episode intentionally does NOT call widget.onInteract() the
+    // way the skip-chip branch below does — a tap here immediately
+    // starts tearing this screen down (TheaterScreen.
+    // _requestNextEpisodeTransition), so there's no auto-hide countdown
+    // left worth resetting.
+    final VoidCallback chipOnTap = showNextEpisode
+        ? widget.onNextEpisode
+        : () {
+            if (skipTarget != null) {
+              unawaited(widget.player.seek(skipTarget.end));
+              widget.onInteract();
+            }
+          };
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -420,14 +476,9 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
         Align(
           alignment: Alignment.centerRight,
           child: PlaybackActionChip(
-            visible: skipTarget != null,
-            label: skipTarget?.skipLabel ?? 'Skip',
-            onTap: () {
-              if (skipTarget != null) {
-                unawaited(widget.player.seek(skipTarget.end));
-                widget.onInteract();
-              }
-            },
+            visible: chipVisible,
+            label: chipLabel,
+            onTap: chipOnTap,
           ),
         ),
 

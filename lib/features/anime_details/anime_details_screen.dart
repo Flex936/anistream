@@ -161,28 +161,51 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   /// direct success path (where no modal was ever opened).
   ///
   /// Loops rather than a single push/pop: TheaterScreen normally pops
-  /// with `null` (a real exit), but pops with a [TheaterRestartRequest]
-  /// instead when the user taps its freeze-recovery restart button
-  /// (Settings → Playback Preferences → "Show Freeze Recovery Button").
-  /// Each such result immediately re-pushes a fresh TheaterScreen against
-  /// the same still-buffered [BaseStreamingController] carried in the
-  /// result, rather than starting the torrent over from scratch. The loop
-  /// — and therefore _fetchProgress() — only runs once TheaterScreen pops
-  /// with a genuine `null`, so a restart never triggers a premature
-  /// progress refresh mid-episode the way popping AnimeDetailsScreen's
-  /// own route early would.
+  /// with `null` (a real exit), but pops with a [TheaterExitResult]
+  /// instead in two cases —
+  ///
+  ///  - [TheaterRestartRequest]: the user tapped the freeze-recovery
+  ///    restart button (Settings → Playback Preferences → "Show Freeze
+  ///    Recovery Button"). Loops straight back into another push against
+  ///    the same still-buffered [BaseStreamingController] carried in the
+  ///    result, rather than starting the torrent over from scratch.
+  ///  - [TheaterNextEpisodeRequest] with
+  ///    [NextEpisodeTransitionMode.instantHandoff]: a prefetched
+  ///    controller for the next episode is already buffered. Loops the
+  ///    same way, just against the next episode's torrent/controller
+  ///    instead of the current one.
+  ///
+  /// A [TheaterNextEpisodeRequest] in [NextEpisodeTransitionMode.autoFetch]
+  /// or [NextEpisodeTransitionMode.manualPick] instead exits the loop and
+  /// is handled exactly like a fresh tap on that episode row —
+  /// [_autoSelectTopTorrentAndStream] or [_openTorrentModal] respectively
+  /// — once _fetchProgress() below has run, so a next-episode transition
+  /// still triggers exactly one progress refresh, same as a genuine exit.
+  ///
+  /// The loop — and therefore _fetchProgress() — only runs once
+  /// TheaterScreen pops with a genuine `null` or a delegated next-episode
+  /// request, so a restart or an instant handoff never triggers a
+  /// premature progress refresh mid-episode the way popping
+  /// AnimeDetailsScreen's own route early would.
   Future<void> _streamTorrent(int ep, Torrent torrent) async {
     BaseStreamingController? resumeController;
     Duration? resumePosition;
 
+    // Set only when the loop below exits needing this screen to resolve
+    // the next episode itself (autoFetch or manualPick) — a restart or an
+    // instantHandoff next-episode request both loop straight back into
+    // another push instead, without this ever being set.
+    (int, NextEpisodeTransitionMode)? pendingDelegate;
+
     while (true) {
-      final result = await Navigator.push<TheaterRestartRequest?>(
+      final result = await Navigator.push<TheaterExitResult?>(
         context,
-        MaterialPageRoute<TheaterRestartRequest?>(
+        MaterialPageRoute<TheaterExitResult?>(
           builder: (_) => TheaterScreen(
             anime: widget.anime,
             episode: ep,
             torrent: torrent,
+            totalEpisodes: _episodeCount,
             resumeController: resumeController,
             resumePosition: resumePosition,
           ),
@@ -190,12 +213,38 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       );
 
       if (result == null) break;
-      resumeController = result.resumeController;
-      resumePosition = result.resumePosition;
+
+      if (result is TheaterRestartRequest) {
+        resumeController = result.resumeController;
+        resumePosition = result.resumePosition;
+        continue;
+      }
+
+      if (result is TheaterNextEpisodeRequest) {
+        if (result.mode == NextEpisodeTransitionMode.instantHandoff) {
+          ep = result.nextEpisode;
+          torrent = result.prewarmedTorrent!;
+          resumeController = result.prewarmedController;
+          resumePosition = Duration.zero;
+          continue;
+        }
+        pendingDelegate = (result.nextEpisode, result.mode);
+      }
+
+      break;
     }
 
     if (mounted) {
       await _fetchProgress();
+    }
+
+    if (pendingDelegate != null && mounted) {
+      final (nextEpisode, mode) = pendingDelegate;
+      if (mode == NextEpisodeTransitionMode.autoFetch) {
+        unawaited(_autoSelectTopTorrentAndStream(nextEpisode));
+      } else {
+        unawaited(_openTorrentModal(nextEpisode));
+      }
     }
   }
 

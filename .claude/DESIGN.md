@@ -119,6 +119,7 @@ These are documented as-is per the Living Documentation Rule — NEVER silently 
 - **System text-scaling hasn't been explicitly verified.** No `MediaQuery`/`TextScaler` override exists today, which likely means the OS text-size setting is respected by default — unconfirmed on-device across Settings, Watchlist, and Anime Details.
 - **The `< 600` → `context.isMobile`/`Breakpoints` migration (§ 3) is incomplete.** `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `settings_menu.dart`, and `navbar.dart` still inline `MediaQuery.sizeOf(context).width < 600` — versus `episode_tile.dart`, `hero_banner.dart`, `torrent_tile.dart`, `search_results_screen.dart`, and `watchlist_cards.dart`'s `ListCard`, which already use `context.isMobile`. Migrate the remaining call sites opportunistically rather than in one sweeping PR.
 - **`navbar.dart`'s `_NavIconButton`** (the mobile Search/Menu buttons) is a fixed 44×44, short of § 3's 48×48 minimum mobile touch target.
+- **Theater's playback-action chips aren't D-pad reachable.** `PlaybackActionChip` (`features/theater/widgets/playback_action_chip.dart`) — used for both the OP/ED/preview skip chip and the Next Episode chip — is a plain `Material`+`InkWell`, mouse/touch only, with no `DpadFocusable` wrapping. A TV remote user has no way to trigger either action; playback for those users just continues through the video's natural progression instead. Pre-existing for the skip chip; carried forward deliberately into the Next Episode chip rather than fixed as an unrelated side effect of introducing it.
 
 ### 5.2 Structure
 
@@ -143,4 +144,4 @@ These are documented as-is per the Living Documentation Rule — NEVER silently 
 *(Formerly tracked two items here — "blur sigma has no named tiers" and `anime_carousel.dart`'s `_NavArrow` bypassing `FrostedContainer` — both resolved via the `AppMaterials` tiers introduced in `core/theme/app_materials.dart`; see § 1.4. Removed from this list accordingly.)*
 
 ---
-*Last reviewed against the codebase: 2026-08-15. Added a palette color, a blur/radius/card-size value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-23. Added a palette color, a blur/radius/card-size value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

@@ -31,14 +31,22 @@ import 'widgets/theater_controls.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_settings.dart';
 
+/// Base type for every non-null value [TheaterScreen] can pop with — see
+/// [TheaterRestartRequest] (freeze-recovery restart, same episode) and
+/// [TheaterNextEpisodeRequest] (advancing to the next episode). A plain
+/// `null` pop remains a genuine exit back to [AnimeDetailsScreen] — see
+/// [_TheaterScreenState._exitTheater].
+sealed class TheaterExitResult {
+  const TheaterExitResult();
+}
+
 /// Returned by [TheaterScreen] when the user taps its freeze-recovery
 /// restart button (see [_TheaterScreenState._handleRestartRequested]).
 /// Carries the still-live, still-buffered streaming session across to
 /// whatever [TheaterScreen] instance replaces this one, so a restart
 /// recovers a frozen frame near-instantly instead of re-downloading the
-/// torrent from scratch. A normal exit pops with `null` instead — see
-/// [_TheaterScreenState._exitTheater].
-class TheaterRestartRequest {
+/// torrent from scratch.
+class TheaterRestartRequest extends TheaterExitResult {
   final BaseStreamingController resumeController;
   final Duration resumePosition;
 
@@ -46,6 +54,50 @@ class TheaterRestartRequest {
     required this.resumeController,
     required this.resumePosition,
   });
+}
+
+/// How [AnimeDetailsScreen._streamTorrent] should proceed once a
+/// [TheaterNextEpisodeRequest] pops back to it.
+enum NextEpisodeTransitionMode {
+  /// A prefetched, already-buffering controller for the next episode is
+  /// ready — skip fetching entirely and re-push TheaterScreen directly
+  /// against it. Not yet produced by any caller today — reserved for the
+  /// background-prefetching engine (`NextEpisodePrefetchController`).
+  instantHandoff,
+
+  /// No prewarmed controller, but episode-autoplay is on — fetch and
+  /// stream the next episode's top-scored torrent automatically, exactly
+  /// like a fresh tap on that episode row with auto-torrent-selection on.
+  autoFetch,
+
+  /// Episode-autoplay is off — open the torrent-selection modal for the
+  /// next episode, exactly like a fresh tap on that episode row with
+  /// auto-torrent-selection off.
+  manualPick,
+}
+
+/// Returned by [TheaterScreen] when the current episode ends (playback
+/// completion) or the user taps the Next Episode chip — see
+/// [_TheaterScreenState._requestNextEpisodeTransition]. [mode] tells
+/// [AnimeDetailsScreen._streamTorrent] how to proceed;
+/// [prewarmedController] and [prewarmedTorrent] are only ever populated
+/// for [NextEpisodeTransitionMode.instantHandoff].
+class TheaterNextEpisodeRequest extends TheaterExitResult {
+  final int nextEpisode;
+  final NextEpisodeTransitionMode mode;
+  final BaseStreamingController? prewarmedController;
+  final Torrent? prewarmedTorrent;
+
+  const TheaterNextEpisodeRequest({
+    required this.nextEpisode,
+    required this.mode,
+    this.prewarmedController,
+    this.prewarmedTorrent,
+  }) : assert(
+         mode != NextEpisodeTransitionMode.instantHandoff ||
+             (prewarmedController != null && prewarmedTorrent != null),
+         'instantHandoff requires both prewarmedController and prewarmedTorrent',
+       );
 }
 
 /// Carries the message/icon/color for Theater's own in-flow status toast
@@ -68,6 +120,13 @@ class TheaterScreen extends StatefulWidget {
   final int episode;
   final Torrent torrent;
 
+  /// Total episode count for [anime] — gates the Next Episode chip and
+  /// completion-triggered transitions (there's nothing to advance to past
+  /// this). Always the same value `AnimeDetailsScreen._episodeCount`
+  /// already computes; threaded through explicitly since this screen has
+  /// no other way to know it.
+  final int totalEpisodes;
+
   /// Non-null only when this screen is replacing a prior instance after
   /// a freeze-recovery restart — the already-buffered controller to
   /// resume from instead of starting a fresh torrent download. Always
@@ -83,6 +142,7 @@ class TheaterScreen extends StatefulWidget {
     required this.anime,
     required this.episode,
     required this.torrent,
+    required this.totalEpisodes,
     this.resumeController,
     this.resumePosition,
   }) : assert(
@@ -132,6 +192,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // AutoSkipController.
   bool _autoSkip = false;
 
+  // Governs _requestNextEpisodeTransition's mode selection — see that
+  // method. Independent of auto-torrent-selection (AnimeDetailsScreen's
+  // own AppSettings.autoTorrentEnabled), which this screen never reads.
+  bool _episodeAutoplayEnabled = false;
+
   // Gates the freeze-recovery restart button in TheaterTopBar. Defaults
   // false — see AppSettings.showFreezeRecoveryButton's doc comment for
   // why this stays a manual, opt-in action rather than an automatic one.
@@ -143,6 +208,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   List<Chapter> _chapters = [];
   StreamSubscription<Duration>? _posSub;
+
+  // Drives _requestNextEpisodeTransition on genuine end-of-file — see
+  // _onPlaybackCompleted. Subscribed synchronously in initState alongside
+  // the other early player-stream-driven controllers below, rather than
+  // deferred to _initPlayerAndStream like _posSub: unlike AniList
+  // tracking, completion detection has no dependency on that method's
+  // async settings/tracker setup, so there's no reason to delay it.
+  StreamSubscription<bool>? _completedSub;
 
   // Theater's own in-flow status toast (AniList sync confirmation,
   // auto-skip arming) — see TheaterTopNotification's doc comment
@@ -188,6 +261,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     );
     _playbackDiagnostics = PlaybackDiagnostics(player: _player);
     _playbackStallController = PlaybackStallController(player: _player);
+    _completedSub = _player.stream.completed.listen(_onPlaybackCompleted);
 
     if (Platform.isAndroid || Platform.isIOS) {
       // initState can't be async — SystemChrome's setters return
@@ -248,6 +322,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       _uiPerformanceMode = s.uiPerformanceMode;
       _videoFilterQuality = s.videoFilterQuality;
       _autoSkip = s.autoSkip;
+      _episodeAutoplayEnabled = s.episodeAutoplayEnabled;
       _showFreezeRecoveryButton = s.showFreezeRecoveryButton;
     });
 
@@ -733,6 +808,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _playbackStallController.dispose();
     _topNotificationTimer?.cancel();
     await _posSub?.cancel();
+    await _completedSub?.cancel();
     // Fires an armed-but-not-yet-committed AniList sync immediately
     // instead of letting _tracker.dispose() below silently cancel it —
     // see flushPendingCommit's doc comment.
@@ -770,6 +846,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _playbackStallController.dispose();
     _topNotificationTimer?.cancel();
     await _posSub?.cancel();
+    await _completedSub?.cancel();
     // The replacement TheaterScreen constructs a brand-new
     // AnilistTrackerService that re-fetches status from scratch — an
     // armed commit on this instance has to fire now or it's gone for
@@ -790,6 +867,76 @@ class _TheaterScreenState extends State<TheaterScreen> {
         ),
       );
     }
+  }
+
+  // Episode transition (next-episode autoplay / manual "Next Episode").
+
+  /// [Player.stream.completed] listener — fires on genuine end-of-file.
+  /// Routes into the same entry point [_requestNextEpisodeTransition] the
+  /// Next Episode chip's tap uses, so completion and a manual tap are
+  /// handled identically regardless of which one triggered it.
+  void _onPlaybackCompleted(bool completed) {
+    if (!completed) return;
+    unawaited(_requestNextEpisodeTransition());
+  }
+
+  /// Shared entry point for both the manual Next Episode chip tap (see
+  /// [_buildControlsOverlay]) and automatic playback completion (see
+  /// [_onPlaybackCompleted] above). No-ops if there's no next episode, or
+  /// if a transition/exit is already underway — guards against a stray
+  /// double-fire, e.g. a completion event landing the same frame as a
+  /// manual tap.
+  Future<void> _requestNextEpisodeTransition() async {
+    if (_isClosing) return;
+    final nextEpisode = widget.episode + 1;
+    if (nextEpisode > widget.totalEpisodes) return;
+
+    // NextEpisodePrefetchController (background-prefetching engine) will
+    // ask here whether an already-buffering controller for nextEpisode is
+    // ready and, if so, select instantHandoff with it attached. Until
+    // that lands, autoplay always falls through to a fresh fetch — see
+    // NextEpisodeTransitionMode.instantHandoff's doc comment.
+    final mode = _episodeAutoplayEnabled
+        ? NextEpisodeTransitionMode.autoFetch
+        : NextEpisodeTransitionMode.manualPick;
+
+    await _teardownForNextEpisode();
+
+    if (mounted) {
+      Navigator.pop(
+        context,
+        TheaterNextEpisodeRequest(nextEpisode: nextEpisode, mode: mode),
+      );
+    }
+  }
+
+  /// Teardown for an episode-to-episode transition. Mirrors
+  /// [_handleRestartRequested]'s shape — a new TheaterScreen is about to
+  /// mount immediately once this pops, so system UI mode/orientation is
+  /// deliberately left alone here, same reasoning as that method — rather
+  /// than [_exitTheater]'s (a genuine return to `AnimeDetailsScreen`).
+  ///
+  /// Unlike a restart, `_torrentController` is disposed normally here
+  /// rather than handed off: it belongs to the episode that just ended,
+  /// not the one about to start. A future prewarmed controller (for
+  /// [NextEpisodeTransitionMode.instantHandoff]) is a separate object
+  /// owned by the prefetching engine, untouched by this method.
+  Future<void> _teardownForNextEpisode() async {
+    _isClosing = true;
+    _torrentController.removeListener(_onTorrentStateChanged);
+
+    _autoSkipController.dispose();
+    _playbackDiagnostics.dispose();
+    _playbackStallController.dispose();
+    _topNotificationTimer?.cancel();
+    await _posSub?.cancel();
+    await _completedSub?.cancel();
+    await _tracker.flushPendingCommit();
+    _tracker.dispose();
+
+    await _player.stop();
+    await _player.dispose();
+    _torrentController.dispose();
   }
 
   @override
@@ -820,6 +967,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
     final posSub = _posSub;
     if (posSub != null) {
       unawaited(posSub.cancel());
+    }
+    final completedSub = _completedSub;
+    if (completedSub != null) {
+      unawaited(completedSub.cancel());
     }
     _torrentController.removeListener(_onTorrentStateChanged);
     // Fire-and-forget, matching this method's existing pattern for
@@ -930,6 +1081,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
                           setState(() => _isSettingsOpen = !_isSettingsOpen),
                       onSeekbarFocusChange: (f) => _seekbarFocused = f,
                       onVolumeFocusChange: (f) => _volumeSliderFocused = f,
+                      hasNextEpisode: widget.episode < widget.totalEpisodes,
+                      onNextEpisode: () =>
+                          unawaited(_requestNextEpisodeTransition()),
                     ),
                   ),
                 ),
