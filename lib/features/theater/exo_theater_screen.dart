@@ -13,7 +13,6 @@ import '../../data/anilist/anilist_tracker_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../shared/utils/perf_animations.dart';
-import '../../shared/widgets/toast.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
 import 'services/native_chapter_parser.dart';
@@ -23,6 +22,7 @@ import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
 import 'services/theater_data.dart';
+import 'services/top_notification_controller.dart';
 import 'services/track_name_parser.dart';
 import 'widgets/batch_picker.dart';
 import 'widgets/mobile_theater_controls.dart';
@@ -51,9 +51,9 @@ import 'widgets/theater_settings.dart';
 // getAudioTracks()/selectAudioTrack(); and a full mobile-oriented
 // control bar (MobileTheaterControls), auto-hide-on-inactivity,
 // background-tap-to-toggle, keyboard shortcuts, and immersive system UI
-// + landscape lock on enter/exit, sharing SkipChip, Seekbar, and
-// TheaterSettingsMenu with TheaterScreen directly instead of duplicating
-// them.
+// + landscape lock on enter/exit, sharing SkipChip, Seekbar,
+// TheaterSettingsMenu, and TopNotificationController's top-of-screen
+// status toast with TheaterScreen directly instead of duplicating them.
 //
 // The kUseHardwareOverlay flag is the actual experiment:
 //
@@ -157,6 +157,13 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   // the eligibility and debounce rules.
   late final AnilistTrackerService _tracker;
 
+  // Same shared mechanism TheaterScreen uses for its own top-of-screen
+  // status toast (AniList sync confirmation, auto-skip arming) — see
+  // TopNotificationController's class doc
+  // (services/top_notification_controller.dart).
+  final TopNotificationController _topNotificationController =
+      TopNotificationController();
+
   // Subtitles.
   int? _selectedSubtitleIndex;
   bool _subtitleFetchTriggered = false;
@@ -215,8 +222,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       isEnabled: () => _autoSkip,
       onSkipArmed: (skipLabel) {
         if (mounted) {
-          AppleTopSnackBar.show(
-            context: context,
+          _topNotificationController.show(
             message: 'Auto-skipping $skipLabel in 2s...',
             icon: Icons.fast_forward_rounded,
             iconColor: AppPalette.primary,
@@ -228,11 +234,19 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     _tracker = AnilistTrackerService(
       onSuccess: () {
         if (mounted) {
-          AppleTopSnackBar.show(
-            context: context,
+          _topNotificationController.show(
             message: 'Progress saved to AniList',
             icon: Icons.check_circle_rounded,
             iconColor: AppPalette.statusReleasing,
+          );
+        }
+      },
+      onFailure: (message) {
+        if (mounted) {
+          _topNotificationController.show(
+            message: message,
+            icon: Icons.error_outline_rounded,
+            iconColor: AppPalette.statusCancelled,
           );
         }
       },
@@ -328,16 +342,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     // like mixWithOthers). Verified directly against the current
     // video_player API docs rather than assumed from memory, since this
     // is the one line the whole engine experiment hinges on.
-    final controller = VideoPlayerController.networkUrl(
-      Uri.parse(url),
-      // ignore: avoid_redundant_argument_values -- kUseHardwareOverlay is
-      // false today, so this folds to the same textureView default
-      // video_player already uses; kept explicit so flipping the
-      // constant to true for Stage 2 actually switches to platformView.
-      viewType: kUseHardwareOverlay
-          ? VideoViewType.platformView
-          : VideoViewType.textureView,
-    );
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
 
     try {
       await controller.initialize();
@@ -810,6 +815,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     _subtitleContentTimer?.cancel();
     _autoSkipController.dispose();
     _tracker.dispose();
+    _topNotificationController.dispose();
     unawaited(_posSub?.cancel() ?? Future<void>.value());
     super.dispose();
   }
@@ -835,6 +841,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               episode: widget.episode,
               uiPerformanceMode: _uiPerformanceMode,
               onBack: _exitTheater,
+              onRestart: () => {}, //temporary(?) fix to stop lint
             ),
           ),
           Positioned(
@@ -851,12 +858,12 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               isSettingsOpen: _isSettingsOpen,
               onToggleSettings:
                   (_torrentController.subtitleTracks.isEmpty &&
-                          _audioTracks.isEmpty)
-                      ? null
-                      : () {
-                          cv.registerActivity();
-                          setState(() => _isSettingsOpen = !_isSettingsOpen);
-                        },
+                      _audioTracks.isEmpty)
+                  ? null
+                  : () {
+                      cv.registerActivity();
+                      setState(() => _isSettingsOpen = !_isSettingsOpen);
+                    },
               onSeekbarFocusChange: (f) => _seekbarFocused = f,
             ),
           ),
@@ -915,6 +922,29 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               ),
             ),
           ),
+
+        // Theater's own in-flow status toast (AniList sync confirmation,
+        // auto-skip arming), fed by the same TopNotificationController
+        // mechanism TheaterScreen uses. Rendered unconditionally here
+        // (not inside _buildControlsOverlay's gated Stack), so it stays
+        // reachable even while the controls bar has auto-hidden.
+        Positioned(
+          top:
+              24 +
+              MediaQuery.paddingOf(context).top +
+              TheaterTopNotification.kTopBarClearance,
+          left: 16,
+          right: 16,
+          child: ValueListenableBuilder<TopNotificationData?>(
+            valueListenable: _topNotificationController.notification,
+            builder: (context, data, _) => TheaterTopNotification(
+              message: data?.message,
+              icon: data?.icon,
+              iconColor: data?.iconColor,
+              uiPerformanceMode: _uiPerformanceMode,
+            ),
+          ),
+        ),
 
         if (_isSettingsOpen)
           Positioned(

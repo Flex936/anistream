@@ -4,5 +4,6 @@
     "dart.analysisExcludedFolders": [
         "D:/programming/anistream/claude_temp"
     ],
-    "cmake.ignoreCMakeListsMissing": true
+    "cmake.ignoreCMakeListsMissing": true,
+    "java.compile.nullAnalysis.mode": "automatic"
 }

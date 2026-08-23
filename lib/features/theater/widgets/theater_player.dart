@@ -123,14 +123,15 @@ class TheaterTopBar extends StatelessWidget {
 
 /// Theater's own in-flow status toast — the AniList "Progress saved"
 /// confirmation and the auto-skip "Skipping Opening in 2s..." countdown
-/// both render through this widget. It's a plain sibling of
-/// [TheaterTopBar] inside `theater_screen.dart`'s own `Stack`, positioned
-/// with enough vertical clearance (that file's `_kTopBarClearance`) to
-/// sit below the top bar rather than over it, and wrapped in
-/// [IgnorePointer] since a transient status message is never itself an
-/// interactive target — between the two, the back button in
-/// [TheaterTopBar] stays reachable regardless of whether a notification
-/// is currently showing.
+/// both render through this widget, fed by a shared
+/// `TopNotificationController` (services/top_notification_controller.dart)
+/// on both `TheaterScreen` (media_kit) and `ExoTheaterScreen`
+/// (video_player). It's a plain sibling of [TheaterTopBar] inside each
+/// screen's own `Stack`, positioned [kTopBarClearance] below the top bar
+/// rather than over it, and wrapped in [IgnorePointer] since a transient
+/// status message is never itself an interactive target — between the
+/// two, the back button in [TheaterTopBar] stays reachable regardless of
+/// whether a notification is currently showing.
 ///
 /// [message] is null when nothing is currently showing; [icon]/
 /// [iconColor] are only meaningful while it's non-null and fall back to a
@@ -142,6 +143,13 @@ class TheaterTopNotification extends StatelessWidget {
   final IconData? icon;
   final Color? iconColor;
   final bool uiPerformanceMode;
+
+  /// Vertical clearance this notification reserves below a screen's own
+  /// top-bar offset (`24 + MediaQuery.paddingOf(context).top`) — enough
+  /// to sit below [TheaterTopBar] rather than over it, regardless of
+  /// whether the controls overlay is currently shown or hidden. Shared by
+  /// both consumers so neither hardcodes its own copy of this offset.
+  static const double kTopBarClearance = 64.0;
 
   const TheaterTopNotification({
     super.key,

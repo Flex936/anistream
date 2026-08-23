@@ -80,8 +80,9 @@ lib/
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,
     │                                 controls_visibility_controller, auto_skip_controller,
-    │                                 playback_diagnostics, theater_data, track_name_parser,
-    │                                 playback_handle, mpv_chapter_loader, native_chapter_parser,
+    │                                 top_notification_controller, playback_diagnostics,
+    │                                 theater_data, track_name_parser, playback_handle,
+    │                                 mpv_chapter_loader, native_chapter_parser,
     │                                 native_subtitle_parser}.dart,
     │                                 widgets/{theater_controls, mobile_theater_controls,
     │                                 theater_player, seekbar, skip_chip, styled_subtitle_view,
@@ -207,4 +208,4 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
   - **Still open:** not yet filed upstream against `media-kit/media-kit` — worth doing regardless of the mitigation, since the confirmed root cause lives entirely in the plugin's native Linux rendering path and this codebase can't fix it directly.
 
 ---
-*Last reviewed against the codebase: 2026-08-20. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
+*Last reviewed against the codebase: 2026-08-23. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
