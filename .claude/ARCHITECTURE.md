@@ -79,7 +79,9 @@ lib/
     ├── theater/                      theater_screen.dart,
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,
-    │                                 auto_skip_controller, playback_diagnostics, theater_data,
+    │                                 auto_skip_controller, next_episode_prefetch_controller,
+    │                                 controls_visibility_controller, playback_stall_controller,
+    │                                 playback_diagnostics, theater_data,
     │                                 track_name_parser}.dart,
     │                                 widgets/{theater_controls, theater_player, seekbar,
     │                                 theater_settings, batch_picker, playback_action_chip}.dart
@@ -158,6 +160,8 @@ Two distinct native-integration mechanisms are in use — new performance-sensit
 
 Both implementations parse candidate filenames with the same `TorrentParser` (see [API.md](API.md) § 3) to guess episode numbers inside a batch torrent — this logic is intentionally not duplicated between the on-device and remote paths.
 
+**Background prefetching:** `NextEpisodePrefetchController` (`features/theater/services/`) constructs a second, short-lived `BaseStreamingController` — via the shared `createStreamingController(AppSettings)` factory, so it always matches the current episode's own `serverMode`-selected implementation — to warm-buffer the *next* episode's top-scored torrent once episode-autoplay is on and the current episode nears its end. This briefly overlaps two controller *instances* of the same implementation, not two different implementations — it does not relax § 1's "never both at once" rule. Owned and disposed by `TheaterScreen`; the warm controller only ever leaves that ownership when an actual episode transition consumes it.
+
 ## 6. AniStream Server (Go)
 
 Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, single external dependency `github.com/anacrolix/torrent`. Full build/run/API instructions live in [`anistream_server/README.md`](../anistream_server/README.md) — this section is the condensed architectural summary; that file is authoritative for the actual command-line flags and endpoint reference.
@@ -197,4 +201,4 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
   - **Still open:** not yet filed upstream against `media-kit/media-kit` — worth doing regardless of the mitigation, since the confirmed root cause lives entirely in the plugin's native Linux rendering path and this codebase can't fix it directly.
 
 ---
-*Last reviewed against the codebase: 2026-08-22. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-23. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

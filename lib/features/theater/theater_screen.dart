@@ -18,10 +18,10 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
+import 'services/next_episode_prefetch_controller.dart';
 import 'services/playback_diagnostics.dart';
 import 'services/playback_stall_controller.dart';
 import 'services/player_configurator.dart';
-import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
 import 'services/theater_data.dart';
@@ -171,6 +171,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // Drives the mid-playback "Buffering…" indicator off mpv's own
   // buffering signal — see playback_stall_controller.dart's class doc.
   late final PlaybackStallController _playbackStallController;
+
+  // Background-prefetches the next episode's sources (and, when
+  // episode-autoplay is on, an actual buffering stream) as this episode
+  // nears its end — see next_episode_prefetch_controller.dart's class
+  // doc. Null whenever there's no next episode to prefetch (constructed
+  // in _initPlayerAndStream, once totalEpisodes/settings are known).
+  NextEpisodePrefetchController? _prefetchController;
 
   /// A same-position pause before a manual restart, below which a
   /// restart wouldn't meaningfully rewind anything.
@@ -329,10 +336,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     final bool isResuming = widget.resumeController != null;
 
     final BaseStreamingController newController =
-        widget.resumeController ??
-        (s.serverMode && s.serverUrl.isNotEmpty
-            ? RemoteStreamingController(serverUrl: s.serverUrl)
-            : StreamingController());
+        widget.resumeController ?? createStreamingController(s);
     newController.addListener(_onTorrentStateChanged);
 
     if (!mounted) {
@@ -399,9 +403,24 @@ class _TheaterScreenState extends State<TheaterScreen> {
     );
     if (!mounted) return;
 
+    if (widget.episode < widget.totalEpisodes) {
+      _prefetchController = NextEpisodePrefetchController(
+        anime: widget.anime,
+        nextEpisode: widget.episode + 1,
+        settings: s,
+        episodeAutoplayEnabled: () => _episodeAutoplayEnabled,
+        onEngineWarm: () => _showTopNotification(
+          message: 'Up next: Episode ${widget.episode + 1} ready',
+          icon: Icons.skip_next_rounded,
+          iconColor: AppPalette.primary,
+        ),
+      );
+    }
+
     _posSub = _player.stream.position.listen((pos) {
       _tracker.updateProgress(pos, _player.state.duration);
       _autoSkipController.onPosition(pos);
+      _prefetchController?.onPosition(pos, _player.state.duration);
     });
   }
 
@@ -803,6 +822,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
       setState(() => _videoInitialized = false);
       await WidgetsBinding.instance.endOfFrame;
     }
+    _prefetchController?.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     _playbackStallController.dispose();
@@ -841,6 +861,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
         ? Duration.zero
         : rawResumePosition;
 
+    // Discarded rather than handed off across the restart boundary — the
+    // replacement TheaterScreen constructs its own fresh
+    // NextEpisodePrefetchController in _initPlayerAndStream and simply
+    // re-runs Tier 1/Tier 2 from scratch for the same next episode. A
+    // freeze-recovery restart is a rare, user-triggered recovery action,
+    // not a normal hot path, so re-paying that cost here is accepted
+    // rather than adding complexity to thread prefetch progress through
+    // TheaterRestartRequest as well.
+    _prefetchController?.dispose();
     _autoSkipController.dispose();
     _playbackDiagnostics.dispose();
     _playbackStallController.dispose();
@@ -891,21 +920,41 @@ class _TheaterScreenState extends State<TheaterScreen> {
     final nextEpisode = widget.episode + 1;
     if (nextEpisode > widget.totalEpisodes) return;
 
-    // NextEpisodePrefetchController (background-prefetching engine) will
-    // ask here whether an already-buffering controller for nextEpisode is
-    // ready and, if so, select instantHandoff with it attached. Until
-    // that lands, autoplay always falls through to a fresh fetch — see
-    // NextEpisodeTransitionMode.instantHandoff's doc comment.
-    final mode = _episodeAutoplayEnabled
-        ? NextEpisodeTransitionMode.autoFetch
-        : NextEpisodeTransitionMode.manualPick;
+    final NextEpisodeTransitionMode mode;
+    BaseStreamingController? prewarmedController;
+    Torrent? prewarmedTorrent;
+
+    if (_episodeAutoplayEnabled) {
+      // Consumes (not just reads) the prefetch controller's warm result —
+      // if one exists, ownership of that controller transfers to the
+      // TheaterNextEpisodeRequest below, and _prefetchController itself
+      // no longer holds any reference to it (see takeWarmResult's own
+      // doc comment). Nothing to take (autoplay only just now flipped on
+      // mid-episode, Tier 2 hasn't finished warming yet, or it failed)
+      // falls through to a fresh fetch exactly like before Stage 4.
+      final warm = _prefetchController?.takeWarmResult();
+      if (warm != null) {
+        mode = NextEpisodeTransitionMode.instantHandoff;
+        prewarmedController = warm.controller;
+        prewarmedTorrent = warm.torrent;
+      } else {
+        mode = NextEpisodeTransitionMode.autoFetch;
+      }
+    } else {
+      mode = NextEpisodeTransitionMode.manualPick;
+    }
 
     await _teardownForNextEpisode();
 
     if (mounted) {
       Navigator.pop(
         context,
-        TheaterNextEpisodeRequest(nextEpisode: nextEpisode, mode: mode),
+        TheaterNextEpisodeRequest(
+          nextEpisode: nextEpisode,
+          mode: mode,
+          prewarmedController: prewarmedController,
+          prewarmedTorrent: prewarmedTorrent,
+        ),
       );
     }
   }
@@ -918,13 +967,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
   ///
   /// Unlike a restart, `_torrentController` is disposed normally here
   /// rather than handed off: it belongs to the episode that just ended,
-  /// not the one about to start. A future prewarmed controller (for
-  /// [NextEpisodeTransitionMode.instantHandoff]) is a separate object
-  /// owned by the prefetching engine, untouched by this method.
+  /// not the one about to start. `_prefetchController` is disposed here
+  /// too — safe even after `_requestNextEpisodeTransition` already called
+  /// [NextEpisodePrefetchController.takeWarmResult] above, since that
+  /// leaves nothing further for it to own (see that method's own doc
+  /// comment on the ownership hand-off).
   Future<void> _teardownForNextEpisode() async {
     _isClosing = true;
     _torrentController.removeListener(_onTorrentStateChanged);
 
+    _prefetchController?.dispose();
     _autoSkipController.dispose();
     _playbackDiagnostics.dispose();
     _playbackStallController.dispose();
@@ -960,6 +1012,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
 
     _controlsVisibility.dispose();
+    _prefetchController?.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     _playbackStallController.dispose();
