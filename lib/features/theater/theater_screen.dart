@@ -921,13 +921,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Widget build(BuildContext context) {
     final dpadModeActive = InputModeScope.of(context).dpadModeActive;
 
-    // The video texture, the top notification, the settings-menu popup,
-    // and the loading/batch-picker overlay switcher don't depend on
-    // controls visibility at all — they're computed once per real
-    // setState() (video-ready, settings toggle, chapters loaded, etc.).
-    // Passed as the `child` of the ValueListenableBuilder below so this
-    // subtree is reused, not rebuilt, on every controls-visibility
-    // transition.
+    // The video texture, the top notification, and the loading/
+    // batch-picker overlay switcher don't depend on controls visibility
+    // at all — they're computed once per real setState() (video-ready,
+    // chapters loaded, etc.). Passed as the `child` of the
+    // ValueListenableBuilder below so this subtree is reused, not
+    // rebuilt, on every controls-visibility transition. The settings
+    // popup is a separate top-level Stack layer instead (see the
+    // returned Stack below), so it always paints, and hit-tests, above
+    // TheaterControls' bottom bar.
     final staticLayer = Stack(
       fit: StackFit.expand,
       children: [
@@ -1001,17 +1003,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
           ),
         ),
 
-        if (_isSettingsOpen)
-          Positioned(
-            bottom: 110,
-            right: 32,
-            child: DesktopTheaterSettingsMenu(
-              player: _player,
-              uiPerformanceMode: _uiPerformanceMode,
-              onClose: () => setState(() => _isSettingsOpen = false),
-            ),
-          ),
-
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 600),
           child: ListenableBuilder(
@@ -1070,9 +1061,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
           // ValueListenableBuilder scoped to controls visibility only —
           // MouseRegion's cursor and the controls overlay's opacity/
           // hit-testing both depend on it, but `staticLayer` above
-          // (video, top notification, settings menu, loading/batch-picker
-          // overlay) does not, and is passed as `child` so it's reused
-          // rather than reconstructed on every show/hide transition.
+          // (video, top notification, loading/batch-picker overlay)
+          // does not, and is passed as `child` so it's reused rather
+          // than reconstructed on every show/hide transition.
           // registerActivity() writes to a ValueNotifier, which only
           // notifies listeners on a genuine true→false/false→true
           // transition — so hovering with controls already visible
@@ -1108,6 +1099,28 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       child!,
                       if (_videoInitialized)
                         _buildControlsOverlay(showControls, dpadModeActive),
+                      // Painted after _buildControlsOverlay so it always
+                      // paints — and hit-tests — above it. A `Container`
+                      // with a `BoxDecoration` (TheaterControls' bottom
+                      // bar) registers a hit across its entire rectangle
+                      // regardless of the gradient's actual alpha at a
+                      // given point, so sitting below it in the Stack
+                      // would let it silently swallow mouse clicks meant
+                      // for this popup's tiles wherever the two overlap
+                      // on screen — even though the popup still painted
+                      // visibly through the gradient's transparent
+                      // regions.
+                      if (_isSettingsOpen)
+                        Positioned(
+                          bottom: 110,
+                          right: 32,
+                          child: DesktopTheaterSettingsMenu(
+                            player: _player,
+                            uiPerformanceMode: _uiPerformanceMode,
+                            onClose: () =>
+                                setState(() => _isSettingsOpen = false),
+                          ),
+                        ),
                     ],
                   ),
                 ),
