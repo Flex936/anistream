@@ -39,7 +39,7 @@ The app is built entirely in **Flutter and Dart** (well, technically, optionally
 
 ## 3. How It Works
 
-1. **The Scraper:** When you select an episode, a background Dart isolate queries **Nyaa.si RSS feeds**, cross-references the results with AniList's GraphQL metadata, and assigns a weighted quality score to find the best torrent. *(Full scoring rubric and query details: [API.md](.claude/API.md).)*
+1. **The Scraper:** When you select an episode, the app first asks the **TsukiHime API** — an anime- and episode-aware torrent index — for releases matching that exact episode or the whole season. If TsukiHime doesn't know the anime yet, a background Dart isolate falls back to scraping **Nyaa.si's RSS feeds** directly and scoring the results itself. Either way, live seeder counts come from querying BitTorrent trackers directly. *(Full scoring rubric and query details: [API.md](.claude/API.md).)*
 2. **The Streaming Pipeline:** The chosen magnet link is fed into `libtorrent_flutter`, which creates a local HTTP streaming server and requests sequential piece deadlines from peers instead of downloading randomly. *(Or, optionally, offloaded to the companion Go server — see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § 6.)*
 3. **The Native Player:** The local stream URL is passed directly to `media_kit`. Because Flutter renders UI with its own 2D graphics engine (Impeller), the video frames and the UI overlays composite onto the exact same native OS window — no separate video-view Z-index bugs, no OS rendering conflicts.
 
@@ -184,7 +184,7 @@ flutter build windows --release
 flutter build apk --release
 ```
 
-> Android TV builds don't yet use the TV's own decode unit — a weak-GPU TV model most likely won't run 1080p footage well.
+> If your model struggles on 1080p footage on AndroidTV consider switching to exoplayer engine in settings. Note: Exoplayer currently requires subtitles from the anistream server and are of lower quality. 
 
 ---
 
@@ -216,4 +216,4 @@ AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)**; see
 AniStream is an open-source architectural proof-of-concept designed as a personal utility. Users assume complete liability for the metadata aggregation parameters, torrent tracking hashes, and compliance with local legal frameworks governing peer-to-peer data transfers. No copyright-infringing media files are hosted, stored, or distributed on this codebase. However, while you are streaming, you will become a seeder for that duration.
 
 ---
-*Last reviewed against the codebase: 2026-08-16. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*
+*Last reviewed against the codebase: 2026-08-26. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*

@@ -8,7 +8,9 @@
 | Source | Role | Auth |
 | --- | --- | --- |
 | **AniList** | Primary metadata (titles, covers, scores, airing schedule), user authentication, and watch-progress tracking | OAuth2 (implicit grant), read+write |
-| **Nyaa.si** | Torrent discovery via RSS scraping | None (unauthenticated read) |
+| **TsukiHime API** | Primary torrent discovery — anime- and episode-aware torrent listings, keyed off AniList ID (§ 5) | None (unauthenticated read) |
+| **Nyaa.si** | Torrent discovery via RSS scraping — fallback only, used when TsukiHime has no match (§ 3) | None (unauthenticated read) |
+| **BitTorrent trackers** | Live seeder/leecher counts for TsukiHime-sourced candidates, via direct tracker scrape (§ 6) | None |
 | **MyAnimeList** | **Passive link-out only** — a button on the details screen opens `myanimelist.net/anime/<id>` in the system browser | N/A — no API calls are made to MAL |
 
 The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, LAN-local API this app talks to for remote torrenting. It isn't a data source in the sense above — see [`anistream_server/README.md`](../anistream_server/README.md) and [ARCHITECTURE.md](ARCHITECTURE.md) § 6, not here.
@@ -54,6 +56,8 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 
 ## 3. Nyaa.si
 
+**Fallback role:** everything below describes the path used only when TsukiHime (§ 5) has no internal-ID match for the anime, or its own endpoints return zero usable torrents — not the primary source anymore.
+
 **Mirrors:** `nyaa.si`, then `nyaa.iss.one` as fallback, tried in order with a 7-second per-mirror timeout (`TorrentMirrorFetcher`).
 
 **Query construction:** for a given anime + episode, the search queue is the de-duplicated set of {romaji title, English title (if different), synonyms}. Each candidate is queried as `<title> <episode, zero-padded>` (or bare `<title>` for movies/batch-mode), against `<mirror>/?page=rss&q=<query>&c=1_2&f=0`, with `&s=seeders&o=desc` appended in batch mode.
@@ -97,5 +101,61 @@ This table is the single authoritative list of every cache in the app, regardles
 | `SettingsCache` | N/A (sync mirror, not TTL-based) | — | In-memory copy of the current `AppSettings`, kept live by `SettingsController` — see [ARCHITECTURE.md](ARCHITECTURE.md) § 3. |
 | Image decoding | N/A | — | Not a persistent disk cache. `Image.network` calls are capped with a `cacheWidth` matched to the widget's actual rendered size, so Flutter's in-memory image cache never holds a full-resolution decode of a thumbnail-sized poster. |
 
+## 5. TsukiHime API
+
+**Role:** primary torrent source. Nyaa.si (§ 3) only runs when this returns nothing.
+
+**Base URL:** `https://api.tsukihime.org/v1`, no auth. Endpoints used stay under the default 120 req/min rate limit — `/search/torrents` (50 req/min) is unused.
+
+**Flow** (`TsukihimeApiService`):
+
+1. `resolveInternalId(anilistId)` — `GET /animes/anilist/{anilistId}`. A 404 means the anime isn't in TsukiHime's database yet; `fetchTorrents` falls back to Nyaa in that case, not an error.
+2. `getEpisodeTorrents(internalId, episodeNumber)` — `GET /animes/{id}/episodes/{n}`. Always queried — pre-filtered to that exact episode server-side, unlike Nyaa's own filename-guessing.
+3. `getSeriesTorrents(internalId)` — `GET /animes/{id}`. Only queried when `anime.status == 'FINISHED' && anime.format != 'MOVIE'` (same condition the Nyaa-native batch branch already uses). Returns every torrent ever associated with the anime, batch and per-episode releases mixed together — `episode_no == null` on a result is what actually means "whole-series/season torrent," not which endpoint returned it.
+
+Both list endpoints share one paginated envelope: `{ total, start, limit, error, results: [...] }`. Only the first page (`limit`'s default, 50) is fetched — not enough volume seen in practice to justify paging further.
+
+**Fields consumed** (`TsukihimeTorrentWire`):
+
+| Field | Maps to |
+| --- | --- |
+| `btih` | `Torrent.id` — the info hash; skip any result missing this outright, nothing else about it is usable |
+| `name` | `Torrent.title` |
+| `totalsize` (bytes) | `Torrent.size`, formatted |
+| `episode_no` | `Torrent.isBatch` (`null` → batch) |
+| `group.name` | `Torrent.releaseGroup` — real structured data, replaces `TorrentParser`'s bracket-extraction for this path |
+| `nyaa_id` | gates whether a candidate is worth a tracker-scrape lookup at all (§ 6) — unrelated to `main_source` |
+
+`group` itself can be `null` — happens on older/unattributed entries, mostly seen via `getSeriesTorrents`'s much larger, longer-lived result set rather than the tightly-filtered episode endpoint.
+
+**Not provided by this API, and where it comes from instead:**
+
+- **Resolution/codec** — no structured field. Still derived from `name` via the existing `TorrentParser.parse()`.
+- **Seeders** — no field at all. Backfilled via direct tracker scraping — see § 6.
+
+## 6. Tracker Scraping (Seeder Enrichment)
+
+TsukiHime has no seeder data (§ 5). Rather than cross-referencing Nyaa.si per candidate, `TrackerScrapeService` queries real BitTorrent trackers directly, keyed by the info hash TsukiHime already provided.
+
+**Two protocols, five trackers:**
+
+| Tracker | Protocol | Notes |
+| --- | --- | --- |
+| `nyaa.tracker.wf:7777` | HTTP scrape | unofficial but universal convention — swap `/announce` for `/scrape`, `info_hash` query params, bencoded response |
+| `tracker.opentrackr.org:1337` | HTTP scrape | same convention |
+| `exodus.desync.com:6969` | UDP scrape ([BEP 0015](https://www.bittorrent.org/beps/bep_0015.html)) | no HTTP scrape endpoint |
+| `open.stealth.si:80` | UDP scrape | scrape-only — not in `Torrent`'s own magnet-link tracker list (`torrent.dart`) |
+| `tracker.torrent.eu.org:451` | UDP scrape | same — scrape-only |
+
+The last two are queried purely to catch more of a swarm than the trackers actually embedded in AniStream's own magnet links would see — they're not added to `Torrent.magnetLink`'s tracker list, which stays exactly as it was.
+
+**Batching and load:** one scrape request covers many info hashes at once (both protocols support this natively), so this is a small, fixed number of requests regardless of result-set size — unlike a per-candidate Nyaa search. Still bounded to the top `_kSeedersEnrichmentCount` (currently 10) candidates by preliminary score, since there's no reason to look up seeders for a torrent that's already scored out of contention.
+
+**Merging:** where more than one tracker reports on the same hash, the higher seeder count wins — each tracker only knows about peers that announced to it, so taking the max avoids undercounting a real swarm split across trackers.
+
+**Scoring:** folded in via the same `log(seeders + 1) × 5`, clamped 0–50, formula `TorrentScoringEngine` already uses for the Nyaa-native path — deliberately kept identical so a seeder count means the same thing regardless of which path found the torrent.
+
+**Known caveat:** these five trackers have no guaranteed relationship to whatever trackers a given release's original uploader actually embedded — a swarm relying purely on DHT, or on trackers outside this list, won't be reflected here even if it has real seeders. nyaa.si's own displayed seeder count doesn't have this problem, since it reads whatever the specific upload it hosts actually declares — this is a deliberate trade-off (avoids hitting Nyaa at all), not a bug.
+
 ---
-*Last reviewed against the codebase: 2026-08-15. Added a query, a data source, or a cache? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-26. Added a query, a data source, or a cache? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
