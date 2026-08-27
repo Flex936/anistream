@@ -102,6 +102,25 @@ class _MobileTheaterControlsState extends State<MobileTheaterControls> {
     widget.onInteract();
   }
 
+  // Reads position/duration synchronously at tap time rather than
+  // subscribing to their streams — this row only ever needs the value at
+  // the moment of the tap, so adding a subscription here would tick (and
+  // rebuild) this State on every position update, defeating the rebuild
+  // isolation `_MobilePlaybackTimelineState` exists for (see that
+  // class's own doc comment). Clamping mirrors
+  // `ExoTheaterScreen._seekBy` exactly, so the touch buttons here and
+  // that screen's J/L and Left/Right keyboard shortcuts always move by
+  // the same amount and clamp the same way.
+  void _seekBy(Duration delta) {
+    final target = widget.playback.position + delta;
+    final duration = widget.playback.duration;
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (target > duration ? duration : target);
+    unawaited(widget.playback.seek(clamped));
+    widget.onInteract();
+  }
+
   @override
   Widget build(BuildContext context) {
     final coreControls = Container(
@@ -135,8 +154,30 @@ class _MobileTheaterControlsState extends State<MobileTheaterControls> {
             onSeekbarFocusChange: widget.onSeekbarFocusChange,
           ),
           const SizedBox(height: 8),
+          // Mute sits in the left Expanded region, settings in the right
+          // one — both regions carry equal flex regardless of whether
+          // settings is actually rendered, so the fixed
+          // skip-back/play/skip-forward group between them always sits
+          // on the row's true center rather than drifting toward
+          // whichever side has less content.
           Row(
             children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _MobileIconButton(
+                    icon: _volume == 0
+                        ? Icons.volume_off_rounded
+                        : Icons.volume_up_rounded,
+                    onPressed: _toggleMute,
+                  ),
+                ),
+              ),
+              _MobileIconButton(
+                icon: Icons.replay_10_rounded,
+                onPressed: () => _seekBy(const Duration(seconds: -10)),
+              ),
+              const SizedBox(width: 20),
               _MobileIconButton(
                 icon: _isPlaying
                     ? Icons.pause_rounded
@@ -147,21 +188,25 @@ class _MobileTheaterControlsState extends State<MobileTheaterControls> {
                   widget.onInteract();
                 },
               ),
+              const SizedBox(width: 20),
               _MobileIconButton(
-                icon: _volume == 0
-                    ? Icons.volume_off_rounded
-                    : Icons.volume_up_rounded,
-                onPressed: _toggleMute,
+                icon: Icons.forward_10_rounded,
+                onPressed: () => _seekBy(const Duration(seconds: 10)),
               ),
-              const Spacer(),
-              if (widget.onToggleSettings != null)
-                _MobileIconButton(
-                  icon: Icons.settings_rounded,
-                  color: widget.isSettingsOpen
-                      ? AppPalette.primary
-                      : AppPalette.white,
-                  onPressed: widget.onToggleSettings!,
-                ),
+              Expanded(
+                child: widget.onToggleSettings == null
+                    ? const SizedBox.shrink()
+                    : Align(
+                        alignment: Alignment.centerRight,
+                        child: _MobileIconButton(
+                          icon: Icons.settings_rounded,
+                          color: widget.isSettingsOpen
+                              ? AppPalette.primary
+                              : AppPalette.white,
+                          onPressed: widget.onToggleSettings!,
+                        ),
+                      ),
+              ),
             ],
           ),
         ],
@@ -192,7 +237,7 @@ class _MobileTheaterControlsState extends State<MobileTheaterControls> {
 /// Owns position/duration/buffer and renders the skip-chip, [Seekbar],
 /// and time label — the parts of the control bar that redraw on every
 /// tick. Kept separate from [_MobileTheaterControlsState] so a position
-/// tick doesn't also rebuild the play/mute/settings row.
+/// tick doesn't also rebuild the play/mute/skip/settings row.
 class _MobilePlaybackTimeline extends StatefulWidget {
   final PlaybackHandle playback;
   final List<Chapter> chapterMetadata;
