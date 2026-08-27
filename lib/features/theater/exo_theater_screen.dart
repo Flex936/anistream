@@ -1006,7 +1006,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               // two overlap on screen.
               if (_isSettingsOpen)
                 Positioned(
-                  bottom: 200,
+                  bottom: 130,
                   right: 16,
                   child: TheaterSettingsMenu(
                     uiPerformanceMode: _uiPerformanceMode,

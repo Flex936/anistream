@@ -20,6 +20,7 @@ import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
 import 'services/mpv_chapter_loader.dart';
 import 'services/playback_diagnostics.dart';
+import 'services/playback_handle.dart';
 import 'services/playback_stall_controller.dart';
 import 'services/player_configurator.dart';
 import 'services/remote_streaming_controller.dart';
@@ -28,6 +29,7 @@ import 'services/streaming_controller_base.dart';
 import 'services/theater_data.dart';
 import 'services/top_notification_controller.dart';
 import 'widgets/batch_picker.dart';
+import 'widgets/mobile_theater_controls.dart';
 import 'widgets/playback_stall_indicator.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_player.dart';
@@ -86,6 +88,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   late final AnilistTrackerService _tracker;
   late final Player _player;
+  late final PlaybackHandle _playbackHandle;
   late final VideoController _videoController;
   late final AutoSkipController _autoSkipController;
   late final ControlsVisibilityController _controlsVisibility;
@@ -159,6 +162,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
         bufferSize: earlyUiPerformanceMode ? 70000000 : 150000000,
       ),
     );
+    // Thin PlaybackHandle wrapper around _player — see
+    // PlayerPlaybackHandle's own doc comment. Only consumed by
+    // MobileTheaterControls, on non-desktop platforms (see
+    // _buildControlsOverlay below).
+    _playbackHandle = PlayerPlaybackHandle(_player);
     const videoConfig = VideoControllerConfiguration(
       androidAttachSurfaceAfterVideoParameters: true,
     );
@@ -400,7 +408,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // controls ... on Mobile/TV builds"). Mirrors the exact platform test
   // already used elsewhere in this file (_initPlayerAndStream,
   // _toggleFullscreen, _disposePlaybackResources) rather than introducing
-  // a new check.
+  // a new check. Also what _buildControlsOverlay branches the bottom
+  // control bar on — see that method's doc comment.
   bool get _isDesktopPlatform =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
@@ -667,6 +676,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _disposePlaybackResources() async {
     await _player.stop();
     await _player.dispose();
+    _playbackHandle.dispose();
     _torrentController.dispose();
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       if (await windowManager.isFullScreen()) {
@@ -754,6 +764,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     await _player.stop();
     await _player.dispose();
+    _playbackHandle.dispose();
 
     if (mounted) {
       Navigator.pop(
@@ -828,7 +839,51 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // Parameterized on showControls/dpadModeActive rather than reading
   // fields directly, since it's built from inside the ValueListenableBuilder
   // in build() below — see that method's doc comment for why.
+  //
+  // The bottom bar itself branches on _isDesktopPlatform: desktop keeps
+  // TheaterControls (D-Pad focus rings, draggable volume slider,
+  // fullscreen toggle); Android and iOS — Android TV included, since
+  // there's no OS-level flag distinguishing TV from phone, only the
+  // runtime dpadModeActive signal — get MobileTheaterControls' touch-
+  // oriented layout instead. MobileTheaterControls has no D-Pad focus
+  // wiring of its own (see that widget's doc comment), so on Android TV
+  // this bar is tappable but not D-Pad-focusable; TheaterTopBar above it
+  // keeps its own DpadRegion regardless of which bottom bar is showing.
   Widget _buildControlsOverlay(bool showControls, bool dpadModeActive) {
+    final bottomBar = _isDesktopPlatform
+        ? DpadRegion(
+            memoryKey: 'theater.controls',
+            child: TheaterControls(
+              player: _player,
+              chapterMetadata: _chapters,
+              isSettingsOpen: _isSettingsOpen,
+              isFullscreen: _isFullscreen,
+              isDesktop: _isDesktopPlatform,
+              uiPerformanceMode: _uiPerformanceMode,
+              dpadModeActive: dpadModeActive,
+              onToggleFullscreen: _toggleFullscreen,
+              onInteract: _controlsVisibility.registerActivity,
+              onInteractionStart: _handleInteractionStart,
+              onInteractionEnd: _handleInteractionEnd,
+              onToggleSettings: () =>
+                  setState(() => _isSettingsOpen = !_isSettingsOpen),
+              onSeekbarFocusChange: (f) => _seekbarFocused = f,
+              onVolumeFocusChange: (f) => _volumeSliderFocused = f,
+            ),
+          )
+        : MobileTheaterControls(
+            playback: _playbackHandle,
+            chapterMetadata: _chapters,
+            isSettingsOpen: _isSettingsOpen,
+            uiPerformanceMode: _uiPerformanceMode,
+            onInteract: _controlsVisibility.registerActivity,
+            onInteractionStart: _handleInteractionStart,
+            onInteractionEnd: _handleInteractionEnd,
+            onToggleSettings: () =>
+                setState(() => _isSettingsOpen = !_isSettingsOpen),
+            onSeekbarFocusChange: (f) => _seekbarFocused = f,
+          );
+
     return AnimatedOpacity(
       opacity: showControls ? 1.0 : 0.0,
       duration: const Duration(milliseconds: 300),
@@ -877,35 +932,17 @@ class _TheaterScreenState extends State<TheaterScreen> {
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  // No tap-swallowing wrapper here either. TheaterControls'
-                  // gradient Container paints across nearly its entire
-                  // bounds, but under Flutter's standard nested-
-                  // GestureDetector resolution a descendant's own tap
-                  // recognizer (an actual button) still wins the gesture
-                  // arena over an ancestor's — so real buttons keep
-                  // working, while a tap on empty gradient space falls
-                  // through to the root GestureDetector's onTap
-                  // (_handleBackgroundTap) in build() below.
-                  child: DpadRegion(
-                    memoryKey: 'theater.controls',
-                    child: TheaterControls(
-                      player: _player,
-                      chapterMetadata: _chapters,
-                      isSettingsOpen: _isSettingsOpen,
-                      isFullscreen: _isFullscreen,
-                      isDesktop: _isDesktopPlatform,
-                      uiPerformanceMode: _uiPerformanceMode,
-                      dpadModeActive: dpadModeActive,
-                      onToggleFullscreen: _toggleFullscreen,
-                      onInteract: _controlsVisibility.registerActivity,
-                      onInteractionStart: _handleInteractionStart,
-                      onInteractionEnd: _handleInteractionEnd,
-                      onToggleSettings: () =>
-                          setState(() => _isSettingsOpen = !_isSettingsOpen),
-                      onSeekbarFocusChange: (f) => _seekbarFocused = f,
-                      onVolumeFocusChange: (f) => _volumeSliderFocused = f,
-                    ),
-                  ),
+                  // No tap-swallowing wrapper here either — both
+                  // TheaterControls and MobileTheaterControls paint a
+                  // gradient background across nearly their full bounds,
+                  // but under Flutter's standard nested-GestureDetector
+                  // resolution a descendant's own tap recognizer (an
+                  // actual button) still wins the gesture arena over an
+                  // ancestor's, so real buttons keep working while a tap
+                  // on empty gradient space falls through to the root
+                  // GestureDetector's onTap (_handleBackgroundTap) in
+                  // build() below.
+                  child: bottomBar,
                 ),
               ],
             ),
@@ -1101,19 +1138,24 @@ class _TheaterScreenState extends State<TheaterScreen> {
                         _buildControlsOverlay(showControls, dpadModeActive),
                       // Painted after _buildControlsOverlay so it always
                       // paints — and hit-tests — above it. A `Container`
-                      // with a `BoxDecoration` (TheaterControls' bottom
-                      // bar) registers a hit across its entire rectangle
-                      // regardless of the gradient's actual alpha at a
-                      // given point, so sitting below it in the Stack
-                      // would let it silently swallow mouse clicks meant
-                      // for this popup's tiles wherever the two overlap
-                      // on screen — even though the popup still painted
-                      // visibly through the gradient's transparent
-                      // regions.
+                      // with a `BoxDecoration` (the bottom control bar,
+                      // whichever variant is showing) registers a hit
+                      // across its entire rectangle regardless of the
+                      // gradient's actual alpha at a given point, so
+                      // sitting below it in the Stack would let it
+                      // silently swallow mouse clicks meant for this
+                      // popup's tiles wherever the two overlap on screen
+                      // — even though the popup still painted visibly
+                      // through the gradient's transparent regions.
                       if (_isSettingsOpen)
                         Positioned(
-                          bottom: 110,
-                          right: 32,
+                          // Matches ExoTheaterScreen's own offset for
+                          // MobileTheaterControls' shorter bar — the
+                          // desktop offset below was tuned against
+                          // TheaterControls' taller row and floats too
+                          // high above MobileTheaterControls otherwise.
+                          bottom: 130,
+                          right: _isDesktopPlatform ? 32 : 16,
                           child: DesktopTheaterSettingsMenu(
                             player: _player,
                             uiPerformanceMode: _uiPerformanceMode,
