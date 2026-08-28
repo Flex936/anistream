@@ -11,6 +11,7 @@ import '../../../shared/widgets/frosted_container.dart';
 import '../services/theater_data.dart';
 import 'playback_action_chip.dart';
 import 'seekbar.dart';
+import 'skip_chip.dart';
 
 class TheaterControls extends StatefulWidget {
   final Player player;
@@ -448,40 +449,27 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
 
   @override
   Widget build(BuildContext context) {
-    final skipTarget = _activeSkipChapter;
-    final showNextEpisode = _showNextEpisodeChip;
-
-    final bool chipVisible = showNextEpisode || skipTarget != null;
-    final String chipLabel = showNextEpisode
-        ? 'Next Episode'
-        : (skipTarget?.skipLabel ?? 'Skip');
-    // Next Episode intentionally does NOT call widget.onInteract() the
-    // way the skip-chip branch below does — a tap here immediately
-    // starts tearing this screen down (TheaterScreen.
-    // _requestNextEpisodeTransition), so there's no auto-hide countdown
-    // left worth resetting.
-    final VoidCallback chipOnTap = showNextEpisode
-        ? widget.onNextEpisode
-        : () {
-            if (skipTarget != null) {
-              unawaited(widget.player.seek(skipTarget.end));
-              widget.onInteract();
-            }
-          };
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: PlaybackActionChip(
-            visible: chipVisible,
-            label: chipLabel,
-            onTap: chipOnTap,
-          ),
+          child: _showNextEpisodeChip
+              ? PlaybackActionChip(
+                  visible: true,
+                  label: 'Next Episode',
+                  onTap: widget.onNextEpisode,
+                )
+              : SkipChip(
+                  chapters: widget.chapterMetadata,
+                  position: _position,
+                  onSkip: (target) {
+                    unawaited(widget.player.seek(target));
+                    widget.onInteract();
+                  },
+                ),
         ),
-
         Seekbar(
           position: _position,
           duration: _duration,

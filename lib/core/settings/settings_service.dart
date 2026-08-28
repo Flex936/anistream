@@ -49,6 +49,14 @@ class AppSettings {
   /// Base URL of the AniStream Go server, e.g. "http://192.168.1.5:7878".
   final String serverUrl;
 
+  /// When true (mobile/TV only — see [SettingsMenu]'s platform gate),
+  /// episode playback goes through [ExoTheaterScreen] (video_player, an
+  /// ExoPlayer/AVPlayer-backed engine) instead of the default
+  /// [TheaterScreen] (media_kit/mpv-backed). Deliberately independent of
+  /// [uiPerformanceMode] — that setting is scoped to UI chrome (blur,
+  /// animations), not which decode/render engine plays the video.
+  final bool useExoPlayer;
+
   const AppSettings({
     this.filterEcchi = true,
     this.hardwareDecoding = 'auto',
@@ -61,6 +69,7 @@ class AppSettings {
     this.videoFilterQuality = 'low',
     this.serverMode = false,
     this.serverUrl = 'http://192.168.1.100:7878',
+    this.useExoPlayer = false,
   });
 }
 
@@ -104,6 +113,7 @@ class SettingsService {
   static const String kVideoFilterQuality = 'video_filter_quality';
   static const String kServerMode = 'server_mode';
   static const String kServerUrl = 'server_url';
+  static const String kuseExoPlayer = 'use_exo_player';
 
   /// Persisted key name [kAutoTorrentEnabled] used before the
   /// autoplay/autotorrent rename. Kept only so the two migration methods
@@ -154,6 +164,7 @@ class SettingsService {
       serverMode: await _prefs.getBool(kServerMode) ?? false,
       serverUrl:
           await _prefs.getString(kServerUrl) ?? 'http://192.168.1.100:7878',
+      useExoPlayer: await _prefs.getBool(kuseExoPlayer) ?? false,
     );
   }
 
@@ -176,6 +187,7 @@ class SettingsService {
       _prefs.setString(kVideoFilterQuality, settings.videoFilterQuality),
       _prefs.setBool(kServerMode, settings.serverMode),
       _prefs.setString(kServerUrl, settings.serverUrl),
+      _prefs.setBool(kuseExoPlayer, settings.useExoPlayer),
     ]);
   }
 

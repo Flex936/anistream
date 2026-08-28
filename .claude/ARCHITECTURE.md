@@ -24,7 +24,7 @@ Metadata and tracking come from AniList's GraphQL API; torrent discovery comes f
                 (libtorrent_flutter)       │
                                            │  LAN REST (optional)
                                   ┌────────▼────────┐
-                                  │ AniStream Server │  (Go, § 6)
+                                  │ AniStream Server│  (Go, § 6)
                                   └─────────────────┘
 ```
 
@@ -76,15 +76,18 @@ lib/
     ├── settings/                     settings_menu.dart, widgets/settings_components.dart
     ├── shell/                        app_shell.dart, controllers/navigation_controller.dart,
     │                                 widgets/{navbar, search_input}.dart
-    ├── theater/                      theater_screen.dart,
+    ├── theater/                      theater_screen.dart, exo_theater_screen.dart,
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,
-    │                                 auto_skip_controller, next_episode_prefetch_controller,
-    │                                 controls_visibility_controller, playback_stall_controller,
-    │                                 playback_diagnostics, theater_data,
-    │                                 track_name_parser}.dart,
-    │                                 widgets/{theater_controls, theater_player, seekbar,
-    │                                 theater_settings, batch_picker, playback_action_chip}.dart
+    │                                 auto_skip_controller, controls_visibility_controller,
+    │                                 next_episode_prefetch_controller, playback_stall_controller,
+    │                                 playback_diagnostics, theater_data, track_name_parser,
+    │                                 top_notification_controller, playback_handle,
+    │                                 mpv_chapter_loader, native_chapter_parser,
+    │                                 native_subtitle_parser}.dart,
+    │                                 widgets/{theater_controls, mobile_theater_controls,
+    │                                 theater_player, seekbar, skip_chip, playback_action_chip,
+    │                                 styled_subtitle_view, theater_settings, batch_picker}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
 ```
@@ -120,8 +123,13 @@ Feature-local state (a single screen's pagination, tab selection, or navigation 
 
 Two distinct native-integration mechanisms are in use — new performance-sensitive native work should extend the second, not add more of the first:
 
-1. **A single `MethodChannel`** (`anistream/device_mode`, method `isTelevision`) — used exactly once, by `InputModeController`, to ask the native Android side a one-time yes/no question at boot. Fails safe to `false` (not a TV) if the platform channel isn't implemented, so a build without the native handler wired up simply never activates TV mode rather than crashing. This is the *only* signal feeding `dpadModeActive`, sticky for the process lifetime once resolved — deliberately NOT combined with live input-sniffing. A directional key or gamepad press is ordinary keyboard/pointer input on desktop and phone, regardless of connected hardware, and is never treated as a TV signal there. See [DESIGN.md](DESIGN.md) § 4.
-2. **FFI plugins** — `libtorrent_flutter` (the torrent engine, all platforms) and its supporting `jni` / `jni_flutter` / `objective_c` packages (cross-platform native interop — not Android-only despite the `jni` name). This is the mechanism for anything performance-critical; the app deliberately keeps custom `MethodChannel` surface area to the single case above.
+1. **`MethodChannel`s** — three today, all registered in `MainActivity.kt`:
+   - `anistream/device_mode` (method `isTelevision`) — used once, by `InputModeController`, to ask the native Android side a one-time yes/no question at boot. Fails safe to `false` (not a TV) if the platform channel isn't implemented, so a build without the native handler wired up simply never activates TV mode rather than crashing. This is only one of two signals feeding `dpadModeActive` — the other (live D-pad/pointer input sniffing) is pure Dart, has no native bridge of its own, and is documented in [DESIGN.md](DESIGN.md) § 4.
+   - `anistream/chapter_parser` (method `extractChapters`) — `ChapterMetadataPlugin.kt` / `native_chapter_parser.dart`, used only on the ExoPlayer path (`ExoTheaterScreen`). Opens a throwaway `ExoPlayer` against the stream URL purely to read whatever Chapter metadata entries Media3's own extractors attach to the container — `video_player` exposes no chapter API of its own, unlike media_kit/mpv on `TheaterScreen`, which gets chapters natively.
+   - `anistream/subtitle_parser` (method `parseSubtitle`) — `SubtitleParserPlugin.kt` / `native_subtitle_parser.dart`, also ExoPlayer-path-only. Hands raw subtitle bytes to Media3's own `TtmlParser`/`SsaParser` and returns real cue timing, positioning, and per-run styling, instead of `video_player`'s plain-text-only `ClosedCaptionFile` mechanism.
+
+   All three are Android-only, with no iOS/macOS equivalent wired up for any of them.
+2. **FFI plugins** — `libtorrent_flutter` (the torrent engine, all platforms) and its supporting `jni` / `jni_flutter` / `objective_c` packages (cross-platform native interop — not Android-only despite the `jni` name). This remains the mechanism for anything performance-critical; the `MethodChannel`s above are one-shot metadata/parsing calls, not sustained high-throughput work.
 
 ### Android
 
@@ -160,7 +168,9 @@ Two distinct native-integration mechanisms are in use — new performance-sensit
 
 Both implementations parse candidate filenames with the same `TorrentParser` (see [API.md](API.md) § 3) to guess episode numbers inside a batch torrent — this logic is intentionally not duplicated between the on-device and remote paths.
 
-**Background prefetching:** `NextEpisodePrefetchController` (`features/theater/services/`) constructs a second, short-lived `BaseStreamingController` — via the shared `createStreamingController(AppSettings)` factory, so it always matches the current episode's own `serverMode`-selected implementation — to warm-buffer the *next* episode's top-scored torrent once episode-autoplay is on and the current episode nears its end. This briefly overlaps two controller *instances* of the same implementation, not two different implementations — it does not relax § 1's "never both at once" rule. Owned and disposed by `TheaterScreen`; the warm controller only ever leaves that ownership when an actual episode transition consumes it.
+Independent of which streaming controller is active, `AppSettings.useExoPlayer` (mobile/TV only; exposed as "ExoPlayer Video Engine" under Settings → Playback Preferences) additionally picks the player implementation: `TheaterScreen` (`media_kit`/mpv — the default, and the only path with D-Pad/TV-remote focus navigation) or `exo_theater_screen.dart`'s `ExoTheaterScreen` (`video_player`, an ExoPlayer/AVPlayer-backed engine kept around to isolate whether stutter on weak Android TV hardware is a decode-engine problem — see that file's own header comment for the experiment's findings so far). This path is Android/TV-primary; iOS is out of scope for it. Both paths support chapters, auto-skip, and AniList progress tracking. `ExoTheaterScreen` additionally supports audio-track switching via `video_player`'s own `getAudioTracks()`/`selectAudioTrack()` (backed by Media3's `DefaultTrackSelector`), exposed through `PlaybackHandle` — `TheaterScreen` has had this from the start via media_kit's own `Tracks`/`setAudioTrack`, so this closes a gap specific to the ExoPlayer path rather than adding a new capability to both. The two axes are orthogonal: either streaming controller pairs with either player. `useExoPlayer` defaults to false, so `TheaterScreen` is what every session gets unless a user opts in.
+
+**Background prefetching:** `NextEpisodePrefetchController` (`features/theater/services/`) constructs a second, short-lived `BaseStreamingController` — via the shared `createStreamingController(AppSettings)` factory, so it always matches the current episode's own `serverMode`-selected implementation — to warm-buffer the *next* episode's top-scored torrent once episode-autoplay is on and the current episode nears its end. This briefly overlaps two controller *instances* of the same implementation, not two different implementations — it does not relax § 1's "never both at once" rule. Owned and disposed by `TheaterScreen`; the warm controller only ever leaves that ownership when an actual episode transition consumes it. Scoped to `TheaterScreen` only today — `ExoTheaterScreen` has neither episode-autoplay nor prefetching.
 
 ## 6. AniStream Server (Go)
 

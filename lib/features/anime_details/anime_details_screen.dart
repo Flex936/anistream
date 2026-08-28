@@ -10,6 +10,7 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
 import '../../shared/widgets/frosted_container.dart';
+import '../theater/exo_theater_screen.dart';
 import '../theater/services/streaming_controller_base.dart';
 import '../theater/theater_screen.dart';
 import 'widgets/anime_synopsis_section.dart';
@@ -154,84 +155,106 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     }
   }
 
-  /// Pushes TheaterScreen and refreshes AniList progress once the whole
-  /// viewing session ends. Deliberately does NOT pop anything itself —
-  /// it's called both from [_openTorrentModal] (once the modal's own pop
-  /// has already resolved) AND from [_autoSelectTopTorrentAndStream]'s
-  /// direct success path (where no modal was ever opened).
+  /// Pushes TheaterScreen or ExoTheaterScreen and refreshes AniList progress
+  /// once the whole viewing session ends. Deliberately does NOT pop anything
+  /// itself — it's called both from [_openTorrentModal] (once the modal's
+  /// own pop has already resolved) AND from
+  /// [_autoSelectTopTorrentAndStream]'s direct success path (where no modal
+  /// was ever opened).
   ///
-  /// Loops rather than a single push/pop: TheaterScreen normally pops
-  /// with `null` (a real exit), but pops with a [TheaterExitResult]
-  /// instead in two cases —
+  /// [AppSettings.useExoPlayer] picks which player screen this pushes:
   ///
-  ///  - [TheaterRestartRequest]: the user tapped the freeze-recovery
-  ///    restart button (Settings → Playback Preferences → "Show Freeze
-  ///    Recovery Button"). Loops straight back into another push against
-  ///    the same still-buffered [BaseStreamingController] carried in the
-  ///    result, rather than starting the torrent over from scratch.
-  ///  - [TheaterNextEpisodeRequest] with
-  ///    [NextEpisodeTransitionMode.instantHandoff]: a prefetched
-  ///    controller for the next episode is already buffered. Loops the
-  ///    same way, just against the next episode's torrent/controller
-  ///    instead of the current one.
+  ///  - **true**: a single push/pop against [ExoTheaterScreen]. No restart
+  ///    loop and no episode-transition contract on this path — ExoPlayer
+  ///    doesn't have media_kit's Linux/NVIDIA freeze bug the restart loop
+  ///    exists for, and episode-autoplay/Next Episode/background
+  ///    prefetching are scoped to [TheaterScreen] only for now.
+  ///  - **false** (default): [TheaterScreen], via a loop. It normally pops
+  ///    with `null` (a real exit), but pops with a [TheaterExitResult]
+  ///    instead in two cases — [TheaterRestartRequest] (the freeze-recovery
+  ///    restart button; loops back against the same still-buffered
+  ///    controller rather than starting the torrent over from scratch) and
+  ///    [TheaterNextEpisodeRequest] in
+  ///    [NextEpisodeTransitionMode.instantHandoff] (a prefetched next-episode
+  ///    controller is already buffered; loops the same way against it
+  ///    instead). A [TheaterNextEpisodeRequest] in `autoFetch`/`manualPick`
+  ///    instead exits the loop and is handled exactly like a fresh tap on
+  ///    that episode row, via [_autoSelectTopTorrentAndStream] or
+  ///    [_openTorrentModal] respectively.
   ///
-  /// A [TheaterNextEpisodeRequest] in [NextEpisodeTransitionMode.autoFetch]
-  /// or [NextEpisodeTransitionMode.manualPick] instead exits the loop and
-  /// is handled exactly like a fresh tap on that episode row —
-  /// [_autoSelectTopTorrentAndStream] or [_openTorrentModal] respectively
-  /// — once _fetchProgress() below has run, so a next-episode transition
-  /// still triggers exactly one progress refresh, same as a genuine exit.
-  ///
-  /// The loop — and therefore _fetchProgress() — only runs once
-  /// TheaterScreen pops with a genuine `null` or a delegated next-episode
-  /// request, so a restart or an instant handoff never triggers a
-  /// premature progress refresh mid-episode the way popping
-  /// AnimeDetailsScreen's own route early would.
+  /// Either way, `_fetchProgress()` only runs once the push actually
+  /// completes (or, on the TheaterScreen path, once the loop exits via a
+  /// genuine `null` or a delegated next-episode request), so a restart or
+  /// an instant handoff never triggers a premature progress refresh
+  /// mid-episode the way popping AnimeDetailsScreen's own route early
+  /// would.
   Future<void> _streamTorrent(int ep, Torrent torrent) async {
-    BaseStreamingController? resumeController;
-    Duration? resumePosition;
+    final bool useExoPlayer = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.useExoPlayer;
 
-    // Set only when the loop below exits needing this screen to resolve
-    // the next episode itself (autoFetch or manualPick) — a restart or an
-    // instantHandoff next-episode request both loop straight back into
-    // another push instead, without this ever being set.
+    // Set only when the TheaterScreen loop below exits needing this
+    // screen to resolve the next episode itself (autoFetch or
+    // manualPick) — a restart or an instantHandoff next-episode request
+    // both loop straight back into another push instead, without this
+    // ever being set. Declared here, above the useExoPlayer branch,
+    // rather than inside the `else` block below, since it's read after
+    // the branch closes — the ExoPlayer path simply never sets it, so
+    // the check below correctly no-ops for those sessions.
     (int, NextEpisodeTransitionMode)? pendingDelegate;
 
-    while (true) {
-      final result = await Navigator.push<TheaterExitResult?>(
+    if (useExoPlayer) {
+      await Navigator.push<void>(
         context,
-        MaterialPageRoute<TheaterExitResult?>(
-          builder: (_) => TheaterScreen(
+        MaterialPageRoute<void>(
+          builder: (_) => ExoTheaterScreen(
             anime: widget.anime,
             episode: ep,
             torrent: torrent,
-            totalEpisodes: _episodeCount,
-            resumeController: resumeController,
-            resumePosition: resumePosition,
           ),
         ),
       );
+    } else {
+      BaseStreamingController? resumeController;
+      Duration? resumePosition;
 
-      if (result == null) break;
+      while (true) {
+        final result = await Navigator.push<TheaterExitResult?>(
+          context,
+          MaterialPageRoute<TheaterExitResult?>(
+            builder: (_) => TheaterScreen(
+              anime: widget.anime,
+              episode: ep,
+              torrent: torrent,
+              totalEpisodes: _episodeCount,
+              resumeController: resumeController,
+              resumePosition: resumePosition,
+            ),
+          ),
+        );
 
-      if (result is TheaterRestartRequest) {
-        resumeController = result.resumeController;
-        resumePosition = result.resumePosition;
-        continue;
-      }
+        if (result == null) break;
 
-      if (result is TheaterNextEpisodeRequest) {
-        if (result.mode == NextEpisodeTransitionMode.instantHandoff) {
-          ep = result.nextEpisode;
-          torrent = result.prewarmedTorrent!;
-          resumeController = result.prewarmedController;
-          resumePosition = Duration.zero;
+        if (result is TheaterRestartRequest) {
+          resumeController = result.resumeController;
+          resumePosition = result.resumePosition;
           continue;
         }
-        pendingDelegate = (result.nextEpisode, result.mode);
-      }
 
-      break;
+        if (result is TheaterNextEpisodeRequest) {
+          if (result.mode == NextEpisodeTransitionMode.instantHandoff) {
+            ep = result.nextEpisode;
+            torrent = result.prewarmedTorrent!;
+            resumeController = result.prewarmedController;
+            resumePosition = Duration.zero;
+            continue;
+          }
+          pendingDelegate = (result.nextEpisode, result.mode);
+        }
+
+        break;
+      }
     }
 
     if (mounted) {

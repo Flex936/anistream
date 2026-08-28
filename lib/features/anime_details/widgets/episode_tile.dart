@@ -12,6 +12,7 @@ class EpisodeTile extends StatelessWidget {
   final VoidCallback onToggle;
   final bool isCurrentlyLoading;
   final bool uiPerformanceMode;
+  final bool useExoPlayer;
 
   const EpisodeTile({
     super.key,
@@ -21,6 +22,7 @@ class EpisodeTile extends StatelessWidget {
     required this.onToggle,
     this.isCurrentlyLoading = false,
     this.uiPerformanceMode = false,
+    this.useExoPlayer = false,
   });
 
   @override

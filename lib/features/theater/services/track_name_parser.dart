@@ -27,18 +27,29 @@ class TrackNameParser {
     };
   }
 
-  static ParsedTrack parseAudio(AudioTrack? t) {
-    if (t == null) return const ParsedTrack(mainTitle: 'Auto');
-
-    String title = t.title?.trim() ?? '';
-    final lang = _normalizeLanguage(t.language?.trim() ?? '');
+  /// Prettifies an audio track's raw title/language into a display-ready
+  /// [ParsedTrack]. Takes plain strings rather than a concrete track
+  /// type so both the desktop/mpv path (`AudioTrack.title`/`.language`)
+  /// and the ExoPlayer path (`VideoAudioTrack.label`/`.language`) share
+  /// this exact naming logic, instead of `ExoTheaterScreen` carrying a
+  /// second copy of it.
+  ///
+  /// Deliberately says nothing about "no track selected yet" — that's a
+  /// selection-state concern each caller already handles for its own
+  /// engine (mpv genuinely has an "auto" track mode; ExoPlayer's
+  /// reported tracks always have exactly one selected once loaded), not
+  /// something a track-naming helper should guess at from a track that
+  /// might legitimately just have no title or language of its own.
+  static ParsedTrack parseAudio({String? title, String? language}) {
+    String trimmedTitle = title?.trim() ?? '';
+    final lang = _normalizeLanguage(language?.trim() ?? '');
 
     // 1. Remove release group brackets completely
-    title = title.replaceAll(RegExp(r'\[.*?\]'), '').trim();
+    trimmedTitle = trimmedTitle.replaceAll(RegExp(r'\[.*?\]'), '').trim();
 
     // 2. Format: "Japanese / 5.1ch Opus" or "Inner Silence / 5.1ch Opus"
-    if (title.contains('/')) {
-      final parts = title.split('/');
+    if (trimmedTitle.contains('/')) {
+      final parts = trimmedTitle.split('/');
       String main = parts[0].trim();
       String sub = parts.sublist(1).join(' • ').trim();
 
@@ -57,7 +68,7 @@ class TrackNameParser {
     }
 
     // 3. Technical jargon fallback (e.g. "Surround 5.1")
-    final lower = title.toLowerCase();
+    final lower = trimmedTitle.toLowerCase();
     if (lower == 'surround 5.1' ||
         lower == 'stereo' ||
         lower.contains('opus') ||
@@ -65,16 +76,16 @@ class TrackNameParser {
         lower.contains('flac')) {
       return ParsedTrack(
         mainTitle: lang.isEmpty ? 'Audio Track' : lang,
-        subTitle: title,
+        subTitle: trimmedTitle,
       );
     }
 
     // 4. Default fallback
     return ParsedTrack(
-      mainTitle: lang.isEmpty ? (title.isEmpty ? 'Audio Track' : title) : lang,
-      subTitle: lang.isEmpty || title.toLowerCase() == lang.toLowerCase()
+      mainTitle: lang.isEmpty ? (trimmedTitle.isEmpty ? 'Audio Track' : trimmedTitle) : lang,
+      subTitle: lang.isEmpty || trimmedTitle.toLowerCase() == lang.toLowerCase()
           ? null
-          : title,
+          : trimmedTitle,
     );
   }
 

@@ -18,6 +18,7 @@ import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
+import 'services/mpv_chapter_loader.dart';
 import 'services/next_episode_prefetch_controller.dart';
 import 'services/playback_diagnostics.dart';
 import 'services/playback_stall_controller.dart';
@@ -25,6 +26,7 @@ import 'services/player_configurator.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
 import 'services/theater_data.dart';
+import 'services/top_notification_controller.dart';
 import 'widgets/batch_picker.dart';
 import 'widgets/playback_stall_indicator.dart';
 import 'widgets/theater_controls.dart';
@@ -98,21 +100,6 @@ class TheaterNextEpisodeRequest extends TheaterExitResult {
              (prewarmedController != null && prewarmedTorrent != null),
          'instantHandoff requires both prewarmedController and prewarmedTorrent',
        );
-}
-
-/// Carries the message/icon/color for Theater's own in-flow status toast
-/// — see [TheaterTopNotification]'s doc comment
-/// (widgets/theater_player.dart) for how this is rendered.
-class _TopNotification {
-  final String message;
-  final IconData icon;
-  final Color iconColor;
-
-  const _TopNotification({
-    required this.message,
-    required this.icon,
-    required this.iconColor,
-  });
 }
 
 class TheaterScreen extends StatefulWidget {
@@ -226,18 +213,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   // Theater's own in-flow status toast (AniList sync confirmation,
   // auto-skip arming) — see TheaterTopNotification's doc comment
-  // (widgets/theater_player.dart) for why this renders as plain State/
+  // (widgets/theater_player.dart) for why this renders as plain
   // Positioned content in this screen's own Stack rather than through an
-  // Overlay-based toast.
-  _TopNotification? _topNotification;
-  Timer? _topNotificationTimer;
-  static const Duration _kTopNotificationDuration = Duration(seconds: 4);
-
-  // Vertical clearance TheaterTopNotification reserves below
-  // TheaterTopBar's own top offset (see _buildControlsOverlay), so the
-  // notification never visually overlaps the back button regardless of
-  // whether the controls overlay is currently shown or hidden.
-  static const double _kTopBarClearance = 64.0;
+  // Overlay-based toast, and TopNotificationController's own doc comment
+  // (services/top_notification_controller.dart) for why the same
+  // controller also drives ExoTheaterScreen's identical toast.
+  final TopNotificationController _topNotificationController =
+      TopNotificationController();
 
   @override
   void initState() {
@@ -263,7 +245,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _videoController = VideoController(_player, configuration: videoConfig);
 
     _controlsVisibility = ControlsVisibilityController(
-      player: _player,
+      playingStream: _player.stream.playing,
+      isPlaying: () => _player.state.playing,
       isSubMenuOpen: () => _isSettingsOpen,
     );
     _playbackDiagnostics = PlaybackDiagnostics(player: _player);
@@ -286,26 +269,38 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
 
     _autoSkipController = AutoSkipController(
-      player: _player,
+      onSeek: (position) => _player.seek(position),
       isEnabled: () => _autoSkip,
-      onSkipArmed: (skipLabel) => _showTopNotification(
-        message: 'Auto-skipping $skipLabel in 2s...',
-        icon: Icons.fast_forward_rounded,
-        iconColor: AppPalette.primary,
-      ),
+      onSkipArmed: (skipLabel) {
+        if (mounted) {
+          _topNotificationController.show(
+            message: 'Auto-skipping $skipLabel in 2s...',
+            icon: Icons.fast_forward_rounded,
+            iconColor: AppPalette.primary,
+          );
+        }
+      },
     );
 
     _tracker = AnilistTrackerService(
-      onSuccess: () => _showTopNotification(
-        message: 'Progress saved to AniList',
-        icon: Icons.check_circle_rounded,
-        iconColor: AppPalette.statusReleasing,
-      ),
-      onFailure: (message) => _showTopNotification(
-        message: message,
-        icon: Icons.error_outline_rounded,
-        iconColor: AppPalette.statusCancelled,
-      ),
+      onSuccess: () {
+        if (mounted) {
+          _topNotificationController.show(
+            message: 'Progress saved to AniList',
+            icon: Icons.check_circle_rounded,
+            iconColor: AppPalette.statusReleasing,
+          );
+        }
+      },
+      onFailure: (message) {
+        if (mounted) {
+          _topNotificationController.show(
+            message: message,
+            icon: Icons.error_outline_rounded,
+            iconColor: AppPalette.statusCancelled,
+          );
+        }
+      },
     );
 
     // _initPlayerAndStream is Future<void> — initState can't be async,
@@ -409,11 +404,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
         nextEpisode: widget.episode + 1,
         settings: s,
         episodeAutoplayEnabled: () => _episodeAutoplayEnabled,
-        onEngineWarm: () => _showTopNotification(
-          message: 'Up next: Episode ${widget.episode + 1} ready',
-          icon: Icons.skip_next_rounded,
-          iconColor: AppPalette.primary,
-        ),
+        onEngineWarm: () {
+          if (mounted) {
+            _topNotificationController.show(
+              message: 'Up next: Episode ${widget.episode + 1} ready',
+              icon: Icons.skip_next_rounded,
+              iconColor: AppPalette.primary,
+            );
+          }
+        },
       );
     }
 
@@ -490,27 +489,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
         }),
       );
     }
-  }
-
-  // Top notification.
-
-  void _showTopNotification({
-    required String message,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    if (!mounted) return;
-    _topNotificationTimer?.cancel();
-    setState(() {
-      _topNotification = _TopNotification(
-        message: message,
-        icon: icon,
-        iconColor: iconColor,
-      );
-    });
-    _topNotificationTimer = Timer(_kTopNotificationDuration, () {
-      if (mounted) setState(() => _topNotification = null);
-    });
   }
 
   // Platform.
@@ -826,7 +804,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     _playbackStallController.dispose();
-    _topNotificationTimer?.cancel();
+    _topNotificationController.cancelPendingHide();
     await _posSub?.cancel();
     await _completedSub?.cancel();
     // Fires an armed-but-not-yet-committed AniList sync immediately
@@ -873,7 +851,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _autoSkipController.dispose();
     _playbackDiagnostics.dispose();
     _playbackStallController.dispose();
-    _topNotificationTimer?.cancel();
+    _topNotificationController.cancelPendingHide();
     await _posSub?.cancel();
     await _completedSub?.cancel();
     // The replacement TheaterScreen constructs a brand-new
@@ -980,7 +958,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _autoSkipController.dispose();
     _playbackDiagnostics.dispose();
     _playbackStallController.dispose();
-    _topNotificationTimer?.cancel();
+    _topNotificationController.cancelPendingHide();
     await _posSub?.cancel();
     await _completedSub?.cancel();
     await _tracker.flushPendingCommit();
@@ -1016,7 +994,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     _playbackStallController.dispose();
-    _topNotificationTimer?.cancel();
+    _topNotificationController.dispose();
     final posSub = _posSub;
     if (posSub != null) {
       unawaited(posSub.cancel());
@@ -1157,10 +1135,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
     // The video texture, the top notification, the settings-menu popup,
     // and the loading/batch-picker overlay switcher don't depend on
     // controls visibility at all — they're computed once per real
-    // setState() (video-ready, settings toggle, chapters loaded, a new
-    // notification arriving, etc.). Passed as the `child` of the
-    // ValueListenableBuilder below so this subtree is reused, not
-    // rebuilt, on every controls-visibility transition.
+    // setState() (video-ready, settings toggle, chapters loaded, etc.).
+    // Passed as the `child` of the ValueListenableBuilder below so this
+    // subtree is reused, not rebuilt, on every controls-visibility
+    // transition.
     final staticLayer = Stack(
       fit: StackFit.expand,
       children: [
@@ -1213,18 +1191,24 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
         // Rendered regardless of controls-overlay visibility, so a
         // sync/skip status message stays reachable even while the
-        // controls bar has auto-hidden. Positioned _kTopBarClearance
-        // below TheaterTopBar's own top offset above, so the two can
-        // never occupy the same space.
+        // controls bar has auto-hidden. TopNotificationController's own
+        // ValueNotifier drives this small subtree independently, so a
+        // toast never triggers a rebuild of the rest of the screen.
         Positioned(
-          top: 24 + MediaQuery.paddingOf(context).top + _kTopBarClearance,
+          top:
+              24 +
+              MediaQuery.paddingOf(context).top +
+              TheaterTopNotification.kTopBarClearance,
           left: 16,
           right: 16,
-          child: TheaterTopNotification(
-            message: _topNotification?.message,
-            icon: _topNotification?.icon,
-            iconColor: _topNotification?.iconColor,
-            uiPerformanceMode: _uiPerformanceMode,
+          child: ValueListenableBuilder<TopNotificationData?>(
+            valueListenable: _topNotificationController.notification,
+            builder: (context, data, _) => TheaterTopNotification(
+              message: data?.message,
+              icon: data?.icon,
+              iconColor: data?.iconColor,
+              uiPerformanceMode: _uiPerformanceMode,
+            ),
           ),
         ),
 
@@ -1232,7 +1216,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
           Positioned(
             bottom: 110,
             right: 32,
-            child: TheaterSettingsMenu(
+            child: DesktopTheaterSettingsMenu(
               player: _player,
               uiPerformanceMode: _uiPerformanceMode,
               onClose: () => setState(() => _isSettingsOpen = false),
