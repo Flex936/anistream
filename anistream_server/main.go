@@ -937,7 +937,10 @@ func main() {
 	port := flag.Int("port", 7878, "port to listen on")
 	dataDir := flag.String("data", filepath.Join(os.TempDir(), "anistream-server"), "directory for downloaded torrent data")
 	readaheadBytes := flag.Int64("readahead-bytes", 10*1024*1024, "per-stream torrent read-ahead in bytes (lower this on memory-constrained servers, e.g. a Raspberry Pi)")
-	uploadLimitKBps := flag.Int("upload-limit-kbps", 0, "cap upload/seeding bandwidth in KB/s (0 = unlimited)")
+	uploadLimitKBps := flag.Int("upload-limit-kbps", 0, "cap upload/seeding bandwidth in KB/s (0 = unlimited, negative = disable uploading entirely)")
+	downloadLimitKBps := flag.Int("download-limit-kbps", 0, "cap download bandwidth in KB/s (0 = unlimited)")
+	var uploadMessage = ""
+	var downloadMessage = "unlimited"
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0o755); err != nil {
@@ -947,12 +950,20 @@ func main() {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.DataDir = *dataDir
 	// Keep seeding so the swarm stays healthy after we finish downloading.
-	cfg.NoUpload = false
-	if *uploadLimitKBps > 0 {
-		// Burst is left at 0 — ClientConfig.UploadRateLimiter's own doc
-		// comment says anacrolix/torrent will pick a chunk-sized burst
-		// itself in that case, rather than needing one guessed here.
+	switch {
+	case *uploadLimitKBps < 0:
+		cfg.NoUpload = true
+		uploadMessage = "disabled"
+	case *uploadLimitKBps > 0:
 		cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(*uploadLimitKBps*1024), 0)
+		uploadMessage = fmt.Sprintf("%s Kb/s", uploadLimitKBps)
+	default:
+		cfg.NoUpload = false // unchanged — keep seeding, unbounded
+		uploadMessage = "unlimited"
+	}
+	if *downloadLimitKBps > 0 {
+		cfg.DownloadRateLimiter = rate.NewLimiter(rate.Limit(*downloadLimitKBps*1024), 0)
+		downloadMessage = fmt.Sprintf("%s Kb/s", downloadLimitKBps)
 	}
 
 	client, err := torrent.NewClient(cfg)
@@ -979,5 +990,7 @@ func main() {
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("AniStream Server  listening on  http://%s:%d", localIP(), *port)
 	log.Printf("Data directory:   %s", *dataDir)
+	log.Printf("Upload: %s", uploadMessage)
+	log.Printf("Download: %s", downloadMessage)
 	log.Fatal(http.ListenAndServe(addr, server))
 }
