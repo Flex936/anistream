@@ -45,15 +45,16 @@ GOOS=windows GOARCH=amd64 go build -o anistream-server.exe .
 ```bash
 ./anistream-server
 # or with custom options:
-./anistream-server -port 7878 -data /mnt/media/anistream
+./anistream-server -port 7878 -data /tmp/anistream -upload-limit-kbps -1 -download-limit-kbps 5000
 ```
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `-port` | `7878` | TCP port to listen on |
-| `-data` | `$TMPDIR/anistream-server` | Directory for downloaded pieces |
-| `-readahead-bytes` | `10485760` (~10 MB) | Per-stream torrent read-ahead size in bytes. Lower this on memory-constrained servers, e.g. a Raspberry Pi — this bounds *this machine's* memory use, not the client device's |
-| `-upload-limit-kbps` | `0` | Caps upload/seeding bandwidth in KB/s. `0` means unlimited, matching the server's long-standing default of seeding at full speed after a download completes |
+| `-port` | `7878` | Port to listen on. |
+| `-data` | OS temp dir + `anistream-server` | Directory for downloaded torrent data. |
+| `-readahead-bytes` | `10485760` (10 MiB) | Per-stream torrent read-ahead in bytes — lower this on memory-constrained servers (e.g. a Raspberry Pi). |
+| `-upload-limit-kbps` | `0` | Caps upload/seeding bandwidth in KB/s. `0` = unlimited. Any negative value (e.g. `-1`) disables uploading/seeding entirely — the server still downloads and streams normally, it just never offers pieces back to the swarm. |
+| `-download-limit-kbps` | `0` | Caps download bandwidth in KB/s. `0` = unlimited. No negative-value special case — unlike upload, downloading can't be disabled without breaking streaming, so anything `<= 0` just means unlimited. |
 
 The server prints its address on startup — copy that IP into the Flutter app's Settings → Remote Server → Server URL field.
 
@@ -157,4 +158,4 @@ sudo systemctl enable --now anistream-server
   - CORS here is not a security boundary. Don't treat it as one.
 
 ---
-*Last reviewed against the codebase: 2026-08-20. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*
+*Last reviewed against the codebase: 2026-08-29. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*
