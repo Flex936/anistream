@@ -174,7 +174,7 @@ Independent of which streaming controller is active, `AppSettings.useExoPlayer` 
 
 ## 6. AniStream Server (Go)
 
-Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, single external dependency `github.com/anacrolix/torrent`. Full build/run/API instructions live in [`anistream_server/README.md`](../anistream_server/README.md) — this section is the condensed architectural summary; that file is authoritative for the actual command-line flags and endpoint reference.
+Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, two external dependencies `github.com/anacrolix/torrent`, `asticode/go-astisub`. Full build/run/API instructions live in [`anistream_server/README.md`](../anistream_server/README.md) — this section is the condensed architectural summary; that file is authoritative for the actual command-line flags and endpoint reference.
 
 **Flow:** the Flutter app POSTs a magnet link to the server; the server does all torrenting and exposes the result as an HTTP range-request video stream (`http.ServeContent` over a `torrent.Reader`, which implements `io.ReadSeeker` — this is what makes MPV's seeking work against the server with no special-casing).
 
@@ -191,6 +191,7 @@ any state ──(3 min metadata timeout / no video files / stream failure)──
 ```
 
 - Sessions idle for 30+ minutes are dropped automatically (`reap()`, checked every 5 minutes).
+-`max-storage-gb` (0 = unlimited) caps `-data`'s total on-disk size; once reached, `POST /api/stream` rejects new sessions with 507 rather than accepting one that can't fit. Measured by periodically walking `-data`, not by summing the torrent client's own byte-completed counters — see [`anistream_server/README.md`](../anistream_server/README.md) § 4. Existing sessions are never paused to enforce this.
 - No auth, CORS fully open (`Access-Control-Allow-Origin: *`) — trusted-LAN use only. Full rationale in [`anistream_server/README.md`](../anistream_server/README.md)'s own notes.
 - `RemoteStreamingController` (§ 5) is the only Dart-side consumer of this API.
 
@@ -212,4 +213,4 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
   - **TsukiHime internal-ID lookups aren't cached per session.** `TsukihimeApiService.resolveInternalId` re-resolves the AniList ID → internal ID mapping on every `fetchTorrents` call — `_TorrentSearchCache` (`torrent_scraper_service.dart`) only caches the final, per-episode torrent list, not this intermediate lookup. Binge-watching one show re-runs it once per episode. Flagged in-code as a TODO; not yet implemented.
   - **Batch-torrent episode selection still pulls in a sliver of the adjacent episode(s) — expected, not a regression of the whole-batch-download fix.** BitTorrent's atomic download unit is the piece, not the file — pieces are laid out across a multi-file torrent's whole concatenated byte stream (BEP 0003), so a piece straddling two episode files can't be completed for one without also pulling in the other's overlapping bytes. `session.activate()` (`main.go`) sets every file except the selected one to `PiecePriorityNone`, but the one or two pieces shared with its immediate neighbors still download regardless, since the torrent client needs them to complete the selected file. Bounded to roughly one piece's worth per side (a few MiB to several dozen, depending on the torrent's own piece size) — not the full neighboring episode, and distinct from the earlier bug where the whole batch downloaded, which the metadata-resolve-time deprioritization in `session.run()` already fixed. Not fixable client-side: avoiding it entirely would require the torrent to have been authored with episode-aligned piece boundaries in the first place, which is outside this app's control.
 ---
-*Last reviewed against the codebase: 2026-08-28. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
+*Last reviewed against the codebase: 2026-08-30. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*

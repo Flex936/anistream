@@ -55,6 +55,7 @@ GOOS=windows GOARCH=amd64 go build -o anistream-server.exe .
 | `-readahead-bytes` | `10485760` (10 MiB) | Per-stream torrent read-ahead in bytes — lower this on memory-constrained servers (e.g. a Raspberry Pi). |
 | `-upload-limit-kbps` | `0` | Caps upload/seeding bandwidth in KB/s. `0` = unlimited. Any negative value (e.g. `-1`) disables uploading/seeding entirely — the server still downloads and streams normally, it just never offers pieces back to the swarm. |
 | `-download-limit-kbps` | `0` | Caps download bandwidth in KB/s. `0` = unlimited. No negative-value special case — unlike upload, downloading can't be disabled without breaking streaming, so anything `<= 0` just means unlimited. |
+|`-max-storage-gb`|`0`|Caps the total size of `-data` in GB (1024-based). `0` means unlimited. Once reached, `POST /api/stream` rejects new streams with `507` — measured by periodically walking -data, not the torrent client's internal counters, so it also catches orphaned data. Existing sessions are never paused to enforce it, so the folder can briefly exceed the cap by whatever's already mid-download|
 
 The server prints its address on startup — copy that IP into the Flutter app's Settings → Remote Server → Server URL field.
 
@@ -91,7 +92,7 @@ sudo systemctl enable --now anistream-server
 | Method | Path | Body / Response |
 | --- | --- | --- |
 | GET | `/api/health` | `{"name":"AniStream Server","status":"ok","version":"1.0.0"}` |
-| POST | `/api/stream` | `{magnet, episode_number?}` → `{session_id}` |
+| POST | `/api/stream` | `{magnet, episode_number?} → {session_id}`, or `507` once `-max-storage-gb` is reached |
 | GET | `/api/stream/:id` | `StatusResponse` (see below) |
 | POST | `/api/stream/:id/select` | `{file_index}` → `{ok:true}` |
 | GET | `/api/stream/:id/video` | HTTP range-request video stream (for MPV) |
@@ -158,4 +159,4 @@ sudo systemctl enable --now anistream-server
   - CORS here is not a security boundary. Don't treat it as one.
 
 ---
-*Last reviewed against the codebase: 2026-08-29. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*
+*Last reviewed against the codebase: 2026-08-30. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*

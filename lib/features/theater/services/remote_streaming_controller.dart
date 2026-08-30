@@ -119,9 +119,7 @@ class RemoteStreamingController extends BaseStreamingController {
           .timeout(const Duration(seconds: 15));
 
       if (resp.statusCode != 200) {
-        _setError(
-          'Server returned HTTP ${resp.statusCode}. Is the URL correct?',
-        );
+        _setError(_describeStreamError(resp));
         return;
       }
 
@@ -143,6 +141,21 @@ class RemoteStreamingController extends BaseStreamingController {
     } catch (e) {
       _setError('Cannot connect to server: $e');
     }
+  }
+
+  /// Builds the error message for a non-200 response to `POST
+  /// /api/stream`. The server's own error handlers (`http.Error` in
+  /// anistream-server's main.go) write a plain-text, human-readable
+  /// reason as the response body — e.g. "storage limit reached (15.2 GB
+  /// used of 15.0 GB limit)" — so that's surfaced directly whenever
+  /// present. Falls back to the generic status-code message only when
+  /// the body is empty, which previously read as a URL/connectivity
+  /// problem even on responses where the server was reachable and had
+  /// already explained exactly what was wrong.
+  String _describeStreamError(http.Response resp) {
+    final body = resp.body.trim();
+    if (body.isNotEmpty) return body;
+    return 'Server returned HTTP ${resp.statusCode}. Is the URL correct?';
   }
 
   @override

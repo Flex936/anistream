@@ -7,7 +7,7 @@
 // REST API
 // ──────────────────────────────────────────────────────────────────────────
 //  GET  /api/health                        → health check (used by the app's ping button)
-//  POST /api/stream           {magnet, episode_number?}  → {session_id}
+//  POST /api/stream           {magnet, episode_number?}  → {session_id} (or 507 once -max-storage-gb is reached)
 //  GET  /api/stream/:id                    → status (state, buffer_pct, stream_url, files …)
 //  POST /api/stream/:id/select {file_index}→ pick a file from a batch torrent
 //  GET  /api/stream/:id/video              → HTTP range-request video stream (MPV opens this)
@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -361,6 +362,15 @@ type srv struct {
 	// and the answer can't change during a single run of the server.
 	ffmpegReady    bool
 	readaheadBytes int64
+
+	// maxStorageBytes caps dataDir's total on-disk size (0 = unlimited).
+	// storageMu guards storageUsedBytes, the cached measurement
+	// monitorStorage refreshes periodically — see the Storage limit
+	// section below. addStream reads it via storageStatus rather than
+	// walking the filesystem synchronously on every request.
+	maxStorageBytes  int64
+	storageMu        sync.RWMutex
+	storageUsedBytes int64
 }
 
 func newID() string {
@@ -476,6 +486,105 @@ func json200(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// ── Storage limit ─────────────────────────────────────────────────────────────
+
+const gib = 1 << 30 // 1024^3 bytes — see -max-storage-gb's flag description.
+
+// storageCheckInterval is how often monitorStorage re-measures dataDir's
+// total on-disk size. Coarser than the 300ms buffer-watch loop or the
+// 5-minute session reaper — usage only meaningfully changes on the scale
+// of an episode finishing or a session being dropped, so this is frequent
+// enough to catch that without adding noticeable I/O overhead on weaker
+// hardware (a Raspberry Pi, say).
+const storageCheckInterval = 15 * time.Second
+
+// storageLimitStatus is what addStream checks before accepting a new
+// session, and what it reports back to the client when rejecting one.
+//
+// This only ever gates NEW sessions — an already-running session keeps
+// downloading uninterrupted even past the limit, so the folder can still
+// temporarily overshoot by however much whatever's currently in flight
+// adds before finishing or being dropped. Pausing an in-progress
+// download to enforce a hard ceiling was deliberately left out: doing
+// that to a torrent someone is actively watching would freeze their
+// playback for a storage technicality, which is worse than a bounded,
+// temporary overshoot.
+type storageLimitStatus struct {
+	usedBytes  int64
+	limitBytes int64
+	full       bool
+}
+
+func (sv *srv) storageStatus() storageLimitStatus {
+	sv.storageMu.RLock()
+	defer sv.storageMu.RUnlock()
+	return storageLimitStatus{
+		usedBytes:  sv.storageUsedBytes,
+		limitBytes: sv.maxStorageBytes,
+		full:       sv.maxStorageBytes > 0 && sv.storageUsedBytes >= sv.maxStorageBytes,
+	}
+}
+
+// monitorStorage periodically measures dataDir's real on-disk size and
+// caches it for storageStatus to read. A no-op entirely when
+// maxStorageBytes is 0 (unlimited) — a server that hasn't opted into the
+// limit pays nothing for this goroutine beyond its own loop overhead.
+// Measuring here rather than synchronously inside addStream keeps a
+// filesystem walk off the request path — the cost of listing dataDir
+// only grows as more torrents accumulate there, and a stream request
+// shouldn't wait on it.
+//
+// The first measurement runs immediately (before this loop's first
+// sleep), but a request arriving in the brief window before that first
+// walk completes sees storageUsedBytes at its zero value — a server
+// restarted with an already-full data directory could accept one more
+// session than it should during that window. Self-corrects on the very
+// next tick; not worth blocking server startup on a synchronous walk to
+// close entirely.
+func (sv *srv) monitorStorage() {
+	if sv.maxStorageBytes <= 0 {
+		return
+	}
+	for {
+		used, err := dirSize(sv.dataDir)
+		if err != nil {
+			log.Printf("[storage] failed to measure %s: %v", sv.dataDir, err)
+		} else {
+			sv.storageMu.Lock()
+			sv.storageUsedBytes = used
+			sv.storageMu.Unlock()
+		}
+		time.Sleep(storageCheckInterval)
+	}
+}
+
+// dirSize walks root and sums the size of every regular file under it —
+// the actual on-disk footprint of the data directory, rather than an
+// in-memory approximation from the torrent client's own byte-completed
+// counters. A physical measurement is the only way to also catch
+// orphaned data left behind by a crashed process, or the same-declared-
+// name storage collision already documented in this server's own
+// README — neither of which any in-memory torrent accounting would see.
+func dirSize(root string) (int64, error) {
+	var total int64
+	err := filepath.WalkDir(root, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			// A file or directory that errors out (e.g. removed by a
+			// session's own cleanup mid-walk) is skipped rather than
+			// aborting the whole measurement — an undercount here just
+			// self-corrects on the next tick.
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	})
+	return total, err
+}
+
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 func (sv *srv) health(w http.ResponseWriter) {
@@ -487,6 +596,18 @@ func (sv *srv) health(w http.ResponseWriter) {
 }
 
 func (sv *srv) addStream(w http.ResponseWriter, r *http.Request) {
+	// Rejects outright rather than accepting and then stalling — see
+	// storageLimitStatus's doc comment for why existing sessions are
+	// never paused to enforce this.
+	if status := sv.storageStatus(); status.full {
+		http.Error(w, fmt.Sprintf(
+			"storage limit reached (%.1f GB used of %.1f GB limit) — free up space by waiting for another session to finish or removing one, then try again",
+			float64(status.usedBytes)/gib,
+			float64(status.limitBytes)/gib,
+		), http.StatusInsufficientStorage)
+		return
+	}
+
 	var req startReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Magnet == "" {
 		http.Error(w, "magnet is required", http.StatusBadRequest)
@@ -939,8 +1060,10 @@ func main() {
 	readaheadBytes := flag.Int64("readahead-bytes", 10*1024*1024, "per-stream torrent read-ahead in bytes (lower this on memory-constrained servers, e.g. a Raspberry Pi)")
 	uploadLimitKBps := flag.Int("upload-limit-kbps", 0, "cap upload/seeding bandwidth in KB/s (0 = unlimited, negative = disable uploading entirely)")
 	downloadLimitKBps := flag.Int("download-limit-kbps", 0, "cap download bandwidth in KB/s (0 = unlimited)")
+	maxStorageGB := flag.Float64("max-storage-gb", 0, "cap the total size of -data in GB, 1024-based (0 = unlimited); new streams are rejected with HTTP 507 once reached, existing ones are left alone")
 	var uploadMessage = ""
 	var downloadMessage = "unlimited"
+	var storageMessage = "unlimited"
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0o755); err != nil {
@@ -956,14 +1079,17 @@ func main() {
 		uploadMessage = "disabled"
 	case *uploadLimitKBps > 0:
 		cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(*uploadLimitKBps*1024), 0)
-		uploadMessage = fmt.Sprintf("%s Kb/s", uploadLimitKBps)
+		uploadMessage = fmt.Sprintf("%d Kb/s", *uploadLimitKBps)
 	default:
 		cfg.NoUpload = false // unchanged — keep seeding, unbounded
 		uploadMessage = "unlimited"
 	}
 	if *downloadLimitKBps > 0 {
 		cfg.DownloadRateLimiter = rate.NewLimiter(rate.Limit(*downloadLimitKBps*1024), 0)
-		downloadMessage = fmt.Sprintf("%s Kb/s", downloadLimitKBps)
+		downloadMessage = fmt.Sprintf("%d Kb/s", *downloadLimitKBps)
+	}
+	if *maxStorageGB > 0 {
+		storageMessage = fmt.Sprintf("%.1f GB", *maxStorageGB)
 	}
 
 	client, err := torrent.NewClient(cfg)
@@ -978,19 +1104,22 @@ func main() {
 	}
 
 	server := &srv{
-		client:         client,
-		sessions:       make(map[string]*session),
-		port:           *port,
-		dataDir:        *dataDir,
-		ffmpegReady:    ffmpegReady,
-		readaheadBytes: *readaheadBytes,
+		client:          client,
+		sessions:        make(map[string]*session),
+		port:            *port,
+		dataDir:         *dataDir,
+		ffmpegReady:     ffmpegReady,
+		readaheadBytes:  *readaheadBytes,
+		maxStorageBytes: int64(*maxStorageGB * gib),
 	}
 	go server.reap()
+	go server.monitorStorage()
 
 	addr := fmt.Sprintf(":%d", *port)
 	log.Printf("AniStream Server  listening on  http://%s:%d", localIP(), *port)
 	log.Printf("Data directory:   %s", *dataDir)
 	log.Printf("Upload: %s", uploadMessage)
 	log.Printf("Download: %s", downloadMessage)
+	log.Printf("Storage limit: %s", storageMessage)
 	log.Fatal(http.ListenAndServe(addr, server))
 }
