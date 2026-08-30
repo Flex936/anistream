@@ -946,20 +946,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
           ),
         ),
 
-        if (_isSettingsOpen)
-          Positioned(
-            bottom: 200,
-            right: 16,
-            child: TheaterSettingsMenu(
-              uiPerformanceMode: _uiPerformanceMode,
-              onClose: () => setState(() => _isSettingsOpen = false),
-              subtitlePreview: _subtitlePreview(),
-              subtitleOptions: _subtitleOptions(),
-              audioPreview: _audioTracks.isEmpty ? null : _audioPreview(),
-              audioOptions: _audioTracks.isEmpty ? null : _audioOptions(),
-            ),
-          ),
-
         if (!_videoInitialized)
           ListenableBuilder(
             listenable: _torrentController,
@@ -1010,6 +996,27 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
             children: [
               staticLayer,
               if (_videoInitialized && handle != null) _buildControlsOverlay(),
+              // Painted after _buildControlsOverlay so it always paints
+              // — and hit-tests — above it. A `Container` with a
+              // `BoxDecoration` (MobileTheaterControls' bottom bar)
+              // registers a hit across its entire rectangle regardless
+              // of the gradient's actual alpha at a given point, so
+              // sitting below it in the Stack would let it silently
+              // swallow taps meant for this popup's tiles wherever the
+              // two overlap on screen.
+              if (_isSettingsOpen)
+                Positioned(
+                  bottom: 130,
+                  right: 16,
+                  child: TheaterSettingsMenu(
+                    uiPerformanceMode: _uiPerformanceMode,
+                    onClose: () => setState(() => _isSettingsOpen = false),
+                    subtitlePreview: _subtitlePreview(),
+                    subtitleOptions: _subtitleOptions(),
+                    audioPreview: _audioTracks.isEmpty ? null : _audioPreview(),
+                    audioOptions: _audioTracks.isEmpty ? null : _audioOptions(),
+                  ),
+                ),
             ],
           ),
         ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:media_kit/media_kit.dart';
 import 'package:video_player/video_player.dart';
 
 /// Minimal, player-engine-agnostic surface a control-bar widget needs:
@@ -7,8 +8,8 @@ import 'package:video_player/video_player.dart';
 /// that change them. `TheaterControls` (desktop) stays wired directly to
 /// media_kit's `Player`, unaffected by this — the interface exists so
 /// `MobileTheaterControls` doesn't depend on either player package
-/// directly, and a future media_kit-backed implementation could slot in
-/// as a thin pass-through rather than a redesign.
+/// directly. `PlayerPlaybackHandle` below is the media_kit-backed
+/// implementation this was originally built to allow for.
 ///
 /// Streams mirror media_kit's own `Player.stream.*` shape for exactly
 /// that reason.
@@ -184,5 +185,82 @@ class VideoPlayerPlaybackHandle implements PlaybackHandle {
     unawaited(_durationController.close());
     unawaited(_bufferController.close());
     unawaited(_volumeController.close());
+  }
+}
+
+/// [PlaybackHandle] backed by media_kit's [Player] — used by
+/// [MobileTheaterControls] when `TheaterScreen` renders its
+/// touch-oriented control bar (Android/iOS, Android TV included) instead
+/// of the desktop-only `TheaterControls`, which stays wired to [Player]
+/// directly and never touches this class.
+///
+/// A genuinely thin pass-through, more so than [VideoPlayerPlaybackHandle]
+/// above: [Player] already exposes a broadcast stream per field
+/// (`stream.playing`, `.position`, `.duration`, `.buffer`, `.volume`), so
+/// every stream getter below just forwards the matching [Player] stream
+/// directly, with no owned [StreamController] needed to fan a single
+/// listener out into several — unlike [VideoPlayerController], which is
+/// a single [ValueNotifier] with no per-field streams of its own. Volume
+/// needs no rescaling either: both [Player] and [PlaybackHandle] use a
+/// 0-100 scale, unlike [VideoPlayerController]'s 0-1.
+///
+/// `extends` rather than `implements` — unlike [VideoPlayerPlaybackHandle]
+/// — specifically so [getAudioTracks]/[selectAudioTrack] inherit
+/// [PlaybackHandle]'s own no-op default instead of this class repeating
+/// it: `TheaterScreen`'s settings popup (`DesktopTheaterSettingsMenu`)
+/// already talks to [Player]'s own `Tracks`/`setAudioTrack` directly and
+/// has no reason to route audio-track selection through this handle.
+class PlayerPlaybackHandle extends PlaybackHandle {
+  final Player _player;
+
+  PlayerPlaybackHandle(this._player);
+
+  @override
+  bool get isPlaying => _player.state.playing;
+  @override
+  Stream<bool> get playingStream => _player.stream.playing;
+
+  @override
+  Duration get position => _player.state.position;
+  @override
+  Stream<Duration> get positionStream => _player.stream.position;
+
+  @override
+  Duration get duration => _player.state.duration;
+  @override
+  Stream<Duration> get durationStream => _player.stream.duration;
+
+  @override
+  Duration get buffer => _player.state.buffer;
+  @override
+  Stream<Duration> get bufferStream => _player.stream.buffer;
+
+  @override
+  double get volume => _player.state.volume;
+  @override
+  Stream<double> get volumeStream => _player.stream.volume;
+
+  @override
+  Future<void> play() => _player.play();
+
+  @override
+  Future<void> pause() => _player.pause();
+
+  @override
+  Future<void> playOrPause() => _player.playOrPause();
+
+  @override
+  Future<void> seek(Duration position) => _player.seek(position);
+
+  @override
+  Future<void> setVolume(double volume) => _player.setVolume(volume);
+
+  @override
+  void dispose() {
+    // No owned subscriptions or controllers to tear down — every stream
+    // above forwards Player's own broadcast stream directly rather than
+    // deriving a new one. Player's lifecycle belongs to whoever
+    // constructed it (TheaterScreen), matching this method's contract
+    // per PlaybackHandle's own doc comment above.
   }
 }

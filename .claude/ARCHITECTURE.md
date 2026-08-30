@@ -10,7 +10,7 @@ AniStream is a single Flutter/Dart codebase producing native apps for Windows, L
 - **Torrenting** — either on-device (`libtorrent_flutter`, an FFI binding to `libtorrent`) or offloaded to the optional companion Go server over LAN (§ 6). NEVER both at once for a single session — `AppSettings.serverMode` picks one `BaseStreamingController` implementation for the whole session (§ 5).
 - **Playback** — always local, via `media_kit`, which hands frames to Flutter's own Impeller renderer so video and UI overlays composite on the same native surface with no separate video-view Z-index problems.
 
-Metadata and tracking come from AniList's GraphQL API; torrent discovery comes from scraping Nyaa.si's RSS feeds. Both are covered in [API.md](API.md), not here.
+Metadata and tracking come from AniList's GraphQL API; torrent discovery is layered — TsukiHime API first, Nyaa.si RSS scraping as a fallback, BitTorrent tracker scraping backfilling live seeder counts. All three are covered in [API.md](API.md), not here.
 
 ```text
 ┌──────────────┐      GraphQL      ┌──────────────┐
@@ -27,6 +27,7 @@ Metadata and tracking come from AniList's GraphQL API; torrent discovery comes f
                                   │ AniStream Server│  (Go, § 6)
                                   └─────────────────┘
 ```
+*(Diagram simplified to Nyaa.si's original single-source role — see [API.md](API.md) §§ 3, 5, 6 for the current layered torrent-discovery flow.)*
 
 ## 2. Flutter App Structure
 
@@ -53,9 +54,11 @@ lib/
 │   │   ├── anilist_queries.dart
 │   │   └── anilist_tracker_service.dart
 │   └── torrent/
-│       ├── models/                 torrent.dart
+│       ├── models/                 torrent.dart, tsukihime_models.dart
 │       ├── services/               torrent_mirror_fetcher.dart, torrent_parser.dart,
-│       │                           torrent_parser_worker.dart, torrent_scoring_engine.dart
+│       │                           torrent_parser_worker.dart, torrent_scoring_engine.dart,
+│       │                           tsukihime_api_service.dart, tracker_scrape_service.dart,
+│       │                           bencode.dart
 │       └── torrent_scraper_service.dart
 │
 ├── shared/                     # Reused by 2+ features. No single feature owns these.
@@ -209,6 +212,7 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
   - **No automatic fix is possible:** no mpv property distinguishes a frozen frame from a healthy one, so no automatic trigger could ever be correct.
   - **Shipped mitigation:** a manual restart button (`AppSettings.showFreezeRecoveryButton`, Settings → Playback Preferences, default off) in `TheaterTopBar`. It disposes only `_player` — freeing the stuck texture — while deliberately leaving the buffered `BaseStreamingController` running. `TheaterScreen` pops with a `TheaterRestartRequest` carrying that controller and a resume position (a few seconds before wherever playback was); `AnimeDetailsScreen._streamTorrent` immediately re-pushes a fresh `TheaterScreen` against it, recovering without re-downloading the torrent.
   - **Still open:** not yet filed upstream against `media-kit/media-kit` — worth doing regardless of the mitigation, since the confirmed root cause lives entirely in the plugin's native Linux rendering path and this codebase can't fix it directly.
+  - **TsukiHime internal-ID lookups aren't cached per session.** `TsukihimeApiService.resolveInternalId` re-resolves the AniList ID → internal ID mapping on every `fetchTorrents` call — `_TorrentSearchCache` (`torrent_scraper_service.dart`) only caches the final, per-episode torrent list, not this intermediate lookup. Binge-watching one show re-runs it once per episode. Flagged in-code as a TODO; not yet implemented.
 
 ---
-*Last reviewed against the codebase: 2026-08-23. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-26. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
