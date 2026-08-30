@@ -27,6 +27,7 @@ Metadata and tracking come from AniList's GraphQL API; torrent discovery is laye
                                   │ AniStream Server│  (Go, § 6)
                                   └─────────────────┘
 ```
+
 *(Diagram simplified to Nyaa.si's original single-source role — see [API.md](API.md) §§ 3, 5, 6 for the current layered torrent-discovery flow.)*
 
 ## 2. Flutter App Structure
@@ -82,14 +83,15 @@ lib/
     ├── theater/                      theater_screen.dart, exo_theater_screen.dart,
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,
-    │                                 controls_visibility_controller, auto_skip_controller,
-    │                                 top_notification_controller, playback_diagnostics,
-    │                                 theater_data, track_name_parser, playback_handle,
+    │                                 auto_skip_controller, controls_visibility_controller,
+    │                                 next_episode_prefetch_controller, playback_stall_controller,
+    │                                 playback_diagnostics, theater_data, track_name_parser,
+    │                                 top_notification_controller, playback_handle,
     │                                 mpv_chapter_loader, native_chapter_parser,
     │                                 native_subtitle_parser}.dart,
     │                                 widgets/{theater_controls, mobile_theater_controls,
-    │                                 theater_player, seekbar, skip_chip, styled_subtitle_view,
-    │                                 theater_settings, batch_picker}.dart
+    │                                 theater_player, seekbar, skip_chip, playback_action_chip,
+    │                                 styled_subtitle_view, theater_settings, batch_picker}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
 ```
@@ -172,6 +174,8 @@ Both implementations parse candidate filenames with the same `TorrentParser` (se
 
 Independent of which streaming controller is active, `AppSettings.useExoPlayer` (mobile/TV only; exposed as "ExoPlayer Video Engine" under Settings → Playback Preferences) additionally picks the player implementation: `TheaterScreen` (`media_kit`/mpv — the default, and the only path with D-Pad/TV-remote focus navigation) or `exo_theater_screen.dart`'s `ExoTheaterScreen` (`video_player`, an ExoPlayer/AVPlayer-backed engine kept around to isolate whether stutter on weak Android TV hardware is a decode-engine problem — see that file's own header comment for the experiment's findings so far). This path is Android/TV-primary; iOS is out of scope for it. Both paths support chapters, auto-skip, and AniList progress tracking. `ExoTheaterScreen` additionally supports audio-track switching via `video_player`'s own `getAudioTracks()`/`selectAudioTrack()` (backed by Media3's `DefaultTrackSelector`), exposed through `PlaybackHandle` — `TheaterScreen` has had this from the start via media_kit's own `Tracks`/`setAudioTrack`, so this closes a gap specific to the ExoPlayer path rather than adding a new capability to both. The two axes are orthogonal: either streaming controller pairs with either player. `useExoPlayer` defaults to false, so `TheaterScreen` is what every session gets unless a user opts in.
 
+**Background prefetching:** `NextEpisodePrefetchController` (`features/theater/services/`) constructs a second, short-lived `BaseStreamingController` — via the shared `createStreamingController(AppSettings)` factory, so it always matches the current episode's own `serverMode`-selected implementation — to warm-buffer the *next* episode's top-scored torrent once episode-autoplay is on and the current episode nears its end. This briefly overlaps two controller *instances* of the same implementation, not two different implementations — it does not relax § 1's "never both at once" rule. Owned and disposed by `TheaterScreen`; the warm controller only ever leaves that ownership when an actual episode transition consumes it. Scoped to `TheaterScreen` only today — `ExoTheaterScreen` has neither episode-autoplay nor prefetching.
+
 ## 6. AniStream Server (Go)
 
 Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, two external dependencies `github.com/anacrolix/torrent`, `asticode/go-astisub`. Full build/run/API instructions live in [`anistream_server/README.md`](../anistream_server/README.md) — this section is the condensed architectural summary; that file is authoritative for the actual command-line flags and endpoint reference.
@@ -212,5 +216,6 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
   - **Still open:** not yet filed upstream against `media-kit/media-kit` — worth doing regardless of the mitigation, since the confirmed root cause lives entirely in the plugin's native Linux rendering path and this codebase can't fix it directly.
   - **TsukiHime internal-ID lookups aren't cached per session.** `TsukihimeApiService.resolveInternalId` re-resolves the AniList ID → internal ID mapping on every `fetchTorrents` call — `_TorrentSearchCache` (`torrent_scraper_service.dart`) only caches the final, per-episode torrent list, not this intermediate lookup. Binge-watching one show re-runs it once per episode. Flagged in-code as a TODO; not yet implemented.
   - **Batch-torrent episode selection still pulls in a sliver of the adjacent episode(s) — expected, not a regression of the whole-batch-download fix.** BitTorrent's atomic download unit is the piece, not the file — pieces are laid out across a multi-file torrent's whole concatenated byte stream (BEP 0003), so a piece straddling two episode files can't be completed for one without also pulling in the other's overlapping bytes. `session.activate()` (`main.go`) sets every file except the selected one to `PiecePriorityNone`, but the one or two pieces shared with its immediate neighbors still download regardless, since the torrent client needs them to complete the selected file. Bounded to roughly one piece's worth per side (a few MiB to several dozen, depending on the torrent's own piece size) — not the full neighboring episode, and distinct from the earlier bug where the whole batch downloaded, which the metadata-resolve-time deprioritization in `session.run()` already fixed. Not fixable client-side: avoiding it entirely would require the torrent to have been authored with episode-aligned piece boundaries in the first place, which is outside this app's control.
+
 ---
 *Last reviewed against the codebase: 2026-08-30. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*

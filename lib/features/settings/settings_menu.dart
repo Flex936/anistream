@@ -49,7 +49,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late bool _filterEcchi;
   late String _hardwareDecoding;
   late String _androidHwDec;
-  late bool _autoPlayEnabled;
+  late bool _autoTorrentEnabled;
+  late bool _episodeAutoplayEnabled;
   late bool _autoSkip;
   late bool _showFreezeRecoveryButton;
   late bool _uiPerformanceMode;
@@ -85,7 +86,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
     _filterEcchi = s.filterEcchi;
     _hardwareDecoding = s.hardwareDecoding;
     _androidHwDec = s.androidHwDec;
-    _autoPlayEnabled = s.autoPlayEnabled;
+    _autoTorrentEnabled = s.autoTorrentEnabled;
+    _episodeAutoplayEnabled = s.episodeAutoplayEnabled;
     _autoSkip = s.autoSkip;
     _showFreezeRecoveryButton = s.showFreezeRecoveryButton;
     _uiPerformanceMode = s.uiPerformanceMode;
@@ -109,7 +111,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
           filterEcchi: _filterEcchi,
           hardwareDecoding: _hardwareDecoding,
           androidHwDec: _androidHwDec,
-          autoPlayEnabled: _autoPlayEnabled,
+          autoTorrentEnabled: _autoTorrentEnabled,
+          episodeAutoplayEnabled: _episodeAutoplayEnabled,
           autoSkip: _autoSkip,
           showFreezeRecoveryButton: _showFreezeRecoveryButton,
           uiPerformanceMode: _uiPerformanceMode,
@@ -279,12 +282,20 @@ class _SettingsMenuState extends State<SettingsMenu> {
                           showDividerAbove: true,
                           children: [
                             SettingRowTile(
-                              title: 'Auto-Play',
+                              title: 'Auto-Select Torrent',
                               subtitle:
                                   'Skip the release list and instantly stream the highest-rated torrent.',
-                              value: _autoPlayEnabled,
+                              value: _autoTorrentEnabled,
                               onChanged: (v) =>
-                                  setState(() => _autoPlayEnabled = v),
+                                  setState(() => _autoTorrentEnabled = v),
+                            ),
+                            SettingRowTile(
+                              title: 'Autoplay Next Episode',
+                              subtitle:
+                                  'Automatically stream the next episode when this one finishes.',
+                              value: _episodeAutoplayEnabled,
+                              onChanged: (v) =>
+                                  setState(() => _episodeAutoplayEnabled = v),
                             ),
                             SettingRowTile(
                               title: 'Auto-Skip',
