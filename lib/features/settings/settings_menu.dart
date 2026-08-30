@@ -8,6 +8,7 @@ import '../../core/settings/settings_scope.dart';
 import '../../core/settings/settings_service.dart';
 import '../../core/theme/app_palette.dart';
 import '../../shared/widgets/frosted_container.dart';
+import '../../shared/widgets/settings_text_field.dart';
 import '../../shared/widgets/toast.dart';
 import 'widgets/settings_components.dart';
 
@@ -55,6 +56,16 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late bool _uiPerformanceMode;
   late String _videoFilterQuality;
 
+  // Not exposed anywhere in this screen's own UI — TheaterSettingsMenu
+  // is the only place this is user-editable (see AppSettings.
+  // libassEnabled's doc comment for why). Still hydrated and carried
+  // through unchanged in _handleSave below, since AppSettings has no
+  // copyWith: constructing a fresh AppSettings there without this field
+  // would silently reset it to the constructor default every time this
+  // screen's Save button is pressed, wiping out whatever the theater
+  // toggle last set.
+  late bool _libassEnabled;
+
   late bool _serverMode;
   late final TextEditingController _serverUrlController;
 
@@ -89,6 +100,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     _showFreezeRecoveryButton = s.showFreezeRecoveryButton;
     _uiPerformanceMode = s.uiPerformanceMode;
     _videoFilterQuality = s.videoFilterQuality;
+    _libassEnabled = s.libassEnabled;
     _serverMode = s.serverMode;
     _serverUrlController.text = s.serverUrl;
   }
@@ -114,6 +126,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           videoFilterQuality: _videoFilterQuality,
           serverMode: _serverMode,
           serverUrl: _serverUrlController.text.trim(),
+          libassEnabled: _libassEnabled,
         ),
       );
       if (mounted) {

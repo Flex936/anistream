@@ -9,9 +9,8 @@ import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
+import '../../shared/utils/theater_session.dart';
 import '../../shared/widgets/frosted_container.dart';
-import '../theater/services/streaming_controller_base.dart';
-import '../theater/theater_screen.dart';
 import 'widgets/anime_synopsis_section.dart';
 import 'widgets/episode_tile.dart';
 import 'widgets/hero_header_delegate.dart';
@@ -145,45 +144,23 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     }
   }
 
-  /// Pushes TheaterScreen and refreshes AniList progress once the whole
-  /// viewing session ends. Deliberately does NOT pop anything itself —
-  /// it's called both from [_openTorrentModal] (once the modal's own pop
-  /// has already resolved) AND from [_autoPlayEpisode]'s direct success
-  /// path (where no modal was ever opened).
-  ///
-  /// Loops rather than a single push/pop: TheaterScreen normally pops
-  /// with `null` (a real exit), but pops with a [TheaterRestartRequest]
-  /// instead when the user taps its freeze-recovery restart button
-  /// (Settings → Playback Preferences → "Show Freeze Recovery Button").
-  /// Each such result immediately re-pushes a fresh TheaterScreen against
-  /// the same still-buffered [BaseStreamingController] carried in the
-  /// result, rather than starting the torrent over from scratch. The loop
-  /// — and therefore _fetchProgress() — only runs once TheaterScreen pops
-  /// with a genuine `null`, so a restart never triggers a premature
-  /// progress refresh mid-episode the way popping AnimeDetailsScreen's
-  /// own route early would.
+  /// Streams [torrent] for episode [ep] via the shared
+  /// [runTheaterSession] helper — including transparently following any
+  /// freeze-recovery restarts it re-pushes through, see that function's
+  /// own doc comment — then refreshes AniList progress once the whole
+  /// viewing session genuinely ends. Deliberately does NOT pop anything
+  /// itself — it's called both from [_openTorrentModal] (once the
+  /// modal's own pop has already resolved) AND from
+  /// [_autoPlayEpisode]'s direct success path (where no modal was ever
+  /// opened).
   Future<void> _streamTorrent(int ep, Torrent torrent) async {
-    BaseStreamingController? resumeController;
-    Duration? resumePosition;
-
-    while (true) {
-      final result = await Navigator.push<TheaterRestartRequest?>(
-        context,
-        MaterialPageRoute<TheaterRestartRequest?>(
-          builder: (_) => TheaterScreen(
-            anime: widget.anime,
-            episode: ep,
-            torrent: torrent,
-            resumeController: resumeController,
-            resumePosition: resumePosition,
-          ),
-        ),
-      );
-
-      if (result == null) break;
-      resumeController = result.resumeController;
-      resumePosition = result.resumePosition;
-    }
+    await runTheaterSession(
+      context: context,
+      anime: widget.anime,
+      episode: ep,
+      magnetUri: torrent.magnetLink,
+      displayTitle: widget.anime.title.display,
+    );
 
     if (mounted) {
       await _fetchProgress();
@@ -204,14 +181,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     final bool uiPerformanceMode = settings.uiPerformanceMode;
     final materials = context.appMaterials;
 
-    // Material, not Scaffold: this screen always renders inside AppShell's
-    // own Scaffold via NavigationController, which already supplies the
-    // AppBar/backdrop chrome this screen never uses. Material still gives
-    // the subtree below correct Text/ink styling on its own, independent
-    // of whatever ancestor it's mounted under.
-    return Material(
-      color: AppPalette.base,
-      child: Stack(
+    return Scaffold(
+      backgroundColor: AppPalette.base,
+      body: Stack(
         children: [
           CustomScrollView(
             slivers: [

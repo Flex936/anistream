@@ -31,6 +31,19 @@ class AppSettings {
   /// Base URL of the AniStream Go server, e.g. "http://192.168.1.5:7878".
   final String serverUrl;
 
+  /// Whether libass-based subtitle rendering is enabled for the next
+  /// `Player` this setting drives. `media_kit`'s `PlayerConfiguration.
+  /// libass` is only ever read when a `Player` is constructed — there's
+  /// no exposed way to flip it on an already-running instance — so
+  /// `TheaterScreen` reads this once at construction time via
+  /// `SettingsScope`, and a mid-session change goes through a full
+  /// player restart-and-resume instead of a live property flip; see
+  /// `TheaterScreen._handleLibassToggle`. Surfaced exclusively through
+  /// `TheaterSettingsMenu`, not this app's main Settings drawer, since
+  /// it's only meaningful while actively watching something. Defaults to
+  /// `true`, matching this app's behavior before this setting existed.
+  final bool libassEnabled;
+
   const AppSettings({
     this.filterEcchi = true,
     this.hardwareDecoding = 'auto',
@@ -42,6 +55,7 @@ class AppSettings {
     this.videoFilterQuality = 'low',
     this.serverMode = false,
     this.serverUrl = 'http://192.168.1.100:7878',
+    this.libassEnabled = true,
   });
 }
 
@@ -84,6 +98,7 @@ class SettingsService {
   static const String kVideoFilterQuality = 'video_filter_quality';
   static const String kServerMode = 'server_mode';
   static const String kServerUrl = 'server_url';
+  static const String kLibassEnabled = 'libass_enabled';
 
   /// One-time guard so the legacy → async migration below runs at most once
   /// per install, not on every cold start.
@@ -115,13 +130,14 @@ class SettingsService {
       serverMode: await _prefs.getBool(kServerMode) ?? false,
       serverUrl:
           await _prefs.getString(kServerUrl) ?? 'http://192.168.1.100:7878',
+      libassEnabled: await _prefs.getBool(kLibassEnabled) ?? true,
     );
   }
 
   Future<void> save(AppSettings settings) async {
     // ── Fired concurrently — these are independent keys, so there's no
     // ordering dependency between them, and the settings menu shouldn't
-    // block on 9 sequential awaits just to close the dialog. ──
+    // block on 10 sequential awaits just to close the dialog. ──
     await Future.wait([
       _prefs.setBool(kFilterEcchi, settings.filterEcchi),
       _prefs.setString(kHwDec, settings.hardwareDecoding),
@@ -136,6 +152,7 @@ class SettingsService {
       _prefs.setString(kVideoFilterQuality, settings.videoFilterQuality),
       _prefs.setBool(kServerMode, settings.serverMode),
       _prefs.setString(kServerUrl, settings.serverUrl),
+      _prefs.setBool(kLibassEnabled, settings.libassEnabled),
     ]);
   }
 
@@ -144,7 +161,11 @@ class SettingsService {
   /// now reads/writes exclusively, so upgrading users don't silently lose
   /// settings they'd already configured (Filter Ecchi being the one that
   /// actually mattered, since it's the only key another service also read
-  /// independently — but every key is migrated for safety).
+  /// independently — but every key is migrated for safety). `libassEnabled`
+  /// never existed under the legacy API either way — its migration call is
+  /// a permanent no-op — but it's included for the same "every key goes
+  /// through the same path" consistency the rest of this list already
+  /// follows, rather than being silently special-cased out.
   Future<void> _migrateLegacyPrefsIfNeeded() async {
     final alreadyMigrated = await _prefs.getBool(_kMigrationDoneKey) ?? false;
     if (alreadyMigrated) return;
@@ -177,6 +198,7 @@ class SettingsService {
         migrateString(kVideoFilterQuality),
         migrateBool(kServerMode),
         migrateString(kServerUrl),
+        migrateBool(kLibassEnabled),
       ]);
     } catch (_) {
       // Fresh install / no legacy plugin data / platform quirk — nothing

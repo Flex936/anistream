@@ -28,6 +28,15 @@ class TheaterControls extends StatefulWidget {
 
   final VoidCallback onToggleSettings;
   final VoidCallback onToggleFullscreen;
+
+  /// Fixed 90-second forward seek for OP/ED skipping — the button this
+  /// wires up is the Mobile/TV-reachable equivalent of desktop's Ctrl+→
+  /// shortcut (`TheaterScreen._onKeyEvent`/`_exactSkipForward`, which
+  /// this same callback also is). Always required, unlike
+  /// `onToggleFullscreen` — every platform gets this control, just via a
+  /// button instead of a keyboard chord on Mobile/TV.
+  final VoidCallback onExactSkip;
+
   final bool isSettingsOpen;
   final bool isFullscreen;
   final List<Chapter> chapterMetadata;
@@ -39,6 +48,8 @@ class TheaterControls extends StatefulWidget {
   /// builds") — Mobile has no windowed state to escape, and TV is
   /// already permanently fullscreen, so there's no reachable "windowed"
   /// counterpart for the button to toggle back to on either platform.
+  /// Also used to vary the exact-skip button's tooltip, since Ctrl+→ is
+  /// only ever reachable on this platform.
   final bool isDesktop;
 
   /// Reports whether Seekbar/the volume slider currently holds keyboard
@@ -57,6 +68,7 @@ class TheaterControls extends StatefulWidget {
     required this.onInteractionEnd,
     required this.onToggleSettings,
     required this.onToggleFullscreen,
+    required this.onExactSkip,
     required this.isSettingsOpen,
     required this.isFullscreen,
     required this.isDesktop,
@@ -209,6 +221,20 @@ class _TheaterControlsState extends State<TheaterControls> {
               // Owns its own position/duration subscription, renders just
               // the "00:00 / 00:00" text. Ticks in isolation.
               _PlaybackTimeLabel(player: widget.player),
+              const SizedBox(width: 16),
+
+              // Fixed-duration OP/ED skip — Mobile/TV's reachable
+              // equivalent of desktop's Ctrl+→ shortcut (both call the
+              // same TheaterScreen._exactSkipForward via this one
+              // callback). Placed here, ahead of the trailing Spacer,
+              // rather than alongside the mute/settings/fullscreen
+              // cluster on the right — keeps this cluster's own fixed
+              // 44dp targets from getting any more crowded.
+              _TheaterIconButton(
+                icon: Icons.fast_forward_rounded,
+                tooltip: widget.isDesktop ? 'Skip 1:30 (Ctrl+→)' : 'Skip 1:30',
+                onPressed: widget.onExactSkip,
+              ),
 
               const Spacer(),
               _TheaterIconButton(

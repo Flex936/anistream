@@ -63,7 +63,10 @@ class FrostedIconButton extends StatelessWidget {
 }
 
 class TheaterTopBar extends StatelessWidget {
-  final int episode;
+  /// "Episode N" for a normal AniList-tracked session, or a custom
+  /// label (e.g. "Custom Stream") for a session with no episode context
+  /// — see `TheaterScreen.displayTitle`.
+  final String title;
   final VoidCallback onBack;
   final bool uiPerformanceMode;
 
@@ -80,7 +83,7 @@ class TheaterTopBar extends StatelessWidget {
 
   const TheaterTopBar({
     super.key,
-    required this.episode,
+    required this.title,
     required this.onBack,
     required this.onRestart,
     this.uiPerformanceMode = false,
@@ -99,7 +102,7 @@ class TheaterTopBar extends StatelessWidget {
         ),
         const SizedBox(width: 16),
         Text(
-          'Episode $episode',
+          title,
           style: const TextStyle(
             color: AppPalette.white,
             fontSize: 20,
@@ -188,12 +191,15 @@ class TheaterTopNotification extends StatelessWidget {
 /// interactive/focusable elements live here, so D-Pad mode doesn't
 /// affect it.
 class TheaterLoadingOverlay extends StatelessWidget {
-  final int episode;
+  /// "Episode N" for a normal AniList-tracked session, or a custom
+  /// label (e.g. "Custom Stream") for a session with no episode context
+  /// — see `TheaterScreen.displayTitle`.
+  final String title;
   final BaseStreamingController controller;
 
   const TheaterLoadingOverlay({
     super.key,
-    required this.episode,
+    required this.title,
     required this.controller,
   });
 
@@ -215,7 +221,7 @@ class TheaterLoadingOverlay extends StatelessWidget {
             ),
             const SizedBox(height: 32),
             Text(
-              'Episode $episode',
+              title,
               style: const TextStyle(
                 color: AppPalette.white,
                 fontSize: 18,

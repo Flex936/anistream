@@ -59,16 +59,19 @@ lib/
 │       └── torrent_scraper_service.dart
 │
 ├── shared/                     # Reused by 2+ features. No single feature owns these.
-│   ├── widgets/                    anime_card.dart, app_network_image.dart, app_segmented_control.dart,
-│   │                                frosted_container.dart, hover_focus_builder.dart,
-│   │                                mouse_back_forward_listener.dart, selection_modal.dart, toast.dart,
-│   │                                glass_toast_content.dart
-│   └── utils/                       html_utils.dart, anime_status_style.dart, perf_animations.dart
+│   ├── widgets/                     anime_card.dart, app_network_image.dart, app_segmented_control.dart,
+│   │                                frosted_container.dart, hover_focus_builder.dart, mouse_back_forward_listener.dart,
+│   │                                selection_modal.dart, settings_text_field.dart,
+│   │                                toggle_switch.dart, toast.dart, glass_toast_content.dart
+ 
+│   └── utils/                       html_utils.dart, anime_status_style.dart, perf_animations.dart,
+│                                    theater_session.dart
 │
 └── features/                   # One folder per screen/flow. Each owns its own widgets/services/controllers.
     ├── anime_details/                anime_details_screen.dart, widgets/{episode_tile, hero_banner,
     │                                 hero_header_delegate, hero_header_compact, anime_synopsis_section,
     │                                 torrent_tile, torrent_search_modal, external_link_buttons}.dart
+    ├── custom_stream/                custom_stream_launcher.dart, widgets/custom_magnet_modal.dart
     ├── home/                         home_screen.dart, widgets/anime_carousel.dart
     ├── schedule/                     scheduled_screen.dart, utils/schedule_grouping.dart,
     │                                 widgets/calendar_card.dart

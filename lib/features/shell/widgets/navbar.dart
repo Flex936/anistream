@@ -23,6 +23,7 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
   final VoidCallback? onSettings;
   final VoidCallback? onWatchlist;
   final VoidCallback? onScheduled;
+  final VoidCallback? onCustomStream;
   final ValueChanged<Anime>? onSelectAnime;
   final ValueChanged<String>? onSubmitted;
 
@@ -38,6 +39,7 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
     this.onSettings,
     this.onWatchlist,
     this.onScheduled,
+    this.onCustomStream,
     this.onSelectAnime,
     this.onSubmitted,
   });
@@ -134,6 +136,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
           uiPerformanceMode: widget.uiPerformanceMode,
           onScheduled: widget.onScheduled,
           onWatchlist: widget.onWatchlist,
+          onCustomStream: widget.onCustomStream,
           onLogin: widget.onLogin,
           onSettings: widget.onSettings,
         ),
@@ -206,13 +209,13 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
     // forces the nav bar to re-record, and vice versa.
     //
     // DpadRegion: the whole toolbar is one region (logo, search,
-    // schedule/watchlist/user/settings icons, window controls are all
-    // one visual section, not several) with a stable memoryKey so
-    // returning here from anywhere remembers which control was last
-    // focused. No edge-behavior overrides — the default (leave, on both
-    // axes) is right: Up has nothing above to find anyway, and Down must
-    // stay at its default so focus can escape downward into the body's
-    // own DpadRegion (app_shell.dart).
+    // schedule/watchlist/custom-stream/user/settings icons, window
+    // controls are all one visual section, not several) with a stable
+    // memoryKey so returning here from anywhere remembers which control
+    // was last focused. No edge-behavior overrides — the default (leave,
+    // on both axes) is right: Up has nothing above to find anyway, and
+    // Down must stay at its default so focus can escape downward into
+    // the body's own DpadRegion (app_shell.dart).
     return DpadRegion(
       memoryKey: 'navbar',
       child: RepaintBoundary(child: frame),
@@ -311,6 +314,12 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
                   onPressed: widget.onWatchlist,
                 ),
               ],
+              const SizedBox(width: 2),
+              _NavIconButton(
+                icon: Icons.link_rounded,
+                tooltip: 'Stream a Magnet Link',
+                onPressed: widget.onCustomStream,
+              ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Container(
@@ -370,6 +379,7 @@ class _MobileMenu extends StatelessWidget {
   final bool uiPerformanceMode;
   final VoidCallback? onScheduled;
   final VoidCallback? onWatchlist;
+  final VoidCallback? onCustomStream;
   final VoidCallback? onLogin;
   final VoidCallback? onSettings;
 
@@ -378,6 +388,7 @@ class _MobileMenu extends StatelessWidget {
     this.uiPerformanceMode = false,
     this.onScheduled,
     this.onWatchlist,
+    this.onCustomStream,
     this.onLogin,
     this.onSettings,
   });
@@ -438,6 +449,11 @@ class _MobileMenu extends StatelessWidget {
                 title: 'My Watchlist',
                 onTap: () => _handleTap(context, onWatchlist),
               ),
+            _MobileMenuTile(
+              icon: Icons.link_rounded,
+              title: 'Stream a Magnet Link',
+              onTap: () => _handleTap(context, onCustomStream),
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Divider(color: AppPalette.white.withValues(alpha: 0.1)),
