@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -163,9 +164,32 @@ func (s *session) run() {
 		return
 	}
 
+	// Every file starts deprioritized the instant metadata resolves —
+	// not just the non-selected episodes once activate() eventually
+	// runs for a batch torrent. Picking a file is a user-driven step
+	// that can take anywhere from a few seconds to several minutes;
+	// without setting every file's priority to none up front, the swarm
+	// has that entire window to start pushing pieces for every episode
+	// before any single one has actually been requested. activate()
+	// below only ever raises the one chosen file back up to
+	// PiecePriorityNormal.
+	//
+	// This does NOT eliminate download of the immediately adjacent
+	// files' boundary bytes — pieces are laid out across the whole
+	// concatenated torrent, not per-file, so the piece straddling the
+	// selected file's start/end inevitably contains a sliver of its
+	// neighbor too. That's a property of the torrent's own piece
+	// layout, unrelated to this priority logic, and isn't something a
+	// client can avoid short of the uploader having aligned files to
+	// piece boundaries when the torrent was created.
+	allFiles := s.t.Files()
+	for _, f := range allFiles {
+		f.SetPriority(torrent.PiecePriorityNone)
+	}
+
 	// Collect video files from the torrent.
 	var vfs []*torrent.File
-	for _, f := range s.t.Files() {
+	for _, f := range allFiles {
 		// f is *torrent.File — append directly, no pin needed in Go 1.22+
 		if isVideo(f.DisplayPath()) {
 			vfs = append(vfs, f)
@@ -772,62 +796,151 @@ func (sv *srv) serveSubtitleTrack(w http.ResponseWriter, r *http.Request, id str
 // removed here. info is nil for a session that never got past metadata
 // resolution, in which case nothing was ever written to disk to begin
 // with.
+//
+// Retries on failure instead of giving up after one attempt: on Windows
+// specifically, a file can't be removed while any process — including
+// this one — still holds an open handle to it, and t.Drop() releasing
+// the torrent client's own piece-storage handles isn't guaranteed to
+// have finished by the time it returns (nor is an in-flight serveVideo
+// request's own Reader, if one was still open on this torrent when it
+// was dropped). Losing that race surfaces as "The process cannot access
+// the file because it is being used by another process," most often
+// against an in-progress episode's still-open .part file. Linux/macOS
+// have no such restriction (unlink succeeds on an open file there), so
+// this retry loop costs nothing extra there — RemoveAll just succeeds on
+// the first attempt.
 func (sv *srv) removeSessionData(t *torrent.Torrent) {
 	info := t.Info()
 	if info == nil {
 		return
 	}
 	path := filepath.Join(sv.dataDir, info.Name)
-	if err := os.RemoveAll(path); err != nil {
-		log.Printf("[cleanup] failed to remove %q: %v", path, err)
+
+	const maxAttempts = 6
+	var err error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		err = os.RemoveAll(path)
+		if err == nil {
+			return
+		}
+		if attempt < maxAttempts {
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+		}
 	}
+	log.Printf("[cleanup] failed to remove %q after %d attempts: %v", path, maxAttempts, err)
 }
 
 func (sv *srv) dropStream(w http.ResponseWriter, id string) {
 	sv.mu.Lock()
 	s, ok := sv.sessions[id]
 	if ok {
-		s.t.Drop()
-		sv.removeSessionData(s.t)
 		delete(sv.sessions, id)
 	}
 	sv.mu.Unlock()
+
 	if !ok {
 		http.Error(w, "session not found", http.StatusNotFound)
 		return
 	}
-	s.cleanupSubtitleFiles()
+
+	// Torrent teardown and on-disk cleanup happen in the background
+	// rather than blocking this response: the session is already gone
+	// from sv.sessions by this point (the part a caller actually needs
+	// confirmed), and removeSessionData's own retry loop can take
+	// several seconds on Windows (see its doc comment) for no benefit to
+	// the caller — the Flutter client already treats this endpoint as
+	// fire-and-forget with its own 5s timeout (see
+	// RemoteStreamingController.dispose()).
+	go func() {
+		s.t.Drop()
+		sv.removeSessionData(s.t)
+		s.cleanupSubtitleFiles()
+	}()
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// reapEntry is a session marked for teardown by one reap() pass, carrying
+// enough to both perform the teardown and log it afterward, outside the
+// lock that identified it — see reap()'s own comment.
+type reapEntry struct {
+	id   string
+	s    *session
+	idle time.Duration
 }
 
 // reap removes sessions that haven't been touched in 30 minutes.
 func (sv *srv) reap() {
 	for {
 		time.Sleep(5 * time.Minute)
+
+		// Collects which sessions are idle enough to drop while sv.mu is
+		// held, then performs the actual teardown (torrent Drop, on-disk
+		// cleanup, subtitle temp-file cleanup) after releasing it — same
+		// reasoning as dropStream: removeSessionData's own retry loop
+		// can take several seconds on Windows, and running that while
+		// still holding sv.mu would block every other request touching
+		// sv.sessions for the full duration of this reap pass.
+		var toReap []reapEntry
 		sv.mu.Lock()
 		for id, s := range sv.sessions {
 			s.mu.RLock()
 			idle := time.Since(s.lastAccess)
 			s.mu.RUnlock()
 			if idle > 30*time.Minute {
-				s.t.Drop()
-				s.cleanupSubtitleFiles()
-				sv.removeSessionData(s.t)
+				toReap = append(toReap, reapEntry{id: id, s: s, idle: idle})
 				delete(sv.sessions, id)
-				log.Printf("[reap] dropped idle session %s (idle %v)", id, idle.Round(time.Second))
 			}
 		}
 		sv.mu.Unlock()
+
+		for _, entry := range toReap {
+			go func() {
+				entry.s.t.Drop()
+				sv.removeSessionData(entry.s.t)
+				entry.s.cleanupSubtitleFiles()
+				log.Printf("[reap] dropped idle session %s (idle %v)", entry.id, entry.idle.Round(time.Second))
+			}()
+		}
 	}
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+// localIP returns the first non-loopback IPv4 address found on this
+// machine's network interfaces, so the startup banner below prints a
+// URL another device on the LAN can actually reach — unlike 0.0.0.0,
+// which is what the listener itself binds to (every interface) but
+// isn't a dialable address from anywhere else. If more than one
+// interface is up (e.g. both Ethernet and Wi-Fi, or a VPN adapter like
+// Radmin), this takes whichever one the OS lists first rather than
+// trying to guess the "right" one. Falls back to "localhost" if nothing
+// suitable is found.
+func localIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "localhost"
+	}
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok || ipNet.IP.IsLoopback() {
+			continue
+		}
+		if ip4 := ipNet.IP.To4(); ip4 != nil {
+			return ip4.String()
+		}
+	}
+	return "localhost"
+}
+
 func main() {
 	port := flag.Int("port", 7878, "port to listen on")
 	dataDir := flag.String("data", filepath.Join(os.TempDir(), "anistream-server"), "directory for downloaded torrent data")
 	readaheadBytes := flag.Int64("readahead-bytes", 10*1024*1024, "per-stream torrent read-ahead in bytes (lower this on memory-constrained servers, e.g. a Raspberry Pi)")
-	uploadLimitKBps := flag.Int("upload-limit-kbps", 0, "cap upload/seeding bandwidth in KB/s (0 = unlimited)")
+	uploadLimitKBps := flag.Int("upload-limit-kbps", 0, "cap upload/seeding bandwidth in KB/s (0 = unlimited, negative = disable uploading entirely)")
+	downloadLimitKBps := flag.Int("download-limit-kbps", 0, "cap download bandwidth in KB/s (0 = unlimited)")
+	var uploadMessage = ""
+	var downloadMessage = "unlimited"
 	flag.Parse()
 
 	if err := os.MkdirAll(*dataDir, 0o755); err != nil {
@@ -837,12 +950,20 @@ func main() {
 	cfg := torrent.NewDefaultClientConfig()
 	cfg.DataDir = *dataDir
 	// Keep seeding so the swarm stays healthy after we finish downloading.
-	cfg.NoUpload = false
-	if *uploadLimitKBps > 0 {
-		// Burst is left at 0 — ClientConfig.UploadRateLimiter's own doc
-		// comment says anacrolix/torrent will pick a chunk-sized burst
-		// itself in that case, rather than needing one guessed here.
+	switch {
+	case *uploadLimitKBps < 0:
+		cfg.NoUpload = true
+		uploadMessage = "disabled"
+	case *uploadLimitKBps > 0:
 		cfg.UploadRateLimiter = rate.NewLimiter(rate.Limit(*uploadLimitKBps*1024), 0)
+		uploadMessage = fmt.Sprintf("%s Kb/s", uploadLimitKBps)
+	default:
+		cfg.NoUpload = false // unchanged — keep seeding, unbounded
+		uploadMessage = "unlimited"
+	}
+	if *downloadLimitKBps > 0 {
+		cfg.DownloadRateLimiter = rate.NewLimiter(rate.Limit(*downloadLimitKBps*1024), 0)
+		downloadMessage = fmt.Sprintf("%s Kb/s", downloadLimitKBps)
 	}
 
 	client, err := torrent.NewClient(cfg)
@@ -867,7 +988,9 @@ func main() {
 	go server.reap()
 
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("AniStream Server  listening on  http://0.0.0.0%s", addr)
+	log.Printf("AniStream Server  listening on  http://%s:%d", localIP(), *port)
 	log.Printf("Data directory:   %s", *dataDir)
+	log.Printf("Upload: %s", uploadMessage)
+	log.Printf("Download: %s", downloadMessage)
 	log.Fatal(http.ListenAndServe(addr, server))
 }
