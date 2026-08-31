@@ -305,10 +305,7 @@ class AnilistQueryService {
     );
     return _cachedQuery(
       AnilistQueries.mediaByExternalId,
-      {
-        if (anilistId != null) 'id': anilistId,
-        if (idMal != null) 'idMal': idMal,
-      },
+      {'id': anilistId, 'idMal': idMal},
       (data) {
         final media = data['Media'] as Map<String, dynamic>?;
         return media != null ? Anime.fromJson(media) : null;

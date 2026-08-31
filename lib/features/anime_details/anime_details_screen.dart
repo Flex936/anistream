@@ -59,10 +59,25 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     return widget.anime.episodes ?? 12;
   }
 
-  Future<List<Torrent>> _futureFor(int ep) => _torrentFutures.putIfAbsent(
-    ep,
-    () => _scraper.fetchTorrents(widget.anime, ep),
-  );
+  /// Returns the memoized search Future for [ep], or forces a brand-new
+  /// one when [forceRefresh] is true — overwriting whatever entry already
+  /// sits in [_torrentFutures] rather than reusing it. A completed Future
+  /// can only ever resolve once, so without this a retry after a
+  /// failed/empty search would just replay the same already-settled
+  /// error/empty result forever within this screen instance.
+  /// [TorrentScraperService]'s own TTL cache only ever stores a
+  /// successful, non-empty result, so a forced refetch here — only ever
+  /// reachable from a state where that never happened — always reaches
+  /// the network fresh.
+  Future<List<Torrent>> _futureFor(int ep, {bool forceRefresh = false}) {
+    if (forceRefresh) {
+      return _torrentFutures[ep] = _scraper.fetchTorrents(widget.anime, ep);
+    }
+    return _torrentFutures.putIfAbsent(
+      ep,
+      () => _scraper.fetchTorrents(widget.anime, ep),
+    );
+  }
 
   /// Tap entry point for an episode row. With auto-torrent-selection off,
   /// this always opens [TorrentSearchModal]. With it on, it silently
@@ -128,7 +143,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   /// already settled by the time this is called (e.g.
   /// [_autoSelectTopTorrentAndStream]'s fallback path), so the modal
   /// never triggers a second network request for a search that already
-  /// ran.
+  /// ran. [TorrentSearchModal]'s own retry button re-enters `_futureFor`
+  /// with `forceRefresh: true` for a genuinely fresh search, independent
+  /// of whichever future this call originally opened it with.
   ///
   /// Awaits the modal's own pop result rather than handing it a callback
   /// that pops and immediately pushes TheaterScreen: [TorrentSearchModal]
@@ -147,6 +164,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
       context: context,
       episodeNumber: ep,
       torrentsFuture: _futureFor(ep),
+      onRetry: () => _futureFor(ep, forceRefresh: true),
       uiPerformanceMode: uiPerformanceMode,
     );
 
