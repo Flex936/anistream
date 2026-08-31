@@ -33,6 +33,7 @@ The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, L
 | `allTimePopular` | Home screen — "All Time Popular" |
 | `search` | Search screen, and the nav bar's instant-results dropdown |
 | `currentlyAiring` | Schedule screen |
+| `mediaByExternalId` | Browser-extension deep link (ARCHITECTURE.md § 8) — resolves an AniList or MyAnimeList id into a full `Anime` |
 | `userWatchlistPaged` | Watchlist screen (per-tab: CURRENT/PLANNING/COMPLETED) |
 | `viewerId` | Resolves the logged-in user's numeric AniList ID once per session |
 | `mediaListEntryStatus` / `mediaProgress` | Reads the viewer's existing status/progress for one anime |
@@ -47,6 +48,7 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 
 - For `trending`/`seasonPopular`/`allTimePopular`/`search`/`currentlyAiring`, this is passed server-side as AniList's `genre_not_in` GraphQL variable.
 - For `userWatchlistPaged`, AniList's `mediaList` field has no genre filter, so filtering happens **client-side** — after decoding, by inspecting each entry's `media.genres` and dropping any that intersect the banned set.
+- `mediaByExternalId` applies no genre filter at all, deliberately — the caller already named one specific title by identity (a browser-extension deep link), not a browsable list, so hiding it would be surprising rather than protective.
 
 **Auto-tracking** (`AnilistTrackerService`):
 
@@ -158,4 +160,4 @@ The last two are queried purely to catch more of a swarm than the trackers actua
 **Known caveat:** these five trackers have no guaranteed relationship to whatever trackers a given release's original uploader actually embedded — a swarm relying purely on DHT, or on trackers outside this list, won't be reflected here even if it has real seeders. nyaa.si's own displayed seeder count doesn't have this problem, since it reads whatever the specific upload it hosts actually declares — this is a deliberate trade-off (avoids hitting Nyaa at all), not a bug.
 
 ---
-*Last reviewed against the codebase: 2026-08-26. Added a query, a data source, or a cache? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-08-30. Added a query, a data source, or a cache? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

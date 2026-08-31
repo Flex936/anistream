@@ -39,6 +39,7 @@ lib/
 ├── app.dart                   # MaterialApp root: Dpad.wrap() > InputModeScope > SettingsScope > routed content
 │
 ├── core/                      # App-wide infrastructure. Nothing here is feature-specific.
+│   ├── deep_link/                  deep_link_server.dart
 │   ├── extensions/                build_context_extensions.dart   (Breakpoints, ResponsiveContext)
 │   ├── input/                      input_mode_controller.dart, input_mode_scope.dart
 │   ├── logging/                    app_logger.dart
@@ -216,6 +217,27 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
   - **Still open:** not yet filed upstream against `media-kit/media-kit` — worth doing regardless of the mitigation, since the confirmed root cause lives entirely in the plugin's native Linux rendering path and this codebase can't fix it directly.
   - **TsukiHime internal-ID lookups aren't cached per session.** `TsukihimeApiService.resolveInternalId` re-resolves the AniList ID → internal ID mapping on every `fetchTorrents` call — `_TorrentSearchCache` (`torrent_scraper_service.dart`) only caches the final, per-episode torrent list, not this intermediate lookup. Binge-watching one show re-runs it once per episode. Flagged in-code as a TODO; not yet implemented.
   - **Batch-torrent episode selection still pulls in a sliver of the adjacent episode(s) — expected, not a regression of the whole-batch-download fix.** BitTorrent's atomic download unit is the piece, not the file — pieces are laid out across a multi-file torrent's whole concatenated byte stream (BEP 0003), so a piece straddling two episode files can't be completed for one without also pulling in the other's overlapping bytes. `session.activate()` (`main.go`) sets every file except the selected one to `PiecePriorityNone`, but the one or two pieces shared with its immediate neighbors still download regardless, since the torrent client needs them to complete the selected file. Bounded to roughly one piece's worth per side (a few MiB to several dozen, depending on the torrent's own piece size) — not the full neighboring episode, and distinct from the earlier bug where the whole batch downloaded, which the metadata-resolve-time deprioritization in `session.run()` already fixed. Not fixable client-side: avoiding it entirely would require the torrent to have been authored with episode-aligned piece boundaries in the first place, which is outside this app's control.
+
+## 8. Browser Extension Integration
+
+A separate, small companion codebase (its own `manifest.json`/`content.js`/`background.js`) injects an "Open in AniStream" button on AniList and MyAnimeList anime pages. The button never carries anime metadata — the extension only knows which site it's on and the numeric id from the page URL (`anilist.co/anime/<id>`, `myanimelist.net/anime/<id>`) — resolving that id into a real `Anime` and opening it is entirely this app's responsibility.
+
+```text
+Extension button click
+  → GET http://127.0.0.1:53211/open?source=anilist|mal&id=<n>
+  → DeepLinkServer (core/deep_link/deep_link_server.dart)
+      validates the request, responds 200/400 immediately,
+      brings the desktop window to front, stores the request
+  → AppShell (features/shell/app_shell.dart)
+      resolves the id via AnilistQueryService.getAnimeByExternalId
+      (API.md § 2), then reuses the same _handleSelectAnime() every
+      card/carousel already calls to reach AnimeDetailsScreen
+```
+
+- `DeepLinkServer` is a `ChangeNotifier` singleton (`.instance`), started once from `main.dart`'s `_bootstrap()`, desktop-only — Chrome/Edge/Brave extensions have no equivalent on the mobile platforms this app also targets.
+- Binds `127.0.0.1` only (`InternetAddress.loopbackIPv4`), matching the extension's own same-device-only design. No auth: a request can't reach this port from anywhere but the same machine.
+- A bind failure (most likely a second AniStream instance already holding the port) is logged and swallowed, not surfaced as a crash — that instance simply never receives deep links.
+- `pending` (not a bare broadcast stream) is what lets a request that arrives before `AppShell` has mounted still be picked up — `AppShell` checks it directly once on `initState`, not only future notifications.
 
 ---
 *Last reviewed against the codebase: 2026-08-30. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*

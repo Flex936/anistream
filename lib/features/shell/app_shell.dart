@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:dpad/dpad.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/deep_link/deep_link_server.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_auth_service.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/widgets/mouse_back_forward_listener.dart';
+import '../../shared/widgets/toast.dart';
 import '../anime_details/anime_details_screen.dart';
 import '../home/home_screen.dart';
 import '../schedule/scheduled_screen.dart';
@@ -53,6 +55,18 @@ class _AppShellState extends State<AppShell> {
     );
     _nav.addListener(_focusNewPage);
     unawaited(_restoreSession());
+
+    DeepLinkServer.instance.addListener(_handleDeepLinkChanged);
+    // Covers a request that arrived in the brief window between
+    // DeepLinkServer.start() binding the socket (main.dart) and this
+    // State mounting — addListener above only catches requests from
+    // this point forward, so anything already sitting in `pending` needs
+    // an explicit check here too.
+    if (DeepLinkServer.instance.pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _handleDeepLinkChanged(),
+      );
+    }
   }
 
   // Runs after every navigation, once the new page's widgets have
@@ -69,6 +83,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _nav.removeListener(_focusNewPage);
+    DeepLinkServer.instance.removeListener(_handleDeepLinkChanged);
     _bodyFocusScope.dispose();
     _nav.dispose();
     super.dispose();
@@ -76,6 +91,65 @@ class _AppShellState extends State<AppShell> {
 
   void _handleSelectAnime(Anime anime) {
     _nav.navigateTo(AnimeDetailsScreen(anime: anime, onBack: _nav.goBack));
+  }
+
+  // Fires on every DeepLinkServer.instance change — a fresh `/open`
+  // request notifying, or the synthetic post-frame check in initState
+  // above for one that arrived before this State existed. Reads and
+  // immediately consumes `pending` so a second listener (there's only
+  // ever one today, but nothing structurally prevents more) can never
+  // double-handle the same request.
+  void _handleDeepLinkChanged() {
+    final request = DeepLinkServer.instance.pending;
+    if (request == null) return;
+    DeepLinkServer.instance.consume();
+    unawaited(_resolveAndOpenDeepLink(request));
+  }
+
+  /// Resolves [request]'s bare (source, id) pair into a real [Anime] via
+  /// AniList, then reuses [_handleSelectAnime] — the exact same call
+  /// every card/carousel in the app already makes — so a deep-linked
+  /// anime opens with no special-cased navigation of its own: same
+  /// back-history, same nav bar, same everything.
+  Future<void> _resolveAndOpenDeepLink(DeepLinkRequest request) async {
+    final api = AnilistQueryService();
+    try {
+      final anime = await api.getAnimeByExternalId(
+        anilistId: request.source == DeepLinkSource.anilist
+            ? request.externalId
+            : null,
+        idMal: request.source == DeepLinkSource.mal
+            ? request.externalId
+            : null,
+      );
+      if (!mounted) return;
+
+      if (anime == null) {
+        AppleSnackBar.show(
+          context: context,
+          message: "Couldn't find that title on AniList.",
+          icon: Icons.search_off_rounded,
+          iconColor: AppPalette.statusCancelled,
+        );
+        return;
+      }
+
+      _handleSelectAnime(anime);
+    } catch (e) {
+      if (mounted) {
+        final message = e is AnilistException
+            ? e.message
+            : 'Could not open that title — check your connection.';
+        AppleSnackBar.show(
+          context: context,
+          message: message,
+          icon: Icons.wifi_off_rounded,
+          iconColor: AppPalette.statusCancelled,
+        );
+      }
+    } finally {
+      api.dispose();
+    }
   }
 
   void _handleTextChange(String query) => setState(() => _searchQuery = query);

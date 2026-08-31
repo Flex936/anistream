@@ -27,9 +27,10 @@ class _AnilistCacheEntry {
 
 /// Tiny in-memory TTL cache for read-only, non-personalized AniList
 /// queries (trending / seasonal / all-time popular / currently airing /
-/// search). Keyed by query string + JSON-encoded variables, so distinct
-/// filter combinations (different search term, different minScore, etc.)
-/// get distinct entries automatically.
+/// search / external-id lookup). Keyed by query string + JSON-encoded
+/// variables, so distinct filter combinations (different search term,
+/// different minScore, different external id, etc.) get distinct entries
+/// automatically.
 ///
 /// `NavigationController.goHome()` builds a brand-new `HomeScreen` (and a
 /// brand-new `AnilistQueryService`) every time the user navigates Home →
@@ -281,6 +282,38 @@ class AnilistQueryService {
       'currentYear': DateTime.now().year,
       'bannedGenres': _bannedGenres,
     }, _animeListFromPage);
+  }
+
+  /// Resolves a single [Anime] by AniList id or MyAnimeList id — exactly
+  /// one of [anilistId]/[idMal] should be non-null. The browser-extension
+  /// deep-link flow (ARCHITECTURE.md § 8) is the only caller: the
+  /// extension knows only which site it's on and the numeric id from the
+  /// page URL, never a resolved AniList id.
+  ///
+  /// Deliberately does NOT apply `_bannedGenres` the way every query
+  /// above does — the caller already named one specific title by
+  /// identity, not a browsable list, so silently hiding it behind
+  /// "Filter Ecchi" would be surprising rather than protective.
+  ///
+  /// Returns null if AniList has no matching entry (an invalid id, or a
+  /// MAL id AniList hasn't cross-referenced) rather than throwing —
+  /// mirrors [getMediaProgress]'s "absence is a valid answer" contract.
+  Future<Anime?> getAnimeByExternalId({int? anilistId, int? idMal}) {
+    assert(
+      (anilistId == null) != (idMal == null),
+      'Provide exactly one of anilistId or idMal',
+    );
+    return _cachedQuery(
+      AnilistQueries.mediaByExternalId,
+      {
+        if (anilistId != null) 'id': anilistId,
+        if (idMal != null) 'idMal': idMal,
+      },
+      (data) {
+        final media = data['Media'] as Map<String, dynamic>?;
+        return media != null ? Anime.fromJson(media) : null;
+      },
+    );
   }
 
   Future<List<Anime>> searchAnime(
