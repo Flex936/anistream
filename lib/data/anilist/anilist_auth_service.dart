@@ -14,6 +14,13 @@ class AnilistAuthService {
 
   final _prefs = SharedPreferencesAsync();
 
+  // Set only while a login() call is actually awaiting the browser/loopback
+  // round-trip, cleared in login()'s own `finally` block. This is what
+  // lets cancel() reach into and unblock a login() call already in
+  // progress from a completely different call stack — e.g. AppShell
+  // retapping the login button before a previous attempt has resolved.
+  Completer<String?>? _pendingCompleter;
+
   Future<String?> getStoredToken() async {
     return await _prefs.getString(_prefKey);
   }
@@ -22,7 +29,27 @@ class AnilistAuthService {
     await _prefs.remove(_prefKey);
   }
 
+  /// Resolves an in-flight login() call to `null` immediately instead of
+  /// leaving it to wait out its own 5-minute timeout. No-ops when nothing
+  /// is in progress.
+  void cancel() {
+    final completer = _pendingCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete(null);
+    }
+  }
+
   Future<String?> login() async {
+    // A stale attempt left running — the browser tab was closed, AniList
+    // denied the request, or the user just gave up — would otherwise hold
+    // _pendingCompleter for its own full 5-minute timeout, so a second
+    // login() call would have nothing to distinguish "actually in
+    // progress" from "abandoned ages ago." Cancelling first rather than
+    // refusing to proceed is what keeps retapping the login button always
+    // working immediately instead of going unresponsive until the old
+    // attempt times out on its own.
+    cancel();
+
     HttpServer server;
     try {
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, _port);
@@ -38,10 +65,8 @@ class AnilistAuthService {
     await launchUrl(authUri, mode: LaunchMode.externalApplication);
 
     final tokenCompleter = Completer<String?>();
+    _pendingCompleter = tokenCompleter;
 
-    // Captured into a local so it can be canceled explicitly in `finally`
-    // below (alongside `server.close`) rather than relying on the
-    // server's own teardown to implicitly stop delivery.
     final serverSub = server.listen((HttpRequest req) async {
       switch (req.uri.path) {
         case _callbackPath when req.method == 'GET':
@@ -80,6 +105,13 @@ class AnilistAuthService {
     } finally {
       await serverSub.cancel();
       await server.close(force: true);
+      // Only clears the field if it's still pointing at this exact call's
+      // completer — a cancel() that raced against a brand-new login() call
+      // (see the guard at the top of this method) must not clobber that
+      // new call's own _pendingCompleter.
+      if (identical(_pendingCompleter, tokenCompleter)) {
+        _pendingCompleter = null;
+      }
     }
 
     if (token != null) {

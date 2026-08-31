@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../../core/deep_link/deep_link_server.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
-import '../../data/anilist/anilist_auth_service.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/widgets/mouse_back_forward_listener.dart';
@@ -17,6 +16,7 @@ import '../schedule/scheduled_screen.dart';
 import '../search/search_results_screen.dart';
 import '../settings/settings_menu.dart';
 import '../watchlist/watchlist_screen.dart';
+import 'controllers/anilist_login_controller.dart';
 import 'controllers/navigation_controller.dart';
 import 'widgets/navbar.dart';
 
@@ -28,7 +28,7 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  final _auth = AnilistAuthService();
+  late final AnilistLoginController _loginController;
   late final NavigationController _nav;
 
   // Dedicated focus scope for the routed page content, kept separate from
@@ -43,13 +43,15 @@ class _AppShellState extends State<AppShell> {
   );
 
   bool _isLoggedIn = false;
-  bool _loginBusy = false;
   String _searchQuery = '';
   bool _isScrolled = false;
 
   @override
   void initState() {
     super.initState();
+    _loginController = AnilistLoginController();
+    _loginController.addListener(_handleLoginControllerChanged);
+
     _nav = NavigationController(
       buildHome: () => HomeScreen(onSelectAnime: _handleSelectAnime),
     );
@@ -80,10 +82,19 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  // Rebuilds the navbar so its login button reflects
+  // AnilistLoginController.isInProgress — the spinner appearing/clearing,
+  // and the tap target switching between "start login" and "cancel".
+  void _handleLoginControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _nav.removeListener(_focusNewPage);
     DeepLinkServer.instance.removeListener(_handleDeepLinkChanged);
+    _loginController.removeListener(_handleLoginControllerChanged);
+    _loginController.dispose();
     _bodyFocusScope.dispose();
     _nav.dispose();
     super.dispose();
@@ -171,7 +182,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _restoreSession() async {
-    final token = await _auth.getStoredToken();
+    final token = await _loginController.getStoredToken();
     if (token != null && mounted) {
       AnilistQueryService.setToken(token);
       setState(() => _isLoggedIn = true);
@@ -179,10 +190,8 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _handleLogin() async {
-    if (_loginBusy) return;
-
     if (_isLoggedIn) {
-      await _auth.logout();
+      await _loginController.logout();
       AnilistQueryService.clearToken();
       if (!mounted) return;
       setState(() => _isLoggedIn = false);
@@ -190,13 +199,29 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
-    setState(() => _loginBusy = true);
+    // A login is already waiting on the browser round-trip — this tap is
+    // the cancel action (see navbar.dart's _UserButton), not a request
+    // to start a second one. The still-pending call below (from whichever
+    // tap actually started it) picks up the `null` this produces and
+    // shows the "didn't complete" snackbar itself.
+    if (_loginController.isInProgress) {
+      _loginController.cancel();
+      return;
+    }
+
     try {
-      final token = await _auth.login();
+      final token = await _loginController.login();
       if (!mounted) return;
       if (token != null) {
         AnilistQueryService.setToken(token);
         setState(() => _isLoggedIn = true);
+      } else {
+        AppleSnackBar.show(
+          context: context,
+          message: "AniList login didn't complete — you can try again.",
+          icon: Icons.info_outline_rounded,
+          iconColor: AppPalette.textMuted,
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -206,8 +231,6 @@ class _AppShellState extends State<AppShell> {
           backgroundColor: AppPalette.statusCancelled,
         ),
       );
-    } finally {
-      if (mounted) setState(() => _loginBusy = false);
     }
   }
 
@@ -234,6 +257,7 @@ class _AppShellState extends State<AppShell> {
               appBar: AniStreamNavBar(
                 searchQuery: _searchQuery,
                 isLoggedIn: _isLoggedIn,
+                isLoginBusy: _loginController.isInProgress,
                 isScrolled: _isScrolled,
                 uiPerformanceMode: uiPerformanceMode,
                 onHome: _handleGoHome,
