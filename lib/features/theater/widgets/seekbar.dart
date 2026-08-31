@@ -49,6 +49,31 @@ class _SeekbarState extends State<Seekbar> {
   late final FocusNode _focusNode;
   static const Duration _keyboardSeekStep = Duration(seconds: 10);
 
+  // Hover/focus tooltip sizing — the tooltip box is measured to fit
+  // whichever of its two possible lines (chapter title, timestamp) is
+  // wider, clamped to this floor so a bare timestamp with no chapter
+  // still gets the same minimum width it always has.
+  static const double _kTooltipMinWidth = 60.0;
+  static const double _kTooltipHPad = 10.0;
+  static const double _kTooltipVPad = 4.0;
+  static const double _kTooltipLineGap = 2.0;
+
+  static const TextStyle _kTooltipTimeStyle = TextStyle(
+    color: AppPalette.white,
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  // Primary/bold rather than the timestamp's plain white, so the two
+  // lines read as distinct pieces of information (which chapter, versus
+  // what time) instead of blurring together.
+  static const TextStyle _kTooltipChapterStyle = TextStyle(
+    color: AppPalette.primary,
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -67,6 +92,50 @@ class _SeekbarState extends State<Seekbar> {
     final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     if (hours > 0) return '$hours:$minutes:$seconds';
     return '$minutes:$seconds';
+  }
+
+  /// The chapter (if any) containing [position], for the hover/focus
+  /// tooltip's title line. Any chapter with a non-empty title counts —
+  /// not just skippable ones (OP/ED/preview) — since this is purely
+  /// informational, unlike SkipChip's own chapter check, which only
+  /// cares about chapters it can act on.
+  Chapter? _chapterAt(Duration position) {
+    for (final c in widget.chapters) {
+      if (c.title.trim().isEmpty) continue;
+      if (position >= c.start && position < c.end) return c;
+    }
+    return null;
+  }
+
+  /// Widest of [timeText] and [chapterTitle] (if present) at their
+  /// respective tooltip styles — the same "measure it, don't guess"
+  /// approach HeroHeaderDelegate uses for its status pill — so the
+  /// tooltip sizes itself to whatever it's actually showing instead of
+  /// assuming a bare timestamp.
+  double _measureTooltipContentWidth(
+    BuildContext context,
+    String timeText,
+    String? chapterTitle,
+  ) {
+    double widest = _measureTextWidth(context, timeText, _kTooltipTimeStyle);
+    if (chapterTitle != null) {
+      final chapterWidth = _measureTextWidth(
+        context,
+        chapterTitle,
+        _kTooltipChapterStyle,
+      );
+      if (chapterWidth > widest) widest = chapterWidth;
+    }
+    return widest;
+  }
+
+  double _measureTextWidth(BuildContext context, String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout();
+    return painter.width;
   }
 
   void _updateHover(PointerEvent event, double maxWidth) {
@@ -161,7 +230,33 @@ class _SeekbarState extends State<Seekbar> {
             final double trackHeight = isExpanded ? 8.0 : 4.0;
             final double thumbSize = isExpanded ? 16.0 : 0.0;
 
-            const tooltipWidth = 60.0;
+            // The tooltip shows whichever position is "active" right now
+            // — the live hover/drag position, or (D-Pad-focused with
+            // neither in progress) the current playhead — and whichever
+            // chapter (if any) that position falls inside.
+            final Duration displayedDuration =
+                showDpadFocus && !_isHovering && !_isDragging
+                ? widget.position
+                : hoverDuration;
+            final Chapter? displayedChapter = _chapterAt(displayedDuration);
+            final String displayedTimeText = _formatDuration(displayedDuration);
+
+            final double tooltipContentWidth =
+                _measureTooltipContentWidth(
+                  context,
+                  displayedTimeText,
+                  displayedChapter?.title,
+                ) +
+                4;
+            final double maxTooltipWidth = maxWidth > _kTooltipMinWidth
+                ? maxWidth
+                : _kTooltipMinWidth;
+            final double tooltipWidth =
+                (tooltipContentWidth + _kTooltipHPad * 2).clamp(
+                  _kTooltipMinWidth,
+                  maxTooltipWidth,
+                );
+
             double tooltipLeft = _hoverX - (tooltipWidth / 2);
             if (tooltipLeft < 0) tooltipLeft = 0;
             if (tooltipLeft > maxWidth - tooltipWidth) {
@@ -309,17 +404,25 @@ class _SeekbarState extends State<Seekbar> {
                       ),
                     ),
 
-                    // 7. Hover/focus tooltip — falls back to the current
+                    // 7. Hover/focus tooltip — shows the active chapter's
+                    // title (if the displayed position falls inside one)
+                    // above the timestamp, falling back to the current
                     // position (not the stale hover position, which
                     // would default to 0:00) when D-Pad-focused without
-                    // the mouse ever having moved.
+                    // the mouse ever having moved. Sized to whichever
+                    // line is wider (see _measureTooltipContentWidth)
+                    // rather than a fixed width that only ever fit a
+                    // bare timestamp.
                     if (isExpanded)
                       Positioned(
-                        top: -10,
+                        top: displayedChapter != null ? -26 : -10,
                         left: tooltipLeft,
                         child: Container(
                           width: tooltipWidth,
-                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: _kTooltipHPad,
+                            vertical: _kTooltipVPad,
+                          ),
                           decoration: BoxDecoration(
                             color: AppPalette.black.withValues(
                               alpha: widget.uiPerformanceMode ? 0.95 : 0.75,
@@ -330,18 +433,21 @@ class _SeekbarState extends State<Seekbar> {
                             ),
                           ),
                           alignment: Alignment.center,
-                          child: Text(
-                            _formatDuration(
-                              showDpadFocus && !_isHovering && !_isDragging
-                                  ? widget.position
-                                  : hoverDuration,
-                            ),
-                            style: const TextStyle(
-                              color: AppPalette.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              fontFeatures: [FontFeature.tabularFigures()],
-                            ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (displayedChapter != null) ...[
+                                Text(
+                                  displayedChapter.title,
+                                  style: _kTooltipChapterStyle,
+                                ),
+                                const SizedBox(height: _kTooltipLineGap),
+                              ],
+                              Text(
+                                displayedTimeText,
+                                style: _kTooltipTimeStyle,
+                              ),
+                            ],
                           ),
                         ),
                       ),
