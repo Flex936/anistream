@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
@@ -32,6 +33,13 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
   bool _isListView = false;
 
+  // Persisted the same way TheaterControls/MobileTheaterControls persist
+  // volume ('theater_volume') — a direct SharedPreferencesAsync key rather
+  // than a field on AppSettings, since this is a per-screen UI preference,
+  // not something exposed in the Settings menu.
+  static const String _kListViewPrefKey = 'watchlist_list_view';
+  final _prefs = SharedPreferencesAsync();
+
   // A ValueNotifier rather than plain State, so hovering a single card in
   // a 36-item grid only rebuilds the small ValueListenableBuilder wrapping
   // the background image below, not the whole screen (including the
@@ -56,6 +64,23 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     _controller = WatchlistController();
     _scrollController.addListener(_onScroll);
     unawaited(_controller.loadInitial());
+    // initState can't be async — _loadListViewPreference() returns
+    // Future<void>, so the fire-and-forget intent is made explicit
+    // instead of silently dropped (unawaited_futures). The method itself
+    // guards its own setState with a `mounted` check.
+    unawaited(_loadListViewPreference());
+  }
+
+  Future<void> _loadListViewPreference() async {
+    final saved = await _prefs.getBool(_kListViewPrefKey);
+    if (mounted && saved != null) {
+      setState(() => _isListView = saved);
+    }
+  }
+
+  void _setListView(bool value) {
+    setState(() => _isListView = value);
+    unawaited(_prefs.setBool(_kListViewPrefKey, value));
   }
 
   @override
@@ -252,8 +277,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                             ? AppPalette.primary
                                             : AppPalette.textMuted,
                                       ),
-                                      onPressed: () =>
-                                          setState(() => _isListView = false),
+                                      onPressed: () => _setListView(false),
                                     ),
                                     IconButton(
                                       icon: Icon(
@@ -263,8 +287,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                             ? AppPalette.primary
                                             : AppPalette.textMuted,
                                       ),
-                                      onPressed: () =>
-                                          setState(() => _isListView = true),
+                                      onPressed: () => _setListView(true),
                                     ),
                                   ],
                                 ),
