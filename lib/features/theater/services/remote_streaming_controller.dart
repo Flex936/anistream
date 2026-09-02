@@ -102,10 +102,6 @@ class RemoteStreamingController extends BaseStreamingController {
       'StreamingController',
       'Adding magnet, requested episode: $episodeNumber',
     );
-    AppLogger.i(
-      'StreamingController',
-      'Batch torrent detected — ${_batchFiles.length} files',
-    );
     try {
       final resp = await _http
           .post(
@@ -416,6 +412,10 @@ class RemoteStreamingController extends BaseStreamingController {
                 guessedEpisode: meta.episode == -1 ? null : meta.episode,
               );
             }).toList();
+            AppLogger.i(
+              'RemoteStreamingController',
+              'Batch torrent detected — ${_batchFiles.length} files',
+            );
           }
         // else: server sent the exact same list — _batchFiles is left
         // untouched (same reference), which also lets the change-check
