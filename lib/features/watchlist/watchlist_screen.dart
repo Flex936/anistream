@@ -313,6 +313,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                 groupValue: _controller.activeStatus,
                                 onValueChanged: _controller.switchTab,
                               ),
+                              // Applies globally across all three tabs —
+                              // see WatchlistController.changeSort's own
+                              // doc comment for why an inactive tab's
+                              // pagination is reset too, not just the
+                              // active one.
+                              _SortDropdown(
+                                value: _controller.sortOption,
+                                onChanged: (option) =>
+                                    unawaited(_controller.changeSort(option)),
+                              ),
                             ],
                           ),
                         ],
@@ -513,6 +523,53 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             ),
           );
         }, childCount: activeEntries.length),
+      ),
+    );
+  }
+}
+
+/// Sort-order dropdown for the Watchlist toolbar, styled to match the
+/// grid/list toggle it sits next to. Applies globally across all three
+/// tabs via `WatchlistController.changeSort` — not scoped to whichever
+/// tab happens to be active when it's changed.
+class _SortDropdown extends StatelessWidget {
+  final WatchlistSortOption value;
+  final ValueChanged<WatchlistSortOption> onChanged;
+
+  const _SortDropdown({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppPalette.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppPalette.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<WatchlistSortOption>(
+          value: value,
+          isDense: true,
+          dropdownColor: AppPalette.surface,
+          icon: const Icon(
+            Icons.expand_more_rounded,
+            color: AppPalette.textMuted,
+            size: 20,
+          ),
+          style: const TextStyle(
+            color: AppPalette.textMain,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          items: [
+            for (final option in WatchlistSortOption.values)
+              DropdownMenuItem(value: option, child: Text(option.label)),
+          ],
+          onChanged: (option) {
+            if (option != null) onChanged(option);
+          },
+        ),
       ),
     );
   }

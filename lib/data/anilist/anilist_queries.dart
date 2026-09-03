@@ -45,10 +45,10 @@ abstract final class AnilistQueries {
 
   static const String userWatchlistPaged =
       '''
-    query (\$userId: Int, \$status: MediaListStatus, \$page: Int, \$perPage: Int) {
+    query (\$userId: Int, \$status: MediaListStatus, \$page: Int, \$perPage: Int, \$sort: [MediaListSort]) {
       Page(page: \$page, perPage: \$perPage) {
         pageInfo { hasNextPage }
-        mediaList(userId: \$userId, type: ANIME, status: \$status, sort: [MEDIA_TITLE_ROMAJI, MEDIA_ID_DESC]) {
+        mediaList(userId: \$userId, type: ANIME, status: \$status, sort: \$sort) {
           progress
           media { ${AnilistFragments.mediaCore} genres }
         }
