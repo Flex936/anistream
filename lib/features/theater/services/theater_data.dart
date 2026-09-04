@@ -40,13 +40,15 @@ bool _isChapterSkippable(String title) {
   final t = title.toLowerCase().trim();
 
   // 1. Do not skip story segments (release groups often name the Prologue "Intro")
-  if (t == 'intro' || t == 'avant' || t == 'prologue' || t == 'epilogue') {
+  if (t == 'avant' || t == 'prologue' || t == 'epilogue') {
     return false;
   }
 
   // 2. Do skip theme songs (strict equality for short codes to prevent false positives like "Operation" or "Wedding")
-  if (t == 'op' || t.contains('opening') || t == 'ncop') return true;
-  if (t == 'ed' || t.contains('ending') || t == 'nced') return true;
+  if (t == 'op' || t.contains('opening') || t.contains('intro') || t == 'ncop')
+    return true;
+  if (t == 'ed' || t.contains('ending') || t.contains('credits') || t == 'nced')
+    return true;
 
   // 3. Do skip next-episode previews
   if (t == 'pv' || t.contains('preview') || t.contains('next episode')) {
@@ -59,8 +61,10 @@ bool _isChapterSkippable(String title) {
 String _getSkipLabel(String title) {
   final t = title.toLowerCase().trim();
 
-  if (t == 'op' || t.contains('opening') || t == 'ncop') return 'Skip Opening';
-  if (t == 'ed' || t.contains('ending') || t == 'nced') return 'Skip Ending';
+  if (t == 'op' || t.contains('opening') || t.contains('intro') || t == 'ncop')
+    return 'Skip Opening';
+  if (t == 'ed' || t.contains('ending') || t.contains('credits') || t == 'nced')
+    return 'Skip Ending';
   if (t == 'pv' || t.contains('preview') || t.contains('next episode')) {
     return 'Skip Preview';
   }

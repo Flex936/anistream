@@ -97,6 +97,7 @@ Visual restraint, typographic rhythm, and motion quality, in the spirit of Apple
 - D-pad navigation is isolated to confirmed TV builds only. NEVER let TV focus logic bleed into standard Mobile/PC pointer/touch interactions — a connected keyboard, gamepad, or Bluetooth remote on Desktop, phone, or iOS is ordinary input there, never a TV signal.
 - Manage spatial navigation strictly via `FocusNode` and `FocusTraversalGroup` (in practice, via the `dpad` package's `DpadRegion`/`DpadFocusable`, which wrap these).
 - Display visual focus rings ONLY when `dpadModeActive` is true.
+- A route stacked on top of `AppShell` (`TheaterScreen`, `ExoTheaterScreen`, any dialog/bottom sheet on the same Navigator) must not leave the covered screen's `DpadFocusable`s Tab- or D-Pad-reachable — `MaterialPageRoute`'s default `maintainState` keeps it fully mounted underneath. `AppShell` enforces this by wrapping its `Scaffold` in `ExcludeFocus(excluding: !isCurrentRoute)`, keyed off `ModalRoute.of(context)?.isCurrent`.
 
 **How `dpadModeActive` is resolved** (`InputModeController`) — exactly one signal: a one-time platform check at boot (Android TV / Google TV "leanback" mode), sticky for the process lifetime — a TV's remote is its only input, so there's nothing to detect "switching away" from. Native bridge specifics (channel name, method, platform) live in [ARCHITECTURE.md](ARCHITECTURE.md) § 4.
 
@@ -144,4 +145,4 @@ These are documented as-is per the Living Documentation Rule — NEVER silently 
 *(Formerly tracked two items here — "blur sigma has no named tiers" and `anime_carousel.dart`'s `_NavArrow` bypassing `FrostedContainer` — both resolved via the `AppMaterials` tiers introduced in `core/theme/app_materials.dart`; see § 1.4. Removed from this list accordingly.)*
 
 ---
-*Last reviewed against the codebase: 2026-08-23. Added a palette color, a blur/radius/card-size value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-09-04. Added a palette color, a blur/radius/card-size value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

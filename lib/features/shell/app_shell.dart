@@ -154,8 +154,8 @@ class _AppShellState extends State<AppShell> {
         AppleSnackBar.show(
           context: context,
           message: message,
-          icon: Icons.wifi_off_rounded,
           iconColor: AppPalette.statusCancelled,
+          icon: Icons.wifi_off_rounded,
         );
       }
     } finally {
@@ -238,9 +238,25 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
+    // False the instant any route is pushed on top of AppShell's own
+    // route — TheaterScreen, ExoTheaterScreen, or a dialog/bottom sheet
+    // on the same (only) Navigator (SettingsMenu, TorrentSearchModal,
+    // SearchFilterPanel). AppShell is that route's direct page widget,
+    // so ModalRoute.of(context) here always resolves to it, and
+    // rebuilds this widget the instant coverage starts or ends
+    // (isCurrent is exposed through an InheritedWidget with its own
+    // updateShouldNotify).
+    final bool isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? true;
+
     return MouseBackForwardListener(
-      onBack: _nav.goBack,
-      onForward: _nav.goForward,
+      // Same gate as the ExcludeFocus below, applied to the mouse
+      // side-button listener instead of the focus tree — without it,
+      // pressing Back/Forward while a route sits on top of AppShell
+      // would silently mutate the hidden NavigationController's
+      // history, so backing out of that route later would land on a
+      // different screen than the one actually left.
+      onBack: isCurrentRoute ? _nav.goBack : null,
+      onForward: isCurrentRoute ? _nav.goForward : null,
       child: PopScope(
         canPop: !_nav.canGoBack,
         onPopInvokedWithResult: (bool didPop, dynamic result) {
@@ -251,66 +267,83 @@ class _AppShellState extends State<AppShell> {
         child: ListenableBuilder(
           listenable: _nav,
           builder: (context, _) {
-            return Scaffold(
-              backgroundColor: AppPalette.base,
-              extendBodyBehindAppBar: true,
-              appBar: AniStreamNavBar(
-                searchQuery: _searchQuery,
-                isLoggedIn: _isLoggedIn,
-                isLoginBusy: _loginController.isInProgress,
-                isScrolled: _isScrolled,
-                uiPerformanceMode: uiPerformanceMode,
-                onHome: _handleGoHome,
-                onSearch: _handleTextChange,
-                onSubmitted: _handleSubmit,
-                onSelectAnime: _handleSelectAnime,
-                onScheduled: () => _nav.navigateTo(
-                  ScheduledScreen(onSelectAnime: _handleSelectAnime),
+            // MaterialPageRoute's default maintainState keeps
+            // HomeScreen/AnimeDetailsScreen/the nav bar fully mounted
+            // underneath whatever's pushed on top of AppShell, not
+            // disposed — so without this, Tab (and dpad's own
+            // traversal) can still walk into a hidden AnimeCard/
+            // EpisodeTile/nav-bar control, and Select can still fire
+            // its onSelect/onToggle — exactly what opens a second
+            // AnimeDetailsScreen or a TorrentSearchModal on top of an
+            // already-playing TheaterScreen. Mirrors
+            // _buildControlsOverlay's own ExcludeFocus in
+            // theater_screen.dart, applied here at the route boundary
+            // instead of a controls-visibility boundary.
+            return ExcludeFocus(
+              excluding: !isCurrentRoute,
+              child: Scaffold(
+                backgroundColor: AppPalette.base,
+                extendBodyBehindAppBar: true,
+                appBar: AniStreamNavBar(
+                  searchQuery: _searchQuery,
+                  isLoggedIn: _isLoggedIn,
+                  isLoginBusy: _loginController.isInProgress,
+                  isScrolled: _isScrolled,
+                  uiPerformanceMode: uiPerformanceMode,
+                  onHome: _handleGoHome,
+                  onSearch: _handleTextChange,
+                  onSubmitted: _handleSubmit,
+                  onSelectAnime: _handleSelectAnime,
+                  onScheduled: () => _nav.navigateTo(
+                    ScheduledScreen(onSelectAnime: _handleSelectAnime),
+                  ),
+                  onWatchlist: () => _nav.navigateTo(
+                    WatchlistScreen(onSelectAnime: _handleSelectAnime),
+                  ),
+                  onLogin: _handleLogin,
+                  // SettingsScope propagates saved changes automatically.
+                  onSettings: () => showSettingsMenu(context),
                 ),
-                onWatchlist: () => _nav.navigateTo(
-                  WatchlistScreen(onSelectAnime: _handleSelectAnime),
-                ),
-                onLogin: _handleLogin,
-                // SettingsScope propagates saved changes automatically.
-                onSettings: () => showSettingsMenu(context),
-              ),
-              body: GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                behavior: HitTestBehavior.opaque,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (ScrollNotification notification) {
-                    if (notification.depth == 0) {
-                      final isScrolled = notification.metrics.pixels > 20;
-                      if (isScrolled != _isScrolled) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) setState(() => _isScrolled = isScrolled);
-                        });
+                body: GestureDetector(
+                  onTap: () => FocusScope.of(context).unfocus(),
+                  behavior: HitTestBehavior.opaque,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (ScrollNotification notification) {
+                      if (notification.depth == 0) {
+                        final isScrolled = notification.metrics.pixels > 20;
+                        if (isScrolled != _isScrolled) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              setState(() => _isScrolled = isScrolled);
+                            }
+                          });
+                        }
                       }
-                    }
-                    return false;
-                  },
-                  // Bare DpadRegion — default leave/leave edge behavior on
-                  // both axes is what's wanted here: Up from the top of
-                  // whichever screen is showing escapes this region
-                  // entirely and lands on the best candidate outside it
-                  // (AniStreamNavBar's own region, wrapped in navbar.dart),
-                  // while Down/Left/Right with nothing beyond this region
-                  // to find just no-op harmlessly. No memoryKey: _nav.current
-                  // is a completely different widget subtree per section
-                  // (Home's carousels vs. Watchlist's grid vs. Schedule's
-                  // shelves), so a single "remembered position" at this
-                  // outer level wouldn't mean anything — that memory
-                  // belongs inside each screen's own regions instead (see
-                  // HomeScreen).
-                  //
-                  // Wrapped in its own FocusScope (_bodyFocusScope, set
-                  // above) so this region's focus state is independent of
-                  // AniStreamNavBar's — see that field's doc comment for
-                  // why that separation is what makes each page's own
-                  // autofocus target actually win focus on navigation.
-                  child: FocusScope(
-                    node: _bodyFocusScope,
-                    child: DpadRegion(child: _nav.current),
+                      return false;
+                    },
+                    // Bare DpadRegion — default leave/leave edge behavior on
+                    // both axes is what's wanted here: Up from the top of
+                    // whichever screen is showing escapes this region
+                    // entirely and lands on the best candidate outside it
+                    // (AniStreamNavBar's own region, wrapped in navbar.dart),
+                    // while Down/Left/Right with nothing beyond this region
+                    // to find just no-op harmlessly. No memoryKey: _nav.current
+                    // is a completely different widget subtree per section
+                    // (Home's carousels vs. Watchlist's grid vs. Schedule's
+                    // shelves), so a single "remembered position" at this
+                    // outer level wouldn't mean anything — that memory
+                    // belongs inside each screen's own regions instead (see
+                    // HomeScreen).
+                    //
+                    // Wrapped in its own FocusScope (_bodyFocusScope, set
+                    // above) so this region's focus state is independent of
+                    // AniStreamNavBar's — see that field's doc comment for
+                    // why that separation is what makes each page's own
+                    // autofocus target actually win focus on navigation.
+                    child: FocusScope(
+                      node: _bodyFocusScope,
+                      child: DpadRegion(child: _nav.current),
+                    ),
                   ),
                 ),
               ),
