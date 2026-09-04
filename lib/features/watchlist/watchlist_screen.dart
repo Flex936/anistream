@@ -259,6 +259,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                           Wrap(
                             spacing: 16,
                             runSpacing: 16,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Container(
                                 decoration: BoxDecoration(
