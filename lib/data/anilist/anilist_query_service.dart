@@ -331,10 +331,17 @@ class AnilistQueryService {
     return _cachedQuery(AnilistQueries.search, variables, _animeListFromPage);
   }
 
+  /// [sort] is a list of AniList `MediaListSort` enum values (e.g.
+  /// `['SCORE_DESC', 'MEDIA_TITLE_ROMAJI']`) — see
+  /// `WatchlistSortOption.anilistSort` (watchlist_controller.dart) for
+  /// the values `WatchlistScreen`'s sort dropdown maps to. Defaults to
+  /// the same title-order every caller used before sorting existed, so
+  /// omitting it changes nothing.
   Future<({List<MediaListEntry> entries, bool hasNextPage})> getUserWatchlist({
     required String status,
     int page = 1,
     int perPage = 40,
+    List<String> sort = const ['MEDIA_TITLE_ROMAJI', 'MEDIA_ID_DESC'],
   }) async {
     if (!isLoggedIn) throw const AnilistException('Not logged in');
     final viewerId = await _resolveViewerId();
@@ -344,7 +351,13 @@ class AnilistQueryService {
 
     return _query(
       AnilistQueries.userWatchlistPaged,
-      {'userId': viewerId, 'status': status, 'page': page, 'perPage': perPage},
+      {
+        'userId': viewerId,
+        'status': status,
+        'page': page,
+        'perPage': perPage,
+        'sort': sort,
+      },
       (data) {
         // Same "cast each hop before indexing" approach as
         // `_animeListFromPage` / `_assertResponse` above. `rawList` is

@@ -79,8 +79,8 @@ lib/
     │                                 widgets/calendar_card.dart
     ├── search/                       search_results_screen.dart, widgets/search_filter_panel.dart
     ├── settings/                     settings_menu.dart, widgets/settings_components.dart
-    ├── shell/                        app_shell.dart, controllers/navigation_controller.dart,
-    │                                 widgets/{navbar, search_input}.dart
+    ├── shell/                        app_shell.dart, controllers/{navigation_controller,
+    │                                 anilist_login_controller}.dart, widgets/{navbar, search_input}.dart
     ├── theater/                      theater_screen.dart, exo_theater_screen.dart,
     │                                 services/{streaming_controller_base, streaming_controller,
     │                                 remote_streaming_controller, player_configurator,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/extensions/build_context_extensions.dart';
 import '../../core/settings/settings_scope.dart';
@@ -32,6 +33,13 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
 
   bool _isListView = false;
 
+  // Persisted the same way TheaterControls/MobileTheaterControls persist
+  // volume ('theater_volume') — a direct SharedPreferencesAsync key rather
+  // than a field on AppSettings, since this is a per-screen UI preference,
+  // not something exposed in the Settings menu.
+  static const String _kListViewPrefKey = 'watchlist_list_view';
+  final _prefs = SharedPreferencesAsync();
+
   // A ValueNotifier rather than plain State, so hovering a single card in
   // a 36-item grid only rebuilds the small ValueListenableBuilder wrapping
   // the background image below, not the whole screen (including the
@@ -56,6 +64,23 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
     _controller = WatchlistController();
     _scrollController.addListener(_onScroll);
     unawaited(_controller.loadInitial());
+    // initState can't be async — _loadListViewPreference() returns
+    // Future<void>, so the fire-and-forget intent is made explicit
+    // instead of silently dropped (unawaited_futures). The method itself
+    // guards its own setState with a `mounted` check.
+    unawaited(_loadListViewPreference());
+  }
+
+  Future<void> _loadListViewPreference() async {
+    final saved = await _prefs.getBool(_kListViewPrefKey);
+    if (mounted && saved != null) {
+      setState(() => _isListView = saved);
+    }
+  }
+
+  void _setListView(bool value) {
+    setState(() => _isListView = value);
+    unawaited(_prefs.setBool(_kListViewPrefKey, value));
   }
 
   @override
@@ -234,6 +259,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                           Wrap(
                             spacing: 16,
                             runSpacing: 16,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Container(
                                 decoration: BoxDecoration(
@@ -252,8 +278,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                             ? AppPalette.primary
                                             : AppPalette.textMuted,
                                       ),
-                                      onPressed: () =>
-                                          setState(() => _isListView = false),
+                                      onPressed: () => _setListView(false),
                                     ),
                                     IconButton(
                                       icon: Icon(
@@ -263,8 +288,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                             ? AppPalette.primary
                                             : AppPalette.textMuted,
                                       ),
-                                      onPressed: () =>
-                                          setState(() => _isListView = true),
+                                      onPressed: () => _setListView(true),
                                     ),
                                   ],
                                 ),
@@ -289,6 +313,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                                 ],
                                 groupValue: _controller.activeStatus,
                                 onValueChanged: _controller.switchTab,
+                              ),
+                              // Applies globally across all three tabs —
+                              // see WatchlistController.changeSort's own
+                              // doc comment for why an inactive tab's
+                              // pagination is reset too, not just the
+                              // active one.
+                              _SortDropdown(
+                                value: _controller.sortOption,
+                                onChanged: (option) =>
+                                    unawaited(_controller.changeSort(option)),
                               ),
                             ],
                           ),
@@ -490,6 +524,53 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             ),
           );
         }, childCount: activeEntries.length),
+      ),
+    );
+  }
+}
+
+/// Sort-order dropdown for the Watchlist toolbar, styled to match the
+/// grid/list toggle it sits next to. Applies globally across all three
+/// tabs via `WatchlistController.changeSort` — not scoped to whichever
+/// tab happens to be active when it's changed.
+class _SortDropdown extends StatelessWidget {
+  final WatchlistSortOption value;
+  final ValueChanged<WatchlistSortOption> onChanged;
+
+  const _SortDropdown({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppPalette.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppPalette.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<WatchlistSortOption>(
+          value: value,
+          isDense: true,
+          dropdownColor: AppPalette.surface,
+          icon: const Icon(
+            Icons.expand_more_rounded,
+            color: AppPalette.textMuted,
+            size: 20,
+          ),
+          style: const TextStyle(
+            color: AppPalette.textMain,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          items: [
+            for (final option in WatchlistSortOption.values)
+              DropdownMenuItem(value: option, child: Text(option.label)),
+          ],
+          onChanged: (option) {
+            if (option != null) onChanged(option);
+          },
+        ),
       ),
     );
   }

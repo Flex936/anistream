@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import '../../core/deep_link/deep_link_server.dart';
 import '../../core/settings/settings_scope.dart';
 import '../../core/theme/app_palette.dart';
-import '../../data/anilist/anilist_auth_service.dart';
 import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../shared/widgets/mouse_back_forward_listener.dart';
@@ -17,6 +16,7 @@ import '../schedule/scheduled_screen.dart';
 import '../search/search_results_screen.dart';
 import '../settings/settings_menu.dart';
 import '../watchlist/watchlist_screen.dart';
+import 'controllers/anilist_login_controller.dart';
 import 'controllers/navigation_controller.dart';
 import 'widgets/navbar.dart';
 
@@ -28,7 +28,7 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  final _auth = AnilistAuthService();
+  late final AnilistLoginController _loginController;
   late final NavigationController _nav;
 
   // Dedicated focus scope for the routed page content, kept separate from
@@ -43,13 +43,15 @@ class _AppShellState extends State<AppShell> {
   );
 
   bool _isLoggedIn = false;
-  bool _loginBusy = false;
   String _searchQuery = '';
   bool _isScrolled = false;
 
   @override
   void initState() {
     super.initState();
+    _loginController = AnilistLoginController();
+    _loginController.addListener(_handleLoginControllerChanged);
+
     _nav = NavigationController(
       buildHome: () => HomeScreen(onSelectAnime: _handleSelectAnime),
     );
@@ -80,10 +82,19 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  // Rebuilds the navbar so its login button reflects
+  // AnilistLoginController.isInProgress — the spinner appearing/clearing,
+  // and the tap target switching between "start login" and "cancel".
+  void _handleLoginControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _nav.removeListener(_focusNewPage);
     DeepLinkServer.instance.removeListener(_handleDeepLinkChanged);
+    _loginController.removeListener(_handleLoginControllerChanged);
+    _loginController.dispose();
     _bodyFocusScope.dispose();
     _nav.dispose();
     super.dispose();
@@ -143,8 +154,8 @@ class _AppShellState extends State<AppShell> {
         AppleSnackBar.show(
           context: context,
           message: message,
-          icon: Icons.wifi_off_rounded,
           iconColor: AppPalette.statusCancelled,
+          icon: Icons.wifi_off_rounded,
         );
       }
     } finally {
@@ -171,7 +182,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _restoreSession() async {
-    final token = await _auth.getStoredToken();
+    final token = await _loginController.getStoredToken();
     if (token != null && mounted) {
       AnilistQueryService.setToken(token);
       setState(() => _isLoggedIn = true);
@@ -179,10 +190,8 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _handleLogin() async {
-    if (_loginBusy) return;
-
     if (_isLoggedIn) {
-      await _auth.logout();
+      await _loginController.logout();
       AnilistQueryService.clearToken();
       if (!mounted) return;
       setState(() => _isLoggedIn = false);
@@ -190,13 +199,29 @@ class _AppShellState extends State<AppShell> {
       return;
     }
 
-    setState(() => _loginBusy = true);
+    // A login is already waiting on the browser round-trip — this tap is
+    // the cancel action (see navbar.dart's _UserButton), not a request
+    // to start a second one. The still-pending call below (from whichever
+    // tap actually started it) picks up the `null` this produces and
+    // shows the "didn't complete" snackbar itself.
+    if (_loginController.isInProgress) {
+      _loginController.cancel();
+      return;
+    }
+
     try {
-      final token = await _auth.login();
+      final token = await _loginController.login();
       if (!mounted) return;
       if (token != null) {
         AnilistQueryService.setToken(token);
         setState(() => _isLoggedIn = true);
+      } else {
+        AppleSnackBar.show(
+          context: context,
+          message: "AniList login didn't complete — you can try again.",
+          icon: Icons.info_outline_rounded,
+          iconColor: AppPalette.textMuted,
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -206,8 +231,6 @@ class _AppShellState extends State<AppShell> {
           backgroundColor: AppPalette.statusCancelled,
         ),
       );
-    } finally {
-      if (mounted) setState(() => _loginBusy = false);
     }
   }
 
@@ -215,9 +238,25 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
+    // False the instant any route is pushed on top of AppShell's own
+    // route — TheaterScreen, ExoTheaterScreen, or a dialog/bottom sheet
+    // on the same (only) Navigator (SettingsMenu, TorrentSearchModal,
+    // SearchFilterPanel). AppShell is that route's direct page widget,
+    // so ModalRoute.of(context) here always resolves to it, and
+    // rebuilds this widget the instant coverage starts or ends
+    // (isCurrent is exposed through an InheritedWidget with its own
+    // updateShouldNotify).
+    final bool isCurrentRoute = ModalRoute.of(context)?.isCurrent ?? true;
+
     return MouseBackForwardListener(
-      onBack: _nav.goBack,
-      onForward: _nav.goForward,
+      // Same gate as the ExcludeFocus below, applied to the mouse
+      // side-button listener instead of the focus tree — without it,
+      // pressing Back/Forward while a route sits on top of AppShell
+      // would silently mutate the hidden NavigationController's
+      // history, so backing out of that route later would land on a
+      // different screen than the one actually left.
+      onBack: isCurrentRoute ? _nav.goBack : null,
+      onForward: isCurrentRoute ? _nav.goForward : null,
       child: PopScope(
         canPop: !_nav.canGoBack,
         onPopInvokedWithResult: (bool didPop, dynamic result) {
@@ -228,65 +267,83 @@ class _AppShellState extends State<AppShell> {
         child: ListenableBuilder(
           listenable: _nav,
           builder: (context, _) {
-            return Scaffold(
-              backgroundColor: AppPalette.base,
-              extendBodyBehindAppBar: true,
-              appBar: AniStreamNavBar(
-                searchQuery: _searchQuery,
-                isLoggedIn: _isLoggedIn,
-                isScrolled: _isScrolled,
-                uiPerformanceMode: uiPerformanceMode,
-                onHome: _handleGoHome,
-                onSearch: _handleTextChange,
-                onSubmitted: _handleSubmit,
-                onSelectAnime: _handleSelectAnime,
-                onScheduled: () => _nav.navigateTo(
-                  ScheduledScreen(onSelectAnime: _handleSelectAnime),
+            // MaterialPageRoute's default maintainState keeps
+            // HomeScreen/AnimeDetailsScreen/the nav bar fully mounted
+            // underneath whatever's pushed on top of AppShell, not
+            // disposed — so without this, Tab (and dpad's own
+            // traversal) can still walk into a hidden AnimeCard/
+            // EpisodeTile/nav-bar control, and Select can still fire
+            // its onSelect/onToggle — exactly what opens a second
+            // AnimeDetailsScreen or a TorrentSearchModal on top of an
+            // already-playing TheaterScreen. Mirrors
+            // _buildControlsOverlay's own ExcludeFocus in
+            // theater_screen.dart, applied here at the route boundary
+            // instead of a controls-visibility boundary.
+            return ExcludeFocus(
+              excluding: !isCurrentRoute,
+              child: Scaffold(
+                backgroundColor: AppPalette.base,
+                extendBodyBehindAppBar: true,
+                appBar: AniStreamNavBar(
+                  searchQuery: _searchQuery,
+                  isLoggedIn: _isLoggedIn,
+                  isLoginBusy: _loginController.isInProgress,
+                  isScrolled: _isScrolled,
+                  uiPerformanceMode: uiPerformanceMode,
+                  onHome: _handleGoHome,
+                  onSearch: _handleTextChange,
+                  onSubmitted: _handleSubmit,
+                  onSelectAnime: _handleSelectAnime,
+                  onScheduled: () => _nav.navigateTo(
+                    ScheduledScreen(onSelectAnime: _handleSelectAnime),
+                  ),
+                  onWatchlist: () => _nav.navigateTo(
+                    WatchlistScreen(onSelectAnime: _handleSelectAnime),
+                  ),
+                  onLogin: _handleLogin,
+                  // SettingsScope propagates saved changes automatically.
+                  onSettings: () => showSettingsMenu(context),
                 ),
-                onWatchlist: () => _nav.navigateTo(
-                  WatchlistScreen(onSelectAnime: _handleSelectAnime),
-                ),
-                onLogin: _handleLogin,
-                // SettingsScope propagates saved changes automatically.
-                onSettings: () => showSettingsMenu(context),
-              ),
-              body: GestureDetector(
-                onTap: () => FocusScope.of(context).unfocus(),
-                behavior: HitTestBehavior.opaque,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (ScrollNotification notification) {
-                    if (notification.depth == 0) {
-                      final isScrolled = notification.metrics.pixels > 20;
-                      if (isScrolled != _isScrolled) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted) setState(() => _isScrolled = isScrolled);
-                        });
+                body: GestureDetector(
+                  onTap: () => FocusScope.of(context).unfocus(),
+                  behavior: HitTestBehavior.opaque,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (ScrollNotification notification) {
+                      if (notification.depth == 0) {
+                        final isScrolled = notification.metrics.pixels > 20;
+                        if (isScrolled != _isScrolled) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              setState(() => _isScrolled = isScrolled);
+                            }
+                          });
+                        }
                       }
-                    }
-                    return false;
-                  },
-                  // Bare DpadRegion — default leave/leave edge behavior on
-                  // both axes is what's wanted here: Up from the top of
-                  // whichever screen is showing escapes this region
-                  // entirely and lands on the best candidate outside it
-                  // (AniStreamNavBar's own region, wrapped in navbar.dart),
-                  // while Down/Left/Right with nothing beyond this region
-                  // to find just no-op harmlessly. No memoryKey: _nav.current
-                  // is a completely different widget subtree per section
-                  // (Home's carousels vs. Watchlist's grid vs. Schedule's
-                  // shelves), so a single "remembered position" at this
-                  // outer level wouldn't mean anything — that memory
-                  // belongs inside each screen's own regions instead (see
-                  // HomeScreen).
-                  //
-                  // Wrapped in its own FocusScope (_bodyFocusScope, set
-                  // above) so this region's focus state is independent of
-                  // AniStreamNavBar's — see that field's doc comment for
-                  // why that separation is what makes each page's own
-                  // autofocus target actually win focus on navigation.
-                  child: FocusScope(
-                    node: _bodyFocusScope,
-                    child: DpadRegion(child: _nav.current),
+                      return false;
+                    },
+                    // Bare DpadRegion — default leave/leave edge behavior on
+                    // both axes is what's wanted here: Up from the top of
+                    // whichever screen is showing escapes this region
+                    // entirely and lands on the best candidate outside it
+                    // (AniStreamNavBar's own region, wrapped in navbar.dart),
+                    // while Down/Left/Right with nothing beyond this region
+                    // to find just no-op harmlessly. No memoryKey: _nav.current
+                    // is a completely different widget subtree per section
+                    // (Home's carousels vs. Watchlist's grid vs. Schedule's
+                    // shelves), so a single "remembered position" at this
+                    // outer level wouldn't mean anything — that memory
+                    // belongs inside each screen's own regions instead (see
+                    // HomeScreen).
+                    //
+                    // Wrapped in its own FocusScope (_bodyFocusScope, set
+                    // above) so this region's focus state is independent of
+                    // AniStreamNavBar's — see that field's doc comment for
+                    // why that separation is what makes each page's own
+                    // autofocus target actually win focus on navigation.
+                    child: FocusScope(
+                      node: _bodyFocusScope,
+                      child: DpadRegion(child: _nav.current),
+                    ),
                   ),
                 ),
               ),

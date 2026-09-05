@@ -148,6 +148,8 @@ class _AppSegmentedControlState<T> extends State<AppSegmentedControl<T>> {
             selectedForegroundColor: AppPalette.white,
             side: const BorderSide(color: AppPalette.border),
             textStyle: typography.cardTitleCompact,
+            visualDensity: const VisualDensity(vertical: 0.5),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(radii.small),
             ),

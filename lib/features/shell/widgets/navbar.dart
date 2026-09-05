@@ -14,6 +14,7 @@ import 'search_input.dart';
 class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
   final String searchQuery;
   final bool isLoggedIn;
+  final bool isLoginBusy;
   final bool isScrolled;
   final bool uiPerformanceMode;
 
@@ -30,6 +31,7 @@ class AniStreamNavBar extends StatefulWidget implements PreferredSizeWidget {
     super.key,
     this.searchQuery = '',
     this.isLoggedIn = false,
+    this.isLoginBusy = false,
     this.isScrolled = false,
     this.uiPerformanceMode = false,
     this.onSearch,
@@ -131,6 +133,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
         },
         pageBuilder: (_, _, _) => _MobileMenu(
           isLoggedIn: widget.isLoggedIn,
+          isLoginBusy: widget.isLoginBusy,
           uiPerformanceMode: widget.uiPerformanceMode,
           onScheduled: widget.onScheduled,
           onWatchlist: widget.onWatchlist,
@@ -321,6 +324,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
               ),
               _UserButton(
                 isLoggedIn: widget.isLoggedIn,
+                isBusy: widget.isLoginBusy,
                 onPressed: widget.onLogin,
               ),
               const SizedBox(width: 2),
@@ -367,6 +371,7 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
 
 class _MobileMenu extends StatelessWidget {
   final bool isLoggedIn;
+  final bool isLoginBusy;
   final bool uiPerformanceMode;
   final VoidCallback? onScheduled;
   final VoidCallback? onWatchlist;
@@ -375,6 +380,7 @@ class _MobileMenu extends StatelessWidget {
 
   const _MobileMenu({
     required this.isLoggedIn,
+    this.isLoginBusy = false,
     this.uiPerformanceMode = false,
     this.onScheduled,
     this.onWatchlist,
@@ -443,11 +449,17 @@ class _MobileMenu extends StatelessWidget {
               child: Divider(color: AppPalette.white.withValues(alpha: 0.1)),
             ),
             _MobileMenuTile(
-              icon: Icons.person_outline_rounded,
-              title: isLoggedIn ? 'Log out of AniList' : 'Log in to AniList',
-              iconColor: isLoggedIn
-                  ? AppPalette.statusCancelled
-                  : AppPalette.statusReleasing,
+              icon: isLoginBusy
+                  ? Icons.close_rounded
+                  : Icons.person_outline_rounded,
+              title: isLoginBusy
+                  ? 'Cancel AniList Login'
+                  : (isLoggedIn ? 'Log out of AniList' : 'Log in to AniList'),
+              iconColor: isLoginBusy
+                  ? AppPalette.textMuted
+                  : (isLoggedIn
+                        ? AppPalette.statusCancelled
+                        : AppPalette.statusReleasing),
               onTap: () => _handleTap(context, onLogin),
             ),
             _MobileMenuTile(
@@ -626,17 +638,44 @@ class _NavIconButton extends StatelessWidget {
 
 class _UserButton extends StatelessWidget {
   final bool isLoggedIn;
+  final bool isBusy;
   final VoidCallback? onPressed;
 
-  const _UserButton({required this.isLoggedIn, this.onPressed});
+  const _UserButton({required this.isLoggedIn, this.isBusy = false, this.onPressed});
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: isLoggedIn ? 'Log out of AniList' : 'Log in to AniList',
+      message: isBusy
+          ? 'Cancel AniList login'
+          : (isLoggedIn ? 'Log out of AniList' : 'Log in to AniList'),
       child: DpadFocusable(
         onSelect: () => onPressed?.call(),
         builder: (context, state, child) {
+          // While a login attempt is in flight, this same button becomes
+          // the cancel action — a small spinner in place of the person
+          // icon, tapped (or Select-pressed) exactly the same way. See
+          // AppShell._handleLogin: it routes a tap here into
+          // AnilistLoginController.cancel() rather than starting a
+          // second concurrent attempt.
+          if (isBusy) {
+            return Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    state.focused ? AppPalette.primary : AppPalette.textMuted,
+                  ),
+                ),
+              ),
+            );
+          }
+
           Color iconColor;
           if (isLoggedIn) {
             iconColor = state.focused
