@@ -67,12 +67,18 @@ Visual restraint, typographic rhythm, and motion quality, in the spirit of Apple
   - `TorrentSearchModal` sets it `true`: a real pushed route (`showGeneralDialog<Torrent>`, pops with the chosen `Torrent` as its result — the same `showDialog<T>` contract Flutter's own dialogs use), with a tap-to-dismiss backdrop.
   - `BatchEpisodePickerOverlay` sets it `false`: predates the `AppMaterials` tiers (tracked in § 5.3), and is mounted inline as a branch of `TheaterScreen`'s own state machine rather than a pushed route — no backdrop-dismiss or pop-with-value behavior to speak of.
   - `TorrentSearchModal`'s backdrop is a real, opaque widget in front of the route's own transparent `ModalBarrier`, so it carries its own tap-to-dismiss handler — `showGeneralDialog`'s `barrierDismissible` alone won't reach it.
-- This is the lowest-priority layer of the four — a desktop-leaning enhancement, not something Mobile or TV correctness ever depends on.
+- Toggling `uiPerformanceMode` live changes `FrostedContainer`'s internal ancestor chain, which would otherwise remount `child`'s whole subtree and reset its state. A caller whose `child` holds state worth preserving across that toggle passes a stable `preservationKey` — `settings_menu.dart`'s `_frostedBodyKey` is the canonical example.
+- ALWAYS treat frosted glass as the default finish for floating/content surfaces — flat color is the exception, not the norm.
+- NEVER treat this layer as skippable on its own judgment; § 2 is the
+only thing allowed to turn it off, and it turns it off completely.
 
 ## 2. Performance UI Mode
 
-- Read the active performance state (`SettingsScope.of(context).uiPerformanceMode`) when building visually complex components.
-- Auto-downgrade expensive rendering when performance mode is active — e.g., replace `BackdropFilter` glassmorphism with flat, semi-transparent fallback colors.
+- Performance Mode is an absolute reversion to plain Material — NEVER
+a partial dial-down of frosted glass or any other effect.
+- ALWAYS read `SettingsScope.of(context).uiPerformanceMode` in a
+visually complex component and remove each effect below outright
+when true — not lower it.
 
 **Checklist for any new component that renders a visual effect:**
 
@@ -134,14 +140,16 @@ These are documented as-is per the Living Documentation Rule — NEVER silently 
   - `BatchEpisodePickerOverlay` and `TorrentSearchModal` (both genuine modals) use 16px, not 24px — now one shared literal inside `SelectionModal` rather than two independently hardcoded values, so resolving it is a one-line change whenever this item is formally addressed.
   - `TheaterSettingsMenu` (a floating popup, arguably closer to the 12px "item" category despite being a menu) uses 12px.
 
-  *(`CalendarCard`, the watchlist screen's `ListCard`, and `HeroCard` previously listed here have since converged onto `AppRadii.small`/`AppRadii.tag` — removed from this list accordingly.)*
+ *(Resolved: `CalendarCard`, `ListCard`, `HeroCard` now use
+ `AppRadii.small`/`.tag`.)*
+
 - **Hardcoded colors:** `hero_banner.dart`'s AniList/MyAnimeList external-link buttons use raw third-party brand colors (`Color(0xFF3DB4F2)`, `Color(0xFF2E51A2)`) rather than `AppPalette` — accepted as-is, since these represent another product's brand identity rather than this app's own palette. Separately, `calendar_card.dart`'s card shadow uses a raw `Color(0x4D000000)` instead of `AppPalette.black.withValues(...)` — this one is a genuine gap, not an intentional exception.
 - **`episode_tile.dart`** hardcodes its header `AnimatedContainer`'s duration (150ms) instead of routing it through `perfDuration(uiPerformanceMode, ...)` per § 2's Animation duration rule.
 - **`BatchEpisodePickerOverlay` has no glass/blur treatment at all** (§ 1.4) — a flat scrim and flat card surface, expressed as `useGlassEffect: false` on the shared `SelectionModal` widget both this and `TorrentSearchModal` build on. Migrating it onto `AppMaterials`'s tiers, so it opts into the same glass treatment `TorrentSearchModal` uses, is still open.
 
 ### 5.4 Accent
 
-*(Formerly tracked two items here — "blur sigma has no named tiers" and `anime_carousel.dart`'s `_NavArrow` bypassing `FrostedContainer` — both resolved via the `AppMaterials` tiers introduced in `core/theme/app_materials.dart`; see § 1.4. Removed from this list accordingly.)*
+*(No open items — resolved via the `AppMaterials` tiers, § 1.4.)*
 
 ---
-*Last reviewed against the codebase: 2026-08-23. Added a palette color, a blur/radius/card-size value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-09-04. Added a palette color, a blur/radius/card-size value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

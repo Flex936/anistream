@@ -39,9 +39,17 @@
 
 - ALWAYS satisfy `analysis_options.yaml` in full — see § 1's table above for exactly which rules `flutter analyze` actually catches versus review-only.
 - Comment the "why" behind complex logic (Regex, Focus, FFI). Every comment describes the code's **current** behavior only:
+  - Default to one `//` line. Up to 2 sentences, only for a mechanism that's genuinely non-obvious on its own — not for design rationale or anything repeated across call sites (see the table below).
   - FORBIDDEN: referencing the conversational or editorial process behind the code — no "as per the request," "as agreed in Phase 4," "per Track B," or similar. State what the code does and why it's built that way, not which session or turn produced it.
   - FORBIDDEN: describing a prior implementation alongside the new one — no "was X," "previously did Y," "the old version used to...". When an implementation changes, delete the stale comment entirely and write one comment describing only how the current code works.
   - FORBIDDEN: bracketing comments in long-dash/box-drawing separators (e.g. `── like this ──`). Plain `//` comments only, no decorative opening/closing marks.
+
+| Comment case | Budget | Lives in |
+| --- | --- | --- |
+| Ordinary implementation detail | 1 line | `//` inline |
+| Non-obvious mechanism (regex/FFI/focus/isolate) | ≤2 sentences | `//`/`///` inline |
+| Design rationale, cross-file pattern, incident history | 0 — no inline prose | Canonical doc + `// See Doc.md § N.` pointer |
+
 - NEVER hallucinate APIs. Maintain the existing architecture — see [ARCHITECTURE.md](ARCHITECTURE.md) § 2 for the full `lib/` folder tree (`core/`, `data/`, `shared/`, `features/<name>/`) and where new code belongs.
 - Reject unnecessary external dependencies. Prioritize native-only solutions and SOLID/DRY principles.
 
@@ -52,4 +60,4 @@ This file is Flutter/Dart only. The optional companion server (`anistream_server
 Before considering any non-trivial change finished, check it against [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule — a change that adds a dependency, a folder, a cache, a native bridge, or a design token isn't done until the matching doc is updated (or flagged) alongside it.
 
 ---
-*Governed by [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule. Last reviewed against the codebase: 2026-08-16. Changed a performance rule, a caching guideline, or a code-quality directive? Update this file — and check whether [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist needs the same update.*
+*Governed by [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule. Last reviewed against the codebase: 2026-09-04. Changed a performance rule, a caching guideline, or a code-quality directive? Update this file — and check whether [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist needs the same update.*

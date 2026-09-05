@@ -19,6 +19,12 @@ analyzer:
     missing_return: error
     todo: ignore
     invalid_annotation_target: ignore
+  exclude:
+    - build/**
+    - android/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   # The lint rules applied to this project can be customized in the

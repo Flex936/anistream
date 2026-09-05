@@ -11,7 +11,8 @@
   - CODING_RULES.md enforces against these versions; not restated there.
 - Flutter/Dart at the core, plus an optional companion Go server (`anistream_server/`) for thin clients — see [ARCHITECTURE.md](ARCHITECTURE.md) § 6 and [`anistream_server/README.md`](../anistream_server/README.md).
   - CODING_RULES.md is Dart-only. The Go code has its own conventions and isn't held to it.
-- ALWAYS draft a plan before generating code on any non-trivial task, and wait for explicit approval before generating.
+- ALWAYS draft a plan before generating code on any non-trivial task.
+- ALWAYS wait for explicit approval before generating.
   - Multiple viable approaches, or genuine uncertainty? Present the options and ask — don't guess.
 - Output complete, runnable files for refactors — snippets only if explicitly requested.
 - Docs describe the current state only — never the editing process that produced it.
@@ -23,7 +24,7 @@
 ## 2. Documentation & the Living Documentation Rule
 
 - Eight living docs, cross-referencing each other as `DocName.md § N`: this file, [CODING_RULES.md](CODING_RULES.md), [DESIGN.md](DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [API.md](API.md), [CONTRIBUTING.md](CONTRIBUTING.md) (all in `.claude/`), [README.md](../README.md) (repo root), and [`anistream_server/README.md`](../anistream_server/README.md) (narrower scope, no shared nav bar, same rule below). All eight describe the codebase as it actually is today — never as it was designed to be or will eventually become.
-- `ISSUE_BACKLOG.md` isn't one of the eight — it's a generated backlog, not a description of current state — but every entry pins a `Ref:` to a [DESIGN.md](DESIGN.md) § 5 sub-section. Renumber § 5 without updating it in the same pass and every reference breaks. See the table below.
+- `ISSUE_BACKLOG.md` isn't one of the eight — it's a generated backlog, not a description of current state — but every entry pins a `Ref:` to a [DESIGN.md](DESIGN.md) § 5 sub-section, or another canonical doc's section for items outside the design-system audit (see ISSUE_BACKLOG.md's Platform & Playback / Code Quality sections). Renumber § 5 without updating its refs in the same pass and every reference breaks. See the table below.
 
 **The rule:** a codebase change matching a trigger below gets its doc update proposed alongside it — named explicitly, not silently rewritten, not deferred until asked. Same plan-first discipline as § 1, applied to docs.
 
@@ -53,6 +54,11 @@ Every doc in this suite — this file included — follows the rules below. Foun
 - Rationale is one inline clause, not its own paragraph or section.
 - Name exceptions explicitly — never leave them to inference.
 - Commands and diagrams go in fenced code blocks, verbatim — nothing else shares the block.
+- Before/after code examples use two separate plain code blocks — the
+  full "before" snippet, then the full "after" snippet immediately
+  below it — never a unified diff with `+`/`-` markers. A diff-style
+  block is harder to copy directly into a file; two clean blocks paste
+  as-is.
 - Cross-references use `DocName.md § N`. Don't invent a second citation format.
 - New sections are appended, never inserted mid-document — unless a full repo-wide grep-and-fix pass is explicitly budgeted for that change.
 - No editing-process narrative (§ 1 above already covers this — it's law, not a style preference).
@@ -62,4 +68,4 @@ Every doc in this suite — this file included — follows the rules below. Foun
 - If a rewrite makes a doc longer, that's a defect. The goal is density, not volume.
 
 ---
-*This file defines the Living Documentation Rule and the doc-suite style contract above; unlike the other seven docs (including [CODING_RULES.md](CODING_RULES.md)), it has no separate file to check itself against. Last reviewed against the codebase: 2026-08-15.*
+*This file defines the Living Documentation Rule and the doc-suite style contract above; unlike the other seven docs (including [CODING_RULES.md](CODING_RULES.md)), it has no separate file to check itself against. Last reviewed against the codebase: 2026-09-04.*

@@ -59,7 +59,7 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 
 ---
 
-  *Items #4 and #5 previously tracked here have since been resolved — removed from this list accordingly.*
+  *(#4–#5 resolved — removed.)*
 
 ---
 
@@ -108,4 +108,29 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 
 *Unlike the sections above, this one isn't drawn from the design-system audit — it doesn't reference a `DESIGN.md` § 5 entry, since the issue lives in native playback internals, not the design system. Tracked here per explicit request rather than in a separate document; refs point to `ARCHITECTURE.md` § 7 instead.*
 
-*Item 9 (replace the ineffective automatic freeze mitigation with a manual restart button) has since shipped — see `ARCHITECTURE.md` § 7 for the current mitigation. Removed from this list accordingly. Filing the upstream `media-kit/media-kit` issue described there remains outstanding — worth its own tracked item if this backlog gets a general pass later.*
+*(#9 shipped — see ARCHITECTURE.md § 7. Filing the upstream
+media-kit/media-kit issue is still open — candidate for a future
+item.)*
+
+## Code Quality
+
+*Like Platform & Playback, not drawn from the design-system audit —
+this tracks a coding-rules gap found while updating the doc suite.
+Refs point to CODING_RULES.md instead of DESIGN.md § 5.*
+
+---
+
+### 10. Retroactive comment-brevity sweep against CODING_RULES.md § 2
+
+**Priority:** Low · **Size:** Large (spans most of `lib/`) · **Ref:** `CODING_RULES.md` § 2
+
+**Context:** § 2 now caps comments at one line by default (≤2 sentences for a genuinely non-obvious mechanism only), with broader rationale required to move into the owning canonical doc. Most of the codebase predates this rule and still carries multi-paragraph class/method doc comments.
+
+**Acceptance criteria:**
+
+- [ ] Audit each file's comments against the § 2 budget; shorten or delete anything over it
+- [ ] Where the rationale is worth keeping, move it to the matching canonical doc (ARCHITECTURE.md § 7, API.md, or DESIGN.md § 5) and leave a `// See Doc.md § N.` pointer in its place
+- [ ] Comment-only changes — no logic touched in the same pass
+- [ ] Work file-by-file or feature-by-feature, not one sweeping PR, matching item #1's convention for large multi-file items
+
+**Affected files:** effectively all of `lib/` — highest-density starting points: `torrent_parser_worker.dart`, `next_episode_prefetch_controller.dart`, `frosted_container.dart`, `torrent_scraper_service.dart`, `styled_subtitle_view.dart`, `player_configurator.dart`
