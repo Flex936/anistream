@@ -13,14 +13,15 @@
 | **BitTorrent trackers** | Live seeder/leecher counts for TsukiHime-sourced candidates, via direct tracker scrape (§ 6) | None |
 | **MyAnimeList** | **Passive link-out only** — a button on the details screen opens `myanimelist.net/anime/<id>` in the system browser | N/A — no API calls are made to MAL |
 
-The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, LAN-local API this app talks to for remote torrenting. It isn't a data source in the sense above — see [`anistream_server/README.md`](../anistream_server/README.md) and [ARCHITECTURE.md](ARCHITECTURE.md) § 6, not here.
+The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, LAN-local API for remote torrenting, not a data source in the sense above — see [`anistream_server/README.md`](../anistream_server/README.md) and [ARCHITECTURE.md](ARCHITECTURE.md) § 6, not here.
 
 ## 2. AniList
 
 **Auth flow** (`AnilistAuthService`) — OAuth2 implicit grant:
 
 - `login()` opens `https://anilist.co/api/v2/oauth/authorize?client_id=43011&response_type=token` in the system browser, and binds a local `HttpServer` on `127.0.0.1:3456`.
-- AniList redirects back to `/callback`, which serves a small static HTML page. Its inline script reads the token from `window.location.hash` (never sent to any server by the browser itself) and `POST`s it to `/store` on the same loopback server.
+- AniList redirects back to `/callback`, which serves a small static HTML page.
+- That page's inline script reads the token from `window.location.hash` (never sent to any server by the browser itself) and `POST`s it to `/store` on the same loopback server.
 - The token persists via `SharedPreferencesAsync` under `anilist_access_token`.
 - The whole flow times out after 5 minutes if no token arrives.
 
@@ -37,28 +38,30 @@ The optional Go server's own REST surface (`/api/stream`, etc.) is a separate, L
 | `userWatchlistPaged` | Watchlist screen (per-tab: CURRENT/PLANNING/COMPLETED) |
 | `viewerId` | Resolves the logged-in user's numeric AniList ID once per session |
 | `mediaListEntryStatus` / `mediaProgress` | Reads the viewer's existing status/progress for one anime |
-| `saveMediaListEntry` | Writes progress back to AniList (see auto-tracking, below) |
+| `saveMediaListEntry` | Writes progress back to AniList (auto-tracking, below) |
 
 Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for their field selection.
 
 - KNOWN DRY GAP: `currentlyAiring` inlines its own near-identical field list instead of reusing the fragment. Harmless today (the two lists match) — fold it into the shared fragment next time this query is touched ([CODING_RULES.md](CODING_RULES.md) § 2).
-- KNOWN DRY GAP: `mediaProgress` is a strict subset of `mediaListEntryStatus` (same shape, minus `status`), kept separate only because the two call sites differ (`AnimeDetailsScreen`'s "up next" readout vs. `AnilistTrackerService`'s eligibility check) — not because the data need differs. Candidate for consolidation next time either is touched ([CODING_RULES.md](CODING_RULES.md) § 2).
+- KNOWN DRY GAP: `mediaProgress` is a strict subset of `mediaListEntryStatus` (same shape, minus `status`), kept separate only because the two call sites differ (`AnimeDetailsScreen`'s "up next" readout vs. `AnilistTrackerService`'s eligibility check). Candidate for consolidation next time either is touched ([CODING_RULES.md](CODING_RULES.md) § 2).
 
-**Content filtering asymmetry:** `_bannedGenres` is `['Hentai', 'Ecchi']` when "Filter Ecchi" is on, else `['Hentai']`.
+**Content filtering:** `_bannedGenres` is `['Hentai', 'Ecchi']` when "Filter Ecchi" is on, else `['Hentai']` — applied differently per query:
 
-- For `trending`/`seasonPopular`/`allTimePopular`/`search`/`currentlyAiring`, this is passed server-side as AniList's `genre_not_in` GraphQL variable.
-- For `userWatchlistPaged`, AniList's `mediaList` field has no genre filter, so filtering happens **client-side** — after decoding, by inspecting each entry's `media.genres` and dropping any that intersect the banned set.
-- `mediaByExternalId` applies no genre filter at all, deliberately — the caller already named one specific title by identity (a browser-extension deep link), not a browsable list, so hiding it would be surprising rather than protective.
+| Query | Filtering mechanism |
+| --- | --- |
+| `trending`, `seasonPopular`, `allTimePopular`, `search`, `currentlyAiring` | Server-side, via AniList's `genre_not_in` GraphQL variable |
+| `userWatchlistPaged` | Client-side — AniList's `mediaList` field has no genre filter, so results are decoded first, then dropped if `media.genres` intersects the banned set |
+| `mediaByExternalId` | None, deliberately — the caller already named one specific title by identity (a deep link), not a browsable list, so hiding it would be surprising rather than protective |
 
 **Auto-tracking** (`AnilistTrackerService`):
 
 - Watches playback position. Once it crosses **90%** of the episode's duration, a 5-second timer arms.
-- On expiry, fires `saveMediaListEntry` with the new progress, and flips status `PLANNING → CURRENT`, or `→ COMPLETED` if this episode is the anime's last.
-- A per-session flag stops it firing twice. It only arms if the viewer is logged in and this episode is ahead of their existing recorded progress (or their status is still `PLANNING`).
+- On expiry, fires `saveMediaListEntry` with the new progress, flipping status `PLANNING → CURRENT`, or `→ COMPLETED` if this episode is the anime's last.
+- A per-session flag stops it firing twice. It only arms if the viewer is logged in and this episode is ahead of their recorded progress (or their status is still `PLANNING`).
 
 ## 3. Nyaa.si
 
-**Fallback role:** everything below describes the path used only when TsukiHime (§ 5) has no internal-ID match for the anime, or its own endpoints return zero usable torrents — not the primary source anymore.
+**Fallback role:** used only when TsukiHime (§ 5) has no internal-ID match for the anime, or its endpoints return zero usable torrents.
 
 **Mirrors:** `nyaa.si`, then `nyaa.iss.one` as fallback, tried in order with a 7-second per-mirror timeout (`TorrentMirrorFetcher`).
 
@@ -67,11 +70,17 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 **Concurrency:**
 
 - Batch-mode and episode-mode search run concurrently via `Future.wait`.
-- Within each, candidate titles are tried in list order — but a title that hasn't resolved within 500ms lets the *next* candidate start concurrently rather than blocking behind it. The first non-empty result by original list order still wins, even if a later concurrent request finishes first.
+- Within each, candidate titles are tried in list order — a title that hasn't resolved within 500ms lets the next candidate start concurrently instead of blocking behind it. The first non-empty result by original list order still wins, even if a later concurrent request finishes first.
 - Titles longer than 4 words also get a concurrent truncated-title fallback query, used only if the full-title query comes back empty.
-- Trade-off: `package:http` requests can't be cancelled, so a title that resolves after an earlier candidate's head start still runs to completion even once that earlier candidate wins — extra requests are accepted for lower click-to-magnet-link latency.
+- Trade-off: `package:http` requests can't be cancelled, so a title that resolves after an earlier candidate's head start still runs to completion even once that candidate wins. Extra requests are accepted for lower click-to-magnet-link latency.
 
-**Parsing:** happens off the UI thread, in a single long-lived isolate (`TorrentParserWorker`, spawned lazily on first search, falling back to a one-shot `compute()` if isolate spawn ever fails). Spawned lazily rather than at boot, since torrent search may never run in a session; requests are correlated by an incrementing id (not assumed FIFO) since concurrent fan-out can have several in flight at once. A worker pool was considered and rejected — per-feed parsing is low-single-digit milliseconds, negligible next to the network round-trip. `TorrentParser` extracts season/episode/batch-range/resolution via a hand-written single-pass tokenizer rather than a chain of regexes — the file's own comments document the equivalence testing this was checked against. The one regex kept (`_batchRangeRegex`) requires 2-4 digit episode numbers specifically — relaxing to 1-4 would misread an embedded sequel/cour digit (e.g. "Series 2 - 05") as batch range "2-5" instead of episode 5.
+**Parsing:**
+
+- Runs off the UI thread in a single long-lived isolate (`TorrentParserWorker`), spawned lazily on first search — falls back to a one-shot `compute()` if isolate spawn fails.
+- Requests are correlated by an incrementing id, not assumed FIFO — concurrent fan-out can have several in flight at once.
+- A worker pool was considered and rejected: per-feed parsing is low-single-digit milliseconds, negligible next to the network round-trip.
+- `TorrentParser` extracts season/episode/batch-range/resolution via a hand-written single-pass tokenizer, not a regex chain — see the file's own comments for the equivalence testing this was checked against.
+- The one regex kept (`_batchRangeRegex`) requires 2-4 digit episode numbers — relaxing to 1-4 would misread an embedded sequel/cour digit (e.g. "Series 2 - 05") as batch range "2-5" instead of episode 5.
 
 **Scoring** (`TorrentScoringEngine`, starts at 100 points):
 
@@ -95,7 +104,7 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 
 ## 4. Caching
 
-This table is the single authoritative list of every cache in the app, regardless of which subsystem owns it — a codebase-wide concern, not limited to AniList/Nyaa. [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule routes "new cache, or a changed TTL" here for exactly this reason: add a row even if the new cache lives outside `data/`.
+This table is the single authoritative list of every cache in the app, regardless of which subsystem owns it. [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule routes "new cache, or a changed TTL" here even when the cache lives outside `data/`.
 
 | Cache | TTL | Cap | Scope |
 | --- | --- | --- | --- |
@@ -112,9 +121,11 @@ This table is the single authoritative list of every cache in the app, regardles
 
 **Flow** (`TsukihimeApiService`):
 
-1. `resolveInternalId(anilistId)` — `GET /animes/anilist/{anilistId}`. A 404 means the anime isn't in TsukiHime's database yet; `fetchTorrents` falls back to Nyaa in that case, not an error.
-2. `getEpisodeTorrents(internalId, episodeNumber)` — `GET /animes/{id}/episodes/{n}`. Always queried — pre-filtered to that exact episode server-side, unlike Nyaa's own filename-guessing.
-3. `getSeriesTorrents(internalId)` — `GET /animes/{id}`. Only queried when `anime.status == 'FINISHED' && anime.format != 'MOVIE'` (same condition the Nyaa-native batch branch already uses). Returns every torrent ever associated with the anime, batch and per-episode releases mixed together — `episode_no == null` on a result is what actually means "whole-series/season torrent," not which endpoint returned it.
+| Step | Call | Endpoint | Notes |
+| --- | --- | --- | --- |
+| 1 | `resolveInternalId(anilistId)` | `GET /animes/anilist/{anilistId}` | A 404 means the anime isn't in TsukiHime's database yet — `fetchTorrents` falls back to Nyaa, not an error |
+| 2 | `getEpisodeTorrents(internalId, episodeNumber)` | `GET /animes/{id}/episodes/{n}` | Always queried — pre-filtered to that exact episode server-side, unlike Nyaa's own filename-guessing |
+| 3 | `getSeriesTorrents(internalId)` | `GET /animes/{id}` | Only queried when `anime.status == 'FINISHED' && anime.format != 'MOVIE'` (same condition the Nyaa-native batch branch uses). Returns every torrent ever associated with the anime — `episode_no == null` on a result means "whole-series/season torrent," not which endpoint returned it |
 
 Both list endpoints share one paginated envelope: `{ total, start, limit, error, results: [...] }`. Only the first page (`limit`'s default, 50) is fetched — not enough volume seen in practice to justify paging further.
 
@@ -152,13 +163,13 @@ TsukiHime has no seeder data (§ 5). Rather than cross-referencing Nyaa.si per c
 
 The last two are queried purely to catch more of a swarm than the trackers actually embedded in AniStream's own magnet links would see — they're not added to `Torrent.magnetLink`'s tracker list, which stays exactly as it was.
 
-**Batching and load:** one scrape request covers many info hashes at once (both protocols support this natively), so this is a small, fixed number of requests regardless of result-set size — unlike a per-candidate Nyaa search. Still bounded to the top `_kSeedersEnrichmentCount` (currently 10) candidates by preliminary score, since there's no reason to look up seeders for a torrent that's already scored out of contention.
+**Batching and load:** one scrape request covers many info hashes at once (both protocols support this natively), so this is a small, fixed number of requests regardless of result-set size — unlike a per-candidate Nyaa search. Still bounded to the top `_kSeedersEnrichmentCount` (currently 10) candidates by preliminary score — no reason to look up seeders for a torrent already scored out of contention.
 
 **Merging:** where more than one tracker reports on the same hash, the higher seeder count wins — each tracker only knows about peers that announced to it, so taking the max avoids undercounting a real swarm split across trackers.
 
-**Scoring:** folded in via the same `log(seeders + 1) × 5`, clamped 0–50, formula `TorrentScoringEngine` already uses for the Nyaa-native path — deliberately kept identical so a seeder count means the same thing regardless of which path found the torrent.
+**Scoring:** folded in via the same `log(seeders + 1) × 5`, clamped 0–50, formula `TorrentScoringEngine` already uses for the Nyaa-native path — kept identical so a seeder count means the same thing regardless of which path found the torrent.
 
-**Known caveat:** these five trackers have no guaranteed relationship to whatever trackers a given release's original uploader actually embedded — a swarm relying purely on DHT, or on trackers outside this list, won't be reflected here even if it has real seeders. nyaa.si's own displayed seeder count doesn't have this problem, since it reads whatever the specific upload it hosts actually declares — this is a deliberate trade-off (avoids hitting Nyaa at all), not a bug.
+**Known caveat:** these five trackers have no guaranteed relationship to whatever trackers a release's original uploader actually embedded — a swarm relying purely on DHT, or on trackers outside this list, won't be reflected here even with real seeders. nyaa.si's own displayed count avoids this by reading whatever the specific upload declares; skipping that lookup entirely is a deliberate trade-off, not a bug.
 
 ---
-*Last reviewed against the codebase: 2026-09-04. Added a query, a data source, or a cache? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-09-06. Added a query, a data source, or a cache? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

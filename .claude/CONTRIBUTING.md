@@ -8,9 +8,9 @@ Thanks for considering a contribution — AniStream is maintained by a small tea
 ## 1. Ways to Contribute
 
 - **Bug reports** — open an issue with repro steps, your platform (Windows/Linux/macOS/Android/Android TV/iOS), and logs if you have them (see `AppLogger`'s output directory, printed at startup).
-- **Feature requests** — open an issue describing the use case before writing code. For anything non-trivial, a short discussion up front avoids a PR that doesn't fit the architecture.
+- **Feature requests** — open an issue describing the use case before writing code; a short discussion up front avoids a non-trivial PR that doesn't fit the architecture.
 - **Design work** — frame proposals for new UI against [DESIGN.md](DESIGN.md) § 1's existing tokens and § 4's TV/D-pad rules, not introduced ad hoc in a single widget.
-- **Documentation** — all eight living docs (see [CLAUDE.md](CLAUDE.md) § 2) are fair game: the six in `.claude/`, root `README.md`, and [`anistream_server/README.md`](../anistream_server/README.md). Doc-only PRs that correct drift between the docs and the code are genuinely welcome.
+- **Documentation** — all eight living docs (see [CLAUDE.md](CLAUDE.md) § 2) are fair game: the six in `.claude/`, root `README.md`, and [`anistream_server/README.md`](../anistream_server/README.md). Doc-only PRs correcting drift between docs and code are welcome.
 - **Code** — see below.
 
 ## 2. Getting Set Up
@@ -21,10 +21,10 @@ Follow [README.md](../README.md) § 4 (**Developer & System Setup**) and § 5 (*
 
 Every PR is held to [CODING_RULES.md](CODING_RULES.md) and the lint configuration in `analysis_options.yaml` in full — both non-negotiable, neither restated here.
 
-- ALWAYS run `flutter analyze` before opening a PR — it should come back clean. `analyze` only mechanically enforces part of [CODING_RULES.md](CODING_RULES.md) § 1 (see that section's table for exactly which rule) — that's why § 6's checklist has a separate line for the rest.
+- ALWAYS run `flutter analyze` before opening a PR — it should come back clean. `analyze` only mechanically enforces part of [CODING_RULES.md](CODING_RULES.md) § 1 (see that section's table for which rule) — § 6's checklist has a separate line for the rest.
 - Believe a lint should be suppressed? Use a scoped `// ignore: <rule>` with a comment explaining why. NEVER change `analysis_options.yaml` to suppress it project-wide.
 - New code goes where [ARCHITECTURE.md](ARCHITECTURE.md) § 2's folder-placement rule says. Discuss a new top-level folder before introducing one.
-- Flutter/Dart only, for this file. Contributing to the companion Go server (`anistream_server/`)? Its own conventions live in [`anistream_server/README.md`](../anistream_server/README.md), not here.
+- This section covers Flutter/Dart only. Contributing to the companion Go server (`anistream_server/`)? Its own conventions live in [`anistream_server/README.md`](../anistream_server/README.md), not here.
 
 ## 4. UI/Design Contributions
 
@@ -56,4 +56,4 @@ This project follows the [Contributor Covenant](https://www.contributor-covenant
 By contributing, you agree that your contributions are licensed under the project's **GNU General Public License v3.0 (GPLv3)** — see [README.md](../README.md) § 9 and the `LICENSE` file at the repository root.
 
 ---
-*Last reviewed against the codebase: 2026-08-15. Changed the PR checklist (§ 6), the design-debt list (DESIGN.md § 5), or the license (§ 8)? Update this file too.*
+*Last reviewed against the codebase: 2026-09-07. Changed the PR checklist (§ 6), the design-debt list (DESIGN.md § 5), or the license (§ 8)? Update this file too.*

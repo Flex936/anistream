@@ -8,9 +8,9 @@
 AniStream is a single Flutter/Dart codebase producing native apps for Windows, Linux, macOS, Android (phone + TV), and iOS. Two things are pluggable behind a shared interface:
 
 - **Torrenting** — either on-device (`libtorrent_flutter`, an FFI binding to `libtorrent`) or offloaded to the optional companion Go server over LAN (§ 6). NEVER both at once for a single session — `AppSettings.serverMode` picks one `BaseStreamingController` implementation for the whole session (§ 5).
-- **Playback** — always local, via `media_kit`, which hands frames to Flutter's own Impeller renderer so video and UI overlays composite on the same native surface with no separate video-view Z-index problems.
+- **Playback** — always local, via `media_kit`, whose frames go through Flutter's own Impeller renderer — video and UI overlays composite on the same native surface, no separate video-view Z-index problems.
 
-Metadata and tracking come from AniList's GraphQL API; torrent discovery is layered — TsukiHime API first, Nyaa.si RSS scraping as a fallback, BitTorrent tracker scraping backfilling live seeder counts. All three are covered in [API.md](API.md), not here.
+Metadata and tracking come from AniList's GraphQL API. Torrent discovery is layered — TsukiHime API first, Nyaa.si RSS scraping as fallback, BitTorrent tracker scraping backfills live seeder counts. Full detail: [API.md](API.md), not here.
 
 ```text
 ┌──────────────┐      GraphQL      ┌──────────────┐
@@ -106,63 +106,65 @@ lib/
 | …calls an external API (AniList, Nyaa) | `data/<domain>/services/`, with its wire model in `data/<domain>/models/` |
 | …is app-wide infrastructure (logging, theming, routing, settings, input-mode detection) | `core/` |
 
-`playback_session_controller.dart` currently exists in the repo as an empty stub with nothing importing it anywhere in the app — see § 7.
+`playback_session_controller.dart` currently exists as an empty stub with nothing importing it anywhere — see § 7.
 
 ## 3. State Management
 
-Global, app-wide state is managed exclusively via `InheritedNotifier`, wrapped in a `StatefulWidget` "Scope" that owns the underlying controller and installs itself once near the root in `app.dart`:
+Global, app-wide state uses `InheritedNotifier`, wrapped in a `StatefulWidget` "Scope" that owns the controller and installs once near the root in `app.dart`:
 
-- **`SettingsScope`** — wraps a `SettingsController` (itself a `ChangeNotifier` around `AppSettings`). Any descendant reads it via `SettingsScope.of(context)`.
-- **`InputModeScope`** — wraps the `InputModeController` singleton (TV/D-pad detection — see [DESIGN.md](DESIGN.md) § 4).
+- **`SettingsScope`** — wraps `SettingsController` (a `ChangeNotifier` around `AppSettings`). Read via `SettingsScope.of(context)`.
+- **`InputModeScope`** — wraps the `InputModeController` singleton (TV/D-pad detection — [DESIGN.md](DESIGN.md) § 4).
 
-Both live directly under `Dpad.wrap()` in `app.dart`'s `MaterialApp.builder`, in that specific order (`InputModeScope(child: SettingsScope(child: child!))`). NEVER reorder this nesting without checking every consumer — it's load-bearing for several widgets further down the tree.
+Both live directly under `Dpad.wrap()` in `app.dart`'s `MaterialApp.builder`, in that order: `InputModeScope(child: SettingsScope(child: child!))`. NEVER reorder this nesting without checking every consumer — several widgets further down depend on it.
 
-Feature-local state (a single screen's pagination, tab selection, or navigation history) uses a plain `ChangeNotifier` controller instead — `NavigationController` (shell's back/forward stack), `WatchlistController` (per-tab pagination across CURRENT/PLANNING/COMPLETED).
+Feature-local state (a screen's pagination, tab selection, navigation history) uses a plain `ChangeNotifier` controller instead — `NavigationController` (shell's back/forward stack), `WatchlistController` (per-tab pagination across CURRENT/PLANNING/COMPLETED).
 
-- These are **not** `InheritedNotifier`-wrapped. They're constructed directly by their owning `StatefulWidget` and exposed via `ListenableBuilder`, since nothing outside that screen needs to read them.
-- FORBIDDEN: Provider, Riverpod, Bloc, Redux, or any other state-management package — deliberate, not an oversight. Extend the `*Scope` pattern above for new app-wide state instead.
+- NOT `InheritedNotifier`-wrapped — constructed directly by the owning `StatefulWidget`, exposed via `ListenableBuilder`, since nothing outside that screen reads them.
+- FORBIDDEN: Provider, Riverpod, Bloc, Redux, or any other state-management package — deliberate. Extend the `*Scope` pattern for new app-wide state instead.
 
-`SettingsCache` (in `settings_service.dart`) is a narrow exception: a synchronous, static in-memory mirror of the current `AppSettings`, for the handful of no-`BuildContext` services (`AnilistQueryService`, instantiated fresh per screen) that need to read a setting (currently just `filterEcchi`) without walking a widget tree they don't have. `SettingsController` is its only writer. NEVER read it from inside the widget tree as a replacement for `SettingsScope`.
+`SettingsCache` (`settings_service.dart`) is a narrow exception — a synchronous, static in-memory mirror of `AppSettings`, for no-`BuildContext` services (`AnilistQueryService`, instantiated fresh per screen) that need a setting (currently just `filterEcchi`) without a widget tree to walk. `SettingsController` is its only writer. NEVER read it from inside the widget tree as a `SettingsScope` replacement.
 
 ## 4. Native Platform Layer
 
-Two distinct native-integration mechanisms are in use — new performance-sensitive native work should extend the second, not add more of the first:
+Two distinct native-integration mechanisms exist — extend the second for new performance-sensitive native work, not the first.
 
-1. **`MethodChannel`s** — three today, all registered in `MainActivity.kt`:
-   - `anistream/device_mode` (method `isTelevision`) — used once, by `InputModeController`, to ask the native Android side a one-time yes/no question at boot. Fails safe to `false` (not a TV) if the platform channel isn't implemented, so a build without the native handler wired up simply never activates TV mode rather than crashing. This is the sole signal feeding `dpadModeActive` — see [DESIGN.md](DESIGN.md) § 4 for why a second, live-sniffing signal is deliberately never added.
-   - `anistream/chapter_parser` (method `extractChapters`) — `ChapterMetadataPlugin.kt` / `native_chapter_parser.dart`, used only on the ExoPlayer path (`ExoTheaterScreen`). Opens a throwaway `ExoPlayer` against the stream URL purely to read whatever Chapter metadata entries Media3's own extractors attach to the container — `video_player` exposes no chapter API of its own, unlike media_kit/mpv on `TheaterScreen`, which gets chapters natively.
-   - `anistream/subtitle_parser` (method `parseSubtitle`) — `SubtitleParserPlugin.kt` / `native_subtitle_parser.dart`, also ExoPlayer-path-only. Hands raw subtitle bytes to Media3's own `TtmlParser`/`SsaParser` and returns real cue timing, positioning, and per-run styling, instead of `video_player`'s plain-text-only `ClosedCaptionFile` mechanism.
+**1. `MethodChannel`s** — three today, all registered in `MainActivity.kt`, all Android-only with no iOS/macOS equivalent:
 
-   All three are Android-only, with no iOS/macOS equivalent wired up for any of them.
-2. **FFI plugins** — `libtorrent_flutter` (the torrent engine, all platforms) and its supporting `jni` / `jni_flutter` / `objective_c` packages (cross-platform native interop — not Android-only despite the `jni` name). This remains the mechanism for anything performance-critical; the `MethodChannel`s above are one-shot metadata/parsing calls, not sustained high-throughput work.
+| Channel | Method | Used by | Notes |
+| --- | --- | --- | --- |
+| `anistream/device_mode` | `isTelevision` | `InputModeController`, once at boot | Sole signal feeding `dpadModeActive` — fails safe to `false` if unimplemented, rather than crashing. See [DESIGN.md](DESIGN.md) § 4 for why a second, live-sniffing signal is never added |
+| `anistream/chapter_parser` | `extractChapters` | ExoPlayer path only (`ExoTheaterScreen`) | Opens a throwaway ExoPlayer against the stream URL to read Media3's Chapter metadata — `video_player` has no chapter API of its own; media_kit/mpv gets chapters natively |
+| `anistream/subtitle_parser` | `parseSubtitle` | ExoPlayer path only | Hands raw subtitle bytes to Media3's `TtmlParser`/`SsaParser` for real cue timing/positioning/per-run styling, instead of `video_player`'s plain-text `ClosedCaptionFile` |
+
+**2. FFI plugins** — `libtorrent_flutter` (the torrent engine, all platforms) plus its `jni`/`jni_flutter`/`objective_c` interop packages (cross-platform despite the `jni` name). The mechanism for anything performance-critical — the `MethodChannel`s above are one-shot metadata/parsing calls, not sustained high-throughput work.
 
 ### Android
 
-- One manifest, one APK, serving both phone and Android TV (`LEANBACK_LAUNCHER` intent-filter category alongside the standard `LAUNCHER`, `android.software.leanback` declared as `required="false"`, a `tv_banner` drawable for the TV launcher). **The phone/TV split is entirely runtime** (`InputModeController.isTvPlatform` + `dpadModeActive`), never a build-time flavor or a separate manifest.
-- `android:usesCleartextTraffic="true"` is required because both local streaming paths are plain HTTP: `libtorrent_flutter`'s local streaming server, and (if `serverMode` is on) the LAN-only Go server.
-- `android:enableOnBackInvokedCallback="true"` enables predictive back gestures, matching the app's own `PopScope`-based back handling (`AppShell`, `TheaterScreen`).
-- `androidHwDec` setting distinguishes `mediacodec` (zero-copy, phones) from `mediacodec-copy` (safer, recommended for TV — see `settings_menu.dart`'s help text). Build tooling: AGP `9.0.1`, Kotlin `2.3.20`, JVM target 17.
-- **Known limitation** (carried from [README.md](../README.md) § 6): Android TV builds don't yet use the TV's own decode unit, so weak-GPU TV hardware may struggle with 1080p.
+- One manifest, one APK, serves both phone and Android TV (`LEANBACK_LAUNCHER` alongside the standard `LAUNCHER`, `android.software.leanback` as `required="false"`, a `tv_banner` drawable for the TV launcher). **The phone/TV split is entirely runtime** (`InputModeController.isTvPlatform` + `dpadModeActive`) — never a build-time flavor or separate manifest.
+- `android:usesCleartextTraffic="true"` — both local streaming paths are plain HTTP: `libtorrent_flutter`'s local server, and (if `serverMode` is on) the LAN-only Go server.
+- `android:enableOnBackInvokedCallback="true"` enables predictive back gestures, matching the app's `PopScope`-based back handling (`AppShell`, `TheaterScreen`).
+- `androidHwDec`: `mediacodec` (zero-copy, phones) vs. `mediacodec-copy` (safer, recommended for TV — see `settings_menu.dart`'s help text). Build tooling: AGP `9.0.1`, Kotlin `2.3.20`, JVM target 17.
+- **Known limitation** ([README.md](../README.md) § 6): Android TV builds don't yet use the TV's own decode unit — weak-GPU TV hardware may struggle with 1080p.
 
 ### macOS / iOS
 
-- Standard `FlutterAppDelegate` / `FlutterViewController` embedding; the one behavioral customization is `applicationShouldTerminateAfterLastWindowClosed` returning `true` (quits on last-window-close, matching desktop-app rather than menu-bar-app conventions).
-- `Release.entitlements` declares only `com.apple.security.app-sandbox`; `DebugProfile.entitlements` additionally declares `com.apple.security.cs.allow-jit` and `com.apple.security.network.server`. **Worth verifying:** if AniList OAuth (loopback HTTP server on port 3456) or on-device torrenting stop working specifically in signed/notarized Release builds, check whether Release needs `com.apple.security.network.client`/`.server` added too — not confirmed broken, just an untested gap between the two entitlement files (logged in § 7).
-- Per [README.md](../README.md), neither maintainer has a Mac or iOS device to test on — treat this platform as best-effort/community-verified rather than actively maintained.
+- Standard `FlutterAppDelegate`/`FlutterViewController` embedding — the one behavioral customization is `applicationShouldTerminateAfterLastWindowClosed` returning `true` (quits on last-window-close, matching desktop-app rather than menu-bar-app conventions).
+- `Release.entitlements` declares only `com.apple.security.app-sandbox`; `DebugProfile.entitlements` additionally has `com.apple.security.cs.allow-jit` and `.network.server`. **Worth verifying:** if AniList OAuth (loopback server, port 3456) or on-device torrenting break specifically in signed/notarized Release builds, check whether Release needs `.network.client`/`.server` too — untested gap, not confirmed broken (§ 7).
+- Per [README.md](../README.md), neither maintainer has a Mac or iOS device to test on — treat this platform as best-effort/community-verified, not actively maintained.
 
 ### Linux
 
-- GTK3 embedding via CMake; the one native customization is setting the GTK window's background to solid black (`#000000`) before the first Flutter frame, avoiding a white flash on a dark-themed app.
-- System dependencies: `mpv` (the underlying decode/render library `media_kit` wraps), GTK3 dev headers, standard C++ build tools — see [README.md](../README.md)'s install instructions.
+- GTK3 embedding via CMake — the one native customization sets the GTK window's background to solid black (`#000000`) before the first Flutter frame, avoiding a white flash on a dark-themed app.
+- System dependencies: `mpv` (the decode/render library `media_kit` wraps), GTK3 dev headers, standard C++ build tools — see [README.md](../README.md)'s install instructions.
 
 ### Windows
 
-- Win32 embedding via CMake/MSVC; window chrome is fully custom (`window_manager` package, `titleBarStyle: TitleBarStyle.hidden` in `main.dart`), with `dwmapi` used natively for dark-mode title-bar theming.
+- Win32 embedding via CMake/MSVC — window chrome is fully custom (`window_manager` package, `titleBarStyle: TitleBarStyle.hidden` in `main.dart`), with `dwmapi` used natively for dark-mode title-bar theming.
 - Requires the Visual Studio 2022 Build Tools "Desktop development with C++" workload — see [README.md](../README.md).
 
 ## 5. Streaming Pipeline
 
-`TheaterScreen` depends only on the `BaseStreamingController` interface (`streaming_controller_base.dart`) — `statusText`, `streamUrl`, `isReadyToPlay`, `hasError`, `needsManualSelection`, `batchFiles`, `initialize()`, `selectBatchFile()`. Two implementations satisfy it, chosen once per session by `AppSettings.serverMode`:
+`TheaterScreen` depends only on the `BaseStreamingController` interface (`streaming_controller_base.dart`) — `statusText`, `streamUrl`, `isReadyToPlay`, `hasError`, `needsManualSelection`, `batchFiles`, `initialize()`, `selectBatchFile()`. Two implementations satisfy it, chosen once per session via `AppSettings.serverMode`:
 
 | | `StreamingController` | `RemoteStreamingController` |
 | --- | --- | --- |
@@ -171,19 +173,34 @@ Two distinct native-integration mechanisms are in use — new performance-sensit
 | "Ready" threshold | 0.1% sequential buffer downloaded | 5.0% sequential buffer downloaded (server-side `bufferThreshold`) |
 | Batch-file selection | In-process, via `libtorrent_flutter`'s file list | Polled from the server's `needs_selection` state, POSTed back via `/select` |
 
-Both implementations parse candidate filenames with the same `TorrentParser` (see [API.md](API.md) § 3) to guess episode numbers inside a batch torrent — this logic is intentionally not duplicated between the on-device and remote paths.
+Both implementations parse candidate filenames with the same `TorrentParser` ([API.md](API.md) § 3) to guess episode numbers inside a batch torrent — this logic is intentionally not duplicated between the two paths.
 
-Independent of which streaming controller is active, `AppSettings.useExoPlayer` (mobile/TV only; exposed as "ExoPlayer Video Engine" under Settings → Playback Preferences) additionally picks the player implementation: `TheaterScreen` (`media_kit`/mpv — the default, and the only path with D-Pad/TV-remote focus navigation) or `exo_theater_screen.dart`'s `ExoTheaterScreen` (`video_player`, an ExoPlayer/AVPlayer-backed engine kept around to isolate whether stutter on weak Android TV hardware is a decode-engine problem — see that file's own header comment for the experiment's findings so far). This path is Android/TV-primary; iOS is out of scope for it. Both paths support chapters, auto-skip, and AniList progress tracking. `ExoTheaterScreen` additionally supports audio-track switching via `video_player`'s own `getAudioTracks()`/`selectAudioTrack()` (backed by Media3's `DefaultTrackSelector`), exposed through `PlaybackHandle` — `TheaterScreen` has had this from the start via media_kit's own `Tracks`/`setAudioTrack`, so this closes a gap specific to the ExoPlayer path rather than adding a new capability to both. The two axes are orthogonal: either streaming controller pairs with either player. `useExoPlayer` defaults to false, so `TheaterScreen` is what every session gets unless a user opts in.
+`AppSettings.useExoPlayer` (mobile/TV only, "ExoPlayer Video Engine" under Settings → Playback Preferences) independently picks the player, orthogonal to `serverMode`:
 
-**Background prefetching:** `NextEpisodePrefetchController` runs two independent tiers as the current episode nears its end. Tier 1 (always) resolves and scores the next episode's torrents via `TorrentScraperService`, so `TorrentSearchModal` opens pre-resolved even with autoplay off. Tier 2 (only with episode-autoplay on) additionally constructs a second, short-lived `BaseStreamingController` — via the shared `createStreamingController(AppSettings)` factory, so it always matches the current episode's own `serverMode`-selected implementation — and starts buffering it, for an instant hand-off. This briefly overlaps two controller *instances* of the same implementation, not two different implementations — it does not relax § 1's "never both at once" rule. Owned and disposed by `TheaterScreen`; the warm controller only ever leaves that ownership when an actual episode transition consumes it. Scoped to `TheaterScreen` only today — `ExoTheaterScreen` has neither episode-autoplay nor prefetching.
+| | `TheaterScreen` (default) | `ExoTheaterScreen` |
+| --- | --- | --- |
+| Engine | media_kit / mpv | `video_player` (ExoPlayer/AVPlayer) |
+| D-Pad/TV-remote focus nav | Yes | No |
+| Chapters, auto-skip, AniList tracking | Yes | Yes |
+| Audio-track switching | Yes — media_kit's `Tracks`/`setAudioTrack` | Yes, via `PlaybackHandle` (`getAudioTracks()`/`selectAudioTrack()`, Media3's `DefaultTrackSelector`) — closes a gap specific to this path |
+| Platform scope | All | Android/TV-primary; iOS out of scope |
 
-**HTTP reconnect tuning:** both streaming backends serve plain HTTP(S), read via mpv's libavformat network layer (`PlayerConfigurator._applyStreamingTuning`). A long pause routinely outlives the underlying TCP connection's keep-alive window (OS, local-server idle-out, or a LAN NAT/router), and mpv's demuxer has no built-in awareness the socket died — left at defaults, it never reissues the ranged GET, so a resume/seek reads from a dead connection, indistinguishable from a freeze. Mitigated via `network-timeout=10` plus `stream-lavf-o`'s `reconnect`/`reconnect_streamed`/`reconnect_on_network_error`/`reconnect_delay_max=5` flags — libavformat's standard dropped-connection recovery. Targets the specific failure mode `PlaybackDiagnostics` is built to confirm (§ 7); a freeze reproducing with `demuxer-cache-idle`/`core-idle` already `no` has a different root cause this tuning won't fix.
+`ExoTheaterScreen` exists to isolate whether stutter on weak Android TV hardware is a decode-engine problem — see that file's own header comment for findings so far. Either streaming controller pairs with either player. `useExoPlayer` defaults to `false`, so `TheaterScreen` is what every session gets unless a user opts in.
+
+**Background prefetching:** `NextEpisodePrefetchController` runs two tiers as the current episode nears its end.
+
+- **Tier 1** (always): resolves and scores the next episode's torrents via `TorrentScraperService`, so `TorrentSearchModal` opens pre-resolved even with autoplay off.
+- **Tier 2** (only with episode-autoplay on): builds a second, short-lived `BaseStreamingController` — via `createStreamingController(AppSettings)`, so it matches the current episode's own `serverMode` pick — and starts buffering it, for an instant hand-off.
+- This briefly overlaps two controller *instances* of the same implementation, never two different implementations — § 1's "never both at once" rule still holds.
+- Owned and disposed by `TheaterScreen`; only an actual episode transition takes ownership of the warm controller. Scoped to `TheaterScreen` — `ExoTheaterScreen` has neither episode-autoplay nor prefetching.
+
+**HTTP reconnect tuning:** both streaming backends serve plain HTTP(S), read via mpv's libavformat network layer (`PlayerConfigurator._applyStreamingTuning`). A long pause routinely outlives the underlying TCP connection's keep-alive window (OS, local-server idle-out, or a LAN NAT/router) — mpv's demuxer has no built-in awareness the socket died, so left at defaults it never reissues the ranged GET, and a resume/seek reads from a dead connection, indistinguishable from a freeze. Mitigated via `network-timeout=10` plus `stream-lavf-o`'s `reconnect`/`reconnect_streamed`/`reconnect_on_network_error`/`reconnect_delay_max=5` — libavformat's standard dropped-connection recovery. Targets the specific failure mode `PlaybackDiagnostics` is built to confirm (§ 7); a freeze reproducing with `demuxer-cache-idle`/`core-idle` already `no` has a different root cause this tuning won't fix.
 
 ## 6. AniStream Server (Go)
 
-Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, two external dependencies `github.com/anacrolix/torrent`, `asticode/go-astisub`. Full build/run/API instructions live in [`anistream_server/README.md`](../anistream_server/README.md) — this section is the condensed architectural summary; that file is authoritative for the actual command-line flags and endpoint reference.
+Optional, standalone companion for thin clients (Android TV boxes, phones, weak laptops) that shouldn't run a BitTorrent engine locally. Lives in `anistream_server/`, module `github.com/anistream/server`, two dependencies: `github.com/anacrolix/torrent`, `asticode/go-astisub`. This section is the condensed architectural summary — [`anistream_server/README.md`](../anistream_server/README.md) is authoritative for actual CLI flags and the endpoint reference.
 
-**Flow:** the Flutter app POSTs a magnet link to the server; the server does all torrenting and exposes the result as an HTTP range-request video stream (`http.ServeContent` over a `torrent.Reader`, which implements `io.ReadSeeker` — this is what makes MPV's seeking work against the server with no special-casing).
+**Flow:** the Flutter app POSTs a magnet link; the server does all torrenting and exposes the result as an HTTP range-request video stream (`http.ServeContent` over a `torrent.Reader`, which implements `io.ReadSeeker` — this is what makes MPV's seeking work with no special-casing).
 
 **Session state machine** (one session per active magnet link):
 
@@ -198,31 +215,35 @@ any state ──(3 min metadata timeout / no video files / stream failure)──
 ```
 
 - Sessions idle for 30+ minutes are dropped automatically (`reap()`, checked every 5 minutes).
--`max-storage-gb` (0 = unlimited) caps `-data`'s total on-disk size; once reached, `POST /api/stream` rejects new sessions with 507 rather than accepting one that can't fit. Measured by periodically walking `-data`, not by summing the torrent client's own byte-completed counters — see [`anistream_server/README.md`](../anistream_server/README.md) § 4. Existing sessions are never paused to enforce this.
+- `max-storage-gb` (0 = unlimited) caps `-data`'s total on-disk size — once reached, `POST /api/stream` rejects new sessions with 507 rather than accept one that can't fit. Measured by periodically walking `-data`, not by summing the torrent client's own byte-completed counters (see [`anistream_server/README.md`](../anistream_server/README.md) § 4). Existing sessions are never paused to enforce this.
 - No auth, CORS fully open (`Access-Control-Allow-Origin: *`) — trusted-LAN use only. Full rationale in [`anistream_server/README.md`](../anistream_server/README.md)'s own notes.
 - `RemoteStreamingController` (§ 5) is the only Dart-side consumer of this API.
 
 ## 7. Known Issues
 
-Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rather than silently patched around or left for a reader to rediscover — mirrors the same pattern [DESIGN.md](DESIGN.md) § 5 uses for design debt.
+Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rather than silently patched around — mirrors [DESIGN.md](DESIGN.md) § 5's pattern for design debt.
 
-- **`playback_session_controller.dart` is a dead stub.** Empty file, nothing imports it (already omitted from § 2's folder tree). Slated for removal — NEVER build on it.
-- **macOS/iOS Release entitlements are an unconfirmed gap, not a confirmed fix.** § 4 flags that `Release.entitlements` may be missing `com.apple.security.network.client`/`.server` relative to `DebugProfile.entitlements`. Not confirmed to actually break AniList OAuth's loopback server or on-device torrenting in signed/notarized Release builds — just an untested gap. Cross-referenced here so this stays the complete index of open items.
-- **Linux/Wayland/NVIDIA video freeze after an extended pause — confirmed, not fixable from this codebase, mitigated with a manual restart button.**
-  - **Repro:** pause 15 minutes to over an hour, then resume. Audio and the seekbar/position continue normally; the video frame stays permanently frozen for the rest of that session.
-  - **Confirmed on:** Linux + Wayland + NVIDIA (`hwdec-current=nvdec`, `current-vo=libmpv`). Not on Windows + Intel iGPU.
-  - **Ruled out** (via `playback_diagnostics.dart`): network layer, demuxer/cache, app focus/lifecycle, mpv's own decode pipeline — all confirmed healthy.
-  - **Root cause** (source inspection of `media_kit_video`'s Linux plugin, `video_output.cc`, `media-kit/media-kit`): it renders through an EGL context deliberately isolated from Flutter's own, created exactly once when the `Player` is constructed — no public API to re-initialize it short of fully disposing that `Player`.
-  - **Tried and confirmed ineffective**, on real affected hardware: a same-position seek; cycling the `hwdec` mpv property. Manually scrubbing the seekbar doesn't restore the picture either.
-  - **No automatic fix is possible:** no mpv property distinguishes a frozen frame from a healthy one, so no automatic trigger could ever be correct.
-  - **Shipped mitigation:** a manual restart button (`AppSettings.showFreezeRecoveryButton`, Settings → Playback Preferences, default off) in `TheaterTopBar`. It disposes only `_player` — freeing the stuck texture — while deliberately leaving the buffered `BaseStreamingController` running. `TheaterScreen` pops with a `TheaterRestartRequest` carrying that controller and a resume position (a few seconds before wherever playback was); `AnimeDetailsScreen._streamTorrent` immediately re-pushes a fresh `TheaterScreen` against it, recovering without re-downloading the torrent.
-  - **Still open:** not yet filed upstream against `media-kit/media-kit` — worth doing regardless of the mitigation, since the confirmed root cause lives entirely in the plugin's native Linux rendering path and this codebase can't fix it directly.
-  - **TsukiHime internal-ID lookups aren't cached per session.** `TsukihimeApiService.resolveInternalId` re-resolves the AniList ID → internal ID mapping on every `fetchTorrents` call — `_TorrentSearchCache` (`torrent_scraper_service.dart`) only caches the final, per-episode torrent list, not this intermediate lookup. Binge-watching one show re-runs it once per episode. Flagged in-code as a TODO; not yet implemented.
-  - **Batch-torrent episode selection still pulls in a sliver of the adjacent episode(s) — expected, not a regression of the whole-batch-download fix.** BitTorrent's atomic download unit is the piece, not the file — pieces are laid out across a multi-file torrent's whole concatenated byte stream (BEP 0003), so a piece straddling two episode files can't be completed for one without also pulling in the other's overlapping bytes. `session.activate()` (`main.go`) sets every file except the selected one to `PiecePriorityNone`, but the one or two pieces shared with its immediate neighbors still download regardless, since the torrent client needs them to complete the selected file. Bounded to roughly one piece's worth per side (a few MiB to several dozen, depending on the torrent's own piece size) — not the full neighboring episode, and distinct from the earlier bug where the whole batch downloaded, which the metadata-resolve-time deprioritization in `session.run()` already fixed. Not fixable client-side: avoiding it entirely would require the torrent to have been authored with episode-aligned piece boundaries in the first place, which is outside this app's control.
+- **`playback_session_controller.dart` is a dead stub.** Empty file, nothing imports it (already excluded from § 2's tree). Slated for removal — NEVER build on it.
+- **macOS/iOS Release entitlements are an unconfirmed gap.** § 4 flags that `Release.entitlements` may be missing `com.apple.security.network.client`/`.server`, relative to `DebugProfile.entitlements`. Not confirmed to break AniList OAuth's loopback server or on-device torrenting in signed/notarized builds — just untested. Logged here so this stays the complete index of open items.
+- **Linux/Wayland/NVIDIA video freeze after an extended pause** — confirmed, not fixable from this codebase, mitigated with a manual restart button:
+
+  | Aspect | Detail |
+  | --- | --- |
+  | Repro | Pause 15 minutes to over an hour, then resume. Audio and the seekbar/position continue normally; the video frame stays permanently frozen for the rest of that session. |
+  | Confirmed on | Linux + Wayland + NVIDIA (`hwdec-current=nvdec`, `current-vo=libmpv`). Not on Windows + Intel iGPU. |
+  | Ruled out | Network layer, demuxer/cache, app focus/lifecycle, mpv's own decode pipeline — all confirmed healthy (via `playback_diagnostics.dart`). |
+  | Root cause | `media_kit_video`'s Linux plugin (`video_output.cc`, source-inspected) renders through an EGL context deliberately isolated from Flutter's own, created once when the `Player` is constructed — no public API to reinit it short of fully disposing that `Player`. |
+  | Tried, confirmed ineffective | A same-position seek; cycling the `hwdec` mpv property. Manually scrubbing the seekbar doesn't restore the picture either. |
+  | Automatic fix | Not possible — no mpv property distinguishes a frozen frame from a healthy one. |
+  | Shipped mitigation | Manual restart button (`AppSettings.showFreezeRecoveryButton`, Settings → Playback Preferences, default off) in `TheaterTopBar`. Disposes only `_player` — freeing the stuck texture — while leaving the buffered `BaseStreamingController` running. `TheaterScreen` pops a `TheaterRestartRequest` carrying that controller and a resume position a few seconds back; `AnimeDetailsScreen._streamTorrent` immediately re-pushes a fresh `TheaterScreen` against it, recovering with no re-download. |
+  | Still open | Not yet filed upstream against `media-kit/media-kit` — worth doing regardless of the mitigation, since the root cause lives entirely in the plugin's native Linux rendering path. |
+
+- **TsukiHime internal-ID lookups aren't cached per session.** `TsukihimeApiService.resolveInternalId` re-resolves the AniList ID → internal ID mapping on every `fetchTorrents` call — `_TorrentSearchCache` (`torrent_scraper_service.dart`) only caches the final, per-episode torrent list, not this intermediate lookup. Binge-watching one show re-runs it once per episode. Flagged in-code as a TODO, not yet implemented.
+- **Batch-torrent episode selection still pulls in a sliver of adjacent episodes — expected, not a regression.** BitTorrent's atomic unit is the piece, not the file — pieces are laid out across a multi-file torrent's whole concatenated byte stream (BEP 0003), so a piece straddling two episode files can't complete for one without also pulling in the other's overlapping bytes. `session.activate()` (`main.go`) sets every file but the selected one to `PiecePriorityNone`, but the one or two pieces shared with its immediate neighbors still download regardless — the torrent client needs them to complete the selected file. Bounded to roughly one piece's worth per side (a few MiB to several dozen, depending on the torrent's own piece size) — not the full neighboring episode, and distinct from the earlier whole-batch-download bug, which `session.run()`'s metadata-resolve-time deprioritization already fixed. Not fixable client-side — would require the torrent to have been authored with episode-aligned piece boundaries in the first place, outside this app's control.
 
 ## 8. Browser Extension Integration
 
-A separate, small companion codebase (its own `manifest.json`/`content.js`/`background.js`) injects an "Open in AniStream" button on AniList and MyAnimeList anime pages. The button never carries anime metadata — the extension only knows which site it's on and the numeric id from the page URL (`anilist.co/anime/<id>`, `myanimelist.net/anime/<id>`) — resolving that id into a real `Anime` and opening it is entirely this app's responsibility.
+A separate, small companion codebase (its own `manifest.json`/`content.js`/`background.js`) injects an "Open in AniStream" button on AniList and MyAnimeList anime pages. The button never carries anime metadata — the extension only knows which site it's on and the numeric id from the page URL (`anilist.co/anime/<id>`, `myanimelist.net/anime/<id>`) — resolving that id into a real `Anime` and opening it is entirely this app's job.
 
 ```text
 Extension button click
@@ -239,7 +260,7 @@ Extension button click
 - `DeepLinkServer` is a `ChangeNotifier` singleton (`.instance`), started once from `main.dart`'s `_bootstrap()`, desktop-only — Chrome/Edge/Brave extensions have no equivalent on the mobile platforms this app also targets.
 - Binds `127.0.0.1` only (`InternetAddress.loopbackIPv4`), matching the extension's own same-device-only design. No auth: a request can't reach this port from anywhere but the same machine.
 - A bind failure (most likely a second AniStream instance already holding the port) is logged and swallowed, not surfaced as a crash — that instance simply never receives deep links.
-- `pending` (not a bare broadcast stream) is what lets a request that arrives before `AppShell` has mounted still be picked up — `AppShell` checks it directly once on `initState`, not only future notifications.
+- `pending` (not a bare broadcast stream) lets a request arriving before `AppShell` mounts still be picked up — `AppShell` checks it directly in `initState`, not just future notifications.
 
 ---
-*Last reviewed against the codebase: 2026-09-04. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see CLAUDE.md's Living Documentation Rule (§ 4).*
+*Last reviewed against the codebase: 2026-09-06. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md)'s Living Documentation Rule (§ 2).*
