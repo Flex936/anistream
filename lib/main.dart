@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'core/deep_link/deep_link_server.dart';
 import 'core/input/input_mode_controller.dart';
 import 'core/logging/app_logger.dart';
 
@@ -89,6 +90,15 @@ Future<void> _bootstrap(List<String> args) async {
       }),
     );
     AppLogger.i('main', 'Desktop window initialization scheduled');
+  }
+
+  // Loopback listener for the browser extension companion's "Open in
+  // AniStream" button (see ARCHITECTURE.md § 8) — desktop-only, since
+  // Chrome/Edge/Brave extensions have no equivalent on the mobile
+  // platforms this app also targets. Not awaited: binding a local port
+  // is near-instant, and nothing later in boot depends on it.
+  if (isDesktop) {
+    unawaited(DeepLinkServer.instance.start());
   }
 
   // Boot App. Called immediately rather than after the window-show

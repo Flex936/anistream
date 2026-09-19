@@ -1,31 +1,31 @@
 # AniStream Project Rules
 
 > **AniStream Docs:** **CLAUDE.md** · [CODING_RULES.md](CODING_RULES.md) · [DESIGN.md](DESIGN.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [API.md](API.md) · [README.md](../README.md) · [CONTRIBUTING.md](CONTRIBUTING.md)
-> **Covers:** project orientation for AI/human contributors, the code-generation workflow norms, the rule that keeps this doc suite in sync, and the style every doc in it follows. **See also:** [CODING_RULES.md](CODING_RULES.md) for the strict, enforced technical constraints on generated code, [DESIGN.md](DESIGN.md) for visual rules, [ARCHITECTURE.md](ARCHITECTURE.md) for where code lives.
+> **Covers:** project orientation, code-generation workflow norms, the Living Documentation Rule, and doc-suite style. **See also:** [CODING_RULES.md](CODING_RULES.md) for enforced technical constraints on generated code, [DESIGN.md](DESIGN.md) for visual rules, [ARCHITECTURE.md](ARCHITECTURE.md) for where code lives.
 
 ## 1. Project Overview & Working Norms
 
 - Act as a Senior Flutter/Dart Developer (Mobile/TV/Desktop) across this codebase.
-- Stack: Flutter ≥3.44.0, Dart ^3.12.2 — matches `pubspec.yaml`'s `environment:` constraint.
-  - Dart's constraint is an explicit caret pin; Flutter only has the ≥3.44.0 floor (no exact pin) — that asymmetry is intentional, not a gap.
-  - CODING_RULES.md enforces against these versions; not restated there.
-- Flutter/Dart at the core, plus an optional companion Go server (`anistream_server/`) for thin clients — see [ARCHITECTURE.md](ARCHITECTURE.md) § 6 and [`anistream_server/README.md`](../anistream_server/README.md).
-  - CODING_RULES.md is Dart-only. The Go code has its own conventions and isn't held to it.
-- ALWAYS draft a plan before generating code on any non-trivial task, and wait for explicit approval before generating.
-  - Multiple viable approaches, or genuine uncertainty? Present the options and ask — don't guess.
+- Stack: Flutter ≥3.44.0 (floor only, no exact pin — deliberate), Dart ^3.12.2 (caret-pinned), per `pubspec.yaml`. [CODING_RULES.md](CODING_RULES.md) enforces against these versions; not restated here.
+- Flutter/Dart at the core, plus an optional Go server (`anistream_server/`) for thin clients ([ARCHITECTURE.md](ARCHITECTURE.md) § 6, [`anistream_server/README.md`](../anistream_server/README.md)) — [CODING_RULES.md](CODING_RULES.md) is Dart-only; the Go code has its own conventions.
+- ALWAYS draft a plan before generating code on any non-trivial task.
+- ALWAYS wait for explicit approval before generating. Present options and ask when multiple approaches are viable or real uncertainty exists — never guess.
 - Output complete, runnable files for refactors — snippets only if explicitly requested.
-- Docs describe the current state only — never the editing process that produced it.
-  - FORBIDDEN: "per Track B," "as agreed in an earlier pass," or naming which internal pass produced a change.
+- Docs describe current state only, never the editing process that produced it.
+  - FORBIDDEN: "per Track B," "as agreed in an earlier pass," or naming the pass that produced a change.
   - OK: noting resolved *product* debt (e.g. [DESIGN.md](DESIGN.md) § 5 marking an item done) — that's product history, not editing history.
-  - Same rule for code comments — see [CODING_RULES.md](CODING_RULES.md) § 2.
+  - Same rule applies to code comments — [CODING_RULES.md](CODING_RULES.md) § 2.
 - Every generated change is held to [CODING_RULES.md](CODING_RULES.md) in full (performance, state management, caching, linter compliance) — not restated here.
 
 ## 2. Documentation & the Living Documentation Rule
 
-- Eight living docs, cross-referencing each other as `DocName.md § N`: this file, [CODING_RULES.md](CODING_RULES.md), [DESIGN.md](DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [API.md](API.md), [CONTRIBUTING.md](CONTRIBUTING.md) (all in `.claude/`), [README.md](../README.md) (repo root), and [`anistream_server/README.md`](../anistream_server/README.md) (narrower scope, no shared nav bar, same rule below). All eight describe the codebase as it actually is today — never as it was designed to be or will eventually become.
-- `ISSUE_BACKLOG.md` isn't one of the eight — it's a generated backlog, not a description of current state — but every entry pins a `Ref:` to a [DESIGN.md](DESIGN.md) § 5 sub-section. Renumber § 5 without updating it in the same pass and every reference breaks. See the table below.
+- Eight living docs cross-reference each other as `DocName.md § N` — this file, [CODING_RULES.md](CODING_RULES.md), [DESIGN.md](DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [API.md](API.md), and [CONTRIBUTING.md](CONTRIBUTING.md) in `.claude/`, plus root [README.md](../README.md) and [`anistream_server/README.md`](../anistream_server/README.md) (narrower scope, no shared nav bar, same rule applies). Full index: [README.md](../README.md) § 1.
+- All eight describe the codebase as it actually is today — never as designed or planned.
+- `ISSUE_BACKLOG.md` isn't one of the eight — a generated backlog, not a state description.
+- Every `ISSUE_BACKLOG.md` entry pins a `Ref:` to a [DESIGN.md](DESIGN.md) § 5 sub-section, or another canonical doc's section for items outside the design-system audit (see its Platform & Playback / Code Quality sections).
+- NEVER renumber [DESIGN.md](DESIGN.md) § 5 without updating every matching `Ref:` in the same pass — see the trigger table below.
 
-**The rule:** a codebase change matching a trigger below gets its doc update proposed alongside it — named explicitly, not silently rewritten, not deferred until asked. Same plan-first discipline as § 1, applied to docs.
+**The rule:** when a change matches a trigger below, propose the matching doc update alongside it — named explicitly, never silently rewritten or deferred. Same plan-first discipline as § 1, applied to docs.
 
 | Change | Docs to check |
 | --- | --- |
@@ -41,11 +41,11 @@
 | Renumbering or restructuring [DESIGN.md](DESIGN.md) § 5's sub-sections | Every `Ref:` line in `ISSUE_BACKLOG.md` — update both in the same pass, or neither |
 | Discovered a stale doc, dead code stub, or other unresolved inconsistency | [DESIGN.md](DESIGN.md) § 5 (design debt) or [ARCHITECTURE.md](ARCHITECTURE.md) § 7 (known issues), as applicable |
 
-- ALWAYS flag a stale doc the moment you notice it, even one you didn't just touch. A stale doc misleads worse than no doc — human or AI reader alike.
+- ALWAYS flag a stale doc the moment you notice it, even one you didn't just touch — it misleads worse than no doc at all.
 
 ## 3. Documentation Style
 
-Every doc in this suite — this file included — follows the rules below. Found one that doesn't? That's the § 2 stale-doc case: flag it, or fix it if you're already touching that doc for something else.
+Every doc in this suite, including this one, follows the rules below. A violation is the § 2 stale-doc case: flag it, or fix it while already touching that doc for something else.
 
 - One fact per bullet. If a sentence needs "and" to join two unrelated rules, it's two bullets.
 - Imperative, present tense. "Use X," never "we use X" or "you should use X."
@@ -53,13 +53,16 @@ Every doc in this suite — this file included — follows the rules below. Foun
 - Rationale is one inline clause, not its own paragraph or section.
 - Name exceptions explicitly — never leave them to inference.
 - Commands and diagrams go in fenced code blocks, verbatim — nothing else shares the block.
+- Before/after code examples use two separate plain code blocks (full "before," then full "after") — never a unified diff. Diff markers aren't copy-pasteable; two clean blocks are.
 - Cross-references use `DocName.md § N`. Don't invent a second citation format.
-- New sections are appended, never inserted mid-document — unless a full repo-wide grep-and-fix pass is explicitly budgeted for that change.
-- No editing-process narrative (§ 1 above already covers this — it's law, not a style preference).
+- New sections are appended, never inserted mid-document — unless a full repo-wide grep-and-fix pass is explicitly budgeted for the change.
+- No editing-process narrative (§ 1 already covers this — it's law, not a style preference).
 - Tables for anything with 3+ parallel rows, instead of prose enumerating them.
 - Keep the nav bar, the bold self-reference, and the "Last reviewed" footer on every doc that has them.
-- Three sections get no more than a grammar pass, never a restructure: [README.md](../README.md) § 1's origin-story/description prose and § 10 (Legal Disclaimer), and [CONTRIBUTING.md](CONTRIBUTING.md) § 7 (Code of Conduct) — tone, and for § 10 legal precision, matter more than density there. README § 2 (Features) and § 3 (How It Works) can tighten lightly for redundancy, but keep their voice — they're closer to reference content than storytelling. Everything else in the suite follows every rule above.
+- Voice-locked, grammar pass only: [README.md](../README.md) §§ 1 and 10, [CONTRIBUTING.md](CONTRIBUTING.md) § 7 — tone (and, for § 10, legal precision) matters more than density here.
+- Light touch only: [README.md](../README.md) §§ 2–3 — tighten redundancy, keep the voice; closer to reference content than storytelling.
+- Everything else in the suite follows every rule above.
 - If a rewrite makes a doc longer, that's a defect. The goal is density, not volume.
 
 ---
-*This file defines the Living Documentation Rule and the doc-suite style contract above; unlike the other seven docs (including [CODING_RULES.md](CODING_RULES.md)), it has no separate file to check itself against. Last reviewed against the codebase: 2026-08-15.*
+*This file defines the Living Documentation Rule and doc-suite style contract — unlike the other seven docs, it has no separate file to check itself against. Last reviewed against the codebase: 2026-09-05.*

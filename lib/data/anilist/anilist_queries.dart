@@ -45,10 +45,10 @@ abstract final class AnilistQueries {
 
   static const String userWatchlistPaged =
       '''
-    query (\$userId: Int, \$status: MediaListStatus, \$page: Int, \$perPage: Int) {
+    query (\$userId: Int, \$status: MediaListStatus, \$page: Int, \$perPage: Int, \$sort: [MediaListSort]) {
       Page(page: \$page, perPage: \$perPage) {
         pageInfo { hasNextPage }
-        mediaList(userId: \$userId, type: ANIME, status: \$status, sort: [MEDIA_TITLE_ROMAJI, MEDIA_ID_DESC]) {
+        mediaList(userId: \$userId, type: ANIME, status: \$status, sort: \$sort) {
           progress
           media { ${AnilistFragments.mediaCore} genres }
         }
@@ -57,7 +57,13 @@ abstract final class AnilistQueries {
 
   static const String currentlyAiring = r'''
     query GetCurrentlyAiring($page: Int, $perPage: Int, $currentSeason: MediaSeason, $currentYear: Int, $bannedGenres: [String]) {
-      Page(page: $page, perPage: $perPage) { media(type: ANIME, season: $currentSeason, seasonYear: $currentYear, sort: TRENDING_DESC, countryOfOrigin: "JP", isAdult: false, genre_not_in: $bannedGenres, format_not_in: [SPECIAL, OVA, ONA, MOVIE]) { id idMal title { romaji english } synonyms coverImage { extraLarge large } bannerImage description episodes status nextAiringEpisode { episode airingAt } } }
+      Page(page: $page, perPage: $perPage) { media(type: ANIME, season: $currentSeason, seasonYear: $currentYear, sort: TRENDING_DESC, countryOfOrigin: "JP", isAdult: false, genre_not_in: $bannedGenres, format_not_in: [SPECIAL, OVA, MOVIE]) { id idMal title { romaji english } synonyms coverImage { extraLarge large } bannerImage description episodes status nextAiringEpisode { episode airingAt } } }
+    }''';
+
+  static const String mediaByExternalId =
+      '''
+    query (\$id: Int, \$idMal: Int) {
+      Media(id: \$id, idMal: \$idMal, type: ANIME) { ${AnilistFragments.mediaCore} }
     }''';
 
   static const String viewerId = 'query { Viewer { id } }';

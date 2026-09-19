@@ -15,15 +15,23 @@ import 'torrent_tile.dart';
 /// a selection (backdrop tap, close button, or the error state's Close
 /// button) — the standard `showDialog<T>`-style contract, rather than a
 /// callback invoked while the route is still open.
-class TorrentSearchModal extends StatelessWidget {
+///
+/// Holds the currently-active search [Future] as local state rather than
+/// as a plain constructor field: [onRetry] lets the error/empty state
+/// swap in a freshly-fetched Future without popping and re-pushing this
+/// route, which would replay [SelectionModal]'s entrance transition for
+/// what should read as a seamless in-place refresh instead.
+class TorrentSearchModal extends StatefulWidget {
   final int episodeNumber;
   final Future<List<Torrent>> torrentsFuture;
+  final Future<List<Torrent>> Function() onRetry;
   final bool uiPerformanceMode;
 
   const TorrentSearchModal({
     super.key,
     required this.episodeNumber,
     required this.torrentsFuture,
+    required this.onRetry,
     this.uiPerformanceMode = false,
   });
 
@@ -31,6 +39,7 @@ class TorrentSearchModal extends StatelessWidget {
     required BuildContext context,
     required int episodeNumber,
     required Future<List<Torrent>> torrentsFuture,
+    required Future<List<Torrent>> Function() onRetry,
     bool uiPerformanceMode = false,
   }) {
     return showGeneralDialog<Torrent>(
@@ -57,6 +66,7 @@ class TorrentSearchModal extends StatelessWidget {
       pageBuilder: (context, _, _) => TorrentSearchModal(
         episodeNumber: episodeNumber,
         torrentsFuture: torrentsFuture,
+        onRetry: onRetry,
         uiPerformanceMode: uiPerformanceMode,
       ),
     );
@@ -69,34 +79,60 @@ class TorrentSearchModal extends StatelessWidget {
   }
 
   @override
+  State<TorrentSearchModal> createState() => _TorrentSearchModalState();
+}
+
+class _TorrentSearchModalState extends State<TorrentSearchModal> {
+  late Future<List<Torrent>> _activeFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeFuture = widget.torrentsFuture;
+  }
+
+  // Swaps in a freshly-fetched Future from widget.onRetry — FutureBuilder
+  // resets to its loading branch the instant the Future instance it's
+  // given changes, so this alone is what takes the body from _ErrorState
+  // back through _LoadingState to either _ErrorState or _ResultsList
+  // again, with no route pop/push involved.
+  void _handleRetry() {
+    setState(() => _activeFuture = widget.onRetry());
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SelectionModal(
       icon: Icons.search_rounded,
-      title: 'Episode $episodeNumber',
+      title: 'Episode ${widget.episodeNumber}',
       subtitle: 'Choose a release to stream, sorted by best match.',
-      regionMemoryKey: 'animeDetails.torrentModal.$episodeNumber',
-      uiPerformanceMode: uiPerformanceMode,
+      regionMemoryKey: 'animeDetails.torrentModal.${widget.episodeNumber}',
+      uiPerformanceMode: widget.uiPerformanceMode,
       // Both pop with no result (null) — a plain dismiss, not a selection.
       onClose: () => Navigator.of(context).pop(),
       onBackdropTap: () => Navigator.of(context).pop(),
       body: FutureBuilder<List<Torrent>>(
-        future: torrentsFuture,
+        future: _activeFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const _LoadingState();
           }
           if (snapshot.hasError) {
-            return _ErrorState(message: _messageFor(snapshot.error));
+            return _ErrorState(
+              message: TorrentSearchModal._messageFor(snapshot.error),
+              onRetry: _handleRetry,
+            );
           }
           final torrents = snapshot.data ?? const <Torrent>[];
           if (torrents.isEmpty) {
-            return const _ErrorState(
+            return _ErrorState(
               message: 'No seeded torrents found for this episode.',
+              onRetry: _handleRetry,
             );
           }
           return _ResultsList(
             torrents: torrents,
-            uiPerformanceMode: uiPerformanceMode,
+            uiPerformanceMode: widget.uiPerformanceMode,
           );
         },
       ),
@@ -135,7 +171,9 @@ class _LoadingState extends StatelessWidget {
 
 class _ErrorState extends StatelessWidget {
   final String message;
-  const _ErrorState({required this.message});
+  final VoidCallback onRetry;
+
+  const _ErrorState({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -156,30 +194,84 @@ class _ErrorState extends StatelessWidget {
             style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
           ),
           const SizedBox(height: 24),
-          DpadFocusable(
-            autofocus: true,
-            onSelect: () => Navigator.of(context).pop(),
-            builder: (context, state, child) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: state.focused
-                    ? AppPalette.primary.withValues(alpha: 0.15)
-                    : AppPalette.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: state.focused ? AppPalette.primary : AppPalette.border,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Primary action — holds the autofocus the Close button
+              // used to hold, since retrying is the more useful default
+              // than dismissing once a search has failed or come up empty.
+              DpadFocusable(
+                autofocus: true,
+                onSelect: onRetry,
+                builder: (context, state, child) => Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: state.focused
+                        ? AppPalette.primaryHover
+                        : AppPalette.primary,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: state.focused
+                          ? AppPalette.white
+                          : AppPalette.primary,
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.refresh_rounded,
+                        color: AppPalette.white,
+                        size: 15,
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Retry',
+                        style: TextStyle(
+                          color: AppPalette.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                child: const SizedBox.shrink(),
               ),
-              child: const Text(
-                'Close',
-                style: TextStyle(
-                  color: AppPalette.textMain,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(width: 12),
+              DpadFocusable(
+                onSelect: () => Navigator.of(context).pop(),
+                builder: (context, state, child) => Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: state.focused
+                        ? AppPalette.primary.withValues(alpha: 0.15)
+                        : AppPalette.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: state.focused
+                          ? AppPalette.primary
+                          : AppPalette.border,
+                    ),
+                  ),
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(
+                      color: AppPalette.textMain,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
+                child: const SizedBox.shrink(),
               ),
-            ),
-            child: const SizedBox.shrink(),
+            ],
           ),
         ],
       ),

@@ -29,9 +29,9 @@ The app is built entirely in **Flutter and Dart** (well, technically, optionally
 
 ## 2. Features
 
-- **P2P Playback:** Click on an episode, and streaming begins within seconds. The app utilizes a high-performance C++ torrent engine (`libtorrent`) with time-critical piece deadlines to stream data sequentially.
+- **P2P Playback:** Click on an episode, and streaming begins within seconds. Uses a high-performance C++ torrent engine (`libtorrent`) with time-critical piece deadlines to stream data sequentially.
 - **Progress Tracker:** Log in to your AniList account via OAuth2. Watching an episode past the **90% mark** triggers an automated progress update to your AniList library.
-- **AniList Library:** The app automatically pulls your current **Watching**, **Plan to Watch**, and **Watched** lists into a personalized library view.
+- **AniList Library:** Automatically pulls your current **Watching**, **Plan to Watch**, and **Watched** lists into a personalized library view.
 - **Calendar:** View weekly upcoming anime.
 - **Hardware Acceleration:** Powered by the `media_kit` package, the video player taps directly into your OS graphics pipeline for decoding with near-zero CPU usage.
 
@@ -39,15 +39,15 @@ The app is built entirely in **Flutter and Dart** (well, technically, optionally
 
 ## 3. How It Works
 
-1. **The Scraper:** When you select an episode, the app first asks the **TsukiHime API** — an anime- and episode-aware torrent index — for releases matching that exact episode or the whole season. If TsukiHime doesn't know the anime yet, a background Dart isolate falls back to scraping **Nyaa.si's RSS feeds** directly and scoring the results itself. Either way, live seeder counts come from querying BitTorrent trackers directly. *(Full scoring rubric and query details: [API.md](.claude/API.md).)*
+1. **The Scraper:** When you select an episode, the app first asks the **TsukiHime API** — an anime- and episode-aware torrent index — for releases matching that exact episode or the whole season. If TsukiHime doesn't know the anime yet, a background Dart isolate falls back to scraping **Nyaa.si's RSS feeds** directly and scoring the results itself. Live seeder counts come from querying BitTorrent trackers directly either way. *(Full scoring rubric and query details: [API.md](.claude/API.md).)*
 2. **The Streaming Pipeline:** The chosen magnet link is fed into `libtorrent_flutter`, which creates a local HTTP streaming server and requests sequential piece deadlines from peers instead of downloading randomly. *(Or, optionally, offloaded to the companion Go server — see [ARCHITECTURE.md](.claude/ARCHITECTURE.md) § 6.)*
-3. **The Native Player:** The local stream URL is passed directly to `media_kit`. Because Flutter renders UI with its own 2D graphics engine (Impeller), the video frames and the UI overlays composite onto the exact same native OS window — no separate video-view Z-index bugs, no OS rendering conflicts.
+3. **The Native Player:** The local stream URL is passed directly to `media_kit`. Because Flutter renders UI with its own 2D graphics engine (Impeller), the video frames and UI overlays composite onto the exact same native OS window — no separate video-view Z-index bugs, no OS rendering conflicts.
 
 ---
 
 ## 4. Developer & System Setup
 
-If you want to compile AniStream from source, modify components, or run a local development build, follow the setup instructions for your operating system below. For the project's folder structure and where new code belongs, see [ARCHITECTURE.md](.claude/ARCHITECTURE.md).
+Compiling AniStream from source, modifying it, or running a local dev build? Follow the setup for your OS below. For the project's folder structure and where new code belongs, see [ARCHITECTURE.md](.claude/ARCHITECTURE.md).
 
 ---
 
@@ -72,7 +72,7 @@ sudo apt install build-essential cmake ninja-build pkg-config libgtk-3-dev mpv g
 
 #### 2. Install the Flutter SDK (Linux)
 
-The cleanest way to install Flutter on Linux is directly from GitHub.
+Install Flutter directly from GitHub — the cleanest path on Linux.
 
 ```bash
 git clone https://github.com/flutter/flutter.git ~/.flutter-sdk
@@ -86,7 +86,7 @@ fish_add_path -g -p ~/.flutter-sdk/bin
 
 *(For bash/zsh, add `export PATH="$PATH:$HOME/.flutter-sdk/bin"` to your `.bashrc` or `.zshrc`)*
 
-Run the diagnostic tool to automatically download the Dart SDK:
+Run the diagnostic tool to download the Dart SDK:
 
 ```bash
 flutter doctor
@@ -108,7 +108,7 @@ winget install Git.Git
 
 Download and install the Flutter SDK from the [official Flutter website](https://docs.flutter.dev/install). Extract it somewhere like `C:\flutter` and add `C:\flutter\bin` to your `PATH` environment variable.
 
-Then run the diagnostic tool to verify your setup and download the Dart SDK:
+Run the diagnostic tool to verify your setup and download the Dart SDK:
 
 ```cmd
 flutter doctor
@@ -122,17 +122,17 @@ Flutter Windows desktop apps require the MSVC C++ compiler and the Windows SDK.
 2. In the installer, select the **Desktop development with C++** workload.
 3. Complete the installation and restart your PC.
 
-After restarting, run `flutter doctor` again to confirm all Windows requirements are satisfied.
+Restart, then run `flutter doctor` again to confirm.
 
 ---
 
 ## 5. Getting Started (Development)
 
-Once your Flutter environment is ready, navigate to the project directory to launch the application.
+Once Flutter is set up, navigate to the project directory to launch the app.
 
 ### 1. Install Dart Packages
 
-Fetch the necessary dependencies (like `media_kit`, `libtorrent_flutter`, etc):
+Fetch dependencies (`media_kit`, `libtorrent_flutter`, etc.):
 
 ```bash
 flutter pub get
@@ -140,7 +140,7 @@ flutter pub get
 
 ### 2. Launch the App in Live Development Mode
 
-Flutter handles live hot-reloading automatically. When you save a `.dart` file, the UI updates instantly without losing its state.
+Flutter hot-reloads automatically — saving a `.dart` file updates the UI instantly without losing its state.
 
 *For Linux:*
 
@@ -164,7 +164,7 @@ flutter run -d macos
 
 ## 6. Production Builds
 
-Compile an optimized, production-ready binary via Flutter's AOT (Ahead-of-Time) compiler — strips debug symbols, aggressively tree-shakes unused code, and needs no external VM or browser to run.
+Compile an optimized, production-ready binary via Flutter's AOT (Ahead-of-Time) compiler — strips debug symbols, tree-shakes unused code, and needs no external VM or browser to run.
 
 **Linux** → `build/linux/x64/release/bundle/`
 
@@ -184,7 +184,7 @@ flutter build windows --release
 flutter build apk --release
 ```
 
-> If your model struggles on 1080p footage on AndroidTV consider switching to exoplayer engine in settings. Note: Exoplayer currently requires subtitles from the anistream server and are of lower quality. 
+> If your device struggles with 1080p footage on Android TV, switch to the ExoPlayer engine in Settings. Note: ExoPlayer currently requires subtitles from the AniStream server, and those are lower quality.
 
 ---
 
@@ -213,7 +213,7 @@ AniStream is licensed under the **GNU General Public License v3.0 (GPLv3)**; see
 
 ## 10. Legal Disclaimer
 
-AniStream is an open-source architectural proof-of-concept designed as a personal utility. Users assume complete liability for the metadata aggregation parameters, torrent tracking hashes, and compliance with local legal frameworks governing peer-to-peer data transfers. No copyright-infringing media files are hosted, stored, or distributed on this codebase. However, while you are streaming, you will become a seeder for that duration.
+AniStream is an open-source architectural proof-of-concept designed as a personal utility. Users assume complete liability for the metadata aggregation parameters, torrent tracking hashes, and compliance with local legal frameworks governing peer-to-peer data transfers. No copyright-infringing media files are hosted, stored, or distributed by this codebase. However, while you are streaming, you will become a seeder for that duration.
 
 ---
-*Last reviewed against the codebase: 2026-08-26. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*
+*Last reviewed against the codebase: 2026-09-08. Changed a setup step, added a feature, or introduced a new top-level doc? Update this file's Documentation Index (§ 1) and relevant section too — see [CLAUDE.md](.claude/CLAUDE.md)'s Living Documentation Rule (§ 2).*
