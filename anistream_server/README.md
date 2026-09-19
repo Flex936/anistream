@@ -17,13 +17,14 @@ MPV on the TV opens the returned stream URL directly. HTTP range requests (seeki
 ## 2. Requirements
 
 - Go 1.23 or later — <https://go.dev/dl/> (matches the floor declared in `go.mod`)
-- Server and client on the same LAN, or connected via VPN
+- The server and the TV must be on the same LAN (or connected via VPN)
+- `ffmpeg` and `ffprobe` on `PATH` — optional. Video streaming works without them; without them, subtitle extraction is unavailable (see § 7)
 
 ## 3. Build
 
 ```bash
 cd anistream_server
-go mod tidy          # fetches anacrolix/torrent and its deps (~30 s first run)
+go mod tidy          # fetches anacrolix/torrent and go-astisub and their deps (~30 s first run)
 go build -o anistream-server .
 ```
 
@@ -44,15 +45,17 @@ GOOS=windows GOARCH=amd64 go build -o anistream-server.exe .
 ```bash
 ./anistream-server
 # or with custom options:
-./anistream-server -port 7878 -data /mnt/media/anistream
+./anistream-server -port 7878 -data /tmp/anistream -upload-limit-kbps -1 -download-limit-kbps 5000
 ```
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `-port` | `7878` | TCP port to listen on |
-| `-data` | `$TMPDIR/anistream-server` | Directory for downloaded pieces |
-| `-readahead-bytes` | `10485760` (~10 MB) | Per-stream torrent read-ahead size in bytes. Lower this on memory-constrained servers, e.g. a Raspberry Pi — this bounds *this machine's* memory use, not the client device's |
-| `-upload-limit-kbps` | `0` | Caps upload/seeding bandwidth in KB/s. `0` means unlimited, matching the server's long-standing default of seeding at full speed after a download completes |
+| `-port` | `7878` | Port to listen on. |
+| `-data` | OS temp dir + `anistream-server` | Directory for downloaded torrent data. |
+| `-readahead-bytes` | `10485760` (10 MiB) | Per-stream torrent read-ahead in bytes — lower this on memory-constrained servers (e.g. a Raspberry Pi). |
+| `-upload-limit-kbps` | `0` | Caps upload/seeding bandwidth in KB/s. `0` = unlimited. Any negative value (e.g. `-1`) disables uploading/seeding entirely — the server still downloads and streams normally, it just never offers pieces back to the swarm. |
+| `-download-limit-kbps` | `0` | Caps download bandwidth in KB/s. `0` = unlimited. No negative-value special case — unlike upload, downloading can't be disabled without breaking streaming, so anything `<= 0` just means unlimited. |
+|`-max-storage-gb`|`0`|Caps the total size of `-data` in GB (1024-based). `0` means unlimited. Once reached, `POST /api/stream` rejects new streams with `507` — measured by periodically walking -data, not the torrent client's internal counters, so it also catches orphaned data. Existing sessions are never paused to enforce it, so the folder can briefly exceed the cap by whatever's already mid-download|
 
 The server prints its address on startup — copy that IP into the Flutter app's Settings → Remote Server → Server URL field.
 
@@ -89,10 +92,12 @@ sudo systemctl enable --now anistream-server
 | Method | Path | Body / Response |
 | --- | --- | --- |
 | GET | `/api/health` | `{"name":"AniStream Server","status":"ok","version":"1.0.0"}` |
-| POST | `/api/stream` | `{magnet, episode_number?}` → `{session_id}` |
+| POST | `/api/stream` | `{magnet, episode_number?} → {session_id}`, or `507` once `-max-storage-gb` is reached |
 | GET | `/api/stream/:id` | `StatusResponse` (see below) |
 | POST | `/api/stream/:id/select` | `{file_index}` → `{ok:true}` |
 | GET | `/api/stream/:id/video` | HTTP range-request video stream (for MPV) |
+| GET | `/api/stream/:id/subtitles` | `{tracks: [...]}` — embedded subtitle tracks (needs `ffmpeg`/`ffprobe`, see § 2) |
+| GET | `/api/stream/:id/subtitles/:index` | That track's content, `?format=vtt\|ass\|ttml` (default `vtt`) — see `X-Subtitle-Complete` response header, § 7 |
 | DELETE | `/api/stream/:id` | 204 No Content |
 
 ### StatusResponse
@@ -118,9 +123,13 @@ sudo systemctl enable --now anistream-server
   "status_text": "Ready",
   "buffer_pct": 5.2,
   "peers": 24,
-  "stream_url": "http://192.168.1.5:7878/api/stream/abc123/video"
+  "stream_url": "http://192.168.1.5:7878/api/stream/abc123/video",
+  "subtitles_available": true,
+  "subtitles_complete": false
 }
 ```
+
+`subtitles_available`/`subtitles_complete` only ever appear once `state` is `"ready"`, and — like `stream_url`/`files` — are omitted entirely (not sent as `false`) rather than shown as `false`. `subtitles_available` needs `ffmpeg`/`ffprobe` on `PATH` (§ 2) and the same ≥5% buffer threshold that unlocks `stream_url`, not a full download. `subtitles_complete` only flips `true` once the whole file has finished downloading, at which point the client can stop re-fetching a given track.
 
 **`needs_selection`** — a batch torrent; `files` appears only now, and the client is expected to `POST` back to `/select` with a chosen `file_index`:
 
@@ -143,10 +152,11 @@ sudo systemctl enable --now anistream-server
 
 - Idle sessions (no requests for 30 minutes) are cleaned up automatically, including deleting their downloaded data from `-data`.
 - The server keeps seeding after download so the swarm stays healthy.
+- If `ffmpeg`/`ffprobe` aren't found on `PATH` at startup, the server logs a warning and degrades gracefully — video streaming is unaffected, but every `/subtitles` request returns `501 Not Implemented` and `subtitles_available` never turns true.
 - **Known caveat:** the default file storage lays each torrent's data out under `-data` keyed by the torrent's own declared name, not by info-hash. Two different torrents that happen to declare the same file/folder name can collide — and now that sessions delete this data on drop, dropping one could remove data a second, unrelated active session is still reading. Pre-existing in how `anacrolix/torrent`'s default storage lays files out, not introduced by cleanup — flagged here rather than left silent.
 - **No auth, CORS fully open** (`Access-Control-Allow-Origin: *`) — required so any LAN device can reach it.
   - Trusted-LAN use only. NEVER expose this directly to the internet — put it behind a firewall or VPN.
   - CORS here is not a security boundary. Don't treat it as one.
 
 ---
-*Last reviewed against the codebase: 2026-08-17. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether [ARCHITECTURE.md](../.claude/ARCHITECTURE.md) § 6's condensed summary needs the same update (see [CLAUDE.md](../.claude/CLAUDE.md) § 2).*
+*Last reviewed against the codebase: 2026-08-30. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*

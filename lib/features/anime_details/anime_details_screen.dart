@@ -9,8 +9,10 @@ import '../../data/anilist/anilist_query_service.dart';
 import '../../data/anilist/models/anime.dart';
 import '../../data/torrent/models/torrent.dart';
 import '../../data/torrent/torrent_scraper_service.dart';
-import '../../shared/utils/theater_session.dart';
 import '../../shared/widgets/frosted_container.dart';
+import '../theater/exo_theater_screen.dart';
+import '../theater/services/streaming_controller_base.dart';
+import '../theater/theater_screen.dart';
 import 'widgets/anime_synopsis_section.dart';
 import 'widgets/episode_tile.dart';
 import 'widgets/hero_header_delegate.dart';
@@ -33,7 +35,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
   int? _userProgress;
 
   bool _isFetchingSource = false;
-  int _autoPlayTargetEpisode = -1;
+  int _autoTorrentTargetEpisode = -1;
 
   @override
   void initState() {
@@ -62,30 +64,38 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     () => _scraper.fetchTorrents(widget.anime, ep),
   );
 
-  /// Tap entry point for an episode row. With autoplay off, this always
-  /// opens [TorrentSearchModal]. With autoplay on, it silently tries the
-  /// top result first, falling back to the same modal on either an empty
-  /// result or a thrown exception.
+  /// Tap entry point for an episode row. With auto-torrent-selection off,
+  /// this always opens [TorrentSearchModal]. With it on, it silently
+  /// tries the top result first, falling back to the same modal on either
+  /// an empty result or a thrown exception. Governs torrent *selection*
+  /// only — see `AppSettings.autoTorrentEnabled`'s doc comment for how
+  /// this is distinct from episode-to-episode autoplay.
   void _toggleEpisode(int ep) {
     if (_isFetchingSource) return;
 
-    final bool autoPlayEnabled = SettingsScope.of(
+    final bool autoTorrentEnabled = SettingsScope.of(
       context,
       listen: false,
-    ).settings.autoPlayEnabled;
+    ).settings.autoTorrentEnabled;
 
-    if (!autoPlayEnabled) {
+    if (!autoTorrentEnabled) {
       unawaited(_openTorrentModal(ep));
       return;
     }
 
-    unawaited(_autoPlayEpisode(ep));
+    unawaited(_autoSelectTopTorrentAndStream(ep));
   }
 
-  Future<void> _autoPlayEpisode(int ep) async {
+  /// Fetches sources for [ep] and streams the top-scored result directly,
+  /// falling back to [_openTorrentModal] on an empty result or a thrown
+  /// exception. Reused by both [_toggleEpisode] (a fresh tap on an
+  /// episode row with auto-torrent-selection on) and the episode-autoplay
+  /// transition flow, which resolves next-episode sources exactly the
+  /// same way once it decides to auto-advance.
+  Future<void> _autoSelectTopTorrentAndStream(int ep) async {
     setState(() {
       _isFetchingSource = true;
-      _autoPlayTargetEpisode = ep;
+      _autoTorrentTargetEpisode = ep;
     });
 
     try {
@@ -105,7 +115,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
           if (mounted) {
             setState(() {
               _isFetchingSource = false;
-              _autoPlayTargetEpisode = -1;
+              _autoTorrentTargetEpisode = -1;
             });
           }
         });
@@ -115,9 +125,10 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
 
   /// Opens [TorrentSearchModal] for [ep], reusing the same memoized
   /// [Future] `_futureFor` already produces — including one that's
-  /// already settled by the time this is called (e.g. autoplay's
-  /// fallback path), so the modal never triggers a second network
-  /// request for a search that already ran.
+  /// already settled by the time this is called (e.g.
+  /// [_autoSelectTopTorrentAndStream]'s fallback path), so the modal
+  /// never triggers a second network request for a search that already
+  /// ran.
   ///
   /// Awaits the modal's own pop result rather than handing it a callback
   /// that pops and immediately pushes TheaterScreen: [TorrentSearchModal]
@@ -144,26 +155,119 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     }
   }
 
-  /// Streams [torrent] for episode [ep] via the shared
-  /// [runTheaterSession] helper — including transparently following any
-  /// freeze-recovery restarts it re-pushes through, see that function's
-  /// own doc comment — then refreshes AniList progress once the whole
-  /// viewing session genuinely ends. Deliberately does NOT pop anything
-  /// itself — it's called both from [_openTorrentModal] (once the
-  /// modal's own pop has already resolved) AND from
-  /// [_autoPlayEpisode]'s direct success path (where no modal was ever
-  /// opened).
+  /// Pushes TheaterScreen or ExoTheaterScreen and refreshes AniList progress
+  /// once the whole viewing session ends. Deliberately does NOT pop anything
+  /// itself — it's called both from [_openTorrentModal] (once the modal's
+  /// own pop has already resolved) AND from
+  /// [_autoSelectTopTorrentAndStream]'s direct success path (where no modal
+  /// was ever opened).
+  ///
+  /// [AppSettings.useExoPlayer] picks which player screen this pushes:
+  ///
+  ///  - **true**: a single push/pop against [ExoTheaterScreen]. No restart
+  ///    loop and no episode-transition contract on this path — ExoPlayer
+  ///    doesn't have media_kit's Linux/NVIDIA freeze bug the restart loop
+  ///    exists for, and episode-autoplay/Next Episode/background
+  ///    prefetching are scoped to [TheaterScreen] only for now.
+  ///  - **false** (default): [TheaterScreen], via a loop. It normally pops
+  ///    with `null` (a real exit), but pops with a [TheaterExitResult]
+  ///    instead in two cases — [TheaterRestartRequest] (the freeze-recovery
+  ///    restart button; loops back against the same still-buffered
+  ///    controller rather than starting the torrent over from scratch) and
+  ///    [TheaterNextEpisodeRequest] in
+  ///    [NextEpisodeTransitionMode.instantHandoff] (a prefetched next-episode
+  ///    controller is already buffered; loops the same way against it
+  ///    instead). A [TheaterNextEpisodeRequest] in `autoFetch`/`manualPick`
+  ///    instead exits the loop and is handled exactly like a fresh tap on
+  ///    that episode row, via [_autoSelectTopTorrentAndStream] or
+  ///    [_openTorrentModal] respectively.
+  ///
+  /// Either way, `_fetchProgress()` only runs once the push actually
+  /// completes (or, on the TheaterScreen path, once the loop exits via a
+  /// genuine `null` or a delegated next-episode request), so a restart or
+  /// an instant handoff never triggers a premature progress refresh
+  /// mid-episode the way popping AnimeDetailsScreen's own route early
+  /// would.
   Future<void> _streamTorrent(int ep, Torrent torrent) async {
-    await runTheaterSession(
-      context: context,
-      anime: widget.anime,
-      episode: ep,
-      magnetUri: torrent.magnetLink,
-      displayTitle: widget.anime.title.display,
-    );
+    final bool useExoPlayer = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.useExoPlayer;
+
+    // Set only when the TheaterScreen loop below exits needing this
+    // screen to resolve the next episode itself (autoFetch or
+    // manualPick) — a restart or an instantHandoff next-episode request
+    // both loop straight back into another push instead, without this
+    // ever being set. Declared here, above the useExoPlayer branch,
+    // rather than inside the `else` block below, since it's read after
+    // the branch closes — the ExoPlayer path simply never sets it, so
+    // the check below correctly no-ops for those sessions.
+    (int, NextEpisodeTransitionMode)? pendingDelegate;
+
+    if (useExoPlayer) {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ExoTheaterScreen(
+            anime: widget.anime,
+            episode: ep,
+            torrent: torrent,
+          ),
+        ),
+      );
+    } else {
+      BaseStreamingController? resumeController;
+      Duration? resumePosition;
+
+      while (true) {
+        final result = await Navigator.push<TheaterExitResult?>(
+          context,
+          MaterialPageRoute<TheaterExitResult?>(
+            builder: (_) => TheaterScreen(
+              anime: widget.anime,
+              episode: ep,
+              magnetUri: torrent.magnetLink,
+              totalEpisodes: _episodeCount,
+              resumeController: resumeController,
+              resumePosition: resumePosition,
+            ),
+          ),
+        );
+
+        if (result == null) break;
+
+        if (result is TheaterRestartRequest) {
+          resumeController = result.resumeController;
+          resumePosition = result.resumePosition;
+          continue;
+        }
+
+        if (result is TheaterNextEpisodeRequest) {
+          if (result.mode == NextEpisodeTransitionMode.instantHandoff) {
+            ep = result.nextEpisode;
+            torrent = result.prewarmedTorrent!;
+            resumeController = result.prewarmedController;
+            resumePosition = Duration.zero;
+            continue;
+          }
+          pendingDelegate = (result.nextEpisode, result.mode);
+        }
+
+        break;
+      }
+    }
 
     if (mounted) {
       await _fetchProgress();
+    }
+
+    if (pendingDelegate != null && mounted) {
+      final (nextEpisode, mode) = pendingDelegate;
+      if (mode == NextEpisodeTransitionMode.autoFetch) {
+        unawaited(_autoSelectTopTorrentAndStream(nextEpisode));
+      } else {
+        unawaited(_openTorrentModal(nextEpisode));
+      }
     }
   }
 
@@ -261,7 +365,8 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                         userProgress: _userProgress,
                         isUpNext: isUpNext,
                         isCurrentlyLoading:
-                            _isFetchingSource && _autoPlayTargetEpisode == ep,
+                            _isFetchingSource &&
+                            _autoTorrentTargetEpisode == ep,
                         uiPerformanceMode: uiPerformanceMode,
                         onToggle: () => _toggleEpisode(ep),
                       );
@@ -298,7 +403,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
                             ),
                             const SizedBox(height: 24),
                             Text(
-                              'Finding best source for Episode $_autoPlayTargetEpisode...',
+                              'Finding best source for Episode $_autoTorrentTargetEpisode...',
                               style: const TextStyle(
                                 color: AppPalette.textMain,
                                 fontSize: 16,

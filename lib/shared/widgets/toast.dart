@@ -3,10 +3,12 @@ import '../../core/settings/settings_scope.dart';
 import 'glass_toast_content.dart';
 
 // Apple-style premium glass toast (bottom). Theater's own top-of-screen
-// status messages render through TheaterTopNotification
-// (features/theater/widgets/theater_player.dart) instead, since they need
-// to sit inside TheaterScreen's own Stack alongside TheaterTopBar rather
-// than above it via Overlay.
+// status messages (TheaterScreen and ExoTheaterScreen alike) render
+// through TheaterTopNotification (features/theater/widgets/
+// theater_player.dart) instead, fed by a shared TopNotificationController
+// (features/theater/services/top_notification_controller.dart), since
+// they need to sit inside each screen's own Stack alongside its top bar
+// rather than above it via Overlay.
 
 class AppleSnackBar {
   static void show({

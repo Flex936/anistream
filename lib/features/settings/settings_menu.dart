@@ -50,11 +50,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late bool _filterEcchi;
   late String _hardwareDecoding;
   late String _androidHwDec;
-  late bool _autoPlayEnabled;
+  late bool _autoTorrentEnabled;
+  late bool _episodeAutoplayEnabled;
   late bool _autoSkip;
   late bool _showFreezeRecoveryButton;
   late bool _uiPerformanceMode;
   late String _videoFilterQuality;
+  late bool _useExoPlayer;
 
   // Not exposed anywhere in this screen's own UI — TheaterSettingsMenu
   // is the only place this is user-editable (see AppSettings.
@@ -95,12 +97,14 @@ class _SettingsMenuState extends State<SettingsMenu> {
     _filterEcchi = s.filterEcchi;
     _hardwareDecoding = s.hardwareDecoding;
     _androidHwDec = s.androidHwDec;
-    _autoPlayEnabled = s.autoPlayEnabled;
+    _autoTorrentEnabled = s.autoTorrentEnabled;
+    _episodeAutoplayEnabled = s.episodeAutoplayEnabled;
     _autoSkip = s.autoSkip;
     _showFreezeRecoveryButton = s.showFreezeRecoveryButton;
     _uiPerformanceMode = s.uiPerformanceMode;
     _videoFilterQuality = s.videoFilterQuality;
     _libassEnabled = s.libassEnabled;
+    _useExoPlayer = s.useExoPlayer;
     _serverMode = s.serverMode;
     _serverUrlController.text = s.serverUrl;
   }
@@ -119,11 +123,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
           filterEcchi: _filterEcchi,
           hardwareDecoding: _hardwareDecoding,
           androidHwDec: _androidHwDec,
-          autoPlayEnabled: _autoPlayEnabled,
+          autoTorrentEnabled: _autoTorrentEnabled,
+          episodeAutoplayEnabled: _episodeAutoplayEnabled,
           autoSkip: _autoSkip,
           showFreezeRecoveryButton: _showFreezeRecoveryButton,
           uiPerformanceMode: _uiPerformanceMode,
           videoFilterQuality: _videoFilterQuality,
+          useExoPlayer: _useExoPlayer,
           serverMode: _serverMode,
           serverUrl: _serverUrlController.text.trim(),
           libassEnabled: _libassEnabled,
@@ -289,12 +295,20 @@ class _SettingsMenuState extends State<SettingsMenu> {
                           showDividerAbove: true,
                           children: [
                             SettingRowTile(
-                              title: 'Auto-Play',
+                              title: 'Auto-Select Torrent',
                               subtitle:
                                   'Skip the release list and instantly stream the highest-rated torrent.',
-                              value: _autoPlayEnabled,
+                              value: _autoTorrentEnabled,
                               onChanged: (v) =>
-                                  setState(() => _autoPlayEnabled = v),
+                                  setState(() => _autoTorrentEnabled = v),
+                            ),
+                            SettingRowTile(
+                              title: 'Autoplay Next Episode',
+                              subtitle:
+                                  'Automatically stream the next episode when this one finishes.',
+                              value: _episodeAutoplayEnabled,
+                              onChanged: (v) =>
+                                  setState(() => _episodeAutoplayEnabled = v),
                             ),
                             SettingRowTile(
                               title: 'Auto-Skip',
@@ -319,6 +333,15 @@ class _SettingsMenuState extends State<SettingsMenu> {
                               onChanged: (v) =>
                                   setState(() => _uiPerformanceMode = v),
                             ),
+                            if (!_isDesktop)
+                              SettingRowTile(
+                                title: 'ExoPlayer Video Engine',
+                                subtitle:
+                                    'Uses an alternate ExoPlayer engine instead of the default. May help with stutter on some Android TV hardware.',
+                                value: _useExoPlayer,
+                                onChanged: (v) =>
+                                    setState(() => _useExoPlayer = v),
+                              ),
                             const SizedBox(height: 16),
                             Padding(
                               padding: const EdgeInsets.symmetric(

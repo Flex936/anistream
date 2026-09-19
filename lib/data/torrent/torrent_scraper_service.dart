@@ -1,13 +1,17 @@
 // lib/data/torrent/torrent_scraper_service.dart
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
 import '../../core/logging/app_logger.dart';
 import '../anilist/models/anime.dart';
 import 'models/torrent.dart';
+import 'models/tsukihime_models.dart';
 import 'services/torrent_mirror_fetcher.dart';
 import 'services/torrent_parser_worker.dart';
+import 'services/tracker_scrape_service.dart';
+import 'services/tsukihime_api_service.dart';
 
 abstract final class _QueryRegex {
   static final stripTags = RegExp(
@@ -218,10 +222,84 @@ Future<List<Torrent>> _runQueueSearchStaggered(
 class TorrentScraperService {
   final http.Client _client;
   late final TorrentMirrorFetcher _mirrorFetcher;
+  late final TsukihimeApiService _tsukihimeApi;
+  late final TrackerScrapeService _trackerScrape;
 
-  TorrentScraperService({http.Client? client})
-    : _client = client ?? http.Client() {
+  TorrentScraperService({
+    http.Client? client,
+    TsukihimeApiService? tsukihimeApi,
+  }) : _client = client ?? http.Client() {
     _mirrorFetcher = TorrentMirrorFetcher(_client);
+    _tsukihimeApi = tsukihimeApi ?? TsukihimeApiService();
+    _trackerScrape = TrackerScrapeService(_client);
+  }
+  Future<List<Torrent>?> _tryTsukihime(Anime anime, int episodeNumber) async {
+    try {
+      final internalId = await _tsukihimeApi.resolveInternalId(anime.id);
+      if (internalId == null) return null;
+      final isFinished = anime.status?.toUpperCase() == "FINISHED";
+      final isMovie = anime.format?.toUpperCase() == "MOVIE";
+      final episodeFuture = _tsukihimeApi.getEpisodeTorrents(
+        internalId,
+        episodeNumber,
+      );
+      final seriesFuture = (isFinished && !isMovie)
+          ? _tsukihimeApi.getSeriesTorrents(internalId)
+          : Future.value(const <TsukihimeTorrentWire>[]);
+      final wireResults = await Future.wait([episodeFuture, seriesFuture]);
+      final episodeWires = wireResults[0];
+      final batchWires = wireResults[1].where((w) => w.episodeNo == null);
+      final seenIds = <String>{};
+      final torrents = <Torrent>[];
+      for (final wire in [...episodeWires, ...batchWires]) {
+        if (wire.btih.isEmpty || wire.nyaaId == 0) {
+          continue; //skip if no hash or not from nyaa.si
+        }
+        final torrent = wire.toAppTorrent();
+        if (seenIds.add(torrent.id)) torrents.add(torrent);
+      }
+      if (torrents.isEmpty) return null;
+      torrents.sort((a, b) => b.score.compareTo(a.score));
+      return await _enrichTopCandidatesWithSeeders(torrents);
+    } catch (e) {
+      AppLogger.w(
+        'TorrentScraper',
+        'Tsukihime lookup failed, falling back to Nyaa: $e',
+      );
+      return null;
+    }
+  }
+
+  static const int _kSeedersEnrichmentCount = 10;
+  Future<List<Torrent>> _enrichTopCandidatesWithSeeders(
+    List<Torrent> sorted,
+  ) async {
+    final top = sorted.take(_kSeedersEnrichmentCount).toList();
+    final rest = sorted.skip(_kSeedersEnrichmentCount);
+    try {
+      final stats = await _trackerScrape.scrape(top.map((t) => t.id).toList());
+      final enriched = top.map((t) {
+        final stat = stats[t.id.toLowerCase()];
+        if (stat == null) return t;
+        return Torrent(
+          id: t.id,
+          title: t.title,
+          releaseGroup: t.releaseGroup,
+          resolution: t.resolution,
+          size: t.size,
+          seeders: stat.seeders,
+          score: t.score + (math.log(stat.seeders + 1) * 5).clamp(0, 50),
+          isBatch: t.isBatch,
+        );
+      }).toList();
+      return [...enriched, ...rest]..sort((a, b) => b.score.compareTo(a.score));
+    } catch (e) {
+      AppLogger.w(
+        'TorrentScraper',
+        'Tracker scrape enrichment failed, using results as-is: $e',
+      );
+      return sorted;
+    }
   }
 
   Future<List<Torrent>> fetchTorrents(Anime anime, int episodeNumber) async {
@@ -236,6 +314,12 @@ class TorrentScraperService {
             '(${cached.length} candidates)',
       );
       return cached;
+    }
+
+    final tsukihimeResults = await _tryTsukihime(anime, episodeNumber);
+    if (tsukihimeResults != null) {
+      _TorrentSearchCache.set(anime.id, episodeNumber, tsukihimeResults);
+      return tsukihimeResults;
     }
 
     final title = anime.title;
@@ -415,6 +499,7 @@ class TorrentScraperService {
 
   void dispose() {
     _client.close();
+    _tsukihimeApi.dispose();
     // Deliberately not touching TorrentParserWorker here — it's an
     // app-lifetime singleton shared across every TorrentScraperService
     // instance.

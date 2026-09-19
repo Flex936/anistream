@@ -50,5 +50,5 @@ app.*.map.json
 claude_temp
 
 
-anistream_server/.torrent.*
+anistream_server/tmp
 

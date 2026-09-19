@@ -74,15 +74,26 @@ Future<void> _bootstrap(List<String> args) async {
       titleBarStyle: TitleBarStyle.hidden,
     );
 
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.maximize();
-      await windowManager.show();
-      await windowManager.focus();
-    });
-    AppLogger.i('main', 'Desktop window initialized');
+    // Deliberately not awaited. The native window stays hidden (see the
+    // "hide until ready" patches in windows/runner and linux/runner)
+    // until this callback's show() call reveals it, already maximized.
+    // Awaiting the whole call here would block runApp() below until the
+    // window is already shown/maximized/focused — before Flutter has
+    // built a widget tree or rendered a single frame onto its surface.
+    unawaited(
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.maximize();
+        await windowManager.show();
+        await windowManager.focus();
+        AppLogger.i('main', 'Desktop window shown (maximized)');
+      }),
+    );
+    AppLogger.i('main', 'Desktop window initialization scheduled');
   }
 
-  // Boot App
+  // Boot App. Called immediately rather than after the window-show
+  // sequence above completes, so Flutter has a real frame on the way to
+  // the window's surface well before show()/focus() ever reveal it.
   AppLogger.i('main', 'Booting AniStreamApp');
   runApp(const AniStreamApp());
 }

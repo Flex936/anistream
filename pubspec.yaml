@@ -42,6 +42,7 @@ dependencies:
   window_manager: ^0.5.1
   xml: ^7.0.1
   dpad: ^3.0.0
+  video_player: ^2.13.0
 
 dev_dependencies:
   flutter_test:

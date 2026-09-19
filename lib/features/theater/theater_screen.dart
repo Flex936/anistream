@@ -15,20 +15,34 @@ import '../../core/settings/settings_service.dart';
 import '../../core/theme/app_palette.dart';
 import '../../data/anilist/anilist_tracker_service.dart';
 import '../../data/anilist/models/anime.dart';
+import '../../data/torrent/models/torrent.dart';
 import 'services/auto_skip_controller.dart';
 import 'services/controls_visibility_controller.dart';
+import 'services/mpv_chapter_loader.dart';
+import 'services/next_episode_prefetch_controller.dart';
 import 'services/playback_diagnostics.dart';
+import 'services/playback_handle.dart';
 import 'services/playback_stall_controller.dart';
 import 'services/player_configurator.dart';
-import 'services/remote_streaming_controller.dart';
 import 'services/streaming_controller.dart';
 import 'services/streaming_controller_base.dart';
 import 'services/theater_data.dart';
+import 'services/top_notification_controller.dart';
 import 'widgets/batch_picker.dart';
+import 'widgets/mobile_theater_controls.dart';
 import 'widgets/playback_stall_indicator.dart';
 import 'widgets/theater_controls.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_settings.dart';
+
+/// Base type for every non-null value [TheaterScreen] can pop with — see
+/// [TheaterRestartRequest] (freeze-recovery restart, or a Libass toggle,
+/// same episode) and [TheaterNextEpisodeRequest] (advancing to the next
+/// episode). A plain `null` pop remains a genuine exit back to
+/// `AnimeDetailsScreen` — see [_TheaterScreenState._exitTheater].
+sealed class TheaterExitResult {
+  const TheaterExitResult();
+}
 
 /// Returned by [TheaterScreen] when the user taps its freeze-recovery
 /// restart button, or toggles Libass in [TheaterSettingsMenu] (see
@@ -39,7 +53,7 @@ import 'widgets/theater_settings.dart';
 /// near-instantly instead of re-downloading the torrent from scratch. A
 /// normal exit pops with `null` instead — see
 /// [_TheaterScreenState._exitTheater].
-class TheaterRestartRequest {
+class TheaterRestartRequest extends TheaterExitResult {
   final BaseStreamingController resumeController;
   final Duration resumePosition;
 
@@ -49,26 +63,55 @@ class TheaterRestartRequest {
   });
 }
 
-/// Carries the message/icon/color for Theater's own in-flow status toast
-/// — see [TheaterTopNotification]'s doc comment
-/// (widgets/theater_player.dart) for how this is rendered.
-class _TopNotification {
-  final String message;
-  final IconData icon;
-  final Color iconColor;
+/// How [AnimeDetailsScreen._streamTorrent] should proceed once a
+/// [TheaterNextEpisodeRequest] pops back to it.
+enum NextEpisodeTransitionMode {
+  /// A prefetched, already-buffering controller for the next episode is
+  /// ready — skip fetching entirely and re-push TheaterScreen directly
+  /// against it. Not yet produced by any caller today — reserved for the
+  /// background-prefetching engine (`NextEpisodePrefetchController`).
+  instantHandoff,
 
-  const _TopNotification({
-    required this.message,
-    required this.icon,
-    required this.iconColor,
-  });
+  /// No prewarmed controller, but episode-autoplay is on — fetch and
+  /// stream the next episode's top-scored torrent automatically, exactly
+  /// like a fresh tap on that episode row with auto-torrent-selection on.
+  autoFetch,
+
+  /// Episode-autoplay is off — open the torrent-selection modal for the
+  /// next episode, exactly like a fresh tap on that episode row with
+  /// auto-torrent-selection off.
+  manualPick,
+}
+
+/// Returned by [TheaterScreen] when the current episode ends (playback
+/// completion) or the user taps the Next Episode chip — see
+/// [_TheaterScreenState._requestNextEpisodeTransition]. [mode] tells
+/// [AnimeDetailsScreen._streamTorrent] how to proceed;
+/// [prewarmedController] and [prewarmedTorrent] are only ever populated
+/// for [NextEpisodeTransitionMode.instantHandoff].
+class TheaterNextEpisodeRequest extends TheaterExitResult {
+  final int nextEpisode;
+  final NextEpisodeTransitionMode mode;
+  final BaseStreamingController? prewarmedController;
+  final Torrent? prewarmedTorrent;
+
+  const TheaterNextEpisodeRequest({
+    required this.nextEpisode,
+    required this.mode,
+    this.prewarmedController,
+    this.prewarmedTorrent,
+  }) : assert(
+         mode != NextEpisodeTransitionMode.instantHandoff ||
+             (prewarmedController != null && prewarmedTorrent != null),
+         'instantHandoff requires both prewarmedController and prewarmedTorrent',
+       );
 }
 
 class TheaterScreen extends StatefulWidget {
   /// AniList context for progress tracking — always null together with
-  /// [episode] for a custom-magnet stream with no anime metadata behind
-  /// it (see [magnetUri]). Never null on the normal from-AnimeDetails
-  /// path.
+  /// [episode]/[totalEpisodes] for a custom-magnet stream with no anime
+  /// metadata behind it (see [magnetUri]). Never null on the normal
+  /// from-AnimeDetails path.
   final Anime? anime;
 
   /// Paired with [anime] — see that field's doc comment. Also used as
@@ -84,6 +127,15 @@ class TheaterScreen extends StatefulWidget {
   /// Shown in the top bar / loading overlay in place of "Episode N" when
   /// [episode] is null. Ignored otherwise.
   final String? displayTitle;
+
+  /// Total episode count for [anime] — gates the Next Episode chip and
+  /// completion-triggered transitions (there's nothing to advance to past
+  /// this). Null exactly when [anime]/[episode] are null (a custom-magnet
+  /// stream with no episode context) — see the constructor's assert.
+  /// Otherwise always the same value `AnimeDetailsScreen._episodeCount`
+  /// already computes; threaded through explicitly since this screen has
+  /// no other way to know it.
+  final int? totalEpisodes;
 
   /// Non-null only when this screen is replacing a prior instance after
   /// a freeze-recovery restart or a Libass toggle — the already-buffered
@@ -101,6 +153,7 @@ class TheaterScreen extends StatefulWidget {
     this.episode,
     required this.magnetUri,
     this.displayTitle,
+    this.totalEpisodes,
     this.resumeController,
     this.resumePosition,
   }) : assert(
@@ -108,8 +161,10 @@ class TheaterScreen extends StatefulWidget {
          'resumeController and resumePosition must both be null or both be provided',
        ),
        assert(
-         (anime == null) == (episode == null),
-         'anime and episode must both be null (custom magnet stream) or both be provided',
+         (anime == null) == (episode == null) &&
+             (episode == null) == (totalEpisodes == null),
+         'anime, episode, and totalEpisodes must all be null (a custom '
+         'magnet stream with no episode context) or all be provided',
        );
 
   @override
@@ -121,6 +176,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   late final AnilistTrackerService _tracker;
   late final Player _player;
+  late final PlaybackHandle _playbackHandle;
   late final VideoController _videoController;
   late final AutoSkipController _autoSkipController;
   late final ControlsVisibilityController _controlsVisibility;
@@ -133,6 +189,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // Drives the mid-playback "Buffering…" indicator off mpv's own
   // buffering signal — see playback_stall_controller.dart's class doc.
   late final PlaybackStallController _playbackStallController;
+
+  // Background-prefetches the next episode's sources (and, when
+  // episode-autoplay is on, an actual buffering stream) as this episode
+  // nears its end — see next_episode_prefetch_controller.dart's class
+  // doc. Null whenever there's no next episode to prefetch (constructed
+  // in _initPlayerAndStream, once totalEpisodes/settings are known) or
+  // this is a custom-magnet session with no episode context at all.
+  NextEpisodePrefetchController? _prefetchController;
 
   /// A same-position pause before a manual restart, below which a
   /// restart wouldn't meaningfully rewind anything.
@@ -163,6 +227,11 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // AutoSkipController.
   bool _autoSkip = false;
 
+  // Governs _requestNextEpisodeTransition's mode selection — see that
+  // method. Independent of auto-torrent-selection (AnimeDetailsScreen's
+  // own AppSettings.autoTorrentEnabled), which this screen never reads.
+  bool _episodeAutoplayEnabled = false;
+
   // Gates the freeze-recovery restart button in TheaterTopBar. Defaults
   // false — see AppSettings.showFreezeRecoveryButton's doc comment for
   // why this stays a manual, opt-in action rather than an automatic one.
@@ -182,20 +251,23 @@ class _TheaterScreenState extends State<TheaterScreen> {
   List<Chapter> _chapters = [];
   StreamSubscription<Duration>? _posSub;
 
+  // Drives _requestNextEpisodeTransition on genuine end-of-file — see
+  // _onPlaybackCompleted. Subscribed synchronously in initState alongside
+  // the other early player-stream-driven controllers below, rather than
+  // deferred to _initPlayerAndStream like _posSub: unlike AniList
+  // tracking, completion detection has no dependency on that method's
+  // async settings/tracker setup, so there's no reason to delay it.
+  StreamSubscription<bool>? _completedSub;
+
   // Theater's own in-flow status toast (AniList sync confirmation,
   // auto-skip arming) — see TheaterTopNotification's doc comment
-  // (widgets/theater_player.dart) for why this renders as plain State/
+  // (widgets/theater_player.dart) for why this renders as plain
   // Positioned content in this screen's own Stack rather than through an
-  // Overlay-based toast.
-  _TopNotification? _topNotification;
-  Timer? _topNotificationTimer;
-  static const Duration _kTopNotificationDuration = Duration(seconds: 4);
-
-  // Vertical clearance TheaterTopNotification reserves below
-  // TheaterTopBar's own top offset (see _buildControlsOverlay), so the
-  // notification never visually overlaps the back button regardless of
-  // whether the controls overlay is currently shown or hidden.
-  static const double _kTopBarClearance = 64.0;
+  // Overlay-based toast, and TopNotificationController's own doc comment
+  // (services/top_notification_controller.dart) for why the same
+  // controller also drives ExoTheaterScreen's identical toast.
+  final TopNotificationController _topNotificationController =
+      TopNotificationController();
 
   /// "Episode N" when this session has AniList episode context, or
   /// [TheaterScreen.displayTitle] (falling back to "Custom Stream")
@@ -231,17 +303,24 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _player = Player(
       configuration: PlayerConfiguration(libass: _libassEnabled),
     );
+    // Thin PlaybackHandle wrapper around _player — see
+    // PlayerPlaybackHandle's own doc comment. Only consumed by
+    // MobileTheaterControls, on non-desktop platforms (see
+    // _buildControlsOverlay below).
+    _playbackHandle = PlayerPlaybackHandle(_player);
     const videoConfig = VideoControllerConfiguration(
       androidAttachSurfaceAfterVideoParameters: true,
     );
     _videoController = VideoController(_player, configuration: videoConfig);
 
     _controlsVisibility = ControlsVisibilityController(
-      player: _player,
+      playingStream: _player.stream.playing,
+      isPlaying: () => _player.state.playing,
       isSubMenuOpen: () => _isSettingsOpen,
     );
     _playbackDiagnostics = PlaybackDiagnostics(player: _player);
     _playbackStallController = PlaybackStallController(player: _player);
+    _completedSub = _player.stream.completed.listen(_onPlaybackCompleted);
 
     if (Platform.isAndroid || Platform.isIOS) {
       // initState can't be async — SystemChrome's setters return
@@ -259,26 +338,38 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
 
     _autoSkipController = AutoSkipController(
-      player: _player,
+      onSeek: (position) => _player.seek(position),
       isEnabled: () => _autoSkip,
-      onSkipArmed: (skipLabel) => _showTopNotification(
-        message: 'Auto-skipping $skipLabel in 2s...',
-        icon: Icons.fast_forward_rounded,
-        iconColor: AppPalette.primary,
-      ),
+      onSkipArmed: (skipLabel) {
+        if (mounted) {
+          _topNotificationController.show(
+            message: 'Auto-skipping $skipLabel in 2s...',
+            icon: Icons.fast_forward_rounded,
+            iconColor: AppPalette.primary,
+          );
+        }
+      },
     );
 
     _tracker = AnilistTrackerService(
-      onSuccess: () => _showTopNotification(
-        message: 'Progress saved to AniList',
-        icon: Icons.check_circle_rounded,
-        iconColor: AppPalette.statusReleasing,
-      ),
-      onFailure: (message) => _showTopNotification(
-        message: message,
-        icon: Icons.error_outline_rounded,
-        iconColor: AppPalette.statusCancelled,
-      ),
+      onSuccess: () {
+        if (mounted) {
+          _topNotificationController.show(
+            message: 'Progress saved to AniList',
+            icon: Icons.check_circle_rounded,
+            iconColor: AppPalette.statusReleasing,
+          );
+        }
+      },
+      onFailure: (message) {
+        if (mounted) {
+          _topNotificationController.show(
+            message: message,
+            icon: Icons.error_outline_rounded,
+            iconColor: AppPalette.statusCancelled,
+          );
+        }
+      },
     );
 
     // _initPlayerAndStream is Future<void> — initState can't be async,
@@ -302,16 +393,14 @@ class _TheaterScreenState extends State<TheaterScreen> {
       _uiPerformanceMode = s.uiPerformanceMode;
       _videoFilterQuality = s.videoFilterQuality;
       _autoSkip = s.autoSkip;
+      _episodeAutoplayEnabled = s.episodeAutoplayEnabled;
       _showFreezeRecoveryButton = s.showFreezeRecoveryButton;
     });
 
     final bool isResuming = widget.resumeController != null;
 
     final BaseStreamingController newController =
-        widget.resumeController ??
-        (s.serverMode && s.serverUrl.isNotEmpty
-            ? RemoteStreamingController(serverUrl: s.serverUrl)
-            : StreamingController());
+        widget.resumeController ?? createStreamingController(s);
     newController.addListener(_onTorrentStateChanged);
 
     if (!mounted) {
@@ -370,12 +459,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
       );
     }
 
-    // AniList progress tracking — skipped entirely for a custom-magnet
-    // session with no anime/episode context. AnilistTrackerService stays
-    // in its default logged-out, ineligible state until init() runs, so
-    // updateProgress() below is already a safe no-op in that case.
+    // AniList progress tracking, and the next-episode background
+    // prefetch below, are both skipped entirely for a custom-magnet
+    // session with no anime/episode/totalEpisodes context — the
+    // constructor's assert guarantees the three are null together.
+    // AnilistTrackerService stays in its default logged-out, ineligible
+    // state until init() runs, so updateProgress() below is already a
+    // safe no-op in that case.
     final trackedAnime = widget.anime;
     final trackedEpisode = widget.episode;
+    final trackedTotalEpisodes = widget.totalEpisodes;
     if (trackedAnime != null && trackedEpisode != null) {
       await _tracker.init(
         mediaId: trackedAnime.id,
@@ -385,9 +478,31 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
     if (!mounted) return;
 
+    if (trackedAnime != null &&
+        trackedEpisode != null &&
+        trackedTotalEpisodes != null &&
+        trackedEpisode < trackedTotalEpisodes) {
+      _prefetchController = NextEpisodePrefetchController(
+        anime: trackedAnime,
+        nextEpisode: trackedEpisode + 1,
+        settings: s,
+        episodeAutoplayEnabled: () => _episodeAutoplayEnabled,
+        onEngineWarm: () {
+          if (mounted) {
+            _topNotificationController.show(
+              message: 'Up next: Episode ${trackedEpisode + 1} ready',
+              icon: Icons.skip_next_rounded,
+              iconColor: AppPalette.primary,
+            );
+          }
+        },
+      );
+    }
+
     _posSub = _player.stream.position.listen((pos) {
       _tracker.updateProgress(pos, _player.state.duration);
       _autoSkipController.onPosition(pos);
+      _prefetchController?.onPosition(pos, _player.state.duration);
     });
   }
 
@@ -460,27 +575,6 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
   }
 
-  // Top notification.
-
-  void _showTopNotification({
-    required String message,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    if (!mounted) return;
-    _topNotificationTimer?.cancel();
-    setState(() {
-      _topNotification = _TopNotification(
-        message: message,
-        icon: icon,
-        iconColor: iconColor,
-      );
-    });
-    _topNotificationTimer = Timer(_kTopNotificationDuration, () {
-      if (mounted) setState(() => _topNotification = null);
-    });
-  }
-
   // Platform.
   //
   // Desktop-only flag, threaded into TheaterControls so it can hide the
@@ -488,7 +582,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // controls ... on Mobile/TV builds"). Mirrors the exact platform test
   // already used elsewhere in this file (_initPlayerAndStream,
   // _toggleFullscreen, _disposePlaybackResources) rather than introducing
-  // a new check.
+  // a new check. Also what _buildControlsOverlay branches the bottom
+  // control bar on — see that method's doc comment.
   bool get _isDesktopPlatform =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
@@ -519,7 +614,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // via its own `Focus.onKeyEvent` (Seekbar and the volume Slider both do
   // this for Left/Right when they hold keyboard focus). Left unguarded,
   // that would double-seek (Seekbar) or seek unexpectedly while the user
-  // is nudging volume (the Slider). `_seekbarFocused`/`_volumeSliderFocused`
+  // is nudging volume. `_seekbarFocused`/`_volumeSliderFocused`
   // (set via TheaterControls' onSeekbarFocusChange/onVolumeFocusChange)
   // exist specifically so the literal ArrowLeft/ArrowRight/ArrowUp/
   // ArrowDown cases below can defer to that widget's own handling instead.
@@ -795,6 +890,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Future<void> _disposePlaybackResources() async {
     await _player.stop();
     await _player.dispose();
+    _playbackHandle.dispose();
     _torrentController.dispose();
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       if (await windowManager.isFullScreen()) {
@@ -830,11 +926,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
       setState(() => _videoInitialized = false);
       await WidgetsBinding.instance.endOfFrame;
     }
+    _prefetchController?.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     _playbackStallController.dispose();
-    _topNotificationTimer?.cancel();
+    _topNotificationController.cancelPendingHide();
     await _posSub?.cancel();
+    await _completedSub?.cancel();
     // Fires an armed-but-not-yet-committed AniList sync immediately
     // instead of letting _tracker.dispose() below silently cancel it —
     // see flushPendingCommit's doc comment.
@@ -861,11 +959,21 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _isClosing = true;
     _torrentController.removeListener(_onTorrentStateChanged);
 
+    // Discarded rather than handed off across the restart boundary — the
+    // replacement TheaterScreen constructs its own fresh
+    // NextEpisodePrefetchController in _initPlayerAndStream and simply
+    // re-runs Tier 1/Tier 2 from scratch for the same next episode. A
+    // freeze-recovery restart is a rare, user-triggered recovery action,
+    // not a normal hot path, so re-paying that cost here is accepted
+    // rather than adding complexity to thread prefetch progress through
+    // TheaterRestartRequest as well.
+    _prefetchController?.dispose();
     _autoSkipController.dispose();
     _playbackDiagnostics.dispose();
     _playbackStallController.dispose();
-    _topNotificationTimer?.cancel();
+    _topNotificationController.cancelPendingHide();
     await _posSub?.cancel();
+    await _completedSub?.cancel();
     // The replacement TheaterScreen constructs a brand-new
     // AnilistTrackerService that re-fetches status from scratch — an
     // armed commit on this instance has to fire now or it's gone for
@@ -876,6 +984,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
     await _player.stop();
     await _player.dispose();
+    _playbackHandle.dispose();
   }
 
   /// Handles a tap on TheaterTopBar's freeze-recovery button (only shown
@@ -889,9 +998,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
   /// `StreamingController.dispose()` deletes downloaded torrent pieces
   /// and `RemoteStreamingController.dispose()` tears down the remote
   /// session, either of which would force a real re-download instead of
-  /// a near-instant recovery. The caller (`runTheaterSession`) is
-  /// expected to immediately re-push a fresh TheaterScreen using both
-  /// values.
+  /// a near-instant recovery. The caller (`runTheaterSession`/
+  /// `AnimeDetailsScreen._streamTorrent`) is expected to immediately
+  /// re-push a fresh TheaterScreen using both values.
   Future<void> _handleRestartRequested() async {
     if (_isClosing) return;
 
@@ -930,20 +1039,21 @@ class _TheaterScreenState extends State<TheaterScreen> {
     final current = settingsController.settings;
 
     // Persisted (and SettingsController's own `_settings` updated)
-    // before any teardown, so the fresh TheaterScreen `runTheaterSession`
-    // immediately re-pushes reads the new value the instant its own
-    // initState constructs a new Player — see this file's initState for
-    // that read.
+    // before any teardown, so the fresh TheaterScreen this pop leads to
+    // reads the new value the instant its own initState constructs a
+    // new Player — see this file's initState for that read.
     await settingsController.update(
       AppSettings(
         filterEcchi: current.filterEcchi,
         hardwareDecoding: current.hardwareDecoding,
         androidHwDec: current.androidHwDec,
-        autoPlayEnabled: current.autoPlayEnabled,
+        autoTorrentEnabled: current.autoTorrentEnabled,
+        episodeAutoplayEnabled: current.episodeAutoplayEnabled,
         autoSkip: current.autoSkip,
         showFreezeRecoveryButton: current.showFreezeRecoveryButton,
         uiPerformanceMode: current.uiPerformanceMode,
         videoFilterQuality: current.videoFilterQuality,
+        useExoPlayer: current.useExoPlayer,
         serverMode: current.serverMode,
         serverUrl: current.serverUrl,
         libassEnabled: newValue,
@@ -968,6 +1078,105 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
   }
 
+  // Episode transition (next-episode autoplay / manual "Next Episode").
+
+  /// [Player.stream.completed] listener — fires on genuine end-of-file.
+  /// Routes into the same entry point [_requestNextEpisodeTransition] the
+  /// Next Episode chip's tap uses, so completion and a manual tap are
+  /// handled identically regardless of which one triggered it.
+  void _onPlaybackCompleted(bool completed) {
+    if (!completed) return;
+    unawaited(_requestNextEpisodeTransition());
+  }
+
+  /// Shared entry point for both the manual Next Episode chip tap (see
+  /// [_buildControlsOverlay]) and automatic playback completion (see
+  /// [_onPlaybackCompleted] above). No-ops if there's no episode context
+  /// at all (a custom-magnet session — see [TheaterScreen]'s constructor
+  /// assert), if there's no next episode, or if a transition/exit is
+  /// already underway — guards against a stray double-fire, e.g. a
+  /// completion event landing the same frame as a manual tap.
+  Future<void> _requestNextEpisodeTransition() async {
+    if (_isClosing) return;
+
+    final episode = widget.episode;
+    final totalEpisodes = widget.totalEpisodes;
+    if (episode == null || totalEpisodes == null) return;
+
+    final nextEpisode = episode + 1;
+    if (nextEpisode > totalEpisodes) return;
+
+    final NextEpisodeTransitionMode mode;
+    BaseStreamingController? prewarmedController;
+    Torrent? prewarmedTorrent;
+
+    if (_episodeAutoplayEnabled) {
+      // Consumes (not just reads) the prefetch controller's warm result —
+      // if one exists, ownership of that controller transfers to the
+      // TheaterNextEpisodeRequest below, and _prefetchController itself
+      // no longer holds any reference to it (see takeWarmResult's own
+      // doc comment). Nothing to take (autoplay only just now flipped on
+      // mid-episode, Tier 2 hasn't finished warming yet, or it failed)
+      // falls through to a fresh fetch exactly like before Stage 4.
+      final warm = _prefetchController?.takeWarmResult();
+      if (warm != null) {
+        mode = NextEpisodeTransitionMode.instantHandoff;
+        prewarmedController = warm.controller;
+        prewarmedTorrent = warm.torrent;
+      } else {
+        mode = NextEpisodeTransitionMode.autoFetch;
+      }
+    } else {
+      mode = NextEpisodeTransitionMode.manualPick;
+    }
+
+    await _teardownForNextEpisode();
+
+    if (mounted) {
+      Navigator.pop(
+        context,
+        TheaterNextEpisodeRequest(
+          nextEpisode: nextEpisode,
+          mode: mode,
+          prewarmedController: prewarmedController,
+          prewarmedTorrent: prewarmedTorrent,
+        ),
+      );
+    }
+  }
+
+  /// Teardown for an episode-to-episode transition. Mirrors
+  /// [_handleRestartRequested]'s shape — a new TheaterScreen is about to
+  /// mount immediately once this pops, so system UI mode/orientation is
+  /// deliberately left alone here, same reasoning as that method — rather
+  /// than [_exitTheater]'s (a genuine return to `AnimeDetailsScreen`).
+  ///
+  /// Unlike a restart, `_torrentController` is disposed normally here
+  /// rather than handed off: it belongs to the episode that just ended,
+  /// not the one about to start. `_prefetchController` is disposed here
+  /// too — safe even after `_requestNextEpisodeTransition` already called
+  /// [NextEpisodePrefetchController.takeWarmResult] above, since that
+  /// leaves nothing further for it to own (see that method's own doc
+  /// comment on the ownership hand-off).
+  Future<void> _teardownForNextEpisode() async {
+    _isClosing = true;
+    _torrentController.removeListener(_onTorrentStateChanged);
+
+    _prefetchController?.dispose();
+    _autoSkipController.dispose();
+    _playbackDiagnostics.dispose();
+    _playbackStallController.dispose();
+    _topNotificationController.cancelPendingHide();
+    await _posSub?.cancel();
+    await _completedSub?.cancel();
+    await _tracker.flushPendingCommit();
+    _tracker.dispose();
+
+    await _player.stop();
+    await _player.dispose();
+    _torrentController.dispose();
+  }
+
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKeyEvent);
@@ -989,13 +1198,18 @@ class _TheaterScreenState extends State<TheaterScreen> {
     }
 
     _controlsVisibility.dispose();
+    _prefetchController?.dispose();
     _playbackDiagnostics.dispose();
     _autoSkipController.dispose();
     _playbackStallController.dispose();
-    _topNotificationTimer?.cancel();
+    _topNotificationController.dispose();
     final posSub = _posSub;
     if (posSub != null) {
       unawaited(posSub.cancel());
+    }
+    final completedSub = _completedSub;
+    if (completedSub != null) {
+      unawaited(completedSub.cancel());
     }
     _torrentController.removeListener(_onTorrentStateChanged);
     // Fire-and-forget, matching this method's existing pattern for
@@ -1030,7 +1244,60 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // Parameterized on showControls/dpadModeActive rather than reading
   // fields directly, since it's built from inside the ValueListenableBuilder
   // in build() below — see that method's doc comment for why.
+  //
+  // The bottom bar itself branches on _isDesktopPlatform: desktop keeps
+  // TheaterControls (D-Pad focus rings, draggable volume slider,
+  // fullscreen toggle); Android and iOS — Android TV included, since
+  // there's no OS-level flag distinguishing TV from phone, only the
+  // runtime dpadModeActive signal — get MobileTheaterControls' touch-
+  // oriented layout instead. MobileTheaterControls has no D-Pad focus
+  // wiring of its own (see that widget's doc comment), so on Android TV
+  // this bar is tappable but not D-Pad-focusable; TheaterTopBar above it
+  // keeps its own DpadRegion regardless of which bottom bar is showing.
   Widget _buildControlsOverlay(bool showControls, bool dpadModeActive) {
+    // Null exactly when this is a custom-magnet session with no episode
+    // context — see TheaterScreen's constructor assert.
+    final hasNextEpisode = widget.episode != null &&
+        widget.totalEpisodes != null &&
+        widget.episode! < widget.totalEpisodes!;
+
+    final bottomBar = _isDesktopPlatform
+        ? DpadRegion(
+            memoryKey: 'theater.controls',
+            child: TheaterControls(
+              player: _player,
+              chapterMetadata: _chapters,
+              isSettingsOpen: _isSettingsOpen,
+              isFullscreen: _isFullscreen,
+              isDesktop: _isDesktopPlatform,
+              uiPerformanceMode: _uiPerformanceMode,
+              dpadModeActive: dpadModeActive,
+              onToggleFullscreen: _toggleFullscreen,
+              onInteract: _controlsVisibility.registerActivity,
+              onInteractionStart: _handleInteractionStart,
+              onInteractionEnd: _handleInteractionEnd,
+              onToggleSettings: () =>
+                  setState(() => _isSettingsOpen = !_isSettingsOpen),
+              onExactSkip: _exactSkipForward,
+              onSeekbarFocusChange: (f) => _seekbarFocused = f,
+              onVolumeFocusChange: (f) => _volumeSliderFocused = f,
+              hasNextEpisode: hasNextEpisode,
+              onNextEpisode: () => unawaited(_requestNextEpisodeTransition()),
+            ),
+          )
+        : MobileTheaterControls(
+            playback: _playbackHandle,
+            chapterMetadata: _chapters,
+            isSettingsOpen: _isSettingsOpen,
+            uiPerformanceMode: _uiPerformanceMode,
+            onInteract: _controlsVisibility.registerActivity,
+            onInteractionStart: _handleInteractionStart,
+            onInteractionEnd: _handleInteractionEnd,
+            onToggleSettings: () =>
+                setState(() => _isSettingsOpen = !_isSettingsOpen),
+            onSeekbarFocusChange: (f) => _seekbarFocused = f,
+          );
+
     return AnimatedOpacity(
       opacity: showControls ? 1.0 : 0.0,
       duration: const Duration(milliseconds: 300),
@@ -1079,36 +1346,17 @@ class _TheaterScreenState extends State<TheaterScreen> {
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  // No tap-swallowing wrapper here either. TheaterControls'
-                  // gradient Container paints across nearly its entire
-                  // bounds, but under Flutter's standard nested-
-                  // GestureDetector resolution a descendant's own tap
-                  // recognizer (an actual button) still wins the gesture
-                  // arena over an ancestor's — so real buttons keep
-                  // working, while a tap on empty gradient space falls
-                  // through to the root GestureDetector's onTap
-                  // (_handleBackgroundTap) in build() below.
-                  child: DpadRegion(
-                    memoryKey: 'theater.controls',
-                    child: TheaterControls(
-                      player: _player,
-                      chapterMetadata: _chapters,
-                      isSettingsOpen: _isSettingsOpen,
-                      isFullscreen: _isFullscreen,
-                      isDesktop: _isDesktopPlatform,
-                      uiPerformanceMode: _uiPerformanceMode,
-                      dpadModeActive: dpadModeActive,
-                      onToggleFullscreen: _toggleFullscreen,
-                      onInteract: _controlsVisibility.registerActivity,
-                      onInteractionStart: _handleInteractionStart,
-                      onInteractionEnd: _handleInteractionEnd,
-                      onToggleSettings: () =>
-                          setState(() => _isSettingsOpen = !_isSettingsOpen),
-                      onExactSkip: _exactSkipForward,
-                      onSeekbarFocusChange: (f) => _seekbarFocused = f,
-                      onVolumeFocusChange: (f) => _volumeSliderFocused = f,
-                    ),
-                  ),
+                  // No tap-swallowing wrapper here either — both
+                  // TheaterControls and MobileTheaterControls paint a
+                  // gradient background across nearly their full bounds,
+                  // but under Flutter's standard nested-GestureDetector
+                  // resolution a descendant's own tap recognizer (an
+                  // actual button) still wins the gesture arena over an
+                  // ancestor's, so real buttons keep working while a tap
+                  // on empty gradient space falls through to the root
+                  // GestureDetector's onTap (_handleBackgroundTap) in
+                  // build() below.
+                  child: bottomBar,
                 ),
               ],
             ),
@@ -1124,13 +1372,15 @@ class _TheaterScreenState extends State<TheaterScreen> {
   Widget build(BuildContext context) {
     final dpadModeActive = InputModeScope.of(context).dpadModeActive;
 
-    // The video texture, the top notification, the settings-menu popup,
-    // and the loading/batch-picker overlay switcher don't depend on
-    // controls visibility at all — they're computed once per real
-    // setState() (video-ready, settings toggle, chapters loaded, a new
-    // notification arriving, etc.). Passed as the `child` of the
+    // The video texture, the top notification, and the loading/
+    // batch-picker overlay switcher don't depend on controls visibility
+    // at all — they're computed once per real setState() (video-ready,
+    // chapters loaded, etc.). Passed as the `child` of the
     // ValueListenableBuilder below so this subtree is reused, not
-    // rebuilt, on every controls-visibility transition.
+    // rebuilt, on every controls-visibility transition. The settings
+    // popup is a separate top-level Stack layer instead (see the
+    // returned Stack below), so it always paints, and hit-tests, above
+    // TheaterControls' bottom bar.
     final staticLayer = Stack(
       fit: StackFit.expand,
       children: [
@@ -1183,34 +1433,26 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
         // Rendered regardless of controls-overlay visibility, so a
         // sync/skip status message stays reachable even while the
-        // controls bar has auto-hidden. Positioned _kTopBarClearance
-        // below TheaterTopBar's own top offset above, so the two can
-        // never occupy the same space.
+        // controls bar has auto-hidden. TopNotificationController's own
+        // ValueNotifier drives this small subtree independently, so a
+        // toast never triggers a rebuild of the rest of the screen.
         Positioned(
-          top: 24 + MediaQuery.paddingOf(context).top + _kTopBarClearance,
+          top:
+              24 +
+              MediaQuery.paddingOf(context).top +
+              TheaterTopNotification.kTopBarClearance,
           left: 16,
           right: 16,
-          child: TheaterTopNotification(
-            message: _topNotification?.message,
-            icon: _topNotification?.icon,
-            iconColor: _topNotification?.iconColor,
-            uiPerformanceMode: _uiPerformanceMode,
-          ),
-        ),
-
-        if (_isSettingsOpen)
-          Positioned(
-            bottom: 110,
-            right: 32,
-            child: TheaterSettingsMenu(
-              player: _player,
+          child: ValueListenableBuilder<TopNotificationData?>(
+            valueListenable: _topNotificationController.notification,
+            builder: (context, data, _) => TheaterTopNotification(
+              message: data?.message,
+              icon: data?.icon,
+              iconColor: data?.iconColor,
               uiPerformanceMode: _uiPerformanceMode,
-              libassEnabled: _libassEnabled,
-              onToggleLibass: (newValue) =>
-                  unawaited(_handleLibassToggle(newValue)),
-              onClose: () => setState(() => _isSettingsOpen = false),
             ),
           ),
+        ),
 
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 600),
@@ -1270,9 +1512,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
           // ValueListenableBuilder scoped to controls visibility only —
           // MouseRegion's cursor and the controls overlay's opacity/
           // hit-testing both depend on it, but `staticLayer` above
-          // (video, top notification, settings menu, loading/batch-picker
-          // overlay) does not, and is passed as `child` so it's reused
-          // rather than reconstructed on every show/hide transition.
+          // (video, top notification, loading/batch-picker overlay)
+          // does not, and is passed as `child` so it's reused rather
+          // than reconstructed on every show/hide transition.
           // registerActivity() writes to a ValueNotifier, which only
           // notifies listeners on a genuine true→false/false→true
           // transition — so hovering with controls already visible
@@ -1308,6 +1550,36 @@ class _TheaterScreenState extends State<TheaterScreen> {
                       child!,
                       if (_videoInitialized)
                         _buildControlsOverlay(showControls, dpadModeActive),
+                      // Painted after _buildControlsOverlay so it always
+                      // paints — and hit-tests — above it. A `Container`
+                      // with a `BoxDecoration` (the bottom control bar,
+                      // whichever variant is showing) registers a hit
+                      // across its entire rectangle regardless of the
+                      // gradient's actual alpha at a given point, so
+                      // sitting below it in the Stack would let it
+                      // silently swallow mouse clicks meant for this
+                      // popup's tiles wherever the two overlap on screen
+                      // — even though the popup still painted visibly
+                      // through the gradient's transparent regions.
+                      if (_isSettingsOpen)
+                        Positioned(
+                          // Matches ExoTheaterScreen's own offset for
+                          // MobileTheaterControls' shorter bar — the
+                          // desktop offset below was tuned against
+                          // TheaterControls' taller row and floats too
+                          // high above MobileTheaterControls otherwise.
+                          bottom: 130,
+                          right: _isDesktopPlatform ? 32 : 16,
+                          child: DesktopTheaterSettingsMenu(
+                            player: _player,
+                            uiPerformanceMode: _uiPerformanceMode,
+                            onClose: () =>
+                                setState(() => _isSettingsOpen = false),
+                            libassEnabled: _libassEnabled,
+                            onToggleLibass: (v) =>
+                                unawaited(_handleLibassToggle(v)),
+                          ),
+                        ),
                     ],
                   ),
                 ),

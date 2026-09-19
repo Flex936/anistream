@@ -4,5 +4,6 @@
     "dart.analysisExcludedFolders": [
         "D:/programming/anistream/claude_temp"
     ],
-    "cmake.sourceDirectory": "/home/alext/Documents/GitHub/anistream/linux"
+    "cmake.ignoreCMakeListsMissing": true,
+    "java.compile.nullAnalysis.mode": "automatic"
 }

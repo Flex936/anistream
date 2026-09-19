@@ -9,7 +9,9 @@ import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../services/theater_data.dart';
+import 'playback_action_chip.dart';
 import 'seekbar.dart';
+import 'skip_chip.dart';
 
 class TheaterControls extends StatefulWidget {
   final Player player;
@@ -60,6 +62,17 @@ class TheaterControls extends StatefulWidget {
   final ValueChanged<bool>? onSeekbarFocusChange;
   final ValueChanged<bool>? onVolumeFocusChange;
 
+  /// False once `episode >= totalEpisodes` — see `TheaterScreen`'s own
+  /// `totalEpisodes` doc comment. Hides the Next Episode chip entirely
+  /// and (via `_PlaybackTimeline`) leaves completion with nothing to
+  /// trigger.
+  final bool hasNextEpisode;
+
+  /// Fired by both the Next Episode chip's tap and, independently,
+  /// `TheaterScreen`'s own `Player.stream.completed` listener — see
+  /// `TheaterScreen._requestNextEpisodeTransition`.
+  final VoidCallback onNextEpisode;
+
   const TheaterControls({
     super.key,
     required this.player,
@@ -72,6 +85,8 @@ class TheaterControls extends StatefulWidget {
     required this.isSettingsOpen,
     required this.isFullscreen,
     required this.isDesktop,
+    required this.hasNextEpisode,
+    required this.onNextEpisode,
     this.uiPerformanceMode = false,
     this.dpadModeActive = false,
     this.chapterMetadata = const [],
@@ -189,6 +204,8 @@ class _TheaterControlsState extends State<TheaterControls> {
             onInteractionStart: widget.onInteractionStart,
             onInteractionEnd: widget.onInteractionEnd,
             onSeekbarFocusChange: widget.onSeekbarFocusChange,
+            hasNextEpisode: widget.hasNextEpisode,
+            onNextEpisode: widget.onNextEpisode,
           ),
           const SizedBox(height: 12),
 
@@ -359,6 +376,8 @@ class _PlaybackTimeline extends StatefulWidget {
   final VoidCallback onInteractionStart;
   final VoidCallback onInteractionEnd;
   final ValueChanged<bool>? onSeekbarFocusChange;
+  final bool hasNextEpisode;
+  final VoidCallback onNextEpisode;
 
   const _PlaybackTimeline({
     required this.player,
@@ -369,6 +388,8 @@ class _PlaybackTimeline extends StatefulWidget {
     required this.onInteractionStart,
     required this.onInteractionEnd,
     this.onSeekbarFocusChange,
+    required this.hasNextEpisode,
+    required this.onNextEpisode,
   });
 
   @override
@@ -434,71 +455,47 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
     return null;
   }
 
+  // Deliberately tighter than NextEpisodePrefetchController's 85%
+  // background-prefetch arm threshold (Stage 4) — prefetching starts
+  // quietly first, well before this chip has any reason to appear;
+  // showing it only once the episode is genuinely almost over keeps it
+  // from crowding the OP/ED/preview skip chip's own usual window.
+  static const double _kNextEpisodeChipThreshold = 0.95;
+
+  // Never true at the same time as _activeSkipChapter != null — the two
+  // chips share one slot below (see build()), so this and the skip
+  // check together are what keeps them mutually exclusive.
+  bool get _showNextEpisodeChip {
+    if (!widget.hasNextEpisode) return false;
+    if (_activeSkipChapter != null) return false;
+    if (_duration <= Duration.zero) return false;
+    return (_position.inMilliseconds / _duration.inMilliseconds) >=
+        _kNextEpisodeChipThreshold;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final skipTarget = _activeSkipChapter;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: AnimatedOpacity(
-            opacity: skipTarget != null ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 200),
-            child: AnimatedSlide(
-              offset: skipTarget != null ? Offset.zero : const Offset(0, 0.5),
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutBack,
-              child: IgnorePointer(
-                ignoring: skipTarget == null,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Material(
-                    color: AppPalette.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () {
-                        if (skipTarget != null) {
-                          unawaited(widget.player.seek(skipTarget.end));
-                          widget.onInteract();
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              skipTarget?.skipLabel ?? 'Skip',
-                              style: const TextStyle(
-                                color: AppPalette.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.skip_next_rounded,
-                              color: AppPalette.white,
-                              size: 18,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+          child: _showNextEpisodeChip
+              ? PlaybackActionChip(
+                  visible: true,
+                  label: 'Next Episode',
+                  onTap: widget.onNextEpisode,
+                )
+              : SkipChip(
+                  chapters: widget.chapterMetadata,
+                  position: _position,
+                  onSkip: (target) {
+                    unawaited(widget.player.seek(target));
+                    widget.onInteract();
+                  },
                 ),
-              ),
-            ),
-          ),
         ),
-
         Seekbar(
           position: _position,
           duration: _duration,

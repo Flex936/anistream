@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:media_kit/media_kit.dart';
 
 /// Owns the "auto-hide the theater controls after inactivity" state
 /// machine. Every interaction (a tap, a keypress, a button press, a
@@ -21,15 +20,22 @@ import 'package:media_kit/media_kit.dart';
 ///
 /// Visibility is exposed as [visible], a [ValueNotifier<bool>], rather
 /// than a callback or a full app-wide `ChangeNotifier` surface — this
-/// lets `theater_screen.dart` wrap only the small subtree that actually
-/// needs to redraw on show/hide in a `ValueListenableBuilder`, instead of
-/// rebuilding the entire screen (video included) on every interaction.
-/// `ValueNotifier` already skips notifying listeners when a value is set
-/// to what it already was, so repeatedly calling [registerActivity]
-/// while controls are already visible (exactly what happens on every
-/// hover tick) costs a cancelled+rescheduled `Timer`, not a rebuild.
+/// lets `theater_screen.dart`/`exo_theater_screen.dart` wrap only the
+/// small subtree that actually needs to redraw on show/hide in a
+/// `ValueListenableBuilder`, instead of rebuilding the entire screen
+/// (video included) on every interaction. `ValueNotifier` already skips
+/// notifying listeners when a value is set to what it already was, so
+/// repeatedly calling [registerActivity] while controls are already
+/// visible (exactly what happens on every hover tick) costs a
+/// cancelled+rescheduled `Timer`, not a rebuild.
+///
+/// Driven by a plain [playingStream]/[isPlaying] pair rather than a
+/// concrete player type, so the same state machine serves both the
+/// media_kit-backed and video_player-backed theater screens without
+/// either one depending on the other's package.
 class ControlsVisibilityController {
-  final Player player;
+  final Stream<bool> playingStream;
+  final bool Function() isPlaying;
 
   /// Read at hide-timer fire time, not captured once at schedule time —
   /// so a sub-menu that opens after the timer was armed still correctly
@@ -37,10 +43,11 @@ class ControlsVisibilityController {
   final bool Function() isSubMenuOpen;
 
   ControlsVisibilityController({
-    required this.player,
+    required this.playingStream,
+    required this.isPlaying,
     required this.isSubMenuOpen,
   }) {
-    _playingSub = player.stream.playing.listen(_onPlayingChanged);
+    _playingSub = playingStream.listen(_onPlayingChanged);
   }
 
   static const Duration _hideDelay = Duration(seconds: 3);
@@ -103,11 +110,11 @@ class ControlsVisibilityController {
   void _armTimer() {
     _hideTimer?.cancel();
     if (_interactionInProgress) return;
-    if (!player.state.playing) return;
+    if (!isPlaying()) return;
 
     _hideTimer = Timer(_hideDelay, () {
       if (_interactionInProgress) return;
-      if (!player.state.playing) return;
+      if (!isPlaying()) return;
       if (isSubMenuOpen()) return;
       visible.value = false;
     });
