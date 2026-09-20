@@ -12,7 +12,7 @@ class Seekbar extends StatefulWidget {
   final VoidCallback onSeekStart;
   final VoidCallback onSeekEnd;
   final bool uiPerformanceMode;
-  final bool dpadModeActive;
+  final bool isTvPlatform;
 
   /// Reports Seekbar's own keyboard-focus state to an ancestor, in
   /// addition to driving the widget's own internal focus-ring styling.
@@ -31,7 +31,7 @@ class Seekbar extends StatefulWidget {
     required this.onSeekStart,
     required this.onSeekEnd,
     required this.uiPerformanceMode,
-    this.dpadModeActive = false,
+    this.isTvPlatform = false,
     this.onFocusChange,
   });
 
@@ -242,7 +242,7 @@ class _SeekbarState extends State<Seekbar> {
             // D-Pad focus expands the track exactly like a mouse hover
             // would — a remote-only user still gets the easier-to-hit,
             // easier-to-read expanded state.
-            final bool showDpadFocus = _isFocused && widget.dpadModeActive;
+            final bool showDpadFocus = _isFocused && widget.isTvPlatform;
             final bool isExpanded = _isHovering || _isDragging || showDpadFocus;
             final double trackHeight = isExpanded ? 8.0 : 4.0;
             final double thumbSize = isExpanded ? 16.0 : 0.0;

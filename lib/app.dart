@@ -108,7 +108,7 @@ class _AniStreamAppState extends State<AniStreamApp>
       // root-install pattern (`MaterialApp(builder: Dpad.wrap())`).
       // InputModeScope + SettingsScope keep this relative nesting — it's
       // load-bearing for TheaterScreen and every widget it hands
-      // dpadModeActive to (Seekbar, TheaterControls, TheaterSettingsMenu,
+      // isTvPlatform to (Seekbar, TheaterControls, TheaterSettingsMenu,
       // BatchEpisodePickerOverlay), plus settings_components.dart,
       // calendar_card.dart, watchlist_cards.dart, hero_banner.dart,
       // episode_tile.dart, and torrent_tile.dart.

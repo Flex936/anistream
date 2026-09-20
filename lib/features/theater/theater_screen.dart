@@ -634,7 +634,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // this codebase's own search_filter_panel.dart comment already takes
   // around this exact Slider's internal keyboard quirks.
   //
-  // dpadModeActive remains a pure data signal (not a focus mechanism)
+  // isTvPlatform remains a pure data signal (not a focus mechanism)
   // deciding which shortcut scheme is active: a desktop keyboard user
   // expects Left/Right/Up/Down to seek/adjust volume from anywhere, a
   // D-Pad user needs those same keys to move focus between controls
@@ -653,13 +653,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
       return true;
     }
 
-    final dpadModeActive = InputModeScope.of(
-      context,
-      listen: false,
-    ).dpadModeActive;
+    final isTvPlatform = InputModeScope.of(context, listen: false).isTvPlatform;
     final subMenuOpen =
         _isSettingsOpen || _torrentController.needsManualSelection;
-    if (dpadModeActive || subMenuOpen) return false;
+    if (isTvPlatform || subMenuOpen) return false;
 
     switch (key) {
       case LogicalKeyboardKey.space:
@@ -1241,7 +1238,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   // Controls overlay (top bar + control bar).
   //
-  // Parameterized on showControls/dpadModeActive rather than reading
+  // Parameterized on showControls/isTvPlatform rather than reading
   // fields directly, since it's built from inside the ValueListenableBuilder
   // in build() below — see that method's doc comment for why.
   //
@@ -1249,15 +1246,16 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // TheaterControls (D-Pad focus rings, draggable volume slider,
   // fullscreen toggle); Android and iOS — Android TV included, since
   // there's no OS-level flag distinguishing TV from phone, only the
-  // runtime dpadModeActive signal — get MobileTheaterControls' touch-
+  // runtime isTvPlatform signal — get MobileTheaterControls' touch-
   // oriented layout instead. MobileTheaterControls has no D-Pad focus
   // wiring of its own (see that widget's doc comment), so on Android TV
   // this bar is tappable but not D-Pad-focusable; TheaterTopBar above it
   // keeps its own DpadRegion regardless of which bottom bar is showing.
-  Widget _buildControlsOverlay(bool showControls, bool dpadModeActive) {
+  Widget _buildControlsOverlay(bool showControls, bool isTvPlatform) {
     // Null exactly when this is a custom-magnet session with no episode
     // context — see TheaterScreen's constructor assert.
-    final hasNextEpisode = widget.episode != null &&
+    final hasNextEpisode =
+        widget.episode != null &&
         widget.totalEpisodes != null &&
         widget.episode! < widget.totalEpisodes!;
 
@@ -1271,7 +1269,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
               isFullscreen: _isFullscreen,
               isDesktop: _isDesktopPlatform,
               uiPerformanceMode: _uiPerformanceMode,
-              dpadModeActive: dpadModeActive,
+              isTvPlatform: isTvPlatform,
               onToggleFullscreen: _toggleFullscreen,
               onInteract: _controlsVisibility.registerActivity,
               onInteractionStart: _handleInteractionStart,
@@ -1370,7 +1368,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dpadModeActive = InputModeScope.of(context).dpadModeActive;
+    final isTvPlatform = InputModeScope.of(context).isTvPlatform;
 
     // The video texture, the top notification, and the loading/
     // batch-picker overlay switcher don't depend on controls visibility
@@ -1549,7 +1547,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                     children: [
                       child!,
                       if (_videoInitialized)
-                        _buildControlsOverlay(showControls, dpadModeActive),
+                        _buildControlsOverlay(showControls, isTvPlatform),
                       // Painted after _buildControlsOverlay so it always
                       // paints — and hit-tests — above it. A `Container`
                       // with a `BoxDecoration` (the bottom control bar,

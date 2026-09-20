@@ -7,13 +7,13 @@ import 'package:flutter/services.dart';
 /// traversal inside the theater controls, remote-style key shortcuts —
 /// versus a normal mouse/touch/keyboard interface (desktop, phone, tablet).
 ///
-/// [dpadModeActive] is driven by exactly one signal: [isTvPlatform], a
-/// one-time platform check (Android TV / Google TV "leanback" mode, via a
-/// MethodChannel to native Android — see the accompanying MainActivity.kt
-/// snippet below). Sticky for the process lifetime: a TV's remote is its
-/// only input, so there's nothing to "detect switching away from."
+/// [isTvPlatform] is a one-time platform check (Android TV / Google TV
+/// "leanback" mode, via a MethodChannel to native Android — see the
+/// accompanying MainActivity.kt snippet below). Sticky for the process
+/// lifetime: a TV's remote is its only input, so there's nothing to
+/// "detect switching away from."
 ///
-/// Desktop, Android phone, and iOS never enter D-Pad mode, regardless of
+/// Desktop, Android phone, and iOS never report true here, regardless of
 /// connected keyboards, gamepads, or Bluetooth remotes — a directional key
 /// or gamepad button is ordinary keyboard/pointer input on those
 /// platforms, not a TV navigation signal, and is never treated as one.
@@ -22,7 +22,7 @@ import 'package:flutter/services.dart';
 /// — that value defaults to "traditional" (rings visible) on desktop
 /// platforms from the very first frame, before any real input has
 /// happened, which is exactly the "D-Pad bleeding onto PC" bug this class
-/// exists to fix. [dpadModeActive] is `true` if and only if the app is
+/// exists to fix. [isTvPlatform] is `true` if and only if the app is
 /// running on a confirmed TV.
 class InputModeController extends ChangeNotifier {
   InputModeController._();
@@ -36,11 +36,6 @@ class InputModeController extends ChangeNotifier {
   /// True on a confirmed Android TV / Google TV device. Sticky for the
   /// lifetime of the process once detected.
   bool get isTvPlatform => _isTvPlatform;
-
-  /// True whenever the D-Pad/remote-control interaction model should drive
-  /// visuals and key handling. Equivalent to [isTvPlatform] — see the
-  /// class doc comment for why no other platform ever sets this.
-  bool get dpadModeActive => _isTvPlatform;
 
   /// Call once, early (see [InputModeScope]). Safe to call more than once —
   /// later calls are no-ops.
