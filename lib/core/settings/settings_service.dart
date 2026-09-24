@@ -19,22 +19,13 @@ class AppSettings {
   /// of returning to `AnimeDetailsScreen`. Independent of
   /// [autoTorrentEnabled] — a user can want hands-off episode advancement
   /// without wanting torrent auto-selection on a fresh tap, or vice versa.
-  /// Defaults to `false`: an entirely new behavior, not something
-  /// upgrading users should be opted into silently.
   final bool episodeAutoplayEnabled;
 
   final bool autoSkip;
 
   /// Gates a manual "restart player" button shown in the theater top bar
   /// — a recovery action for a confirmed Linux/NVIDIA/Wayland video-freeze
-  /// bug in media_kit_video's texture delivery after a long pause, where
-  /// full player recreation is the only recovery (see ARCHITECTURE.md
-  /// § 7 for the diagnostic trail, including two automatic mitigations
-  /// that were tried and confirmed ineffective before landing here).
-  /// Defaults to `false`: the bug is confirmed on that one platform
-  /// combination only, and the button is a deliberate, user-triggered
-  /// action rather than anything automatic, since no mpv property
-  /// distinguishes a frozen frame from a healthy one.
+  /// bug (see ARCHITECTURE.md § 7). Defaults to `false`.
   final bool showFreezeRecoveryButton;
 
   // ── PERFORMANCE ──
@@ -57,6 +48,20 @@ class AppSettings {
   /// animations), not which decode/render engine plays the video.
   final bool useExoPlayer;
 
+  /// Whether libass-based subtitle rendering is enabled for the next
+  /// `Player` this setting drives. `media_kit`'s `PlayerConfiguration.
+  /// libass` is only ever read at `Player` construction — there's no
+  /// exposed way to flip it on an already-running instance — so
+  /// `TheaterScreen` reads this once via `SettingsScope`, and a
+  /// mid-session change goes through a full player restart-and-resume
+  /// instead of a live property flip; see `TheaterScreen._handleLibassToggle`.
+  /// Surfaced exclusively through `TheaterSettingsMenu`, not the main
+  /// Settings drawer — meaningless outside an active session. Only
+  /// applies to the `TheaterScreen`/media_kit path: `ExoTheaterScreen`
+  /// doesn't use libass at all. Defaults to `true`, matching this app's
+  /// behavior before this setting existed.
+  final bool libassEnabled;
+
   const AppSettings({
     this.filterEcchi = true,
     this.hardwareDecoding = 'auto',
@@ -70,6 +75,7 @@ class AppSettings {
     this.serverMode = false,
     this.serverUrl = 'http://192.168.1.100:7878',
     this.useExoPlayer = false,
+    this.libassEnabled = true,
   });
 }
 
@@ -77,21 +83,15 @@ class AppSettings {
 ///
 /// Services with no [BuildContext] — [AnilistQueryService] is instantiated
 /// fresh in `HomeScreen`, `SearchResultsScreen`, `WatchlistController`,
-/// `ScheduledScreen`, etc., none of which have an ambient widget tree to
-/// walk up to [SettingsScope] — previously worked around this by re-reading
+/// `ScheduledScreen`, etc. — previously worked around this by re-reading
 /// `shared_preferences` directly on every call. That direct read is what
 /// caused the "Filter Ecchi" bug: it went through `SharedPreferencesAsync`,
 /// a *different* underlying native store than [SettingsService] wrote
 /// through (`SharedPreferences.getInstance()`, the legacy singleton API).
-/// As of shared_preferences 2.3+, those two APIs are not guaranteed to
-/// share a backend — the setting looked saved, but nothing that read it
-/// through the other API ever saw the new value.
 ///
 /// [SettingsCache] fixes this at the root: [SettingsController] is the only
-/// writer (on both [SettingsController.reload] and [SettingsController.update]),
-/// so any non-widget service reads the exact same in-memory value a widget
-/// under [SettingsScope] would — no second disk round-trip, no second store
-/// to silently drift out of sync with the first.
+/// writer, so any non-widget service reads the exact same in-memory value
+/// a widget under [SettingsScope] would.
 abstract final class SettingsCache {
   static AppSettings _current = const AppSettings();
   static AppSettings get current => _current;
@@ -114,13 +114,12 @@ class SettingsService {
   static const String kServerMode = 'server_mode';
   static const String kServerUrl = 'server_url';
   static const String kuseExoPlayer = 'use_exo_player';
+  static const String kLibassEnabled = 'libass_enabled';
 
   /// Persisted key name [kAutoTorrentEnabled] used before the
   /// autoplay/autotorrent rename. Kept only so the two migration methods
   /// below have a stable name to reference — never read or written
-  /// anywhere else. [_migrateLegacyPrefsIfNeeded] copies this key between
-  /// storage backends with no awareness of the later rename;
-  /// [_migrateAutoTorrentRenameIfNeeded] is the rename step itself.
+  /// anywhere else.
   static const String _kLegacyAutoTorrentKey = 'autoplay_enabled';
 
   /// One-time guard so the legacy → async migration below runs at most once
@@ -129,17 +128,9 @@ class SettingsService {
 
   /// One-time guard for the autoplay/autotorrent rename migration —
   /// deliberately a *different* key than [_kMigrationDoneKey] above.
-  /// That guard is already `true` for every existing install, so reusing
-  /// it here would mean this rename silently never runs for upgrading
-  /// users.
   static const String _kAutoTorrentRenameMigrationDoneKey =
       'settings_migrated_autotorrent_rename_v1';
 
-  // ── Every read/write in this service now goes through the SAME
-  // shared_preferences API the rest of the app already standardized on
-  // (AnilistAuthService's token, TheaterControls' saved volume). Mixing the
-  // legacy singleton API with this new one was the actual bug — see
-  // SettingsCache's doc comment above. ──
   final SharedPreferencesAsync _prefs;
 
   SettingsService({SharedPreferencesAsync? prefs})
@@ -165,13 +156,11 @@ class SettingsService {
       serverUrl:
           await _prefs.getString(kServerUrl) ?? 'http://192.168.1.100:7878',
       useExoPlayer: await _prefs.getBool(kuseExoPlayer) ?? false,
+      libassEnabled: await _prefs.getBool(kLibassEnabled) ?? true,
     );
   }
 
   Future<void> save(AppSettings settings) async {
-    // ── Fired concurrently — these are independent keys, so there's no
-    // ordering dependency between them, and the settings menu shouldn't
-    // block on 9 sequential awaits just to close the dialog. ──
     await Future.wait([
       _prefs.setBool(kFilterEcchi, settings.filterEcchi),
       _prefs.setString(kHwDec, settings.hardwareDecoding),
@@ -188,15 +177,15 @@ class SettingsService {
       _prefs.setBool(kServerMode, settings.serverMode),
       _prefs.setString(kServerUrl, settings.serverUrl),
       _prefs.setBool(kuseExoPlayer, settings.useExoPlayer),
+      _prefs.setBool(kLibassEnabled, settings.libassEnabled),
     ]);
   }
 
   /// Copies any values a previous build wrote via the legacy
   /// `SharedPreferences.getInstance()` API into the async store this class
-  /// now reads/writes exclusively, so upgrading users don't silently lose
-  /// settings they'd already configured (Filter Ecchi being the one that
-  /// actually mattered, since it's the only key another service also read
-  /// independently — but every key is migrated for safety).
+  /// now reads/writes exclusively. `useExoPlayer`/`libassEnabled` are both
+  /// newer than this migration point, so — like the rest of this
+  /// method's list — neither has (or needs) a legacy-key entry here.
   Future<void> _migrateLegacyPrefsIfNeeded() async {
     final alreadyMigrated = await _prefs.getBool(_kMigrationDoneKey) ?? false;
     if (alreadyMigrated) return;
@@ -231,24 +220,16 @@ class SettingsService {
         migrateString(kServerUrl),
       ]);
     } catch (_) {
-      // Fresh install / no legacy plugin data / platform quirk — nothing
-      // to carry over. Not fatal either way.
+      // Fresh install / no legacy plugin data / platform quirk.
     } finally {
       await _prefs.setBool(_kMigrationDoneKey, true);
     }
   }
 
-  /// Copies a pre-rename [_kLegacyAutoTorrentKey] value — already living
-  /// in the async store by the time this runs, either just migrated by
-  /// [_migrateLegacyPrefsIfNeeded] above or written directly by a
-  /// pre-rename version of this app — into [kAutoTorrentEnabled], its new
-  /// name. Runs after [_migrateLegacyPrefsIfNeeded] so it always operates
-  /// on whatever that step already landed in the async store.
-  ///
-  /// [AppSettings.episodeAutoplayEnabled] is a genuinely new feature and
-  /// is deliberately NOT seeded from this value here — it always starts
-  /// at its own default regardless of what the old torrent-autoselect
-  /// toggle was set to.
+  /// Copies a pre-rename [_kLegacyAutoTorrentKey] value into
+  /// [kAutoTorrentEnabled], its new name. [AppSettings.episodeAutoplayEnabled]
+  /// is a genuinely new feature and is deliberately NOT seeded from this
+  /// value — it always starts at its own default.
   Future<void> _migrateAutoTorrentRenameIfNeeded() async {
     final alreadyMigrated =
         await _prefs.getBool(_kAutoTorrentRenameMigrationDoneKey) ?? false;

@@ -12,7 +12,7 @@ class Seekbar extends StatefulWidget {
   final VoidCallback onSeekStart;
   final VoidCallback onSeekEnd;
   final bool uiPerformanceMode;
-  final bool dpadModeActive;
+  final bool isTvPlatform;
 
   /// Reports Seekbar's own keyboard-focus state to an ancestor, in
   /// addition to driving the widget's own internal focus-ring styling.
@@ -31,7 +31,7 @@ class Seekbar extends StatefulWidget {
     required this.onSeekStart,
     required this.onSeekEnd,
     required this.uiPerformanceMode,
-    this.dpadModeActive = false,
+    this.isTvPlatform = false,
     this.onFocusChange,
   });
 
@@ -165,8 +165,25 @@ class _SeekbarState extends State<Seekbar> {
   // a native <input type="range">). Anything else (Up/Down/Tab) is left
   // `ignored` so it bubbles up to whatever FocusTraversalPolicy is in
   // charge and moves focus elsewhere instead of getting stuck here.
+  //
+  // Ctrl+Left/Right is deliberately excluded from that scrubbing
+  // behavior: TheaterScreen's own global exact-skip shortcut (Ctrl+→,
+  // see that file's _onKeyEvent/_exactSkipForward) also receives every
+  // key event regardless of which widget holds focus — this widget's
+  // Focus.onKeyEvent firing too would perform a second, ordinary ±10s
+  // seek on the same keypress. Ignoring Ctrl-held arrows here means
+  // exactly one seek happens, driven entirely by TheaterScreen.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+
+    final ctrlPressed =
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.controlLeft,
+        ) ||
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.controlRight,
+        );
+    if (ctrlPressed) return KeyEventResult.ignored;
 
     Duration? target;
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
@@ -225,7 +242,7 @@ class _SeekbarState extends State<Seekbar> {
             // D-Pad focus expands the track exactly like a mouse hover
             // would — a remote-only user still gets the easier-to-hit,
             // easier-to-read expanded state.
-            final bool showDpadFocus = _isFocused && widget.dpadModeActive;
+            final bool showDpadFocus = _isFocused && widget.isTvPlatform;
             final bool isExpanded = _isHovering || _isDragging || showDpadFocus;
             final double trackHeight = isExpanded ? 8.0 : 4.0;
             final double thumbSize = isExpanded ? 16.0 : 0.0;

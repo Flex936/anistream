@@ -18,7 +18,7 @@ MPV on the TV opens the returned stream URL directly. HTTP range requests (seeki
 
 - Go 1.23 or later — <https://go.dev/dl/> (matches the floor declared in `go.mod`)
 - The server and the TV must be on the same LAN (or connected via VPN)
-- `ffmpeg` and `ffprobe` on `PATH` — optional. Video streaming works without them; without them, subtitle extraction is unavailable (see § 7)
+- `ffmpeg` and `ffprobe` on `PATH` — optional. Video streaming works without them; subtitle extraction doesn't (see § 7)
 
 ## 3. Build
 
@@ -55,13 +55,13 @@ GOOS=windows GOARCH=amd64 go build -o anistream-server.exe .
 | `-readahead-bytes` | `10485760` (10 MiB) | Per-stream torrent read-ahead in bytes — lower this on memory-constrained servers (e.g. a Raspberry Pi). |
 | `-upload-limit-kbps` | `0` | Caps upload/seeding bandwidth in KB/s. `0` = unlimited. Any negative value (e.g. `-1`) disables uploading/seeding entirely — the server still downloads and streams normally, it just never offers pieces back to the swarm. |
 | `-download-limit-kbps` | `0` | Caps download bandwidth in KB/s. `0` = unlimited. No negative-value special case — unlike upload, downloading can't be disabled without breaking streaming, so anything `<= 0` just means unlimited. |
-|`-max-storage-gb`|`0`|Caps the total size of `-data` in GB (1024-based). `0` means unlimited. Once reached, `POST /api/stream` rejects new streams with `507` — measured by periodically walking -data, not the torrent client's internal counters, so it also catches orphaned data. Existing sessions are never paused to enforce it, so the folder can briefly exceed the cap by whatever's already mid-download|
+| `-max-storage-gb` | `0` | Caps `-data`'s total size in GB (1024-based). `0` = unlimited. Once reached, `POST /api/stream` returns `507` — measured by walking `-data` periodically (catches orphaned data too), not internal counters. Existing sessions are never paused, so usage can briefly exceed the cap. |
 
 The server prints its address on startup — copy that IP into the Flutter app's Settings → Remote Server → Server URL field.
 
 ## 5. Run on Startup (Linux systemd)
 
-Create the data directory and make sure the service's user can write to it first — running as `nobody` against a fresh, root-owned path is the most common reason this unit fails immediately on first start:
+Create the data directory and make sure the service user can write to it — a fresh, root-owned path run as `nobody` is the most common reason this unit fails on first start:
 
 ```bash
 sudo mkdir -p /opt/anistream/data
@@ -129,7 +129,7 @@ sudo systemctl enable --now anistream-server
 }
 ```
 
-`subtitles_available`/`subtitles_complete` only ever appear once `state` is `"ready"`, and — like `stream_url`/`files` — are omitted entirely (not sent as `false`) rather than shown as `false`. `subtitles_available` needs `ffmpeg`/`ffprobe` on `PATH` (§ 2) and the same ≥5% buffer threshold that unlocks `stream_url`, not a full download. `subtitles_complete` only flips `true` once the whole file has finished downloading, at which point the client can stop re-fetching a given track.
+`subtitles_available`/`subtitles_complete` only appear once `state` is `"ready"` — like `stream_url`/`files`, they're omitted entirely rather than sent as `false`. `subtitles_available` needs `ffmpeg`/`ffprobe` on `PATH` (§ 2) and the same ≥5% buffer threshold that unlocks `stream_url` — not a full download. `subtitles_complete` flips `true` only once the whole file has finished downloading; the client can then stop re-fetching that track.
 
 **`needs_selection`** — a batch torrent; `files` appears only now, and the client is expected to `POST` back to `/select` with a chosen `file_index`:
 
@@ -153,10 +153,10 @@ sudo systemctl enable --now anistream-server
 - Idle sessions (no requests for 30 minutes) are cleaned up automatically, including deleting their downloaded data from `-data`.
 - The server keeps seeding after download so the swarm stays healthy.
 - If `ffmpeg`/`ffprobe` aren't found on `PATH` at startup, the server logs a warning and degrades gracefully — video streaming is unaffected, but every `/subtitles` request returns `501 Not Implemented` and `subtitles_available` never turns true.
-- **Known caveat:** the default file storage lays each torrent's data out under `-data` keyed by the torrent's own declared name, not by info-hash. Two different torrents that happen to declare the same file/folder name can collide — and now that sessions delete this data on drop, dropping one could remove data a second, unrelated active session is still reading. Pre-existing in how `anacrolix/torrent`'s default storage lays files out, not introduced by cleanup — flagged here rather than left silent.
+- **Known caveat:** default file storage keys each torrent's data under `-data` by the torrent's own declared name, not info-hash — two torrents sharing a declared name can collide, and since sessions delete their data on drop, dropping one could remove data a second active session is still reading. Pre-existing in `anacrolix/torrent`'s default storage layout, not introduced by cleanup.
 - **No auth, CORS fully open** (`Access-Control-Allow-Origin: *`) — required so any LAN device can reach it.
   - Trusted-LAN use only. NEVER expose this directly to the internet — put it behind a firewall or VPN.
   - CORS here is not a security boundary. Don't treat it as one.
 
 ---
-*Last reviewed against the codebase: 2026-08-30. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*
+*Last reviewed against the codebase: 2026-09-08. Changed a CLI flag, an endpoint, a response shape, or a session state? Update this file — and check whether ARCHITECTURE.md § 6's condensed summary needs the same update (see CLAUDE.md § 2).*

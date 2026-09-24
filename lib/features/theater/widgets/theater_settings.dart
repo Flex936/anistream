@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import '../../../core/extensions/build_context_extensions.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
+import '../../../shared/widgets/toggle_switch.dart';
 import '../services/track_name_parser.dart';
 
 enum _MenuPage { main, subtitles, audio }
@@ -45,6 +46,20 @@ class TheaterSettingsMenu extends StatefulWidget {
   final VoidCallback onClose;
   final bool uiPerformanceMode;
 
+  /// Current libass state, purely to seed the toggle row's visual
+  /// state — `TheaterScreen` owns the real value (see
+  /// `AppSettings.libassEnabled`'s doc comment for why toggling it
+  /// restarts the player rather than mutating it live). Null hides the
+  /// Libass tile entirely — used on the ExoPlayer path
+  /// (`ExoTheaterScreen`), which doesn't use libass at all.
+  final bool? libassEnabled;
+
+  /// Fired with the new value when the Libass row is tapped.
+  /// `TheaterScreen._handleLibassToggle` is what actually persists it
+  /// and restarts playback — this widget stays dumb. Paired with
+  /// [libassEnabled]: both null, or both provided.
+  final ValueChanged<bool>? onToggleLibass;
+
   const TheaterSettingsMenu({
     super.key,
     required this.subtitlePreview,
@@ -52,8 +67,14 @@ class TheaterSettingsMenu extends StatefulWidget {
     this.audioPreview,
     this.audioOptions,
     required this.onClose,
+    this.libassEnabled,
+    this.onToggleLibass,
     this.uiPerformanceMode = false,
-  });
+  }) : assert(
+         (libassEnabled == null) == (onToggleLibass == null),
+         'libassEnabled and onToggleLibass must both be null or both be '
+         'provided',
+       );
 
   @override
   State<TheaterSettingsMenu> createState() => _TheaterSettingsMenuState();
@@ -121,6 +142,20 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
             title: 'Audio',
             sub: widget.audioPreview ?? '',
             onTap: () => setState(() => _currentPage = _MenuPage.audio),
+          ),
+        if (widget.onToggleLibass != null)
+          _ToggleTile(
+            icon: Icons.text_fields_rounded,
+            // Kept terse (unlike AppSettings.libassEnabled's own longer
+            // doc-comment phrasing) to comfortably fit this popup's fixed
+            // 280px width alongside the icon and switch, matching the
+            // Subtitles/Audio tiles' own short titles above.
+            title: 'Libass Subtitles',
+            value: widget.libassEnabled ?? true,
+            onChanged: (v) {
+              widget.onToggleLibass!(v);
+              widget.onClose();
+            },
           ),
       ],
     );
@@ -207,6 +242,58 @@ class _Tile extends StatelessWidget {
               sub,
               style: const TextStyle(color: AppPalette.textMuted, fontSize: 12),
             ),
+          ],
+        ),
+      ),
+      child: const SizedBox.shrink(),
+    );
+  }
+}
+
+/// Same plain Container+Row shape as [_Tile]/[_Back] — a binary toggle
+/// row for [TheaterSettingsMenu]'s main page. Unlike [_Tile], selecting
+/// this doesn't navigate to a sub-page; it fires [onChanged] with the
+/// flipped value directly.
+class _ToggleTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _ToggleTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DpadFocusable(
+      onSelect: () => onChanged(!value),
+      builder: (context, state, child) => Container(
+        decoration: BoxDecoration(
+          color: state.focused
+              ? AppPalette.white.withValues(alpha: 0.1)
+              : AppPalette.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: AppPalette.white, size: 20),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: AppPalette.textMain,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ToggleSwitch(value: value),
           ],
         ),
       ),
@@ -327,11 +414,19 @@ class DesktopTheaterSettingsMenu extends StatefulWidget {
   final VoidCallback onClose;
   final bool uiPerformanceMode;
 
+  /// Forwarded to [TheaterSettingsMenu] unchanged — see that widget's
+  /// own doc comments. `TheaterScreen` (media_kit path) always supplies
+  /// both; nothing else constructs this wrapper.
+  final bool? libassEnabled;
+  final ValueChanged<bool>? onToggleLibass;
+
   const DesktopTheaterSettingsMenu({
     super.key,
     required this.player,
     required this.onClose,
     this.uiPerformanceMode = false,
+    this.libassEnabled,
+    this.onToggleLibass,
   });
 
   @override
@@ -389,7 +484,10 @@ class _DesktopTheaterSettingsMenuState
 
   List<SettingsTrackOption> _audioOptions() {
     return _tracks.audio.map((t) {
-      final parsed = TrackNameParser.parseAudio(title: t.title, language: t.language);
+      final parsed = TrackNameParser.parseAudio(
+        title: t.title,
+        language: t.language,
+      );
       return SettingsTrackOption(
         mainTitle: parsed.mainTitle,
         subTitle: parsed.subTitle,
@@ -414,6 +512,8 @@ class _DesktopTheaterSettingsMenuState
               language: activeAudio.language,
             ).mainTitle,
       audioOptions: _audioOptions(),
+      libassEnabled: widget.libassEnabled,
+      onToggleLibass: widget.onToggleLibass,
     );
   }
 }

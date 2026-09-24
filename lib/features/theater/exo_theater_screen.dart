@@ -30,69 +30,8 @@ import 'widgets/styled_subtitle_view.dart';
 import 'widgets/theater_player.dart';
 import 'widgets/theater_settings.dart';
 
-// Branch-experiment screen, reachable in production via the "ExoPlayer
-// Video Engine" toggle (Settings → Playback Preferences, mobile/TV only
-// — see settings_menu.dart), which maps to AppSettings.useExoPlayer.
-// That flag defaults to false, so TheaterScreen is what every session
-// gets unless a user opts in.
-//
-// Tests one specific, isolated hypothesis from the media_kit-vs-ExoPlayer
-// discussion: does swapping the actual decode/render engine fix the
-// stutter/crashes seen on weak Android TV boxes? The player widget
-// itself stays the isolated part of that test — D-Pad/TV-remote focus
-// navigation is a separate, not-yet-started piece of work. Everything
-// else matches TheaterScreen: chapters and auto-skip via Media3's own
-// Chapter metadata support (media_kit/mpv gets chapters natively from
-// whatever stream it's given, but video_player exposes no such thing,
-// so ChapterMetadataPlugin reads them directly off the container the
-// same stream URL points at); AniList tracking via the same
-// player-agnostic AnilistTrackerService, fed from this screen's own
-// position stream; audio-track switching via video_player's own
-// getAudioTracks()/selectAudioTrack(); and a full mobile-oriented
-// control bar (MobileTheaterControls), auto-hide-on-inactivity,
-// background-tap-to-toggle, keyboard shortcuts, and immersive system UI
-// + landscape lock on enter/exit, sharing SkipChip, Seekbar,
-// TheaterSettingsMenu, and TopNotificationController's top-of-screen
-// status toast with TheaterScreen directly instead of duplicating them.
-//
-// The kUseHardwareOverlay flag is the actual experiment:
-//
-// Stage 1 (false, below): plain video_player on its default
-// TextureView-backed path. Tests whether ExoPlayer's own MediaCodec
-// device-workaround tables alone fix the crashes seen — independent of
-// the hardware-overlay question entirely. This is the safe, "recommended"
-// configuration; run this stage first on your worst TV boxes.
-//
-// Stage 2 (flip to true): forces VideoViewType.platformView, which is
-// the only way to get a real SurfaceView — and therefore a hardware
-// overlay — inside a Flutter widget tree. video_player_android's own
-// package page states platform-view mode is "not currently recommended
-// on Android due to a known issue," and there's an open Flutter issue
-// (#164899) about platform-view video drawing on top of other UI in
-// certain scrollable layouts. Our case is always fullscreen with nothing
-// scrolling behind it, narrower than the reported bug — but go into
-// Stage 2 knowing this is a path the Flutter team itself is still
-// shaking out.
-//
-// Stage 1 alone already confirmed the actual fix: real, measured
-// VO-stage frame drops on the media_kit path, decoder-stage drops at
-// zero. Nothing here currently exercises the hardware-overlay path.
 const bool kUseHardwareOverlay = false;
 
-// Subtitle pipeline: which format gets requested from the server and
-// handed to Media3's native parser (see SubtitleParserPlugin.kt /
-// native_subtitle_parser.dart). ass is the default — the source track
-// inside the MKV is already ASS for the overwhelming majority of fansub
-// releases, so the server serves it via a stream copy (no re-encode) and
-// Media3's SsaParser decodes it with real timing, positioning, and
-// style-span fidelity.
-//
-// Swapping to TTML is exactly flipping this one value to
-// NativeSubtitleFormat.ttml. Nothing else here, in
-// remote_streaming_controller.dart, or in SubtitleParserPlugin.kt
-// branches on format beyond this same enum — the server converts via
-// go-astisub (not ffmpeg — see subtitle_extractor.go's FormatTTML doc
-// comment for why) and the native side swaps SsaParser for TtmlParser.
 const NativeSubtitleFormat kSubtitleFormat = NativeSubtitleFormat.ass;
 
 class ExoTheaterScreen extends StatefulWidget {
@@ -116,10 +55,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   VideoPlayerController? _videoController;
   PlaybackHandle? _playbackHandle;
 
-  // Only constructed once _playbackHandle exists (see _openVideoPlayer)
-  // — there's nothing to auto-hide/show before the video is ready
-  // anyway, since the loading/batch-picker overlay occupies that time
-  // instead of the controls overlay.
   ControlsVisibilityController? _controlsVisibility;
 
   bool _videoInitialized = false;
@@ -129,64 +64,24 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   bool _isClosing = false;
   bool _uiPerformanceMode = false;
 
-  // Set by MobileTheaterControls via onSeekbarFocusChange. Read only by
-  // _onKeyEvent, never by build(), so a plain field write (no setState)
-  // is correct and cheap — mirrors theater_screen.dart's identical
-  // _seekbarFocused field and the same double-seek concern it guards
-  // against.
   bool _seekbarFocused = false;
 
-  // Chapters + auto-skip. Fetched once per session via
-  // ChapterMetadataPlugin.kt, which reads
-  // Media3's own Chapter metadata entries off a throwaway ExoPlayer
-  // pointed at the same stream URL the real player opens — see
-  // _fetchChapters. AutoSkipController itself is player-engine-agnostic
-  // (it only needs a seek callback), so this is the same class
-  // TheaterScreen uses, just wired to PlaybackHandle.seek instead of
-  // media_kit's Player.seek directly.
   late final AutoSkipController _autoSkipController;
   bool _autoSkip = false;
   List<Chapter> _chapters = [];
   StreamSubscription<Duration>? _posSub;
 
-  // Player-agnostic AniList progress tracker — the same class
-  // TheaterScreen uses, fed from this screen's own position stream
-  // (_posSub, above) instead of media_kit's Player.stream.position.
-  // Auto-updates the viewer's AniList progress once playback crosses
-  // 90% of the episode; see AnilistTrackerService's own class doc for
-  // the eligibility and debounce rules.
   late final AnilistTrackerService _tracker;
 
-  // Same shared mechanism TheaterScreen uses for its own top-of-screen
-  // status toast (AniList sync confirmation, auto-skip arming) — see
-  // TopNotificationController's class doc
-  // (services/top_notification_controller.dart).
   final TopNotificationController _topNotificationController =
       TopNotificationController();
 
-  // Subtitles.
   int? _selectedSubtitleIndex;
   bool _subtitleFetchTriggered = false;
   bool _subtitleAutoApplied = false;
-  // Parsed cues for the currently-selected track — see
-  // _fetchAndApplySubtitleBytes and StyledSubtitleView. Carries real
-  // timing, positioning, and per-run styling from Media3's own
-  // TtmlParser/SsaParser, instead of video_player's plain-text captions.
   List<StyledCue> _styledCues = [];
-  // Re-fetches the selected track's content periodically while the
-  // server hasn't yet marked it complete — see _applySubtitleTrack.
   Timer? _subtitleContentTimer;
 
-  // Audio tracks. Unlike subtitles, these come straight from
-  // video_player's own getAudioTracks() (ExoPlayer's container-level
-  // track list via Media3's DefaultTrackSelector) — no server
-  // round-trip, no growing-file polling — so this is a single fetch
-  // right after the player starts playing (see _fetchAudioTracks), not
-  // a repeated-trigger guard the way subtitles need. Empty on any
-  // engine/platform PlaybackHandle doesn't implement this for (see
-  // playback_handle.dart's default) — today that means Android only,
-  // which matches this whole screen's TV/Android-first scope; iOS isn't
-  // a target for it.
   List<VideoAudioTrack> _audioTracks = [];
   String? _selectedAudioTrackId;
 
@@ -194,9 +89,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   void initState() {
     super.initState();
     if (Platform.isAndroid || Platform.isIOS) {
-      // initState can't be async — SystemChrome's setters return
-      // Future<void>, so the fire-and-forget intent is made explicit
-      // instead of silently dropped (unawaited_futures).
       unawaited(
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky),
       );
@@ -210,13 +102,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
 
     HardwareKeyboard.instance.addHandler(_onKeyEvent);
 
-    // onSeek defers to whatever _playbackHandle currently is rather than
-    // capturing it at construction time — this runs before
-    // _openVideoPlayer has ever created one. AutoSkipController itself
-    // never calls onSeek before chapters exist, and chapters are only
-    // ever set once _playbackHandle is already non-null (see
-    // _fetchChapters), so the null-coalescing here is a defensive
-    // fallback, not a path expected to actually run.
     _autoSkipController = AutoSkipController(
       onSeek: (position) => _playbackHandle?.seek(position) ?? Future.value(),
       isEnabled: () => _autoSkip,
@@ -252,16 +137,9 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       },
     );
 
-    // initState can't be async — _initStreamAndPlayer() returns
-    // Future<void>, so the fire-and-forget intent is made explicit
-    // instead of silently dropped (unawaited_futures).
     unawaited(_initStreamAndPlayer());
   }
 
-  // Mirrors TheaterScreen._initPlayerAndStream's controller-selection
-  // logic exactly (local vs remote-server mode) — same real streaming
-  // path, so whatever TV box you're testing against sees the same
-  // magnet-to-buffer behavior it would in production.
   Future<void> _initStreamAndPlayer() async {
     if (!mounted) return;
     final s = SettingsScope.of(context, listen: false).settings;
@@ -283,10 +161,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     }
 
     setState(() => _torrentController = newController);
-    // Deliberately not awaited — mirrors TheaterScreen's identical
-    // pattern: readiness is reported via notifyListeners as buffering
-    // progresses, not by this Future completing, and awaiting it would
-    // needlessly serialize the AniList tracker init below behind it.
     unawaited(
       _torrentController.initialize(
         widget.torrent.magnetLink,
@@ -294,12 +168,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       ),
     );
 
-    // Runs concurrently with the streaming controller's own buffering
-    // above rather than waiting on video readiness — the tracker's
-    // eligibility fetch has no dependency on the player, and
-    // updateProgress() itself already no-ops until that fetch resolves,
-    // so there's nothing to gain by deferring this until playback
-    // starts.
     await _tracker.init(
       mediaId: widget.anime.id,
       episode: widget.episode,
@@ -312,12 +180,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       unawaited(_openVideoPlayer(_torrentController.streamUrl!));
     }
 
-    // Both guards below are one-shot triggers — _onTorrentStateChanged
-    // fires on every unrelated change too (buffer percentage ticks,
-    // etc.), so without _subtitleFetchTriggered / _subtitleAutoApplied
-    // this would re-call fetchSubtitleTracks() or re-apply the first
-    // track on every single notification once the relevant condition is
-    // first met.
     if (_torrentController.subtitlesAvailable &&
         _torrentController.subtitleTracks.isEmpty &&
         !_subtitleFetchTriggered) {
@@ -337,11 +199,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
   }
 
   Future<void> _openVideoPlayer(String url) async {
-    // viewType is a top-level named param on the constructor itself —
-    // NOT nested inside VideoPlayerOptions (that class is for things
-    // like mixWithOthers). Verified directly against the current
-    // video_player API docs rather than assumed from memory, since this
-    // is the one line the whole engine experiment hinges on.
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
 
     try {
@@ -359,9 +216,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
 
     final handle = VideoPlayerPlaybackHandle(controller);
 
-    // Shares TheaterScreen's exact 'theater_volume' preference key, so
-    // a volume/mute choice made on either engine carries over to the
-    // other the next time either one opens.
     final savedVolume =
         await SharedPreferencesAsync().getDouble('theater_volume') ?? 100.0;
     await handle.setVolume(savedVolume);
@@ -388,12 +242,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     });
     controlsVisibility.registerActivity();
 
-    // AutoSkipController and the AniList tracker both need position
-    // ticks the same way TheaterScreen feeds them via
-    // _player.stream.position — nothing in this State subscribed to
-    // position before now, since MobileTheaterControls' own internal
-    // timeline (a separate State object) is the only other position
-    // listener, and it doesn't expose ticks back up to here.
     _posSub = handle.positionStream.listen((pos) {
       _tracker.updateProgress(pos, handle.duration);
       _autoSkipController.onPosition(pos);
@@ -403,28 +251,11 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     unawaited(_fetchAudioTracks(handle));
   }
 
-  // ChapterMetadataPlugin.kt opens a throwaway ExoPlayer against [url]
-  // purely to read whatever Chapter metadata entries Media3's own
-  // extractors attach to the container — this is independent of
-  // video_player's own player instance (there's no supported way to
-  // reach into another plugin's internal ExoPlayer), so it necessarily
-  // opens the stream a second time. Confirmed safe against
-  // anistream-server's video endpoint, which already hands out an
-  // independent reader per HTTP request for exactly this kind of
-  // concurrent-range-request case.
-  //
-  // Deliberately fire-and-forget from _openVideoPlayer's perspective —
-  // chapters are supplementary, not required for playback to start, the
-  // same way subtitle fetching doesn't block anything above.
   Future<void> _fetchChapters(String url, PlaybackHandle handle) async {
     try {
       final raw = await NativeChapterParser.extractChapters(url);
       if (!mounted) return;
 
-      // Chapter.isHidden() means "should not be shown in a table of
-      // contents UI" per its own doc comment — SkipChip is exactly that
-      // kind of UI, so hidden markers are dropped here rather than
-      // reaching buildChaptersFromRaw at all.
       final markers = raw
           .where((m) => !m.hidden)
           .map(
@@ -445,12 +276,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     }
   }
 
-  // One-shot fetch, run alongside _fetchChapters right after the player
-  // starts playing — see the _audioTracks field doc comment for why this
-  // doesn't need subtitle-style re-polling. Picks whichever track
-  // ExoPlayer itself reports as isSelected as the initial selection,
-  // rather than assuming index 0 — that's whatever the container/
-  // DefaultTrackSelector already chose by default before this ever runs.
   Future<void> _fetchAudioTracks(PlaybackHandle handle) async {
     try {
       final tracks = await handle.getAudioTracks();
@@ -473,11 +298,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     }
   }
 
-  // Optimistically updates _selectedAudioTrackId on success rather than
-  // re-fetching _fetchAudioTracks to confirm — mirrors _applySubtitleTrack's
-  // own optimistic setState below for the same reason: selectAudioTrack
-  // already throws if the platform rejects the selection, so there's
-  // nothing a re-fetch would catch that this try/catch doesn't already.
   Future<void> _selectAudioTrack(String trackId) async {
     final handle = _playbackHandle;
     if (handle == null) return;
@@ -493,12 +313,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     }
   }
 
-  // Settings popup data (added). Mirrors _subtitlePreview()/
-  // _subtitleOptions() below exactly, but with no "Off"/no-track entry —
-  // ExoPlayer always reports one of _audioTracks as isSelected once
-  // loaded, so unlike subtitles there's no real "nothing selected" state
-  // to represent, and no platform hook was found to clear a selection
-  // back to some "auto" default once a real one has been applied.
   String _audioPreview() {
     for (final t in _audioTracks) {
       if (t.id == _selectedAudioTrackId) {
@@ -526,23 +340,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     }).toList();
   }
 
-  // Fetches one track's raw bytes (ass, or ttml — see kSubtitleFormat)
-  // through the controller and runs them through NativeSubtitleParser
-  // (Media3's own TtmlParser/SsaParser via SubtitleParserPlugin.kt),
-  // storing the resulting cues in state for StyledSubtitleView to render.
-  // Not routed through the video controller at all — cue fetching/
-  // parsing is independent of whether the video player itself has
-  // finished initializing, so a subtitle selection arriving before
-  // _videoController exists is never silently dropped.
-  //
-  // While the source file is still downloading, the server can return
-  // progressively more content on each fetch (see
-  // RemoteStreamingController.fetchSubtitleBytes's doc comment) — this
-  // re-fetches on a timer until isSubtitleTrackComplete says there's no
-  // point asking again. Cancels and restarts cleanly if the user picks a
-  // different track mid-poll.
-  //
-  // streamIndex == null means "Off": just clear the cue list.
   Future<void> _applySubtitleTrack(int? streamIndex) async {
     _subtitleContentTimer?.cancel();
     _subtitleContentTimer = null;
@@ -560,9 +357,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       _subtitleContentTimer = Timer.periodic(const Duration(seconds: 20), (
         _,
       ) async {
-        // User switched tracks (or turned subtitles off) while this
-        // timer was waiting — stop rather than clobbering their new
-        // choice with stale content for the old track.
         if (_selectedSubtitleIndex != streamIndex) {
           _subtitleContentTimer?.cancel();
           _subtitleContentTimer = null;
@@ -583,11 +377,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
       kSubtitleFormat,
     );
     if (bytes == null) {
-      // Distinguished from the mounted/track-changed guard below —
-      // this specifically means the fetch itself failed (network error,
-      // or the server rejected the format — e.g. ass/ttml requested
-      // against a track that isn't actually ass/ssa, see
-      // subtitle_extractor.go's IsNativeCodec).
       AppLogger.w(
         'ExoTheaterScreen',
         'fetchSubtitleBytes returned null for track $streamIndex, format ${kSubtitleFormat.wireValue}',
@@ -614,12 +403,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     }
   }
 
-  // Settings popup data (added). Builds the plain SettingsTrackOption
-  // rows TheaterSettingsMenu renders from this controller's own
-  // RemoteSubtitleTrack list — the mobile counterpart to
-  // DesktopTheaterSettingsMenu's media_kit-Tracks version in
-  // theater_settings.dart. No audio page: video_player exposes no
-  // audio-track switching to offer one.
   String _subtitlePreview() {
     final selected = _selectedSubtitleIndex;
     if (selected == null) return 'Off';
@@ -645,22 +428,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     ];
   }
 
-  // Keyboard shortcuts.
-  //
-  // Same shape as TheaterScreen's own _onKeyEvent, minus the pieces that
-  // depend on features this screen doesn't have: no F/fullscreen key
-  // (this screen has no toggleable windowed state to escape — see
-  // initState/_exitTheater for the always-on immersive handling
-  // instead), and no dpadModeActive gate (this screen doesn't wire
-  // D-Pad focus at all, so there's no competing input scheme for these
-  // keys to defer to). Chapters exist here now (see "Chapters +
-  // auto-skip" above), but Shift+seek chapter-jump was never asked for
-  // on this screen and isn't wired up — SkipChip covers the
-  // skip-a-chapter case; nothing currently covers manual jump-to-chapter
-  // outside of it. _seekbarFocused mirrors TheaterScreen's exact guard:
-  // Seekbar keeps its own Focus.onKeyEvent for Left/Right when it holds
-  // keyboard focus, so this handler defers to it instead of
-  // double-seeking.
   bool _onKeyEvent(KeyEvent event) {
     if (!mounted) return false;
     if (event is! KeyDownEvent) return false;
@@ -790,9 +557,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     HardwareKeyboard.instance.removeHandler(_onKeyEvent);
 
     if (Platform.isAndroid || Platform.isIOS) {
-      // dispose() must stay synchronous, so these fire-and-forget calls
-      // are wrapped explicitly instead of silently dropped
-      // (unawaited_futures) — same reasoning as TheaterScreen's dispose().
       unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
       unawaited(
         SystemChrome.setPreferredOrientations([
@@ -807,9 +571,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
     _controlsVisibility?.dispose();
     _torrentController.removeListener(_onTorrentStateChanged);
     _torrentController.dispose();
-    // VideoPlayerController.dispose() returns Future<void>; dispose()
-    // itself can't become async, so the fire-and-forget intent is made
-    // explicit instead of silently dropped (unawaited_futures).
     unawaited(_videoController?.dispose() ?? Future<void>.value());
     _playbackHandle?.dispose();
     _subtitleContentTimer?.cancel();
@@ -838,7 +599,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
             top: 24 + MediaQuery.paddingOf(context).top,
             left: 16,
             child: TheaterTopBar(
-              episode: widget.episode,
+              title: 'Episode ${widget.episode}',
               uiPerformanceMode: _uiPerformanceMode,
               onBack: _exitTheater,
               onRestart: () => {}, //temporary(?) fix to stop lint
@@ -890,20 +651,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
             ),
           ),
 
-        // StyledSubtitleView reads _styledCues — real timing,
-        // positioning, and per-run styling from Media3's TtmlParser/
-        // SsaParser via NativeSubtitleParser — instead of video_player's
-        // own plain-text-only ClosedCaption widget. Spans the FULL video
-        // area, bottom:0 included — Cue.line/Cue.position are fractions
-        // of the true video height (same denominator ExoPlayer's own
-        // SubtitleView would use), so measuring against a pre-shrunk
-        // area shifts every cue upward from where the source file
-        // actually places it. Staying clear of the controls bar is
-        // reservedBottom's job, applied per cue inside StyledSubtitleView,
-        // not this Positioned's own bounds. Wrapped in its own
-        // ValueListenableBuilder (VideoPlayerController IS a
-        // ValueNotifier<VideoPlayerValue>) so only this small subtree
-        // rebuilds as playback position changes, not the whole screen.
         if (_videoInitialized &&
             videoController != null &&
             _styledCues.isNotEmpty)
@@ -917,17 +664,11 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               builder: (context, value, _) => StyledSubtitleView(
                 cues: _styledCues,
                 position: value.position,
-                //Subtitle Height
                 reservedBottom: 10,
               ),
             ),
           ),
 
-        // Theater's own in-flow status toast (AniList sync confirmation,
-        // auto-skip arming), fed by the same TopNotificationController
-        // mechanism TheaterScreen uses. Rendered unconditionally here
-        // (not inside _buildControlsOverlay's gated Stack), so it stays
-        // reachable even while the controls bar has auto-hidden.
         Positioned(
           top:
               24 +
@@ -971,7 +712,7 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
                 );
               }
               return TheaterLoadingOverlay(
-                episode: widget.episode,
+                title: 'Episode ${widget.episode}',
                 controller: _torrentController,
               );
             },
@@ -996,14 +737,6 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
             children: [
               staticLayer,
               if (_videoInitialized && handle != null) _buildControlsOverlay(),
-              // Painted after _buildControlsOverlay so it always paints
-              // — and hit-tests — above it. A `Container` with a
-              // `BoxDecoration` (MobileTheaterControls' bottom bar)
-              // registers a hit across its entire rectangle regardless
-              // of the gradient's actual alpha at a given point, so
-              // sitting below it in the Stack would let it silently
-              // swallow taps meant for this popup's tiles wherever the
-              // two overlap on screen.
               if (_isSettingsOpen)
                 Positioned(
                   bottom: 130,

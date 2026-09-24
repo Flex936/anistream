@@ -36,20 +36,23 @@ import 'widgets/theater_player.dart';
 import 'widgets/theater_settings.dart';
 
 /// Base type for every non-null value [TheaterScreen] can pop with — see
-/// [TheaterRestartRequest] (freeze-recovery restart, same episode) and
-/// [TheaterNextEpisodeRequest] (advancing to the next episode). A plain
-/// `null` pop remains a genuine exit back to [AnimeDetailsScreen] — see
-/// [_TheaterScreenState._exitTheater].
+/// [TheaterRestartRequest] (freeze-recovery restart, or a Libass toggle,
+/// same episode) and [TheaterNextEpisodeRequest] (advancing to the next
+/// episode). A plain `null` pop remains a genuine exit back to
+/// `AnimeDetailsScreen` — see [_TheaterScreenState._exitTheater].
 sealed class TheaterExitResult {
   const TheaterExitResult();
 }
 
 /// Returned by [TheaterScreen] when the user taps its freeze-recovery
-/// restart button (see [_TheaterScreenState._handleRestartRequested]).
-/// Carries the still-live, still-buffered streaming session across to
-/// whatever [TheaterScreen] instance replaces this one, so a restart
-/// recovers a frozen frame near-instantly instead of re-downloading the
-/// torrent from scratch.
+/// restart button, or toggles Libass in [TheaterSettingsMenu] (see
+/// [_TheaterScreenState._handleRestartRequested] /
+/// [_TheaterScreenState._handleLibassToggle]). Carries the still-live,
+/// still-buffered streaming session across to whatever [TheaterScreen]
+/// instance replaces this one, so either path recovers/reconfigures
+/// near-instantly instead of re-downloading the torrent from scratch. A
+/// normal exit pops with `null` instead — see
+/// [_TheaterScreenState._exitTheater].
 class TheaterRestartRequest extends TheaterExitResult {
   final BaseStreamingController resumeController;
   final Duration resumePosition;
@@ -105,21 +108,39 @@ class TheaterNextEpisodeRequest extends TheaterExitResult {
 }
 
 class TheaterScreen extends StatefulWidget {
-  final Anime anime;
-  final int episode;
-  final Torrent torrent;
+  /// AniList context for progress tracking — always null together with
+  /// [episode]/[totalEpisodes] for a custom-magnet stream with no anime
+  /// metadata behind it (see [magnetUri]). Never null on the normal
+  /// from-AnimeDetails path.
+  final Anime? anime;
+
+  /// Paired with [anime] — see that field's doc comment. Also used as
+  /// [RemoteStreamingController]/[StreamingController]'s batch-file
+  /// auto-match hint when non-null.
+  final int? episode;
+
+  /// The magnet link to stream — the one piece of state every session
+  /// needs regardless of whether it came from a scored `Torrent` search
+  /// result (`torrent.magnetLink`) or a user-pasted custom magnet link.
+  final String magnetUri;
+
+  /// Shown in the top bar / loading overlay in place of "Episode N" when
+  /// [episode] is null. Ignored otherwise.
+  final String? displayTitle;
 
   /// Total episode count for [anime] — gates the Next Episode chip and
   /// completion-triggered transitions (there's nothing to advance to past
-  /// this). Always the same value `AnimeDetailsScreen._episodeCount`
+  /// this). Null exactly when [anime]/[episode] are null (a custom-magnet
+  /// stream with no episode context) — see the constructor's assert.
+  /// Otherwise always the same value `AnimeDetailsScreen._episodeCount`
   /// already computes; threaded through explicitly since this screen has
   /// no other way to know it.
-  final int totalEpisodes;
+  final int? totalEpisodes;
 
   /// Non-null only when this screen is replacing a prior instance after
-  /// a freeze-recovery restart — the already-buffered controller to
-  /// resume from instead of starting a fresh torrent download. Always
-  /// paired with [resumePosition].
+  /// a freeze-recovery restart or a Libass toggle — the already-buffered
+  /// controller to resume from instead of starting a fresh torrent
+  /// download. Always paired with [resumePosition].
   final BaseStreamingController? resumeController;
 
   /// Paired with [resumeController] — where to seek to once the resumed
@@ -128,15 +149,22 @@ class TheaterScreen extends StatefulWidget {
 
   const TheaterScreen({
     super.key,
-    required this.anime,
-    required this.episode,
-    required this.torrent,
-    required this.totalEpisodes,
+    this.anime,
+    this.episode,
+    required this.magnetUri,
+    this.displayTitle,
+    this.totalEpisodes,
     this.resumeController,
     this.resumePosition,
   }) : assert(
          (resumeController == null) == (resumePosition == null),
          'resumeController and resumePosition must both be null or both be provided',
+       ),
+       assert(
+         (anime == null) == (episode == null) &&
+             (episode == null) == (totalEpisodes == null),
+         'anime, episode, and totalEpisodes must all be null (a custom '
+         'magnet stream with no episode context) or all be provided',
        );
 
   @override
@@ -166,12 +194,22 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // episode-autoplay is on, an actual buffering stream) as this episode
   // nears its end — see next_episode_prefetch_controller.dart's class
   // doc. Null whenever there's no next episode to prefetch (constructed
-  // in _initPlayerAndStream, once totalEpisodes/settings are known).
+  // in _initPlayerAndStream, once totalEpisodes/settings are known) or
+  // this is a custom-magnet session with no episode context at all.
   NextEpisodePrefetchController? _prefetchController;
 
   /// A same-position pause before a manual restart, below which a
   /// restart wouldn't meaningfully rewind anything.
   static const Duration _kFreezeRecoveryRewind = Duration(seconds: 5);
+
+  /// Fixed-duration manual seek for OP/ED skipping — Ctrl+→ on desktop
+  /// (see _onKeyEvent), or the dedicated skip button in TheaterControls
+  /// on Mobile/TV. Deliberately independent of chapter metadata (unlike
+  /// AutoSkipController's own chapter-driven auto-skip): this always
+  /// seeks exactly 90 seconds forward, regardless of whether an OP/ED
+  /// chapter boundary happens to sit nearby. No backward equivalent —
+  /// only a forward skip was asked for.
+  static const Duration _kExactSkipDuration = Duration(minutes: 1, seconds: 30);
 
   bool _videoInitialized = false;
   bool _isSettingsOpen = false;
@@ -203,6 +241,13 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool _uiPerformanceMode = false;
   String _videoFilterQuality = 'low';
 
+  /// What `_player` was actually constructed with — read once in
+  /// initState (see below) purely so TheaterSettingsMenu has a current
+  /// value to show its toggle in. `_handleLibassToggle` is what changes
+  /// the underlying setting; this field never mutates on its own once
+  /// this screen instance exists.
+  late bool _libassEnabled;
+
   List<Chapter> _chapters = [];
   StreamSubscription<Duration>? _posSub;
 
@@ -224,23 +269,39 @@ class _TheaterScreenState extends State<TheaterScreen> {
   final TopNotificationController _topNotificationController =
       TopNotificationController();
 
+  /// "Episode N" when this session has AniList episode context, or
+  /// [TheaterScreen.displayTitle] (falling back to "Custom Stream")
+  /// otherwise — shown in [TheaterTopBar] and [TheaterLoadingOverlay] in
+  /// place of duplicating this branch in each of those dumb widgets.
+  String get _displayLabel => widget.episode != null
+      ? 'Episode ${widget.episode}'
+      : (widget.displayTitle ?? 'Custom Stream');
+
   @override
   void initState() {
     super.initState();
-    // Read via SettingsCache, not SettingsScope: this runs synchronously,
-    // before _initPlayerAndStream's awaited SettingsScope read below has
-    // landed, and Player() needs bufferSize at construction time.
-    // SettingsCache is this codebase's existing no-BuildContext mechanism
-    // for exactly that (see settings_service.dart). The value matches
-    // what PlayerConfigurator.configureForTheater sets demuxer-max-bytes
-    // to moments later, so the demuxer cache is never briefly at one size
-    // and then a different one.
-    final earlyUiPerformanceMode = SettingsCache.current.uiPerformanceMode;
+
+    // `getInheritedWidgetOfExactType` (the `listen: false` path
+    // SettingsScope.of uses) is a plain, non-establishing ancestor
+    // lookup — safe here even though initState runs before this
+    // element's own first build, unlike `dependOnInheritedWidgetOfExactType`
+    // (a listening read), which Flutter reserves for didChangeDependencies.
+    // Read directly off SettingsScope rather than the no-BuildContext
+    // SettingsCache mirror: this widget has a perfectly good
+    // BuildContext, and ARCHITECTURE.md § 3 is explicit that
+    // SettingsCache exists only for services that don't.
+    _libassEnabled = SettingsScope.of(
+      context,
+      listen: false,
+    ).settings.libassEnabled;
+
+    // media_kit's PlayerConfiguration.libass is only ever read at
+    // construction time — there's no exposed way to flip it on an
+    // already-running Player — so a later change to this setting goes
+    // through _handleLibassToggle's full restart instead of a live
+    // property mutation.
     _player = Player(
-      configuration: PlayerConfiguration(
-        libass: true,
-        bufferSize: earlyUiPerformanceMode ? 70000000 : 150000000,
-      ),
+      configuration: PlayerConfiguration(libass: _libassEnabled),
     );
     // Thin PlaybackHandle wrapper around _player — see
     // PlayerPlaybackHandle's own doc comment. Only consumed by
@@ -392,30 +453,44 @@ class _TheaterScreenState extends State<TheaterScreen> {
       // intent is made explicit instead.
       unawaited(
         _torrentController.initialize(
-          widget.torrent.magnetLink,
+          widget.magnetUri,
           episodeNumber: widget.episode,
         ),
       );
     }
 
-    // AniList progress tracking.
-    await _tracker.init(
-      mediaId: widget.anime.id,
-      episode: widget.episode,
-      totalEpisodes: widget.anime.episodes,
-    );
+    // AniList progress tracking, and the next-episode background
+    // prefetch below, are both skipped entirely for a custom-magnet
+    // session with no anime/episode/totalEpisodes context — the
+    // constructor's assert guarantees the three are null together.
+    // AnilistTrackerService stays in its default logged-out, ineligible
+    // state until init() runs, so updateProgress() below is already a
+    // safe no-op in that case.
+    final trackedAnime = widget.anime;
+    final trackedEpisode = widget.episode;
+    final trackedTotalEpisodes = widget.totalEpisodes;
+    if (trackedAnime != null && trackedEpisode != null) {
+      await _tracker.init(
+        mediaId: trackedAnime.id,
+        episode: trackedEpisode,
+        totalEpisodes: trackedAnime.episodes,
+      );
+    }
     if (!mounted) return;
 
-    if (widget.episode < widget.totalEpisodes) {
+    if (trackedAnime != null &&
+        trackedEpisode != null &&
+        trackedTotalEpisodes != null &&
+        trackedEpisode < trackedTotalEpisodes) {
       _prefetchController = NextEpisodePrefetchController(
-        anime: widget.anime,
-        nextEpisode: widget.episode + 1,
+        anime: trackedAnime,
+        nextEpisode: trackedEpisode + 1,
         settings: s,
         episodeAutoplayEnabled: () => _episodeAutoplayEnabled,
         onEngineWarm: () {
           if (mounted) {
             _topNotificationController.show(
-              message: 'Up next: Episode ${widget.episode + 1} ready',
+              message: 'Up next: Episode ${trackedEpisode + 1} ready',
               icon: Icons.skip_next_rounded,
               iconColor: AppPalette.primary,
             );
@@ -435,7 +510,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   void _onTorrentStateChanged() {
     // Defensive guard alongside removing this listener as the first
-    // statement in _exitTheater/_handleRestartRequested below — a stray
+    // statement in _exitTheater/_teardownForRestart below — a stray
     // notifyListeners() landing in either method's own teardown sequence
     // (a trailing FFI callback, a last remote-poll tick) should never be
     // able to reopen or replay against a Player that's already being
@@ -458,11 +533,12 @@ class _TheaterScreenState extends State<TheaterScreen> {
         // genuine duration (the same signal the chapter-load below
         // already relies on) confirms the file is actually ready to
         // accept a seek before issuing one. play() is deliberately
-        // deferred until after the seek lands too, so a freeze-recovery
-        // restart jumps straight to the resume position instead of
-        // briefly showing frame 0 first — this only affects the
-        // restart path; the normal first-time-watching path below still
-        // plays immediately, since it never needs to seek at all.
+        // deferred until after the seek lands too, so a restart (freeze
+        // recovery or a Libass toggle) jumps straight to the resume
+        // position instead of briefly showing frame 0 first — this only
+        // affects the restart path; the normal first-time-watching path
+        // below still plays immediately, since it never needs to seek at
+        // all.
         unawaited(
           _player.stream.duration.firstWhere((d) => d > Duration.zero).then((
             _,
@@ -511,6 +587,18 @@ class _TheaterScreenState extends State<TheaterScreen> {
   bool get _isDesktopPlatform =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
+  /// True while either physical Ctrl key is held — backs the Ctrl+→
+  /// exact-skip shortcut below. Desktop-only in practice: TV/mobile never
+  /// reach this file's raw HardwareKeyboard handler for a Ctrl chord in
+  /// the first place, since neither platform has a Ctrl key to hold.
+  bool get _isCtrlPressed =>
+      HardwareKeyboard.instance.logicalKeysPressed.contains(
+        LogicalKeyboardKey.controlLeft,
+      ) ||
+      HardwareKeyboard.instance.logicalKeysPressed.contains(
+        LogicalKeyboardKey.controlRight,
+      );
+
   // Keyboard shortcuts (desktop).
   //
   // Registered directly with HardwareKeyboard.instance rather than via
@@ -526,7 +614,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // via its own `Focus.onKeyEvent` (Seekbar and the volume Slider both do
   // this for Left/Right when they hold keyboard focus). Left unguarded,
   // that would double-seek (Seekbar) or seek unexpectedly while the user
-  // is nudging volume (the Slider). `_seekbarFocused`/`_volumeSliderFocused`
+  // is nudging volume. `_seekbarFocused`/`_volumeSliderFocused`
   // (set via TheaterControls' onSeekbarFocusChange/onVolumeFocusChange)
   // exist specifically so the literal ArrowLeft/ArrowRight/ArrowUp/
   // ArrowDown cases below can defer to that widget's own handling instead.
@@ -534,7 +622,19 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // Seekbar and the Slider only ever bind the literal arrow keys locally,
   // never letters, so those always reach this handler regardless of focus.
   //
-  // dpadModeActive remains a pure data signal (not a focus mechanism)
+  // Ctrl+→ (exact-skip) is the one arrow-key case that does NOT defer to
+  // _seekbarFocused/_volumeSliderFocused: Seekbar's own onKeyEvent
+  // (seekbar.dart) explicitly ignores Left/Right whenever Ctrl is held,
+  // rather than performing its own ±10s seek, so there's nothing to defer
+  // to there. The volume Slider's internal keyboard Shortcuts bind a
+  // plain (non-Ctrl) SingleActivator for arrow keys, which by
+  // construction doesn't match a Ctrl-held press, so it shouldn't
+  // independently consume this either — flagged as worth confirming on a
+  // real device rather than asserted with full certainty, same caution
+  // this codebase's own search_filter_panel.dart comment already takes
+  // around this exact Slider's internal keyboard quirks.
+  //
+  // isTvPlatform remains a pure data signal (not a focus mechanism)
   // deciding which shortcut scheme is active: a desktop keyboard user
   // expects Left/Right/Up/Down to seek/adjust volume from anywhere, a
   // D-Pad user needs those same keys to move focus between controls
@@ -553,13 +653,10 @@ class _TheaterScreenState extends State<TheaterScreen> {
       return true;
     }
 
-    final dpadModeActive = InputModeScope.of(
-      context,
-      listen: false,
-    ).dpadModeActive;
+    final isTvPlatform = InputModeScope.of(context, listen: false).isTvPlatform;
     final subMenuOpen =
         _isSettingsOpen || _torrentController.needsManualSelection;
-    if (dpadModeActive || subMenuOpen) return false;
+    if (isTvPlatform || subMenuOpen) return false;
 
     switch (key) {
       case LogicalKeyboardKey.space:
@@ -577,6 +674,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
       case LogicalKeyboardKey.keyL:
         _seekForward();
+        return true;
+      case LogicalKeyboardKey.arrowRight when _isCtrlPressed:
+        _exactSkipForward();
         return true;
       case LogicalKeyboardKey.arrowRight:
         if (_seekbarFocused || _volumeSliderFocused) return false;
@@ -677,6 +777,19 @@ class _TheaterScreenState extends State<TheaterScreen> {
       return;
     }
     final target = _player.state.position + const Duration(seconds: 10);
+    final duration = _player.state.duration;
+    unawaited(_player.seek(target > duration ? duration : target));
+  }
+
+  /// Fixed 90-second forward seek — see [_kExactSkipDuration]'s doc
+  /// comment for why this is deliberately independent of chapter
+  /// metadata. Shared by both entry points (Ctrl+→ in [_onKeyEvent], and
+  /// the dedicated skip button in [TheaterControls]), so
+  /// [_controlsVisibility]'s activity registration only needs to happen
+  /// once, here, rather than being duplicated at each call site.
+  void _exactSkipForward() {
+    _controlsVisibility.registerActivity();
+    final target = _player.state.position + _kExactSkipDuration;
     final duration = _player.state.duration;
     unawaited(_player.seek(target > duration ? duration : target));
   }
@@ -826,28 +939,22 @@ class _TheaterScreenState extends State<TheaterScreen> {
     if (mounted) Navigator.pop(context);
   }
 
-  /// Handles a tap on TheaterTopBar's freeze-recovery button (only shown
-  /// when `showFreezeRecoveryButton` is on). Disposes only `_player` —
-  /// which is what actually frees the stuck native texture behind the
-  /// confirmed Linux/NVIDIA/Wayland freeze (see ARCHITECTURE.md § 7) —
-  /// and pops with a [TheaterRestartRequest] carrying the still-live,
-  /// still-buffered `_torrentController` and a resume position a few
-  /// seconds before wherever playback was. `_torrentController` is
-  /// deliberately NOT disposed here: `StreamingController.dispose()`
-  /// deletes downloaded torrent pieces and `RemoteStreamingController.
-  /// dispose()` tears down the remote session, either of which would
-  /// force a real re-download instead of a near-instant recovery. The
-  /// caller (`AnimeDetailsScreen._streamTorrent`) is expected to
-  /// immediately re-push a fresh TheaterScreen using both values.
-  Future<void> _handleRestartRequested() async {
-    if (_isClosing) return;
+  /// Shared teardown for both restart paths this screen supports — the
+  /// freeze-recovery restart button ([_handleRestartRequested]) and the
+  /// Libass toggle ([_handleLibassToggle]) — up to (but not including)
+  /// the final `Navigator.pop` with a [TheaterRestartRequest]. Each
+  /// caller computes its own resume position and finishes any prep of
+  /// its own (persisting the new setting, in the Libass case) before
+  /// calling this, since both still need the *old* `_player` alive right
+  /// up until this runs.
+  ///
+  /// Sets `_isClosing` and removes the torrent-controller listener as
+  /// its first steps, for the same reason `_exitTheater` does — a stray
+  /// `notifyListeners()` mid-teardown must never be able to reopen or
+  /// replay against a `Player` that's on its way out.
+  Future<void> _teardownForRestart() async {
     _isClosing = true;
     _torrentController.removeListener(_onTorrentStateChanged);
-
-    final rawResumePosition = _player.state.position - _kFreezeRecoveryRewind;
-    final resumePosition = rawResumePosition.isNegative
-        ? Duration.zero
-        : rawResumePosition;
 
     // Discarded rather than handed off across the restart boundary — the
     // replacement TheaterScreen constructs its own fresh
@@ -875,6 +982,87 @@ class _TheaterScreenState extends State<TheaterScreen> {
     await _player.stop();
     await _player.dispose();
     _playbackHandle.dispose();
+  }
+
+  /// Handles a tap on TheaterTopBar's freeze-recovery button (only shown
+  /// when `showFreezeRecoveryButton` is on). Disposing `_player` (inside
+  /// [_teardownForRestart]) is what actually frees the stuck native
+  /// texture behind the confirmed Linux/NVIDIA/Wayland freeze (see
+  /// ARCHITECTURE.md § 7). Pops with a [TheaterRestartRequest] carrying
+  /// the still-live, still-buffered `_torrentController` and a resume
+  /// position a few seconds before wherever playback was.
+  /// `_torrentController` is deliberately NOT disposed here:
+  /// `StreamingController.dispose()` deletes downloaded torrent pieces
+  /// and `RemoteStreamingController.dispose()` tears down the remote
+  /// session, either of which would force a real re-download instead of
+  /// a near-instant recovery. The caller (`runTheaterSession`/
+  /// `AnimeDetailsScreen._streamTorrent`) is expected to immediately
+  /// re-push a fresh TheaterScreen using both values.
+  Future<void> _handleRestartRequested() async {
+    if (_isClosing) return;
+
+    final rawResumePosition = _player.state.position - _kFreezeRecoveryRewind;
+    final resumePosition = rawResumePosition.isNegative
+        ? Duration.zero
+        : rawResumePosition;
+
+    await _teardownForRestart();
+
+    if (mounted) {
+      Navigator.pop(
+        context,
+        TheaterRestartRequest(
+          resumeController: _torrentController,
+          resumePosition: resumePosition,
+        ),
+      );
+    }
+  }
+
+  /// Handles a toggle in [TheaterSettingsMenu]'s Libass row.
+  /// `media_kit`'s `PlayerConfiguration.libass` is only ever read at
+  /// `Player`-construction time — there's no exposed way to flip it on
+  /// an already-running instance — so persisting the new value and then
+  /// restarting via the same [TheaterRestartRequest] mechanism
+  /// [_handleRestartRequested] uses is the only way to make the change
+  /// take effect this session. Unlike freeze recovery, this always
+  /// resumes at the *exact* position playback was at — nothing is
+  /// actually wrong with the player here, so there's no reason to
+  /// rewind.
+  Future<void> _handleLibassToggle(bool newValue) async {
+    if (_isClosing) return;
+
+    final settingsController = SettingsScope.of(context, listen: false);
+    final current = settingsController.settings;
+
+    // Persisted (and SettingsController's own `_settings` updated)
+    // before any teardown, so the fresh TheaterScreen this pop leads to
+    // reads the new value the instant its own initState constructs a
+    // new Player — see this file's initState for that read.
+    await settingsController.update(
+      AppSettings(
+        filterEcchi: current.filterEcchi,
+        hardwareDecoding: current.hardwareDecoding,
+        androidHwDec: current.androidHwDec,
+        autoTorrentEnabled: current.autoTorrentEnabled,
+        episodeAutoplayEnabled: current.episodeAutoplayEnabled,
+        autoSkip: current.autoSkip,
+        showFreezeRecoveryButton: current.showFreezeRecoveryButton,
+        uiPerformanceMode: current.uiPerformanceMode,
+        videoFilterQuality: current.videoFilterQuality,
+        useExoPlayer: current.useExoPlayer,
+        serverMode: current.serverMode,
+        serverUrl: current.serverUrl,
+        libassEnabled: newValue,
+      ),
+    );
+
+    if (!mounted || _isClosing) return;
+
+    // No rewind, unlike _handleRestartRequested — see this method's doc
+    // comment.
+    final resumePosition = _player.state.position;
+    await _teardownForRestart();
 
     if (mounted) {
       Navigator.pop(
@@ -900,14 +1088,20 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   /// Shared entry point for both the manual Next Episode chip tap (see
   /// [_buildControlsOverlay]) and automatic playback completion (see
-  /// [_onPlaybackCompleted] above). No-ops if there's no next episode, or
-  /// if a transition/exit is already underway — guards against a stray
-  /// double-fire, e.g. a completion event landing the same frame as a
-  /// manual tap.
+  /// [_onPlaybackCompleted] above). No-ops if there's no episode context
+  /// at all (a custom-magnet session — see [TheaterScreen]'s constructor
+  /// assert), if there's no next episode, or if a transition/exit is
+  /// already underway — guards against a stray double-fire, e.g. a
+  /// completion event landing the same frame as a manual tap.
   Future<void> _requestNextEpisodeTransition() async {
     if (_isClosing) return;
-    final nextEpisode = widget.episode + 1;
-    if (nextEpisode > widget.totalEpisodes) return;
+
+    final episode = widget.episode;
+    final totalEpisodes = widget.totalEpisodes;
+    if (episode == null || totalEpisodes == null) return;
+
+    final nextEpisode = episode + 1;
+    if (nextEpisode > totalEpisodes) return;
 
     final NextEpisodeTransitionMode mode;
     BaseStreamingController? prewarmedController;
@@ -1017,8 +1211,8 @@ class _TheaterScreenState extends State<TheaterScreen> {
     _torrentController.removeListener(_onTorrentStateChanged);
     // Fire-and-forget, matching this method's existing pattern for
     // unavoidably-async cleanup — dispose() can't await. Idempotent if
-    // _exitTheater/_handleRestartRequested already flushed: their own
-    // call already cancelled _delayTimer, so this one just no-ops. Only
+    // _exitTheater/_teardownForRestart already flushed: their own call
+    // already cancelled _delayTimer, so this one just no-ops. Only
     // meaningfully fires if this State is torn down through some path
     // that bypasses both of those (e.g. an ancestor route popping this
     // screen directly), which would otherwise drop an armed commit with
@@ -1044,7 +1238,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   // Controls overlay (top bar + control bar).
   //
-  // Parameterized on showControls/dpadModeActive rather than reading
+  // Parameterized on showControls/isTvPlatform rather than reading
   // fields directly, since it's built from inside the ValueListenableBuilder
   // in build() below — see that method's doc comment for why.
   //
@@ -1052,45 +1246,41 @@ class _TheaterScreenState extends State<TheaterScreen> {
   // TheaterControls (D-Pad focus rings, draggable volume slider,
   // fullscreen toggle); Android and iOS — Android TV included, since
   // there's no OS-level flag distinguishing TV from phone, only the
-  // runtime dpadModeActive signal — get MobileTheaterControls' touch-
+  // runtime isTvPlatform signal — get MobileTheaterControls' touch-
   // oriented layout instead. MobileTheaterControls has no D-Pad focus
   // wiring of its own (see that widget's doc comment), so on Android TV
   // this bar is tappable but not D-Pad-focusable; TheaterTopBar above it
   // keeps its own DpadRegion regardless of which bottom bar is showing.
-  Widget _buildControlsOverlay(bool showControls, bool dpadModeActive) {
+  Widget _buildControlsOverlay(bool showControls, bool isTvPlatform) {
+    // Null exactly when this is a custom-magnet session with no episode
+    // context — see TheaterScreen's constructor assert.
+    final hasNextEpisode =
+        widget.episode != null &&
+        widget.totalEpisodes != null &&
+        widget.episode! < widget.totalEpisodes!;
+
     final bottomBar = _isDesktopPlatform
         ? DpadRegion(
             memoryKey: 'theater.controls',
-            // No tap-swallowing wrapper here either. TheaterControls'
-            // gradient Container paints across nearly its entire
-            // bounds, but under Flutter's standard nested-
-            // GestureDetector resolution a descendant's own tap
-            // recognizer (an actual button) still wins the gesture
-            // arena over an ancestor's — so real buttons keep
-            // working, while a tap on empty gradient space falls
-            // through to the root GestureDetector's onTap
-            // (_handleBackgroundTap) in build() below.
-            child: DpadRegion(
-              memoryKey: 'theater.controls',
-              child: TheaterControls(
-                player: _player,
-                chapterMetadata: _chapters,
-                isSettingsOpen: _isSettingsOpen,
-                isFullscreen: _isFullscreen,
-                isDesktop: _isDesktopPlatform,
-                uiPerformanceMode: _uiPerformanceMode,
-                dpadModeActive: dpadModeActive,
-                onToggleFullscreen: _toggleFullscreen,
-                onInteract: _controlsVisibility.registerActivity,
-                onInteractionStart: _handleInteractionStart,
-                onInteractionEnd: _handleInteractionEnd,
-                onToggleSettings: () =>
-                    setState(() => _isSettingsOpen = !_isSettingsOpen),
-                onSeekbarFocusChange: (f) => _seekbarFocused = f,
-                onVolumeFocusChange: (f) => _volumeSliderFocused = f,
-                hasNextEpisode: widget.episode < widget.totalEpisodes,
-                onNextEpisode: () => unawaited(_requestNextEpisodeTransition()),
-              ),
+            child: TheaterControls(
+              player: _player,
+              chapterMetadata: _chapters,
+              isSettingsOpen: _isSettingsOpen,
+              isFullscreen: _isFullscreen,
+              isDesktop: _isDesktopPlatform,
+              uiPerformanceMode: _uiPerformanceMode,
+              isTvPlatform: isTvPlatform,
+              onToggleFullscreen: _toggleFullscreen,
+              onInteract: _controlsVisibility.registerActivity,
+              onInteractionStart: _handleInteractionStart,
+              onInteractionEnd: _handleInteractionEnd,
+              onToggleSettings: () =>
+                  setState(() => _isSettingsOpen = !_isSettingsOpen),
+              onExactSkip: _exactSkipForward,
+              onSeekbarFocusChange: (f) => _seekbarFocused = f,
+              onVolumeFocusChange: (f) => _volumeSliderFocused = f,
+              hasNextEpisode: hasNextEpisode,
+              onNextEpisode: () => unawaited(_requestNextEpisodeTransition()),
             ),
           )
         : MobileTheaterControls(
@@ -1142,7 +1332,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                   child: DpadRegion(
                     memoryKey: 'theater.topbar',
                     child: TheaterTopBar(
-                      episode: widget.episode,
+                      title: _displayLabel,
                       uiPerformanceMode: _uiPerformanceMode,
                       showFreezeRecoveryButton: _showFreezeRecoveryButton,
                       onBack: _exitTheater,
@@ -1178,7 +1368,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dpadModeActive = InputModeScope.of(context).dpadModeActive;
+    final isTvPlatform = InputModeScope.of(context).isTvPlatform;
 
     // The video texture, the top notification, and the loading/
     // batch-picker overlay switcher don't depend on controls visibility
@@ -1283,7 +1473,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                 );
               }
               return TheaterLoadingOverlay(
-                episode: widget.episode,
+                title: _displayLabel,
                 controller: _torrentController,
               );
             },
@@ -1302,9 +1492,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
       // reachable from the system back gesture, a desktop Escape key,
       // and the D-Pad remote's dedicated Back key alike. A direct
       // Navigator.pop() call (as _exitTheater's own last line and
-      // _handleRestartRequested both do) bypasses this guard entirely —
-      // canPop only intercepts involuntary pop attempts, not explicit
-      // ones from this screen's own code.
+      // _teardownForRestart's callers both do) bypasses this guard
+      // entirely — canPop only intercepts involuntary pop attempts, not
+      // explicit ones from this screen's own code.
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) {
         if (didPop) return;
@@ -1357,7 +1547,7 @@ class _TheaterScreenState extends State<TheaterScreen> {
                     children: [
                       child!,
                       if (_videoInitialized)
-                        _buildControlsOverlay(showControls, dpadModeActive),
+                        _buildControlsOverlay(showControls, isTvPlatform),
                       // Painted after _buildControlsOverlay so it always
                       // paints — and hit-tests — above it. A `Container`
                       // with a `BoxDecoration` (the bottom control bar,
@@ -1383,6 +1573,9 @@ class _TheaterScreenState extends State<TheaterScreen> {
                             uiPerformanceMode: _uiPerformanceMode,
                             onClose: () =>
                                 setState(() => _isSettingsOpen = false),
+                            libassEnabled: _libassEnabled,
+                            onToggleLibass: (v) =>
+                                unawaited(_handleLibassToggle(v)),
                           ),
                         ),
                     ],

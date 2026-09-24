@@ -11,6 +11,7 @@ import '../../data/anilist/models/anime.dart';
 import '../../shared/widgets/mouse_back_forward_listener.dart';
 import '../../shared/widgets/toast.dart';
 import '../anime_details/anime_details_screen.dart';
+import '../custom_stream/custom_stream_launcher.dart';
 import '../home/home_screen.dart';
 import '../schedule/scheduled_screen.dart';
 import '../search/search_results_screen.dart';
@@ -129,9 +130,7 @@ class _AppShellState extends State<AppShell> {
         anilistId: request.source == DeepLinkSource.anilist
             ? request.externalId
             : null,
-        idMal: request.source == DeepLinkSource.mal
-            ? request.externalId
-            : null,
+        idMal: request.source == DeepLinkSource.mal ? request.externalId : null,
       );
       if (!mounted) return;
 
@@ -300,6 +299,7 @@ class _AppShellState extends State<AppShell> {
                   onWatchlist: () => _nav.navigateTo(
                     WatchlistScreen(onSelectAnime: _handleSelectAnime),
                   ),
+                  onCustomStream: () => launchCustomMagnetStream(context),
                   onLogin: _handleLogin,
                   // SettingsScope propagates saved changes automatically.
                   onSettings: () => showSettingsMenu(context),

@@ -7,7 +7,7 @@ import 'input_mode_controller.dart';
 /// about D-Pad mode reaching for the singleton directly. Mirrors the
 /// existing `SettingsScope` pattern — mount once near the root in
 /// `app.dart`, then anywhere below it:
-/// `InputModeScope.of(context).dpadModeActive`.
+/// `InputModeScope.of(context).isTvPlatform`.
 class InputModeScope extends StatefulWidget {
   final Widget child;
   const InputModeScope({super.key, required this.child});

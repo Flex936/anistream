@@ -45,10 +45,12 @@ bool _isChapterSkippable(String title) {
   }
 
   // 2. Do skip theme songs (strict equality for short codes to prevent false positives like "Operation" or "Wedding")
-  if (t == 'op' || t.contains('opening') || t.contains('intro') || t == 'ncop')
+  if (t == 'op' || t.contains('opening') || t.contains('intro') || t == 'ncop') {
     return true;
-  if (t == 'ed' || t.contains('ending') || t.contains('credits') || t == 'nced')
+  }
+  if (t == 'ed' || t.contains('ending') || t.contains('credits') || t == 'nced') {
     return true;
+  }
 
   // 3. Do skip next-episode previews
   if (t == 'pv' || t.contains('preview') || t.contains('next episode')) {
@@ -61,10 +63,12 @@ bool _isChapterSkippable(String title) {
 String _getSkipLabel(String title) {
   final t = title.toLowerCase().trim();
 
-  if (t == 'op' || t.contains('opening') || t.contains('intro') || t == 'ncop')
+  if (t == 'op' || t.contains('opening') || t.contains('intro') || t == 'ncop') {
     return 'Skip Opening';
-  if (t == 'ed' || t.contains('ending') || t.contains('credits') || t == 'nced')
+  }
+  if (t == 'ed' || t.contains('ending') || t.contains('credits') || t == 'nced') {
     return 'Skip Ending';
+  }
   if (t == 'pv' || t.contains('preview') || t.contains('next episode')) {
     return 'Skip Preview';
   }
