@@ -8,8 +8,8 @@ abstract final class AppPalette {
   static const Color border = Color(0xFF272A35);
 
   // Brand
-  static const Color primary = Color(0xFF6366F1);
-  static const Color primaryHover = Color(0xFF4F46E5);
+  static const Color primary = Color(0xFFF3D263);
+  static const Color primaryHover = Color(0xFFF2E59C);
   static const Color accent = Color(0xFFFBBF24);
 
   // Text
