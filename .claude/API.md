@@ -80,7 +80,7 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 - Runs off the UI thread in a single long-lived isolate (`TorrentParserWorker`), spawned lazily on first search — falls back to a one-shot `compute()` if isolate spawn fails.
 - Requests are correlated by an incrementing id, not assumed FIFO — concurrent fan-out can have several in flight at once.
 - A worker pool was considered and rejected: per-feed parsing is low-single-digit milliseconds, negligible next to the network round-trip.
-- `TorrentParser` extracts season/episode/batch-range/resolution via a hand-written single-pass tokenizer, not a regex chain.
+- `TorrentParser` extracts season/episode/batch-range/resolution via a hand-written single-pass tokenizer, not a regex chain. Verified against ~30 representative filenames, including the deliberately-preserved quirk that an unclosed `[foo)` blanks the same as a matched bracket pair.
 - The one regex kept (`_batchRangeRegex`) requires 2-4 digit episode numbers — relaxing to 1-4 would misread an embedded sequel/cour digit (e.g. "Series 2 - 05") as batch range "2-5" instead of episode 5.
 
 **Scoring** (`TorrentScoringEngine`, starts at 100 points):
@@ -114,7 +114,7 @@ This table is the single authoritative list of every cache in the app, regardles
 | `SettingsCache` | N/A (sync mirror, not TTL-based) | — | In-memory copy of the current `AppSettings`, kept live by `SettingsController` — see [ARCHITECTURE.md](ARCHITECTURE.md) § 3. |
 | Image decoding | N/A | — | Not a persistent disk cache. `Image.network` calls are capped with a `cacheWidth` matched to the widget's actual rendered size, so Flutter's in-memory image cache never holds a full-resolution decode of a thumbnail-sized poster. |
 
-`_AnilistCache` earns its keep specifically because `NavigationController.goHome()` builds a brand-new `HomeScreen` (and a brand-new `AnilistQueryService`) on every Home → Details → Home trip — without it, the three Home carousels would refetch over the network on every single return to Home.
+`_AnilistCache` earns its keep specifically because `NavigationController.goHome()` builds a brand-new `HomeScreen` (and a brand-new `AnilistQueryService`) on every Home → Details → Home trip — without it, the three Home carousels would refetch over the network on every single return to Home. `_TorrentSearchCache` exists for the same navigation pattern applied to `AnimeDetailsScreen`; `AnimeDetailsScreen._torrentFutures` separately memoizes per-episode within one screen instance.
 
 ## 5. TsukiHime API
 
