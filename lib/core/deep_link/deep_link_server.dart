@@ -22,29 +22,13 @@ class DeepLinkRequest {
   const DeepLinkRequest({required this.source, required this.externalId});
 }
 
-/// Local, loopback-only HTTP listener for the AniStream browser extension
-/// companion — the "Open in AniStream" button it injects on AniList and
-/// MyAnimeList anime pages. Clicking that button never sends anime
-/// metadata, only which site the page is on and the numeric id from the
-/// URL (`anilist.co/anime/<id>`, `myanimelist.net/anime/<id>`) — the
-/// extension has no way to know more than that. Resolving the id into a
-/// real `Anime` and opening `AnimeDetailsScreen` is entirely this app's
-/// job, done by whichever widget is listening (see `AppShell`).
-///
-/// A singleton (`.instance`), matching `InputModeController`'s shape —
-/// the underlying `HttpServer` needs to bind once, early, from
-/// `main.dart`'s `_bootstrap()`, well before any widget exists to own it.
-///
-/// [port] is fixed at 53211 specifically to match the extension's own
-/// `background.js`, which hardcodes the same value with a comment
-/// pointing back to this class by name. Keep both in sync if either ever
-/// changes.
-///
-/// [pending] — rather than a bare broadcast stream — is what lets a
-/// request that arrives in the brief window between [start] binding the
-/// socket and a listener (`AppShell`) actually mounting still get picked
-/// up: a listener checks [pending] directly once on mount, instead of
-/// only reacting to a [notifyListeners] call it might have missed.
+/// Loopback-only listener for the browser extension's "Open in AniStream"
+/// button, which sends only the site and the numeric id from the URL, never
+/// anime metadata — resolving that id and opening `AnimeDetailsScreen` is
+/// entirely this app's job (ARCHITECTURE.md § 8); [port] must match the
+/// extension's own hardcoded value. [pending] lets a request that arrives
+/// before a listener mounts still be picked up on mount, not just on the next
+/// [notifyListeners].
 class DeepLinkServer extends ChangeNotifier {
   DeepLinkServer._();
   static final DeepLinkServer instance = DeepLinkServer._();
@@ -53,17 +37,17 @@ class DeepLinkServer extends ChangeNotifier {
 
   HttpServer? _server;
 
-  // Captured rather than left as a bare expression statement so
-  // cancel_subscriptions is satisfied — see stop()'s doc comment for why
-  // it's never called by default.
+  // Captured rather than left as a bare expression statement, so
+  // `cancel_subscriptions` is satisfied — never explicitly canceled since each
+  // subscription's only job is to run until the process exits.
   StreamSubscription<HttpRequest>? _subscription;
 
   DeepLinkRequest? _pending;
   DeepLinkRequest? get pending => _pending;
 
-  /// Binds the listener. Safe to call more than once — a second call
-  /// no-ops rather than rebinding. Desktop-only by convention (see
-  /// `main.dart`); nothing here enforces that itself.
+  /// Binds the listener; safe to call more than once — a second call no-ops
+  /// rather than rebinding. Desktop-only by convention (see `main.dart`);
+  /// nothing here enforces that itself.
   Future<void> start() async {
     if (_server != null) return;
 
@@ -128,10 +112,8 @@ class DeepLinkServer extends ChangeNotifier {
     _ => null,
   };
 
-  // Best-effort — a request from the extension is exactly the moment the
-  // user wants the app in front of them, but a focus failure here isn't
-  // worth doing anything more about than logging it; the deep link
-  // itself still resolves and navigates regardless.
+  // Best-effort: a focus failure here only gets logged — the deep link still
+  // resolves and navigates regardless.
   Future<void> _bringWindowToFront() async {
     try {
       await windowManager.show();
@@ -146,11 +128,10 @@ class DeepLinkServer extends ChangeNotifier {
   /// later rebuild or a second listener never replays the same request.
   void consume() => _pending = null;
 
-  /// Explicit teardown — not currently called from anywhere (there's no
-  /// "app is exiting" hook that needs it, and the OS reclaims the socket
-  /// on process exit regardless), but kept available for tests or a
-  /// future explicit disable-this-feature setting. Mirrors
-  /// `TorrentParserWorker.dispose()`'s identical rationale.
+  /// Explicit teardown, not currently called — no "app is exiting" hook needs
+  /// it and the OS reclaims the socket on exit regardless — but kept for tests
+  /// or a future disable-this-feature setting, mirroring
+  /// `TorrentParserWorker.dispose()`.
   Future<void> stop() async {
     await _subscription?.cancel();
     _subscription = null;

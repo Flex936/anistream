@@ -30,7 +30,7 @@ AniStream's design language is a deliberate four-layer hybrid — each layer bor
 Visual restraint, typographic rhythm, and motion quality, in Apple's design spirit — NEVER literal Apple interaction idioms (tab bars, SF Symbols, sheet-based navigation).
 
 - Source all colors from `lib/core/theme/app_palette.dart` (`AppPalette.*`), extending it logically for new shades. NEVER hardcode a color in a widget file — exceptions: § 5.3.
-- Source all text styles from `lib/core/theme/app_typography.dart` (`context.appTypography`) rather than hardcoded font sizes/weights — see that file's own doc comment for the full named-token list.
+- Source all text styles from `lib/core/theme/app_typography.dart` (`context.appTypography`) rather than hardcoded font sizes/weights — the named tokens are `AppTypography`'s fields. Exceptions: § 5.3.
 - Source border radii from `lib/core/theme/app_radii.dart` (`context.appRadii`):
 
   | Tier | Radius | Used by |
@@ -115,6 +115,13 @@ This deliberately skips Flutter's own `FocusManager.instance.highlightMode`, whi
 - Give a region a `memoryKey` (e.g., `'home.trending'`, `'theater.controls'`) whenever its contents can be rebuilt or the user can leave and return — this is what makes "leave and return" land on the same focused card instead of resetting to the first item.
 - New screens get exactly one `autofocus: true`, on the single most likely first target (the play button in Theater, the first "up next" episode, the first search result).
 - Standard text inputs (`SettingsTextField`, `SearchInput`) are plain `Focus` widgets with a custom `onKeyEvent`, not `DpadFocusable` — arrow keys move the cursor normally, handing off to directional focus traversal only at the start/end of the field's content. Give a new text field this same boundary-escape pattern rather than wrapping it in `DpadFocusable`.
+- Wrap a Material control that traps or fragments arrow-key focus in an outer `Focus` whose `onKeyEvent` handles Left/Right only, so Up/Down bubble to traversal:
+  - `Slider` binds all four arrow keys and always reports `handled` — give it a `FocusNode(canRequestFocus: false, skipTraversal: true)` (`SearchFilterPanel`'s two sliders).
+  - `SegmentedButton` exposes one focus target per segment — set `descendantsAreFocusable: false` (`AppSegmentedControl`).
+- `TheaterScreen`'s keyboard shortcuts register on `HardwareKeyboard.instance`, not the focus chain — its controls subtree sits in an `ExcludeFocus` while auto-hidden, so a focus-bubbling dispatcher would stop receiving events. `ExoTheaterScreen` mirrors the approach.
+  - The handler bypasses focus-tree consumption, so a widget with its own arrow handling reports focus upstream (`onSeekbarFocusChange`, `onVolumeFocusChange`) and the handler returns `false` for those keys.
+  - It is inactive on TV (`isTvPlatform`, where the same keys drive D-pad traversal) and while a sub-menu is open; Esc/Back always fires.
+  - Ctrl+→ (exact 90-second skip) ignores those guards — `Seekbar` ignores Ctrl-held arrows.
 
 ## 5. Known Inconsistencies (Design Debt)
 
@@ -144,6 +151,9 @@ Documented as-is per the Living Documentation Rule — NEVER silently rename, re
   *(Resolved: `CalendarCard`, `ListCard`, `HeroCard` now use `AppRadii.small`/`.tag`.)*
 
 - **Hardcoded colors:** `hero_banner.dart`'s AniList/MyAnimeList link buttons use raw third-party brand colors (`Color(0xFF3DB4F2)`, `Color(0xFF2E51A2)`) instead of `AppPalette` — accepted, since these are another product's brand identity, not this app's palette. `calendar_card.dart`'s card shadow uses a raw `Color(0x4D000000)` instead of `AppPalette.black.withValues(...)` — a genuine gap, not an intentional exception.
+- **Typography tokens don't cover every text style:**
+  - Token names drift from use sites — `cardTitleCompact` also drives `AppSegmentedControl`'s segment labels (Watchlist's tabs), `cardTitleProminent` `WatchlistScreen`'s `_EmptyPane` title.
+  - One-off styles stay plain `TextStyle` literals where no token matches size, weight, or height — 11pt captions, form-field labels, primary CTA text, the poster score badge (deliberately heavier than `metaLabel`), and wrapped error/empty-state text, where `cardSummary`'s `height` would visibly change line spacing. Accepted, not drift.
 - **`episode_tile.dart`** hardcodes its header `AnimatedContainer`'s duration (150ms) instead of routing it through `perfDuration(uiPerformanceMode, ...)` per § 2's Animation duration rule.
 - **`BatchEpisodePickerOverlay` has no glass/blur treatment** (§ 1.4) — flat scrim, flat card, via `useGlassEffect: false` on the shared `SelectionModal` both it and `TorrentSearchModal` build on. Migrating it onto `AppMaterials`'s tiers is still open.
 
@@ -152,4 +162,4 @@ Documented as-is per the Living Documentation Rule — NEVER silently rename, re
 *(No open items — resolved via the `AppMaterials` tiers, § 1.4.)*
 
 ---
-*Last reviewed against the codebase: 2026-09-06. Added a palette color, a blur/radius/card-size value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-09-20. Added a palette color, a blur/radius/card-size value, or a D-pad pattern? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

@@ -4,15 +4,8 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme/app_palette.dart';
 
-/// A styled text field for free-form text entry — the settings drawer's
-/// server-URL field (`settings_menu.dart`) and `custom_stream`'s
-/// pasted-magnet-link field both use this.
-///
-/// Owns a FocusNode with the same caret-boundary-escape logic
-/// search_input.dart uses: arrows move the cursor normally everywhere
-/// except the two edges, where they hand off to directional focus
-/// traversal instead — so D-Pad/keyboard focus can always escape the
-/// field in either direction.
+/// A styled free-form text field whose arrow keys move the cursor and hand off
+/// to focus traversal only at either edge (DESIGN.md § 4).
 class SettingsTextField extends StatefulWidget {
   final TextEditingController controller;
   final String hint;
@@ -83,9 +76,6 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
         if (widget.label != null) ...[
           Padding(
             padding: const EdgeInsets.only(left: 4, bottom: 6),
-            // Sits between tileSubtitle (12/w400) and metaLabel
-            // (12/w600) — a form field label, not a caption, so it's
-            // left as a plain literal rather than either token.
             child: Text(
               widget.label!,
               style: const TextStyle(
@@ -98,10 +88,8 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
         ],
         DpadFocusable(
           excludeChildFocus: false,
-          // Covers a D-Pad user navigating onto this field and pressing
-          // Select before typing — the TextField itself already grabs
-          // focus normally for touch/mouse taps and Tab, this makes
-          // Select do the same thing.
+          // Lets Select on a D-Pad-focused field request text focus, as a tap
+          // or Tab does.
           onSelect: _focusNode.requestFocus,
           child: TextField(
             controller: widget.controller,
@@ -110,8 +98,6 @@ class _SettingsTextFieldState extends State<SettingsTextField> {
             autofocus: widget.autofocus,
             keyboardType: widget.keyboardType,
             autocorrect: false,
-            // Distinct from compactHeading (14/w600), same reasoning as
-            // SettingsDropdown's style above.
             style: TextStyle(
               color: widget.enabled
                   ? AppPalette.textMain

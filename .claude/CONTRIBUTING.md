@@ -40,7 +40,7 @@ A change matching a trigger in [CLAUDE.md](CLAUDE.md) § 2's Living Documentatio
 
 - [ ] `flutter analyze` passes with no new warnings/errors
 - [ ] Widgets/state also follow [CODING_RULES.md](CODING_RULES.md) § 1's review-only conventions (collection rendering, `StatelessWidget`-by-default, `InheritedNotifier`-only state, offloaded parsing, network-request caching, widget-key discipline on dynamic lists) — `analyze` doesn't catch these, check manually
-- [ ] New/changed comments describe current behavior only — no session/phase references, no "was X" history, no long-dash comment brackets ([CODING_RULES.md](CODING_RULES.md) § 2)
+- [ ] New/changed comments stay within [CODING_RULES.md](CODING_RULES.md) § 2's budget (1 line; ≤2 sentences for a non-obvious mechanism; rationale and repeated idioms live in the canonical doc, not inline) and describe current behavior only — no session/phase references, no "was X" history, no long-dash comment brackets
 - [ ] New/changed widgets follow [DESIGN.md](DESIGN.md) (colors, radii, blur, D-pad focus rules as applicable)
 - [ ] New files are placed per [ARCHITECTURE.md](ARCHITECTURE.md) § 2's folder rule
 - [ ] Any networking/scraping change is reflected in [API.md](API.md)
@@ -56,4 +56,4 @@ This project follows the [Contributor Covenant](https://www.contributor-covenant
 By contributing, you agree that your contributions are licensed under the project's **GNU General Public License v3.0 (GPLv3)** — see [README.md](../README.md) § 9 and the `LICENSE` file at the repository root.
 
 ---
-*Last reviewed against the codebase: 2026-09-07. Changed the PR checklist (§ 6), the design-debt list (DESIGN.md § 5), or the license (§ 8)? Update this file too.*
+*Last reviewed against the codebase: 2026-09-20. Changed the PR checklist (§ 6), the design-debt list (DESIGN.md § 5), or the license (§ 8)? Update this file too.*

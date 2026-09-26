@@ -13,28 +13,19 @@ import 'core/logging/app_logger.dart';
 // Accepts CLI args (kept for forward compatibility with the Flutter
 // tool's own launch args).
 void main(List<String> args) {
-  // Runs everything, including binding initialization, inside the same
-  // zone that `runApp()` executes in — `WidgetsFlutterBinding.ensureInitialized()`
-  // and `runApp()` (inside `_bootstrap`) both need to share a zone, since
-  // zone-specific state (like the error zone used for reporting) must
-  // consistently reflect one zone, not straddle two.
-  //
-  // `main` itself is deliberately NOT `async`: the zone runs for the
-  // lifetime of the app (there's nothing meaningful to await — the
-  // returned Future only completes if the zone's body itself returns,
-  // which for a running Flutter app it never does), so the call is
-  // explicitly marked `unawaited()` rather than given a `Future<void>`
-  // signature purely to satisfy avoid_void_async.
+  // Binding init and `runApp()` share one zone, since zone-specific state (the
+  // error zone) must reflect one zone throughout. `main` stays non-`async`: the
+  // zone runs for the app's lifetime with nothing meaningful to await, so the
+  // call is wrapped in `unawaited()` to satisfy `avoid_void_async` instead of
+  // given a `Future<void>` signature.
   unawaited(
     runZonedGuarded(
       () async {
         WidgetsFlutterBinding.ensureInitialized();
 
-        // Logging initializes first, before anything else runs, so that
-        // any boot-time crash (native window init, media_kit init, etc.)
-        // is still captured to disk. This also installs
-        // FlutterError/PlatformDispatcher hooks and desktop signal
-        // handlers (see app_logger.dart for details).
+        // Logging initializes first so a boot-time crash is still captured to
+        // disk; this also installs the uncaught-error and signal hooks (see
+        // `app_logger.dart`).
         await AppLogger.init();
 
         await _bootstrap(args);
@@ -50,9 +41,9 @@ Future<void> _bootstrap(List<String> args) async {
   MediaKit.ensureInitialized();
   AppLogger.i('main', 'MediaKit initialized');
 
-  // Resolve TV/D-Pad input mode before the first frame — awaited here
-  // rather than left to InputModeScope's initState so a real Android TV
-  // never renders even one frame in "pointer" mode before flipping over.
+  // Resolved before the first frame, awaited here rather than left to
+  // `InputModeScope.initState`, so a real Android TV never renders one frame in
+  // "pointer" mode first.
   await InputModeController.instance.init();
   AppLogger.i(
     'main',
@@ -70,17 +61,14 @@ Future<void> _bootstrap(List<String> args) async {
       minimumSize: Size(
         1000,
         700,
-      ), // Prevents the UI from crushing on tiny screens
+      ),
       center: true,
       titleBarStyle: TitleBarStyle.hidden,
     );
 
-    // Deliberately not awaited. The native window stays hidden (see the
-    // "hide until ready" patches in windows/runner and linux/runner)
-    // until this callback's show() call reveals it, already maximized.
-    // Awaiting the whole call here would block runApp() below until the
-    // window is already shown/maximized/focused — before Flutter has
-    // built a widget tree or rendered a single frame onto its surface.
+    // Deliberately not awaited: the native window stays hidden until this
+    // callback's `show()` reveals it already maximized, so awaiting the whole
+    // call here would block `runApp()` until then.
     unawaited(
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.maximize();
@@ -92,18 +80,15 @@ Future<void> _bootstrap(List<String> args) async {
     AppLogger.i('main', 'Desktop window initialization scheduled');
   }
 
-  // Loopback listener for the browser extension companion's "Open in
-  // AniStream" button (see ARCHITECTURE.md § 8) — desktop-only, since
-  // Chrome/Edge/Brave extensions have no equivalent on the mobile
-  // platforms this app also targets. Not awaited: binding a local port
-  // is near-instant, and nothing later in boot depends on it.
+  // Desktop-only loopback listener for the browser extension companion
+  // (ARCHITECTURE.md § 8); not awaited since binding a local port is
+  // near-instant and nothing later depends on it.
   if (isDesktop) {
     unawaited(DeepLinkServer.instance.start());
   }
 
-  // Boot App. Called immediately rather than after the window-show
-  // sequence above completes, so Flutter has a real frame on the way to
-  // the window's surface well before show()/focus() ever reveal it.
+  // Called before the window-show sequence completes, so Flutter has a real
+  // frame on the way to the surface before `show()`/`focus()` reveal it.
   AppLogger.i('main', 'Booting AniStreamApp');
   runApp(const AniStreamApp());
 }

@@ -68,7 +68,6 @@ lib/
 │   │                                frosted_container.dart, hover_focus_builder.dart, mouse_back_forward_listener.dart,
 │   │                                selection_modal.dart, settings_text_field.dart,
 │   │                                toggle_switch.dart, toast.dart, glass_toast_content.dart
- 
 │   └── utils/                       html_utils.dart, anime_status_style.dart, perf_animations.dart,
 │                                    theater_session.dart
 │
@@ -95,7 +94,8 @@ lib/
     │                                 native_subtitle_parser}.dart,
     │                                 widgets/{theater_controls, mobile_theater_controls,
     │                                 theater_player, seekbar, skip_chip, playback_action_chip,
-    │                                 styled_subtitle_view, theater_settings, batch_picker}.dart
+    │                                 playback_stall_indicator, styled_subtitle_view,
+    │                                 theater_settings, batch_picker}.dart
     └── watchlist/                    watchlist_screen.dart, controllers/watchlist_controller.dart,
                                      widgets/watchlist_cards.dart
 ```
@@ -125,7 +125,14 @@ Feature-local state (a screen's pagination, tab selection, navigation history) u
 - NOT `InheritedNotifier`-wrapped — constructed directly by the owning `StatefulWidget`, exposed via `ListenableBuilder`, since nothing outside that screen reads them.
 - FORBIDDEN: Provider, Riverpod, Bloc, Redux, or any other state-management package — deliberate. Extend the `*Scope` pattern for new app-wide state instead.
 
+High-frequency UI state (controls visibility, the buffering indicator, toasts, playback position, hover targets) stays out of the owning screen's `setState`:
+
+- Hold it in a `ValueNotifier` (`ControlsVisibilityController.visible`, `PlaybackStallController.visible`, `TopNotificationController.notification`), or in a small dedicated `State` subscribed to the player's streams (`_PlaybackTimelineState`).
+- Read it through a `ValueListenableBuilder` around the smallest affected subtree, passing the static subtree as `child` — the video and sibling overlays never rebuild on a show/hide tick.
+
 `SettingsCache` (`settings_service.dart`) is a narrow exception — a synchronous, static in-memory mirror of `AppSettings`, for no-`BuildContext` services (`AnilistQueryService`, instantiated fresh per screen) that need a setting (currently just `filterEcchi`) without a widget tree to walk. `SettingsController` is its only writer. NEVER read it from inside the widget tree as a `SettingsScope` replacement.
+
+`SettingsCache` exists because a pre-cache version of `AnilistQueryService` read `filterEcchi` by calling `shared_preferences` directly, through the legacy `SharedPreferences.getInstance()` singleton — a different native store than `SettingsService` itself writes through (`SharedPreferencesAsync`). The mismatch silently broke the "Filter Ecchi" toggle for any non-widget service.
 
 ## 4. Native Platform Layer
 
@@ -188,14 +195,16 @@ Both implementations parse candidate filenames with the same `TorrentParser` ([A
 | Audio-track switching | Yes — media_kit's `Tracks`/`setAudioTrack` | Yes, via `PlaybackHandle` (`getAudioTracks()`/`selectAudioTrack()`, Media3's `DefaultTrackSelector`) — closes a gap specific to this path |
 | Platform scope | All | Android/TV-primary; iOS out of scope |
 
-`ExoTheaterScreen` exists to isolate whether stutter on weak Android TV hardware is a decode-engine problem — see that file's own header comment for findings so far. Either streaming controller pairs with either player. `useExoPlayer` defaults to `false`, so `TheaterScreen` is what every session gets unless a user opts in.
+`ExoTheaterScreen` exists to isolate whether stutter on weak Android TV hardware is a decode-engine problem. Either streaming controller pairs with either player. `useExoPlayer` defaults to `false`, so `TheaterScreen` is what every session gets unless a user opts in.
+
+`media_kit`'s `PlayerConfiguration.libass` is read only at `Player` construction, with no exposed way to flip it on a running instance — `AppSettings.libassEnabled`, toggled from `TheaterSettingsMenu`, changes it by restarting the player and resuming at the same position (`TheaterScreen._handleLibassToggle`, § 9's `TheaterRestartRequest` path) rather than a live property mutation. `ExoTheaterScreen` doesn't use libass at all.
 
 **Background prefetching:** `NextEpisodePrefetchController` runs two tiers as the current episode nears its end.
 
 - **Tier 1** (always): resolves and scores the next episode's torrents via `TorrentScraperService`, so `TorrentSearchModal` opens pre-resolved even with autoplay off.
 - **Tier 2** (only with episode-autoplay on): builds a second, short-lived `BaseStreamingController` — via `createStreamingController(AppSettings)`, so it matches the current episode's own `serverMode` pick — and starts buffering it, for an instant hand-off.
 - This briefly overlaps two controller *instances* of the same implementation, never two different implementations — § 1's "never both at once" rule still holds.
-- Owned and disposed by `TheaterScreen`; only an actual episode transition takes ownership of the warm controller. Scoped to `TheaterScreen` — `ExoTheaterScreen` has neither episode-autoplay nor prefetching.
+- Owned and disposed by `TheaterScreen`; only an actual episode transition takes ownership of the warm controller (§ 9). Scoped to `TheaterScreen` — `ExoTheaterScreen` has neither episode-autoplay nor prefetching.
 
 **HTTP reconnect tuning:** both streaming backends serve plain HTTP(S), read via mpv's libavformat network layer (`PlayerConfigurator._applyStreamingTuning`). A long pause routinely outlives the underlying TCP connection's keep-alive window (OS, local-server idle-out, or a LAN NAT/router) — mpv's demuxer has no built-in awareness the socket died, so left at defaults it never reissues the ranged GET, and a resume/seek reads from a dead connection, indistinguishable from a freeze. Mitigated via `network-timeout=10` plus `stream-lavf-o`'s `reconnect`/`reconnect_streamed`/`reconnect_on_network_error`/`reconnect_delay_max=5` — libavformat's standard dropped-connection recovery. Targets the specific failure mode `PlaybackDiagnostics` is built to confirm (§ 7); a freeze reproducing with `demuxer-cache-idle`/`core-idle` already `no` has a different root cause this tuning won't fix.
 
@@ -265,5 +274,44 @@ Extension button click
 - A bind failure (most likely a second AniStream instance already holding the port) is logged and swallowed, not surfaced as a crash — that instance simply never receives deep links.
 - `pending` (not a bare broadcast stream) lets a request arriving before `AppShell` mounts still be picked up — `AppShell` checks it directly in `initState`, not just future notifications.
 
+## 9. Theater Session Lifecycle
+
+Two callers push `TheaterScreen` and drive its exit results in a loop: `AnimeDetailsScreen._streamTorrent` (episode sessions) and `runTheaterSession` (`shared/utils/theater_session.dart`, custom-magnet sessions — handles `TheaterRestartRequest` only). `TheaterScreen` asserts that `anime`/`episode`/`totalEpisodes` are all null or all set, and that `resumeController`/`resumePosition` are both null or both set.
+
+| Pops with | Produced by | Player | Torrent controller | Caller then |
+| --- | --- | --- | --- | --- |
+| `null` | Back, Esc, or the top-bar back button (`_exitTheater`) | disposed | disposed | Refreshes AniList progress (episode sessions) |
+| `TheaterRestartRequest` | Freeze-recovery button (resumes 5 s earlier); Libass toggle (resumes at the exact position) | disposed | kept, handed to the replacement screen | Re-pushes `TheaterScreen` with that controller and position |
+| `TheaterNextEpisodeRequest`, `instantHandoff` | Playback completion or the Next Episode chip, autoplay on, prefetch warm | disposed | current one disposed; the prewarmed one handed over | Re-pushes for `nextEpisode` at `Duration.zero` |
+| `TheaterNextEpisodeRequest`, `autoFetch` | Same, autoplay on, nothing warm | disposed | disposed | Refreshes progress, then auto-selects the top torrent for `nextEpisode` |
+| `TheaterNextEpisodeRequest`, `manualPick` | Same, autoplay off | disposed | disposed | Refreshes progress, then opens `TorrentSearchModal` for `nextEpisode` |
+
+- Progress refreshes only when the loop exits (a `null` pop, or a delegated `autoFetch`/`manualPick`), never on a restart or `instantHandoff`.
+- `_requestNextEpisodeTransition` no-ops without episode context, past the last episode, or while the screen is already closing.
+- Back and Esc first leave fullscreen, then exit (`PopScope(canPop: false)`); an explicit `Navigator.pop` bypasses that guard.
+- Restarts and episode transitions leave system UI mode and orientation alone since another `TheaterScreen` mounts immediately; only `_exitTheater` restores them.
+- Every teardown path sets `_isClosing` and removes the controller listener first, so a stray `notifyListeners()` can't reopen a `Player` that is being disposed.
+- `ExoTheaterScreen` is a single push with no loop — no restart, autoplay, or prefetch (§ 5).
+
+## 10. ExoPlayer Subtitle Rendering
+
+`ExoTheaterScreen` renders embedded subtitles itself instead of through `video_player`'s plain-text captions, keeping ASS positioning and per-run styling. Server mode only: the on-device `StreamingController` has no subtitle extraction, so its track list stays empty.
+
+```text
+Go server (embedded track, ?format=ass|ttml)
+  → RemoteStreamingController.fetchSubtitleBytes()
+  → NativeSubtitleParser.parse()
+      MethodChannel anistream/subtitle_parser → Media3 SsaParser / TtmlParser
+  → List<StyledCue> (timing, position, per-run style)
+  → StyledSubtitleView (repainted on every VideoPlayerValue tick)
+```
+
+- `kSubtitleFormat` in `exo_theater_screen.dart` picks the wire format (`NativeSubtitleFormat.ass` today, `.ttml` the alternative) — nothing else in Dart branches on it.
+- The server re-extracts a track as the file downloads and marks a final response with `x-subtitle-complete`; the screen re-fetches every 20 s until `isSubtitleTrackComplete`.
+- `StyledCue.line`/`position` are 0–1 fractions of the video area, so `StyledSubtitleView` is measured against the video's full bounds and clamps each cue away from the control bar (`reservedBottom`) instead of shrinking itself.
+- Font size resolves per cue, not per run, and only from a `fractional` `textSize` — an `absolute` size is ignored (ASS `Fontsize` is relative to `PlayResY`, unknowable at parse time). Fallback: 4.5% of video height, clamped to 12–48 logical px.
+- `line` and `position` map to the cue box's top edge and horizontal center — `positionAnchor`/`lineAnchor` aren't modeled in `StyledCue`.
+- Text has no background box; a stacked-shadow outline stands in for ASS's outline, black or white by the run's text luminance (threshold 0.4).
+
 ---
-*Last reviewed against the codebase: 2026-09-06. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md)'s Living Documentation Rule (§ 2).*
+*Last reviewed against the codebase: 2026-09-20. Added a folder, a native bridge, or changed the server's REST surface? Update this file — see [CLAUDE.md](CLAUDE.md)'s Living Documentation Rule (§ 2).*

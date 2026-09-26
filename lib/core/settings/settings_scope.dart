@@ -30,11 +30,8 @@ class _SettingsScopeState extends State<SettingsScope> {
   void initState() {
     super.initState();
     _controller = SettingsController();
-    // initState can't be async — SettingsController.reload() returns
-    // Future<void>, so the fire-and-forget intent is made explicit
-    // (unawaited_futures). The widget still rebuilds correctly once
-    // reload() completes, via AnimatedBuilder below listening to
-    // _controller.
+    // initState can't be async, so `reload()`'s Future is fire-and-forget; the
+    // widget still rebuilds once it completes, via the AnimatedBuilder below.
     unawaited(_controller.reload());
   }
 

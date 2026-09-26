@@ -3,8 +3,8 @@ import '../../core/extensions/build_context_extensions.dart';
 import '../../core/theme/app_palette.dart';
 import 'frosted_container.dart';
 
-/// Shared visual content for both `AppleSnackBar` (bottom) and
-/// `AppleTopSnackBar` (top overlay).
+/// Glass toast visuals shared by the bottom snackbar and Theater's top
+/// notification.
 class GlassToastContent extends StatelessWidget {
   final String message;
   final IconData icon;
@@ -27,10 +27,8 @@ class GlassToastContent extends StatelessWidget {
     return FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
       sigma: materials.prominent,
-      // Fully-rounded capsule/stadium toast — 50 exceeds half this
-      // container's height to guarantee a full pill curve regardless of
-      // exact size, a different visual role than any of the tag/small/
-      // large tiers, so left as a plain literal.
+      // 50 exceeds half the height, so the capsule stays fully rounded at any
+      // size.
       borderRadius: BorderRadius.circular(50),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),

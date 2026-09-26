@@ -24,13 +24,9 @@ class AniStreamApp extends StatefulWidget {
 
 class _AniStreamAppState extends State<AniStreamApp>
     with WidgetsBindingObserver {
-  // Lets _handleDpadBack reach the real Navigator from a callback that
-  // has no BuildContext of its own. Deliberately not using
-  // MaterialApp.builder's own `context` for this: that context sits
-  // above the Navigator this app pushes routes on (builder wraps around
-  // the routed content), so Navigator.of(context) called with it can't
-  // reliably find the Navigator below. A navigatorKey sidesteps that
-  // entirely.
+  // Lets `_handleDpadBack` reach the real Navigator with no `BuildContext` of
+  // its own — `MaterialApp.builder`'s own context sits above the pushed
+  // Navigator, so `Navigator.of` on it can't find it.
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
@@ -51,22 +47,11 @@ class _AniStreamAppState extends State<AniStreamApp>
     super.dispose();
   }
 
-  // Deliberately does not reimplement back-navigation. maybePop() walks
-  // the exact same PopScope chain the system back gesture/key already
-  // triggers — which means AppShell's own
-  // `PopScope(canPop: !_nav.canGoBack, onPopInvokedWithResult: ...)` is
-  // still the one and only place that decides what "back" actually does
-  // (redirect into NavigationController.goBack(), pop a pushed route like
-  // TheaterScreen/AnimeDetailsScreen, or — at Home, with nothing left —
-  // let the pop through, which is the normal "back at the app's root
-  // exits to the launcher" behavior, not a bug). This gives the D-Pad
-  // remote's dedicated Back key the same entry point the manifest gives
-  // the system gesture.
-  //
-  // Always returning true tells Dpad "the app handled this back-press" —
-  // either something popped, or PopScope already correctly decided
-  // nothing needed to change. There's nothing further for Dpad itself to
-  // do in either case.
+  // Deliberately does not reimplement back navigation: `maybePop()` walks the
+  // same `PopScope` chain the system back gesture already triggers, so
+  // `AppShell`'s own `PopScope` stays the one place that decides what back
+  // does. Always returns `true` — either something popped, or `PopScope`
+  // already decided nothing needed to change.
   bool _handleDpadBack() {
     final navigator = _navigatorKey.currentState;
     if (navigator != null) {
@@ -93,10 +78,6 @@ class _AniStreamAppState extends State<AniStreamApp>
           seedColor: AppPalette.primary,
           brightness: Brightness.dark,
         ),
-        // Named typography/radius/materials/card-size tokens, registered
-        // once here and read anywhere below via `context.appTypography` /
-        // `context.appRadii` / `context.appMaterials` /
-        // `context.appCardSizes` (build_context_extensions.dart).
         extensions: const [
           AppTypography.standard,
           AppRadii.standard,
@@ -104,14 +85,8 @@ class _AniStreamAppState extends State<AniStreamApp>
           AppCardSizes.standard,
         ],
       ),
-      // Dpad.wrap() is the outermost layer, matching its documented
-      // root-install pattern (`MaterialApp(builder: Dpad.wrap())`).
-      // InputModeScope + SettingsScope keep this relative nesting — it's
-      // load-bearing for TheaterScreen and every widget it hands
-      // isTvPlatform to (Seekbar, TheaterControls, TheaterSettingsMenu,
-      // BatchEpisodePickerOverlay), plus settings_components.dart,
-      // calendar_card.dart, watchlist_cards.dart, hero_banner.dart,
-      // episode_tile.dart, and torrent_tile.dart.
+      // Order matters: `InputModeScope` must wrap `SettingsScope` here
+      // (ARCHITECTURE.md § 3).
       builder: (context, child) => Dpad.wrap(
         theme: const DpadThemeData(scrollPadding: 24),
         debugOverlay: kDebugMode,

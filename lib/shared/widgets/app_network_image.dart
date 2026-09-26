@@ -43,24 +43,17 @@ class AppNetworkImage extends StatelessWidget {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        cacheWidth: cacheWidth, // Tells Flutter to discard excess pixel data
-        // Cheaper resampling filter on weak GPUs — the difference is
-        // basically invisible at the poster/thumbnail sizes this widget is
-        // used at, but low-quality bilinear sampling is meaningfully less
-        // GPU work per frame than the medium-quality default.
+        cacheWidth: cacheWidth,
+        // Cheaper resampling under performance mode (DESIGN.md § 2).
         filterQuality: uiPerformanceMode
             ? FilterQuality.low
             : FilterQuality.medium,
         frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
           if (wasSynchronouslyLoaded) return child;
 
-          // AnimatedSwitcher is keyed on load state, so the skeleton
-          // branch (and its AnimationController) is disposed the moment
-          // the cross-fade to the loaded image finishes — nothing keeps
-          // ticking once an image has loaded. Under uiPerformanceMode the
-          // cross-fade duration collapses to zero via perfDuration — the
-          // loaded image just appears on the next frame instead of
-          // dissolving in, with no saveLayer needed for the fade.
+          // The keyed switcher disposes the skeleton and its
+          // AnimationController once the cross-fade ends, so nothing keeps
+          // ticking after load.
           return AnimatedSwitcher(
             duration: perfDuration(
               uiPerformanceMode,

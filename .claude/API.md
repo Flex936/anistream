@@ -58,6 +58,7 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 - Watches playback position. Once it crosses **90%** of the episode's duration, a 5-second timer arms.
 - On expiry, fires `saveMediaListEntry` with the new progress, flipping status `PLANNING → CURRENT`, or `→ COMPLETED` if this episode is the anime's last.
 - A per-session flag stops it firing twice. It only arms if the viewer is logged in and this episode is ahead of their recorded progress (or their status is still `PLANNING`).
+- Every `TheaterScreen` exit path (back, restart, next-episode transition) flushes an armed but unfired commit immediately via `flushPendingCommit()`, bounded to 3 seconds — a mid-playback failure retries on the next qualifying position tick, but no tick follows an exit, and a hung connection must not block it. A request still in flight after the bound completes in the background and still reports success or failure.
 
 ## 3. Nyaa.si
 
@@ -79,7 +80,7 @@ Most queries interpolate the shared `AnilistFragments.mediaCore` fragment for th
 - Runs off the UI thread in a single long-lived isolate (`TorrentParserWorker`), spawned lazily on first search — falls back to a one-shot `compute()` if isolate spawn fails.
 - Requests are correlated by an incrementing id, not assumed FIFO — concurrent fan-out can have several in flight at once.
 - A worker pool was considered and rejected: per-feed parsing is low-single-digit milliseconds, negligible next to the network round-trip.
-- `TorrentParser` extracts season/episode/batch-range/resolution via a hand-written single-pass tokenizer, not a regex chain — see the file's own comments for the equivalence testing this was checked against.
+- `TorrentParser` extracts season/episode/batch-range/resolution via a hand-written single-pass tokenizer, not a regex chain.
 - The one regex kept (`_batchRangeRegex`) requires 2-4 digit episode numbers — relaxing to 1-4 would misread an embedded sequel/cour digit (e.g. "Series 2 - 05") as batch range "2-5" instead of episode 5.
 
 **Scoring** (`TorrentScoringEngine`, starts at 100 points):
@@ -112,6 +113,8 @@ This table is the single authoritative list of every cache in the app, regardles
 | `_TorrentSearchCache` | 5 min | 60 entries | Keyed by `animeId:episodeNumber`. Only a successful, non-empty result is cached — a "no seeded torrents found" outcome is never cached, so a transient scrape failure doesn't get stuck. |
 | `SettingsCache` | N/A (sync mirror, not TTL-based) | — | In-memory copy of the current `AppSettings`, kept live by `SettingsController` — see [ARCHITECTURE.md](ARCHITECTURE.md) § 3. |
 | Image decoding | N/A | — | Not a persistent disk cache. `Image.network` calls are capped with a `cacheWidth` matched to the widget's actual rendered size, so Flutter's in-memory image cache never holds a full-resolution decode of a thumbnail-sized poster. |
+
+`_AnilistCache` earns its keep specifically because `NavigationController.goHome()` builds a brand-new `HomeScreen` (and a brand-new `AnilistQueryService`) on every Home → Details → Home trip — without it, the three Home carousels would refetch over the network on every single return to Home.
 
 ## 5. TsukiHime API
 
@@ -172,4 +175,4 @@ The last two are queried purely to catch more of a swarm than the trackers actua
 **Known caveat:** these five trackers have no guaranteed relationship to whatever trackers a release's original uploader actually embedded — a swarm relying purely on DHT, or on trackers outside this list, won't be reflected here even with real seeders. nyaa.si's own displayed count avoids this by reading whatever the specific upload declares; skipping that lookup entirely is a deliberate trade-off, not a bug.
 
 ---
-*Last reviewed against the codebase: 2026-09-06. Added a query, a data source, or a cache? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*
+*Last reviewed against the codebase: 2026-09-20. Added a query, a data source, or a cache? Update this file — see [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule.*

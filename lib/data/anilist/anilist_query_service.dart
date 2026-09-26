@@ -25,22 +25,9 @@ class _AnilistCacheEntry {
   bool get isExpired => DateTime.now().isAfter(expiresAt);
 }
 
-/// Tiny in-memory TTL cache for read-only, non-personalized AniList
-/// queries (trending / seasonal / all-time popular / currently airing /
-/// search / external-id lookup). Keyed by query string + JSON-encoded
-/// variables, so distinct filter combinations (different search term,
-/// different minScore, different external id, etc.) get distinct entries
-/// automatically.
-///
-/// `NavigationController.goHome()` builds a brand-new `HomeScreen` (and a
-/// brand-new `AnilistQueryService`) every time the user navigates Home →
-/// Details → Home, so this cache is what keeps the three home carousels
-/// from refetching over the network on every single trip back to Home.
-///
-/// Deliberately NOT used for `getUserWatchlist` or `getMediaProgress` —
-/// those need to reflect the viewer's live, current state, and a stale
-/// cache hit right after finishing an episode would show the wrong
-/// "up next" number or watchlist progress bar.
+/// In-memory TTL cache for read-only, non-personalized queries (trending,
+/// seasonal/all-time popular, currently airing, search) — see API.md § 4 for
+/// TTL, cap, and why watchlist/progress queries never use it.
 abstract final class _AnilistCache {
   static final Map<String, _AnilistCacheEntry> _entries = {};
   static const Duration _ttl = Duration(minutes: 2);
@@ -68,10 +55,9 @@ abstract final class _AnilistCache {
     Map<String, dynamic> variables,
     Map<String, dynamic> data,
   ) {
-    // Simple bound so a long session of distinct searches can't grow
-    // this unboundedly — evict the oldest entry once over the cap rather
-    // than pull in a full LRU package for what's normally a handful of
-    // slots (3 home carousels + whatever the user has searched).
+    // Bounded so a long session of distinct searches can't grow this
+    // unboundedly; evicts the oldest entry over the cap rather than pulling in
+    // an LRU package for a handful of slots.
     if (_entries.length >= _maxEntries) {
       _entries.remove(_entries.keys.first);
     }
@@ -137,26 +123,20 @@ class AnilistQueryService {
         .timeout(const Duration(seconds: 15));
   }
 
-  /// Executes [query] and returns the decoded `data` map, applying the
-  /// same HTTP-status and GraphQL-`errors` validation every dedicated
-  /// query method below gets via [_query] — unlike [executeRaw], which is
-  /// a bare transport call with no validation of its own. AniList can
-  /// return HTTP 200 with a GraphQL `errors` array in the body (an
-  /// expired token mid-session, a mutation validation failure); a plain
-  /// status-code check can't tell that apart from a genuine success.
-  ///
-  /// For callers (`AnilistTrackerService`) that need a query/mutation not
-  /// modeled as its own method here, and therefore can't go through
-  /// [_cachedQuery] or a `select`-based [_query] call directly.
+  /// Same HTTP-status and GraphQL-`errors` validation every dedicated query
+  /// method gets via [_query], for callers ([AnilistTrackerService]) whose
+  /// query isn't modeled as its own method here — unlike [executeRaw], a bare
+  /// transport call with no validation of its own. AniList can return HTTP 200
+  /// with a GraphQL `errors` array (an expired token, a mutation failure),
+  /// which a plain status-code check can't catch.
   Future<Map<String, dynamic>> executeChecked(
     String query,
     Map<String, dynamic> variables,
   ) => _query(query, variables, (data) => data);
 
-  /// Generic "POST → assert success → decode → select" pipeline. Every
-  /// method below just supplies a [select] callback for the slice of the
-  /// decoded body it cares about; the transport/error handling lives here
-  /// exactly once instead of being copy-pasted per method.
+  /// The "POST → assert success → decode → select" pipeline every method below
+  /// feeds its own [select] callback into, so transport/error handling lives
+  /// here exactly once.
   Future<T> _query<T>(
     String query,
     Map<String, dynamic> variables,
@@ -178,11 +158,9 @@ class AnilistQueryService {
     }
   }
 
-  /// Same contract as [_query], but checks [_AnilistCache] first and
-  /// populates it after a real network fetch. Only used by the read-only,
-  /// non-personalized queries listed on [_AnilistCache]'s doc comment —
-  /// see there for why the rest of this service deliberately doesn't use
-  /// this wrapper.
+  /// Same contract as [_query], but checks [_AnilistCache] first and populates
+  /// it after a real fetch — only for the read-only, non-personalized queries
+  /// [_AnilistCache]'s doc names.
   Future<T> _cachedQuery<T>(
     String query,
     Map<String, dynamic> variables,
@@ -209,9 +187,9 @@ class AnilistQueryService {
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     if (decoded.containsKey('errors')) {
       final errors = decoded['errors'] as List<dynamic>;
-      // Each element of a decoded `List<dynamic>` is itself `dynamic`, so
-      // it's cast before indexing to keep every subsequent access
-      // statically typed (avoid_dynamic_calls).
+      // Each element of a decoded `List<dynamic>` is itself `dynamic`, so it's
+      // cast before indexing to keep subsequent access statically typed
+      // (`avoid_dynamic_calls`).
       String errorMessage = 'Unknown GraphQL Error';
       if (errors.isNotEmpty) {
         final first = errors[0] as Map<String, dynamic>?;
@@ -222,9 +200,6 @@ class AnilistQueryService {
   }
 
   List<Anime> _animeListFromPage(Map<String, dynamic> data) {
-    // `data['Page']` is `dynamic` (the value type of a
-    // `Map<String, dynamic>`), so the intermediate hop is cast explicitly
-    // before indexing into it (avoid_dynamic_calls).
     final page = data['Page'] as Map<String, dynamic>?;
     final mediaList = page?['media'] as List<dynamic>? ?? const [];
     return mediaList
@@ -284,20 +259,13 @@ class AnilistQueryService {
     }, _animeListFromPage);
   }
 
-  /// Resolves a single [Anime] by AniList id or MyAnimeList id — exactly
-  /// one of [anilistId]/[idMal] should be non-null. The browser-extension
-  /// deep-link flow (ARCHITECTURE.md § 8) is the only caller: the
-  /// extension knows only which site it's on and the numeric id from the
-  /// page URL, never a resolved AniList id.
-  ///
-  /// Deliberately does NOT apply `_bannedGenres` the way every query
-  /// above does — the caller already named one specific title by
-  /// identity, not a browsable list, so silently hiding it behind
-  /// "Filter Ecchi" would be surprising rather than protective.
-  ///
-  /// Returns null if AniList has no matching entry (an invalid id, or a
-  /// MAL id AniList hasn't cross-referenced) rather than throwing —
-  /// mirrors [getMediaProgress]'s "absence is a valid answer" contract.
+  /// Resolves a single [Anime] by AniList id or MyAnimeList id (exactly one of
+  /// [anilistId]/[idMal] should be non-null) — the browser-extension deep-link
+  /// flow (ARCHITECTURE.md § 8) is the only caller, and deliberately skips
+  /// `_bannedGenres` since the caller named one specific title by identity, not
+  /// a browsable list. Returns null (an invalid id, or an uncross-referenced
+  /// MAL id) rather than throwing, mirroring [getMediaProgress]'s "absence is a
+  /// valid answer" contract.
   Future<Anime?> getAnimeByExternalId({int? anilistId, int? idMal}) {
     assert(
       (anilistId == null) != (idMal == null),
@@ -331,12 +299,10 @@ class AnilistQueryService {
     return _cachedQuery(AnilistQueries.search, variables, _animeListFromPage);
   }
 
-  /// [sort] is a list of AniList `MediaListSort` enum values (e.g.
-  /// `['SCORE_DESC', 'MEDIA_TITLE_ROMAJI']`) — see
-  /// `WatchlistSortOption.anilistSort` (watchlist_controller.dart) for
-  /// the values `WatchlistScreen`'s sort dropdown maps to. Defaults to
-  /// the same title-order every caller used before sorting existed, so
-  /// omitting it changes nothing.
+  /// [sort] is a list of AniList `MediaListSort` values — see
+  /// `WatchlistSortOption.anilistSort` (watchlist_controller.dart) for what
+  /// `WatchlistScreen`'s sort dropdown maps to. Defaults to the pre-sort title
+  /// order, so omitting it changes nothing.
   Future<({List<MediaListEntry> entries, bool hasNextPage})> getUserWatchlist({
     required String status,
     int page = 1,
@@ -359,11 +325,6 @@ class AnilistQueryService {
         'sort': sort,
       },
       (data) {
-        // Same "cast each hop before indexing" approach as
-        // `_animeListFromPage` / `_assertResponse` above. `rawList` is
-        // cast to `List<Map<String, dynamic>>` up front so the
-        // `.where`/`.map` callbacks below never touch a `dynamic`
-        // receiver either.
         final pageData = data['Page'] as Map<String, dynamic>?;
         final pageInfo = pageData?['pageInfo'] as Map<String, dynamic>?;
         final hasNextPage = pageInfo?['hasNextPage'] as bool? ?? false;
@@ -372,10 +333,9 @@ class AnilistQueryService {
 
         final banned = _bannedGenres;
 
-        // AniList doesn't expose a `genre_not_in` filter on the user's
-        // own watchlist, so the banned-genre filter is applied
-        // client-side here, against the raw JSON's genre list, before
-        // decoding into MediaListEntry.
+        // AniList exposes no `genre_not_in` filter on a user's own watchlist,
+        // so the banned-genre filter runs client-side here, against the raw
+        // JSON's genre list, before decoding into MediaListEntry.
         final entries = rawList
             .where((r) {
               final media = r['media'] as Map<String, dynamic>?;

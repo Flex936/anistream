@@ -101,7 +101,7 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 
 - [ ] `calendar_card.dart`: replace the raw `Color(0x4D000000)` shadow with `AppPalette.black.withValues(alpha: ...)`
 - [ ] `episode_tile.dart`: route its hardcoded 150ms duration through `perfDuration(uiPerformanceMode, ...)`
-- [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `settings_menu.dart`, `navbar.dart`
+- [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `navbar.dart`
 - [ ] `navbar.dart`: bump `_NavIconButton` from 44×44 to the documented 48×48 minimum
 
 ## Platform & Playback
@@ -129,8 +129,8 @@ Refs point to CODING_RULES.md instead of DESIGN.md § 5.*
 **Acceptance criteria:**
 
 - [ ] Audit each file's comments against the § 2 budget; shorten or delete anything over it
-- [ ] Where the rationale is worth keeping, move it to the matching canonical doc (ARCHITECTURE.md § 7, API.md, or DESIGN.md § 5) and leave a `// See Doc.md § N.` pointer in its place
+- [ ] Where the rationale is worth keeping, move it to the matching canonical doc (ARCHITECTURE.md, API.md, or DESIGN.md) and leave a `// See Doc.md § N.` pointer only at the canonical implementation — repeat sites get no comment
 - [ ] Comment-only changes — no logic touched in the same pass
 - [ ] Work file-by-file or feature-by-feature, not one sweeping PR, matching item #1's convention for large multi-file items
 
-**Affected files:** effectively all of `lib/` — highest-density starting points: `torrent_parser_worker.dart`, `next_episode_prefetch_controller.dart`, `frosted_container.dart`, `torrent_scraper_service.dart`, `styled_subtitle_view.dart`, `player_configurator.dart`
+**Affected files:** effectively all of `lib/` — highest-density files: `theater_screen.dart`, `torrent_parser.dart`, `remote_streaming_controller.dart`, `theater_controls.dart`, `torrent_scraper_service.dart`, `styled_subtitle_view.dart`

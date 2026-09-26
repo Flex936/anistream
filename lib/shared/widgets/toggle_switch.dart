@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_palette.dart';
 
-/// A compact pill-shaped on/off switch, styled to match this app's own
-/// chrome rather than Flutter's platform-default `Switch`.
-/// `settings_components.dart`'s `SettingRowTile` and
-/// `theater_settings.dart`'s Libass toggle row both use this.
+/// A compact pill-shaped on/off switch styled to match the app's chrome instead
+/// of the platform [Switch].
 class ToggleSwitch extends StatelessWidget {
   final bool value;
   const ToggleSwitch({super.key, required this.value});
