@@ -35,6 +35,30 @@ class Chapter {
 }
 
 // Chapter-skippability classification.
+bool isOpTitle(String t) => t == 'op' || t == 'ncop' || t.contains('opening');
+
+List<Chapter> fixIntroSkip(List<Chapter> allTags) {
+  final tag = allTags.indexWhere((e) => e.title.toLowerCase() == 'intro');
+  if (tag == -1) return allTags;
+
+  final all = allTags.map((e) => e.title.toLowerCase());
+  if (all.any(isOpTitle)) {
+    return allTags
+        .map(
+          (e) => e.title.toLowerCase() == 'intro'
+              ? Chapter(
+                  title: e.title,
+                  start: e.start,
+                  end: e.end,
+                  skipLabel: e.skipLabel,
+                )
+              : e,
+        )
+        .toList();
+  }
+
+  return allTags;
+}
 
 bool _isChapterSkippable(String title) {
   final t = title.toLowerCase().trim();
@@ -45,10 +69,7 @@ bool _isChapterSkippable(String title) {
   }
 
   // 2. Do skip theme songs (strict equality for short codes to prevent false positives like "Operation" or "Wedding")
-  if (t == 'op' || t.contains('opening') || t.contains('intro') || t == 'ncop') {
-    return true;
-  }
-  if (t == 'ed' || t.contains('ending') || t.contains('credits') || t == 'nced') {
+  if (t == 'op' || t.contains('opening') || t == 'ncop' || t == 'intro') {
     return true;
   }
 
@@ -63,10 +84,16 @@ bool _isChapterSkippable(String title) {
 String _getSkipLabel(String title) {
   final t = title.toLowerCase().trim();
 
-  if (t == 'op' || t.contains('opening') || t.contains('intro') || t == 'ncop') {
+  if (t == 'op' ||
+      t.contains('opening') ||
+      t.contains('intro') ||
+      t == 'ncop') {
     return 'Skip Opening';
   }
-  if (t == 'ed' || t.contains('ending') || t.contains('credits') || t == 'nced') {
+  if (t == 'ed' ||
+      t.contains('ending') ||
+      t.contains('credits') ||
+      t == 'nced') {
     return 'Skip Ending';
   }
   if (t == 'pv' || t.contains('preview') || t.contains('next episode')) {
@@ -120,5 +147,6 @@ List<Chapter> buildChaptersFromRaw(
       ),
     );
   }
-  return chapters;
+
+  return fixIntroSkip(chapters);
 }
