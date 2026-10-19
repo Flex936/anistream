@@ -1,4 +1,3 @@
-// lib/data/torrent/torrent_scraper_service.dart
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -42,23 +41,11 @@ const Duration _kStaggerDelay = Duration(milliseconds: 500);
 // nyaa.si's mirrors.
 const int _kMaxConcurrentTitles = 3;
 
-// In-memory TTL cache of scored torrent results, keyed by (anime id,
-// episode). `AnimeDetailsScreen._torrentFutures` already memoizes
-// per-episode within one screen instance, but `NavigationController`
-// builds a brand-new `AnimeDetailsScreen` (and a brand-new
-// `TorrentScraperService`) every time the user navigates away and back
-// — this cache is what keeps a revisit within a few minutes from
-// re-running the entire fetch/parse/score pipeline for data that almost
-// certainly hasn't changed.
-//
-// Static (so it outlives any single `TorrentScraperService` instance),
-// TTL-bounded, size-capped in-memory map, mirroring `_AnilistCache` in
-// anilist_query_service.dart.
-//
-// Only ever populated on a successful, non-empty result — fetchTorrents
-// throws on "no seeded torrents found," and that throw path never reaches
-// `_TorrentSearchCache.set(...)`, so a transient failure is never cached
-// and retried the same way.
+// In-memory TTL cache of scored torrent results, keyed by
+// `animeId:episodeNumber` (API.md § 4) — same shape as `_AnilistCache`.
+// `AnimeDetailsScreen._torrentFutures` already memoizes per-episode within one
+// screen instance; this is what keeps a `NavigationController` revisit within a
+// few minutes from re-running the whole fetch/parse/score pipeline.
 class _TorrentCacheEntry {
   final List<Torrent> data;
   final DateTime expiresAt;
@@ -133,33 +120,9 @@ Future<bool> _completesWithin(Future<List<Torrent>> future, Duration duration) {
   return completer.future;
 }
 
-/// Runs [trySearch] against each candidate title in [queue], preserving a
-/// strict precedence contract: the first title (by list order, not by
-/// which one happens to finish first) whose result is non-empty wins —
-/// while not forcing title N+1 to wait for title N to fully complete
-/// before it's even allowed to start.
-///
-/// How: title `i` is always awaited to completion before its result is
-/// inspected (so a slow-but-earlier title can still override a
-/// fast-but-later one). The only concurrency introduced: while waiting on
-/// title `i`, if it hasn't resolved within [_kStaggerDelay], title `i+1`
-/// is kicked off concurrently rather than waiting for `i` to finish. If
-/// `i` later turns out non-empty, `i+1`'s speculative result is simply
-/// discarded (never awaited for real) — its request still runs to
-/// completion in the background, but nothing in this app is waiting on
-/// it. If `i` turns out empty, `i+1` may already be finished (or partway
-/// there) by the time this loop reaches it, hiding its latency behind
-/// however long `i` took.
-///
-/// Deliberate trade-off, called out explicitly rather than buried in
-/// code: because `package:http` gives no cheap way to cancel an in-flight
-/// request once an earlier candidate wins, this means a genuinely higher
-/// request volume against nyaa.si's mirrors on any search where an
-/// earlier candidate title takes longer than [_kStaggerDelay] to resolve
-/// — every such search fires (and lets run to completion) at least one
-/// extra HTTP request it might not have needed. Accepted here because the
-/// goal is minimizing click → magnet-link latency, not minimizing
-/// request count.
+/// Runs [trySearch] against each candidate title in [queue] with a precedence
+/// and staggering contract — see API.md § 3 (Concurrency) for the guarantee and
+/// the accepted request-volume trade-off.
 Future<List<Torrent>> _runQueueSearchStaggered(
   List<String> queue, {
   required bool batchMode,
@@ -406,13 +369,12 @@ class TorrentScraperService {
       return await fallbackFuture;
     }
 
-    // 3. Execute the queue. Batch-mode and episode-mode search are
-    // independent axes, only ever concatenated+deduped+sorted afterward,
-    // so they're fanned out via Future.wait instead of run strictly one
-    // after another. Within each, candidate titles run via the staggered
-    // scheduler above instead of strictly sequentially — see
-    // `_runQueueSearchStaggered`'s doc comment for the precedence
-    // guarantee and the request-volume trade-off it makes.
+    // 3. Execute the queue: batch-mode and episode-mode search fan out via
+    // `Future.wait` since they're independent axes, only ever
+    // concatenated+deduped+sorted afterward. Within each, candidate titles run
+    // via the staggered scheduler above rather than strictly sequentially — see
+    // `_runQueueSearchStaggered`'s doc for the precedence guarantee and the
+    // trade-off it makes.
     final batchFuture = (isFinished && !isMovie)
         ? _runQueueSearchStaggered(
             searchQueue,

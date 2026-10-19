@@ -44,7 +44,8 @@ class TsukihimeApiService {
         .toList();
   }
 
-  // TODO: cache these ids per session to lessen requests (aka if someones bingewatches the show only run this once)
+  // TODO: cache these ids per session to lessen requests (aka if someones
+  // bingewatches the show only run this once) — see ARCHITECTURE.md § 7.
   Future<int?> resolveInternalId(int anilistId) async {
     final response = await _get('/animes/anilist/$anilistId');
     if (response.statusCode == 404) return null;
