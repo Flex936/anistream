@@ -131,15 +131,14 @@ class SettingsDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // excludeChildFocus: false — DropdownButton needs to keep handling
-    // its own taps/opens internally (it manages its own overlay menu),
-    // so it can't be fully subsumed by DpadFocusable's own onSelect
-    // model the way a plain icon button can. DpadFocusable here exists
-    // purely to make this reachable via D-Pad directional navigation and
-    // to drive the border/background from state.focused; the actual
-    // dropdown interaction stays with DropdownButton itself. The
-    // DropdownButton doesn't visually depend on state.focused, so it's
-    // passed through `child` rather than rebuilt inside `builder`.
+    // `excludeChildFocus: false`: `DropdownButton` manages its own overlay menu
+    // and taps, so it can't be fully subsumed by `DpadFocusable`'s `onSelect`
+    // model the way a plain icon button can — `DpadFocusable` here only makes
+    // it reachable via D-Pad and drives the border/background from
+    // `state.focused`, while the dropdown interaction itself stays with
+    // `DropdownButton`. `DropdownButton` doesn't visually depend on
+    // `state.focused`, so it's passed through `child` rather than rebuilt
+    // inside `builder`.
     return DpadFocusable(
       excludeChildFocus: false,
       builder: (context, state, child) => AnimatedContainer(

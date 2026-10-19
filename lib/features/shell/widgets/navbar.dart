@@ -204,21 +204,14 @@ class _AniStreamNavBarState extends State<AniStreamNavBar> with WindowListener {
             builder: (context, blurAmount, _) => buildFrame(blurAmount),
           );
 
-    // RepaintBoundary: this bar is pinned above scrolling body content
-    // (extendBodyBehindAppBar) and only repaints on its own triggers
-    // (scroll-threshold crossing, mobile search toggle) — independent of
-    // whatever is scrolling underneath it. Isolating it onto its own
-    // compositor layer means a scroll-driven repaint of the body never
-    // forces the nav bar to re-record, and vice versa.
-    //
-    // DpadRegion: the whole toolbar is one region (logo, search,
-    // schedule/watchlist/custom-stream/user/settings icons, window
-    // controls are all one visual section, not several) with a stable
-    // memoryKey so returning here from anywhere remembers which control
-    // was last focused. No edge-behavior overrides — the default (leave,
-    // on both axes) is right: Up has nothing above to find anyway, and
-    // Down must stay at its default so focus can escape downward into
-    // the body's own DpadRegion (app_shell.dart).
+    // `RepaintBoundary`: this bar is pinned above scrolling body content and
+    // only repaints on its own triggers, so isolating it onto its own
+    // compositor layer means a scroll-driven repaint of the body never forces
+    // the nav bar to re-record, and vice versa. `DpadRegion`: the whole toolbar
+    // is one region with a stable `memoryKey`; default leave/leave is correct
+    // on both axes — Up has nothing above to find, and Down must stay default
+    // so focus can escape downward into the body's own region
+    // (`app_shell.dart`).
     return DpadRegion(
       memoryKey: 'navbar',
       child: RepaintBoundary(child: frame),
@@ -581,17 +574,13 @@ class _NavLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // The inner Padding+Text is focus-independent — only the wrapping
-    // AnimatedDefaultTextStyle's color depends on state.focused — so it's
-    // passed as `child` and reused across focus-state rebuilds instead
-    // of being reconstructed inside `builder` every time.
-    //
-    // autofocus: true — the navbar's designated default focus target
-    // (DESIGN.md § 4's "exactly one autofocus per region" convention): a
-    // cold entry into the 'navbar' DpadRegion, with nothing else in this
-    // scope yet focused, lands here. Once the user has focused something
-    // else in the navbar, memoryKey: 'navbar' (see AniStreamNavBar's
-    // build method) restores that instead — this only governs the
-    // memory-less first visit.
+    // `AnimatedDefaultTextStyle`'s color depends on `state.focused` — so it's
+    // passed as `child` and reused across focus-state rebuilds instead of
+    // reconstructed inside `builder` every time. `autofocus: true` is this
+    // region's designated default target (DESIGN.md § 4) for a cold entry into
+    // the 'navbar' region with nothing yet focused; once something else in the
+    // navbar has focus, `memoryKey: 'navbar'` restores that instead, so this
+    // only governs the memory-less first visit.
     return DpadFocusable(
       autofocus: true,
       onSelect: () => onTap?.call(),

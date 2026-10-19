@@ -50,6 +50,7 @@ Visual restraint, typographic rhythm, and motion quality, in Apple's design spir
 
   `HeroCard`'s 16:9 landscape treatment is a deliberate exception — it renders banner art, not cover art, and doesn't use `posterAspectRatio`.
 - Prioritize clean layouts, deep contrast, and seamless transitions in every new component.
+- A control that needs a full pill/capsule shape (a toast, a floating badge, a play-overlay button) uses a radius literal larger than half its own height, rather than routing through `.tag`/`.small`/`.large` — none of those tiers serve that role, and the exact value is container-specific, not one of the three tiers by coincidence.
 
 ### 1.4 Accent — translucent materials
 
@@ -96,6 +97,7 @@ Visual restraint, typographic rhythm, and motion quality, in Apple's design spir
 - Hide PC-specific UI controls (window management, explicit fullscreen toggles) on Mobile/TV builds.
 - Shared breakpoints live in `build_context_extensions.dart` (`Breakpoints.{mobile,tablet,desktop,wide}` = 600/900/1200/1500) for layout branches needing a true mobile/tablet/desktop split. New screens use `context.isMobile`, not a hardcoded `< 600` check — § 5.1 tracks the current migration split.
 - **Grid column counts are a separate concern from breakpoints.** Card grids (`SearchResultsScreen`, `WatchlistScreen`) size columns via `SliverGridDelegateWithMaxCrossAxisExtent`, capped at `context.appCardSizes.gridMaxWidth`/`heroGridMaxWidth` (§ 1.3) — column count falls out of available width ÷ cap automatically, not a manually maintained breakpoint table. New card grids follow this pattern.
+- **Poster-card grids set `mainAxisExtent`, not `childAspectRatio`:** `gridMaxWidth / posterAspectRatio + <card>.kTextBlockHeight`. The poster is width-driven but the text block beneath it is a fixed pixel height, so deriving the extent from the widest possible column guarantees every narrower column — whose poster is proportionally shorter — still fits without overflowing. Exception: `HeroCard`'s 16:9 grid has no text block, so a plain `childAspectRatio` is exact at any width.
 - **Landscape title constraint:** a title over a full-bleed hero/banner (§ 1.2) must not exceed half the screen's width in landscape (`MediaQuery.sizeOf(context).width > height`) — otherwise it crowds out whatever sits beside or below it. Canonical example: `HeroHeaderDelegate`'s `contentMaxWidth` calculation.
 
 ## 4. Spatial Navigation & TV (D-pad)
@@ -113,6 +115,7 @@ This deliberately skips Flutter's own `FocusManager.instance.highlightMode`, whi
 
 - One `DpadRegion` per *visual section* (a carousel shelf, the settings popup, the theater control bar) — not one giant region per screen. Regions decide where directional focus "escapes" to (e.g., Up from a carousel escapes to the navbar).
 - Give a region a `memoryKey` (e.g., `'home.trending'`, `'theater.controls'`) whenever its contents can be rebuilt or the user can leave and return — this is what makes "leave and return" land on the same focused card instead of resetting to the first item.
+- Skip `memoryKey` where a region's content is a structurally different subtree on every visit — `AppShell`'s outer body region swaps between Home/Watchlist/Schedule's entirely different widget trees, so a single "remembered position" at that level wouldn't mean anything; the memory belongs inside each screen's own regions instead.
 - New screens get exactly one `autofocus: true`, on the single most likely first target (the play button in Theater, the first "up next" episode, the first search result).
 - Standard text inputs (`SettingsTextField`, `SearchInput`) are plain `Focus` widgets with a custom `onKeyEvent`, not `DpadFocusable` — arrow keys move the cursor normally, handing off to directional focus traversal only at the start/end of the field's content. Give a new text field this same boundary-escape pattern rather than wrapping it in `DpadFocusable`.
 - Wrap a Material control that traps or fragments arrow-key focus in an outer `Focus` whose `onKeyEvent` handles Left/Right only, so Up/Down bubble to traversal:

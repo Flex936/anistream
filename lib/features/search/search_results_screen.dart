@@ -77,9 +77,6 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   }
 
   void _openFilterDrawer() {
-    // Routed through the shared ResponsiveContext.isMobile extension,
-    // matching the breakpoint watchlist_screen.dart/responsive_grid.dart
-    // standardize on.
     final isMobile = context.isMobile;
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
@@ -285,17 +282,8 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                     maxCrossAxisExtent: cardSizes.gridMaxWidth,
                     crossAxisSpacing: 20,
                     mainAxisSpacing: 24,
-                    // Fixed absolute row height rather than
-                    // childAspectRatio: AnimeCard's poster is
-                    // width-driven (its own internal AspectRatio adapts
-                    // to whatever column width the grid actually
-                    // produces), but the text block beneath it is a
-                    // fixed pixel height regardless of width. Deriving
-                    // this extent from the widest possible column
-                    // (gridMaxWidth) guarantees every narrower column —
-                    // which always needs less height too, since its
-                    // poster is proportionally shorter — still fits
-                    // inside it without overflowing.
+                    // `mainAxisExtent` rather than `childAspectRatio`, derived
+                    // from the widest possible column (DESIGN.md § 3).
                     mainAxisExtent:
                         cardSizes.gridMaxWidth / cardSizes.posterAspectRatio +
                         AnimeCard.kTextBlockHeight,

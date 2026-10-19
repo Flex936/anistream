@@ -6,18 +6,14 @@ import '../../../shared/widgets/selection_modal.dart';
 import '../../../shared/widgets/settings_text_field.dart';
 
 /// Centered-card modal collecting a raw magnet link to stream directly,
-/// bypassing AniList/Nyaa.si entirely — see [SelectionModal]'s doc
-/// comment for the shared chrome this and [TorrentSearchModal]/
-/// [BatchEpisodePickerOverlay] all build on. Mounted as a real pushed
-/// route via [show]; the resolved [Future] carries the validated magnet
-/// URI, or `null` if the modal was dismissed without a submission
-/// (backdrop tap, close button) — the same `showDialog<T>`-style
-/// contract [TorrentSearchModal.show] uses.
-///
-/// A stream started this way has no `Anime`/episode context, so
-/// `TheaterScreen` never arms AniList progress tracking for it — the
-/// subtitle text below says so explicitly, since it's a real behavioral
-/// difference from every other way of starting a stream in this app.
+/// bypassing AniList/Nyaa.si entirely, built on [SelectionModal]'s shared
+/// chrome; mounted as a real pushed route via [show], whose [Future] carries
+/// the validated magnet URI, or `null` if dismissed without a submission (the
+/// same `showDialog<T>` contract [TorrentSearchModal.show] uses). A stream
+/// started this way has no `Anime`/episode context, so `TheaterScreen` never
+/// arms AniList progress tracking for it — the subtitle text below says so
+/// explicitly, since it's a real behavioral difference from every other way of
+/// starting a stream.
 class CustomMagnetModal extends StatefulWidget {
   final bool uiPerformanceMode;
 
@@ -31,8 +27,8 @@ class CustomMagnetModal extends StatefulWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Stream a magnet link',
-      // Transparent — the darkening lives entirely in SelectionModal's
-      // own full-screen backdrop, same reasoning as TorrentSearchModal.
+      // Transparent: `SelectionModal`'s own full-screen backdrop does the
+      // darkening.
       barrierColor: AppPalette.transparent,
       transitionBuilder: (context, animation, _, child) {
         final curved = CurvedAnimation(

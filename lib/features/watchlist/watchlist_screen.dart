@@ -114,10 +114,10 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   }
 
   void _handleHover(String? bannerUrl, bool isHovered) {
-    // Same stale-leave guard as before (only clear if this card is the
-    // one currently claiming hover) — just tracked against the pending
-    // intent instead of the already-committed value, since commits now
-    // lag behind intent by `_hoverDebounceDelay`.
+    // Stale-leave guard: only clears if this card is the one currently claiming
+    // hover, now tracked against the pending intent rather than the
+    // already-committed value, since commits lag behind intent by
+    // `_hoverDebounceDelay`.
     if (isHovered && bannerUrl != null) {
       _pendingHoverUrl = bannerUrl;
     } else if (!isHovered && _pendingHoverUrl == bannerUrl) {
@@ -173,11 +173,6 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 valueListenable: _hoveredBanner,
                 builder: (context, hoveredBanner, _) {
                   return AnimatedSwitcher(
-                    // Zero-duration under Performant mode — the backdrop
-                    // swap still happens, it just snaps instead of
-                    // dissolving, avoiding the extra composited frames a
-                    // 600ms cross-fade of a full-screen image would
-                    // otherwise cost.
                     duration: perfDuration(
                       uiPerformanceMode,
                       const Duration(milliseconds: 600),
@@ -617,8 +612,8 @@ class _EmptyPane extends StatelessWidget {
           children: [
             Icon(icon, color: AppPalette.textMuted, size: 48),
             const SizedBox(height: 16),
-            // cardTitleProminent is reused here — see
-            // app_typography.dart's class doc comment on token-name drift.
+            // cardTitleProminent is reused here (DESIGN.md § 5.3 — token-name
+            // drift).
             Text(
               title,
               style: typography.cardTitleProminent.copyWith(
@@ -626,9 +621,6 @@ class _EmptyPane extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            // This subtitle can wrap depending on content/screen width;
-            // cardSummary's height would visibly change line-spacing on
-            // wrapped text, so it's left as a plain literal.
             Text(
               subtitle,
               style: const TextStyle(color: AppPalette.textMuted, fontSize: 13),
@@ -668,9 +660,6 @@ class _ErrorPane extends StatelessWidget {
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
-            // A dynamic, potentially long error message — same
-            // multi-line height caution as scheduled_screen.dart's
-            // _ErrorPane.
             child: Text(
               message,
               textAlign: TextAlign.center,

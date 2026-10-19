@@ -58,10 +58,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final uiPerformanceMode = SettingsScope.of(context).uiPerformanceMode;
 
-    // No Scaffold: HomeScreen is only ever built by
-    // NavigationController.buildHome, always rendered inside AppShell's
-    // own Scaffold (app_shell.dart), which already paints the identical
-    // AppPalette.base background beneath it.
+    // No Scaffold — AppShell's own Scaffold already provides it
+    // (CODING_RULES.md § 1), and already paints the same AppPalette.base
+    // background beneath this.
     return SingleChildScrollView(
       // Both the 96px navbar clearance and the 48px bottom breathing
       // room live in the scroll view's own `padding` rather than as

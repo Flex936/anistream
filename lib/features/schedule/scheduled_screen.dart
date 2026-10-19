@@ -27,14 +27,12 @@ class _ScheduledScreenState extends State<ScheduledScreen> {
   DateTime _now = DateTime.now();
   final ScrollController _scrollController = ScrollController();
 
-  // Memoization for groupByWeekday. _animeFuture is only ever reassigned
-  // by _reload() — the once-a-minute clock tick just calls setState(() =>
-  // _now = ...), leaving _animeFuture (and therefore FutureBuilder's
-  // resolved snapshot.data instance) untouched. That means the same
-  // List<Anime> reference comes back on every tick, so identical()
-  // reliably tells us "nothing to regroup" without needing to compare
-  // contents — avoiding a full sort+bucket over the entire airing list
-  // purely to refresh "Xh Ym left" labels.
+  // Memoization for `groupByWeekday`: `_animeFuture` is only ever reassigned by
+  // `_reload()`, never by the once-a-minute clock tick (which just calls
+  // `setState(() => _now = ...)`), so the same `List<Anime>` reference comes
+  // back on every tick and `identical()` reliably tells us "nothing to regroup"
+  // without comparing contents. That avoids a full sort+bucket over the entire
+  // airing list purely to refresh "Xh Ym left" labels.
   List<Anime>? _cachedSourceList;
   Map<String, List<Anime>>? _cachedCalendar;
 
@@ -273,15 +271,10 @@ class _DayShelf extends StatelessWidget {
         ),
         SizedBox(
           height: shelfHeight,
-          // DpadRegion: this shelf is its own visual section, matching
-          // the Home carousels' convention. memoryKey uses the stable
-          // regionKey (weekday name) so the last-focused card in a given
-          // day's row survives both the once-a-minute clock-driven
-          // rebuild and a full leave-and-return trip through
-          // Search/Watchlist/Home. No edge-behavior overrides — default
-          // leave is what lets Up escape to the navbar from the topmost
-          // shelf, and cascades between shelves the same way Home's
-          // carousels do.
+          // `DpadRegion` per shelf (DESIGN.md § 4); `memoryKey` on the stable
+          // `regionKey` (weekday name) so the last-focused card survives both
+          // the once-a-minute clock-driven rebuild and a full leave-and-return
+          // trip, not just a rebuild of this widget.
           child: DpadRegion(
             memoryKey: 'schedule.$regionKey',
             child: ListView.separated(
@@ -344,10 +337,6 @@ class _ErrorPane extends StatelessWidget {
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 48),
-          // This text can wrap up to 3 lines. cardSummary's height: 1.4
-          // would visibly change line-spacing on wrapped text here, so
-          // it's left as a plain literal rather than routed through that
-          // token.
           child: Text(
             error.toString(),
             textAlign: TextAlign.center,

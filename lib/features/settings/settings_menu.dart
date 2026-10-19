@@ -58,14 +58,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
   late String _videoFilterQuality;
   late bool _useExoPlayer;
 
-  // Not exposed anywhere in this screen's own UI — TheaterSettingsMenu
-  // is the only place this is user-editable (see AppSettings.
-  // libassEnabled's doc comment for why). Still hydrated and carried
-  // through unchanged in _handleSave below, since AppSettings has no
-  // copyWith: constructing a fresh AppSettings there without this field
-  // would silently reset it to the constructor default every time this
-  // screen's Save button is pressed, wiping out whatever the theater
-  // toggle last set.
+  // Not exposed in this screen's own UI — `TheaterSettingsMenu` is the only
+  // place this is user-editable (see `AppSettings.libassEnabled`'s doc for
+  // why). Still hydrated and carried through unchanged in `_handleSave` below,
+  // since `AppSettings` has no `copyWith`: constructing a fresh one without
+  // this field would silently reset it to the constructor default on every
+  // Save, wiping out whatever the theater toggle last set.
   late bool _libassEnabled;
 
   late bool _serverMode;
@@ -490,12 +488,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          // Left as a plain literal — 11pt
-                                          // with 1.5 line height doesn't
-                                          // match any existing typography
-                                          // token (the nearest candidate,
-                                          // tileSubtitle, uses a
-                                          // different height).
                                           Text(
                                             'Run anistream-server on any PC, NAS, or Raspberry Pi on your LAN. '
                                             'See anistream_server/README.md for build instructions.',
@@ -686,9 +678,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 ),
                               ),
                             )
-                          // Left as a plain literal — a deliberate 1pt
-                          // step up from toastMessage (14/w600/0.2) for
-                          // this primary CTA button.
                           : const Text(
                               'Save Changes',
                               style: TextStyle(

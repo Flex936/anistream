@@ -55,9 +55,6 @@ class CalendarCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           AspectRatio(
-            // Matches AniList's coverImage art (2:3) — the same
-            // canonical ratio every other poster card in the app shares
-            // via AppCardSizes.
             aspectRatio: cardSizes.posterAspectRatio,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -81,8 +78,6 @@ class CalendarCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radii.small),
-                // Clip.hardEdge under Performant mode — see
-                // FrostedContainer's doc comment for the rationale.
                 clipBehavior: uiPerformanceMode
                     ? Clip.hardEdge
                     : Clip.antiAlias,
@@ -122,12 +117,9 @@ class CalendarCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: AppPalette.primary,
-                            // Fully-rounded stadium/pill badge — 20
-                            // exceeds half this container's height to
-                            // guarantee a full pill curve regardless of
-                            // content length, so it's left as a plain
-                            // literal rather than one of the tag/small/
-                            // large tiers.
+                            // 20 exceeds half this container's height,
+                            // guaranteeing a full pill curve regardless of
+                            // content length (DESIGN.md § 1.3).
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
