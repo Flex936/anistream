@@ -2,25 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-/// Design-system card-sizing tokens: the canonical poster aspect ratio and
-/// the fixed/capped widths cards render at across shelves and grids.
-///
-/// `posterAspectRatio` matches AniList's own `coverImage` art exactly
-/// (2:3) — `AnimeCard`, `WatchlistCard`, `ListCard`, and `CalendarCard` all
-/// size their poster off this single value instead of each picking a
-/// different crop of the same source art.
-///
-/// `shelfWidth` is the fixed card width used by every horizontal
-/// carousel/shelf (`AnimeCarousel`, `ScheduledScreen`'s day shelves) —
-/// matching widths there is what makes adjacent shelves feel like one
-/// system rather than several.
-///
-/// `gridMaxWidth`/`heroGridMaxWidth` cap how wide a fluid grid card
-/// (`SearchResultsScreen`, `WatchlistScreen`) is allowed to grow on a wide
-/// desktop, via `SliverGridDelegateWithMaxCrossAxisExtent` rather than a
-/// manual breakpoint-to-column-count table.
-///
-/// Accessed via `context.appCardSizes` (see build_context_extensions.dart).
+/// Card-sizing tokens: the poster aspect ratio (2:3, matching AniList's cover
+/// art) and the shelf and grid widths (DESIGN.md § 1.3).
 @immutable
 class AppCardSizes extends ThemeExtension<AppCardSizes> {
   final double posterAspectRatio;

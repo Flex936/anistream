@@ -20,9 +20,9 @@ class TrackerScrapeStats {
   });
 }
 
-/// Queries BitTorrent trackers directly for live seeder/leecher counts,
-/// keyed purely by info hash — see the class doc in torrent_scraper_service.dart's
-/// enrichment step for why this replaced a title-search-based approach.
+/// Queries BitTorrent trackers directly for live seeder/leecher counts, keyed
+/// purely by info hash — see API.md § 6 for why this replaced a
+/// title-search-based approach.
 class TrackerScrapeService {
   final http.Client _client;
   final Random _random = Random();
@@ -120,12 +120,12 @@ class TrackerScrapeService {
     return Uri.parse(buffer.toString());
   }
 
-  /// info_hash must be the RAW 20 bytes, percent-encoded — not the hex
-  /// string. Dart's own Uri.encodeComponent UTF-8-encodes text first,
-  /// which mangles any raw byte >= 0x80 into a multi-byte sequence
-  /// instead of one %XX per byte, so this is hand-rolled instead.
-  /// Percent-encoding every byte unconditionally is always valid per the
-  /// URI spec and simpler than only encoding the ones that strictly need it.
+  /// info_hash must be the RAW 20 bytes, percent-encoded, not the hex string —
+  /// Dart's own `Uri.encodeComponent` UTF-8-encodes text first, mangling any
+  /// raw byte ≥ 0x80 into a multi-byte sequence instead of one %XX per byte, so
+  /// this is hand-rolled instead. Percent-encoding every byte unconditionally
+  /// is always valid per the URI spec and simpler than only encoding the ones
+  /// that strictly need it.
   String _percentEncodeBytes(Uint8List bytes) {
     final buffer = StringBuffer();
     for (final byte in bytes) {
@@ -181,14 +181,12 @@ class TrackerScrapeService {
       if (addresses.isEmpty) return {};
       final address = addresses.first;
 
-      // Exactly one listen() for this socket's whole lifetime — see the
-      // class doc for why calling it per-retry throws. Every subsequent
-      // "wait for the next packet" reads from packetController's
-      // broadcast stream instead, which can be subscribed to any number
-      // of times. onError is required here: an unhandled error on a raw
-      // socket's event stream becomes an uncaught, zone-level crash if
-      // nothing is listening for it — that's what escaped this function's
-      // own try/catch before this fix.
+      // Exactly one `listen()` for this socket's whole lifetime — calling it
+      // again on retry throws, since a `RawDatagramSocket` accepts only one
+      // listener. Each retry instead reads from `packetController`'s broadcast
+      // stream, which supports any number of subscribers; `onError` is required
+      // or an unhandled socket-stream error becomes an uncaught, zone-level
+      // crash.
       subscription = socket.listen(
         (event) {
           if (event == RawSocketEvent.read) {

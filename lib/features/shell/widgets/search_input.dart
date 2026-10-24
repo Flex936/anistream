@@ -112,19 +112,15 @@ class _SearchInputState extends State<SearchInput> {
     }
 
     // Closing is keyed off the whole group, re-checked after a short,
-    // conditional delay rather than firing an unconditional hide. When
-    // focus hops from the text field to a result row (D-Pad Down, Tab —
-    // and also a mouse tap, since InkWell requests focus on activation
-    // too), the old node's "focus lost" notification and the new node's
-    // "focus gained" notification aren't guaranteed to land in the same
-    // synchronous pass. Checking immediately risks catching that
-    // in-between instant and treating a pure focus handoff within this
-    // group as the user leaving it. 100ms is comfortably more than one
-    // frame, so the handoff has settled by the time this fires — and
-    // because the check re-reads live focus state rather than relying on
-    // an unconditional hide, a genuinely fast focus return (e.g. Up then
-    // immediately back Down) is still caught correctly, since nothing
-    // here ever fires on a timer alone.
+    // conditional delay rather than an unconditional hide: a focus hop from the
+    // text field to a result row (D-Pad Down, Tab, or a mouse tap) doesn't
+    // guarantee the old node's "lost" and the new node's "gained" notifications
+    // land in the same synchronous pass, so checking immediately risks treating
+    // a pure in-group handoff as the user leaving. 100ms is comfortably more
+    // than one frame, so the handoff has settled by the time this fires, and
+    // re-reading live focus state still catches a genuinely fast focus return
+    // (Up then immediately back Down), since nothing here fires on a timer
+    // alone.
     _dismissCheckTimer?.cancel();
     _dismissCheckTimer = Timer(const Duration(milliseconds: 100), () {
       if (!mounted) return;

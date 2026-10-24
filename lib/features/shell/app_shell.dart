@@ -266,18 +266,14 @@ class _AppShellState extends State<AppShell> {
         child: ListenableBuilder(
           listenable: _nav,
           builder: (context, _) {
-            // MaterialPageRoute's default maintainState keeps
-            // HomeScreen/AnimeDetailsScreen/the nav bar fully mounted
-            // underneath whatever's pushed on top of AppShell, not
-            // disposed — so without this, Tab (and dpad's own
-            // traversal) can still walk into a hidden AnimeCard/
-            // EpisodeTile/nav-bar control, and Select can still fire
-            // its onSelect/onToggle — exactly what opens a second
-            // AnimeDetailsScreen or a TorrentSearchModal on top of an
-            // already-playing TheaterScreen. Mirrors
-            // _buildControlsOverlay's own ExcludeFocus in
-            // theater_screen.dart, applied here at the route boundary
-            // instead of a controls-visibility boundary.
+            // `MaterialPageRoute`'s default `maintainState` keeps this mounted
+            // underneath a pushed route, so without `ExcludeFocus`, Tab/D-Pad
+            // traversal and Select could still reach a hidden
+            // `AnimeCard`/`EpisodeTile` or open a second modal on top of an
+            // already-playing `TheaterScreen` (DESIGN.md § 4, which
+            // `_buildControlsOverlay`'s own `ExcludeFocus` in
+            // `theater_screen.dart` mirrors at a controls-visibility boundary
+            // instead).
             return ExcludeFocus(
               excluding: !isCurrentRoute,
               child: Scaffold(
@@ -321,25 +317,15 @@ class _AppShellState extends State<AppShell> {
                       }
                       return false;
                     },
-                    // Bare DpadRegion — default leave/leave edge behavior on
-                    // both axes is what's wanted here: Up from the top of
-                    // whichever screen is showing escapes this region
-                    // entirely and lands on the best candidate outside it
-                    // (AniStreamNavBar's own region, wrapped in navbar.dart),
-                    // while Down/Left/Right with nothing beyond this region
-                    // to find just no-op harmlessly. No memoryKey: _nav.current
-                    // is a completely different widget subtree per section
-                    // (Home's carousels vs. Watchlist's grid vs. Schedule's
-                    // shelves), so a single "remembered position" at this
-                    // outer level wouldn't mean anything — that memory
-                    // belongs inside each screen's own regions instead (see
-                    // HomeScreen).
-                    //
-                    // Wrapped in its own FocusScope (_bodyFocusScope, set
-                    // above) so this region's focus state is independent of
-                    // AniStreamNavBar's — see that field's doc comment for
-                    // why that separation is what makes each page's own
-                    // autofocus target actually win focus on navigation.
+                    // Bare `DpadRegion`: default leave/leave is deliberate here
+                    // — Up escapes entirely to the navbar's own region and
+                    // Down/Left/Right with nothing beyond just no-op; no
+                    // `memoryKey`, since `_nav.current` is a different widget
+                    // subtree per section, so a remembered position at this
+                    // outer level wouldn't mean anything (DESIGN.md § 4).
+                    // Wrapped in its own `_bodyFocusScope` (set above) so this
+                    // region's focus state stays independent of
+                    // `AniStreamNavBar`'s — see that field's doc for why.
                     child: FocusScope(
                       node: _bodyFocusScope,
                       child: DpadRegion(child: _nav.current),

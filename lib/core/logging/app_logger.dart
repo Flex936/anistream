@@ -1,4 +1,3 @@
-// lib/core/logging/app_logger.dart
 import 'dart:async';
 import 'dart:io';
 
@@ -18,38 +17,9 @@ extension on LogLevel {
   };
 }
 
-/// Centralized, module-tagged logger for AniStream.
-///
-/// Usage anywhere in the app:
-/// ```dart
-/// AppLogger.i('TorrentScraper', 'Searching nyaa.si for "$query"');
-/// AppLogger.e('StreamingController', 'Failed to mount stream', error, stack);
-/// ```
-///
-/// Every call:
-///  1. Prints to the console via [debugPrint] (handy in dev).
-///  2. Buffers the line and flushes it to a rotating log file on disk, so a
-///     *release* build (phone, Android TV, headless server box, etc — where
-///     there's no attached console) still leaves a readable trail behind
-///     after a crash, force-close, or bug report.
-///
-/// Call [init] once, before `runApp()`, so boot-time errors are captured
-/// too. Call [dispose] from your root widget's `dispose()` as a belt-and-
-/// braces flush; automatic hooks (see below) cover the rest.
-///
-/// The log file stays current even if the app is killed outright because
-/// there is no 100%-guaranteed "on any exit" hook in Flutter/Dart — a hard
-/// `kill -9` or a yanked power cord can't be intercepted by anything. This
-/// class instead makes that scenario harmless by:
-///   • flushing to disk every 2 seconds on a timer (so you lose at most the
-///     last ~2s of logs, not the whole session),
-///   • flushing immediately on every ERROR-level log,
-///   • flushing + closing on FlutterError / PlatformDispatcher uncaught
-///     errors,
-///   • flushing + closing on app lifecycle transitions to paused/inactive/
-///     detached (covers Android/iOS backgrounding and task-kill),
-///   • flushing + closing on SIGINT/SIGTERM on desktop (Ctrl+C, window
-///     manager close, `kill <pid>`).
+/// Module-tagged logger: every call prints via [debugPrint] and buffers to a
+/// rotating log file, flushed every 2 seconds, immediately on an error, and on
+/// an uncaught-error, lifecycle, or process-signal hook (`init`/`dispose`).
 abstract final class AppLogger {
   static IOSink? _sink;
   static File? _logFile;
@@ -60,11 +30,9 @@ abstract final class AppLogger {
   static bool _disposed = false;
   static LogLevel _minLevel = kReleaseMode ? LogLevel.info : LogLevel.debug;
 
-  // Process-lifetime signal subscriptions. Never explicitly canceled —
-  // there's no natural point to do so, since each one's only job is to run
-  // until the process exits — but cancel_subscriptions requires the
-  // subscription be captured somewhere rather than left as a bare
-  // expression statement, so they're stashed here instead of discarded.
+  // Signal subscriptions run for the process lifetime and are never explicitly
+  // canceled; captured here only so `cancel_subscriptions` sees them held
+  // somewhere.
   static final List<StreamSubscription<ProcessSignal>> _signalSubs = [];
 
   /// Keep this many previous session log files around; older ones are
@@ -157,7 +125,7 @@ abstract final class AppLogger {
     PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
       e('PlatformDispatcher', 'Uncaught error', error, stack);
       previousPlatformOnError?.call(error, stack);
-      return false; // still let the platform's own reporting run too
+      return false; // don't mark handled — Flutter's own reporting still runs
     };
 
     // Desktop process signals — Ctrl+C, window-manager kill, `kill <pid>`.
@@ -179,15 +147,8 @@ abstract final class AppLogger {
     _signalSubs.add(sub);
   }
 
-  /// Wire this into your root widget:
-  /// ```dart
-  /// @override
-  /// void didChangeAppLifecycleState(AppLifecycleState state) {
-  ///   AppLogger.onAppLifecycleStateChanged(state);
-  /// }
-  /// ```
-  /// Covers Android/iOS backgrounding and task-kill, where the process may
-  /// be torn down without ever reaching a Dart-level "shutdown" callback.
+  /// Wire into a root widget's `didChangeAppLifecycleState` (`app.dart` does) —
+  /// covers Android/iOS backgrounding and task-kill.
   static void onAppLifecycleStateChanged(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
@@ -228,8 +189,8 @@ abstract final class AppLogger {
       _pending.add(stackTrace.toString());
     }
 
-    // Errors are rare and important — push to disk immediately instead of
-    // waiting for the next periodic flush.
+    // Errors are rare and important enough to flush immediately rather than
+    // wait for the periodic timer.
     if (level == LogLevel.error) {
       unawaited(_flushToDisk());
     }
@@ -250,9 +211,9 @@ abstract final class AppLogger {
     }
   }
 
-  /// Flushes any buffered lines and closes the file. Safe to call more than
-  /// once. Automatic hooks (signals/lifecycle/uncaught errors) already call
-  /// this, but call it explicitly from your root widget's `dispose()` too.
+  /// Flushes any buffered lines and closes the file; safe to call more than
+  /// once. Automatic hooks (signals, lifecycle, uncaught errors) already call
+  /// this, but call it explicitly from a root widget's `dispose()` too.
   static Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;

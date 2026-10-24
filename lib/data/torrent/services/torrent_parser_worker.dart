@@ -1,4 +1,3 @@
-// lib/data/torrent/services/torrent_parser_worker.dart
 import 'dart:async';
 import 'dart:isolate';
 
@@ -27,11 +26,10 @@ typedef _FeedParseRequest = ({
   bool batchMode,
 });
 
-/// Wire-safe stand-in for [Torrent]. A persistent isolate's
-/// [SendPort.send] can only transfer records/lists/maps/primitives
-/// (recursively) — not arbitrary class instances. [Torrent]'s fields are
-/// already all primitives, so this is a lossless, purely mechanical
-/// encode/decode step, not a data model change.
+/// Wire-safe stand-in for [Torrent] — a persistent isolate's [SendPort.send]
+/// can only transfer records/lists/maps/primitives, not arbitrary class
+/// instances. [Torrent]'s fields are already all primitives, so this is a
+/// lossless, mechanical encode/decode, not a data-model change.
 typedef _TorrentWire = ({
   String id,
   String title,
@@ -115,10 +113,10 @@ List<Torrent> _parseAndScoreFeed(_FeedParseRequest req) {
   return validTorrents;
 }
 
-// Isolate entry point. Must be a top-level (or static) function per
-// Isolate.spawn's contract — it cannot close over any TorrentParserWorker
-// instance state. Processes requests one at a time from its own inbox;
-// see TorrentParserWorker's doc comment for why that's fine here.
+// Isolate entry point — must be top-level (or static) per `Isolate.spawn`'s
+// contract, so it can't close over any `TorrentParserWorker` instance state.
+// Processes requests one at a time from its own inbox; see
+// `TorrentParserWorker`'s doc for why that's fine here.
 void _workerIsolateMain(SendPort mainSendPort) {
   final commandPort = ReceivePort();
   // First message back to main: the port it should send requests to.
@@ -143,31 +141,10 @@ void _workerIsolateMain(SendPort mainSendPort) {
   });
 }
 
-/// Owns a single, long-lived isolate that parses+scores Nyaa RSS feeds for
-/// the lifetime of the app. Spawn/teardown cost is paid at most once per
-/// app run rather than once per search — the parsing/scoring work itself
-/// is cheap for a 50-300 item feed, but repeated isolate spawns add up
-/// fast, especially with several searches (batch/episode/fallback) firing
-/// concurrently, and especially on low-end Android TV hardware.
-///
-/// Spawned lazily on first use rather than eagerly in `main()` — the
-/// entire torrent-search feature (and therefore this worker) is only ever
-/// touched after someone opens an anime's episode list, so there's no
-/// reason to pay isolate spawn cost during app boot for sessions that
-/// never search at all.
-///
-/// Requests are correlated by an incrementing request id rather than
-/// assumed-FIFO pairing, since concurrent fan-out (batch-mode +
-/// episode-mode + truncated-title fallback) means multiple
-/// [parseAndScore] calls can genuinely be in flight at once. The worker
-/// isolate still processes its inbox one message at a time (a single
-/// isolate has no internal parallelism), so concurrent requests queue
-/// briefly behind each other there — but parsing+scoring one feed is
-/// low-single-digit milliseconds of work, so that queueing is negligible
-/// next to the network round-trip. A worker *pool* would remove even
-/// that queueing, at the cost of real added lifecycle complexity (N
-/// isolates, load balancing) for a CPU cost that's already small — not
-/// worth it unless on-device profiling says otherwise.
+/// Owns a single, long-lived isolate that parses and scores Nyaa RSS feeds for
+/// the app's lifetime, spawned lazily on first search rather than eagerly at
+/// boot — see API.md § 3 for why (isolate choice, lazy spawn, request-id
+/// correlation, and why a worker pool was rejected).
 class TorrentParserWorker {
   TorrentParserWorker._();
   static final TorrentParserWorker instance = TorrentParserWorker._();
@@ -217,17 +194,13 @@ class TorrentParserWorker {
       _spawnPermanentlyFailed = true;
       _teardown();
     } finally {
-      // Whether spawning succeeded, failed, or timed out, this unblocks
-      // anyone else who was awaiting this same completer via the
-      // `_spawning != null` branch above — a second concurrent caller
-      // (plausible under concurrent fan-out, e.g. batch-mode and
-      // episode-mode both hitting this on the very first search of a
-      // session) would otherwise hang: the `.timeout()` above only fails
-      // the locally awaited future, it doesn't resolve the shared
-      // `completer` itself. Callers only use this signal to mean "the
-      // attempt is over, go check `_workerSendPort`" — not "it
-      // succeeded" — so completing without an error is correct even on
-      // the failure path.
+      // Unblocks anyone awaiting this same completer via the `_spawning !=
+      // null` branch above, regardless of outcome — a second concurrent caller
+      // (plausible under concurrent fan-out) would otherwise hang, since
+      // `.timeout()` above only fails the locally awaited future, not the
+      // shared `completer`. Callers read this as only "the attempt is over,
+      // check `_workerSendPort`," never "it succeeded," so completing without
+      // an error is correct even on the failure path.
       if (!completer.isCompleted) completer.complete();
       _spawning = null;
     }
@@ -249,12 +222,11 @@ class TorrentParserWorker {
       return;
     }
 
-    // 3. Uncaught error surfaced via onError: [errorString, stackTraceString].
-    // `List` (no type argument) is a raw type under strict-raw-types;
-    // `List<dynamic>` is the honest spelling of "a list of whatever
-    // Isolate.onError happened to send." Its `.first` is `dynamic`, so
-    // it's cast to `Object?` before `.toString()` is called — strict-casts
-    // disallows the implicit dynamic→Object downcast.
+    // 3. Uncaught error surfaced via onError: `[errorString,
+    // stackTraceString]`. `List` (no type argument) is a raw type under
+    // `strict-raw-types`, so it's spelled `List<dynamic>`; its `.first` is cast
+    // to `Object?` before `.toString()`, since `strict-casts` disallows the
+    // implicit dynamic→Object downcast.
     if (message is List<dynamic>) {
       final reason = message.isNotEmpty
           ? (message.first as Object?)?.toString() ?? 'Unknown error'

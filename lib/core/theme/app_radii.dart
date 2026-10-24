@@ -2,27 +2,16 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-/// Design-system radius tiers. `small`/`large` match DESIGN.md's
-/// documented scale exactly ("12px for list items, 24px for
-/// modals/bottom sheets"). `tag` is a third tier DESIGN.md doesn't
-/// explicitly call out, for small decorative badges/pills (release-group
-/// tags, status badges, "UP NEXT" labels) — same spirit as DESIGN.md's own
-/// "extend the palette logically if new shades are required" clause,
-/// applied to radii instead of color.
-///
-/// Accessed via `context.appRadii` (see build_context_extensions.dart).
+/// Border-radius tiers (tag / small / large); see DESIGN.md § 1.3.
 @immutable
 class AppRadii extends ThemeExtension<AppRadii> {
-  /// Small decorative badges/pills — release-group tags, status badges,
-  /// "UP NEXT" labels, seeder pills.
+  /// Small decorative badges and pills.
   final double tag;
 
-  /// List items, cards, carousel tiles, grid cards. Matches DESIGN.md's
-  /// documented "12px for list items" exactly.
+  /// List items, cards, carousel tiles, and grid cards.
   final double small;
 
-  /// Modals, bottom sheets, side panels. Matches DESIGN.md's documented
-  /// "24px for modals/bottom sheets" exactly.
+  /// Modals, bottom sheets, and side panels.
   final double large;
 
   const AppRadii({required this.tag, required this.small, required this.large});

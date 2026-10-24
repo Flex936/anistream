@@ -70,8 +70,6 @@ class HeroCard extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(radii.small),
-          // Clip.hardEdge under Performant mode — see FrostedContainer's
-          // doc comment for the rationale.
           clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
           child: Stack(
             fit: StackFit.expand,
@@ -218,13 +216,8 @@ class ListCard extends StatelessWidget {
               // Matches search_input.dart's own 32x48 result-row cover
               // art radius.
               borderRadius: BorderRadius.circular(radii.tag),
-              // Clip.hardEdge under Performant mode — see
-              // FrostedContainer's doc comment for the rationale.
               clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
               child: AspectRatio(
-                // Matches AniList's coverImage art (2:3) — the same
-                // canonical ratio AnimeCard/WatchlistCard/CalendarCard
-                // share via AppCardSizes.
                 aspectRatio: cardSizes.posterAspectRatio,
                 child: AppNetworkImage(
                   url: media.coverImage?.large ?? media.coverImage?.extraLarge,
@@ -266,8 +259,6 @@ class ListCard extends StatelessWidget {
                                 AppPalette.statusDefault,
                           ),
                         ),
-                        // Left as plain literals (separator + score + EPS
-                        // suffix): 12/w400, distinct from metaLabel's w600.
                         const TextSpan(
                           text: '  •  ',
                           style: TextStyle(
@@ -300,10 +291,6 @@ class ListCard extends StatelessWidget {
                       child: ClipRect(
                         child: Wrap(
                           spacing: 8,
-                          // Left as a plain literal (11pt) — doesn't
-                          // belong to any typography token; both nearby
-                          // candidates (metaLabel/badgeLabel) are a
-                          // different size.
                           children: media.genres!
                               .take(3)
                               .map(
@@ -401,9 +388,6 @@ class WatchlistCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
-            // Matches AniList's coverImage art (2:3) — the same
-            // canonical ratio AnimeCard/CalendarCard/ListCard share via
-            // AppCardSizes.
             aspectRatio: cardSizes.posterAspectRatio,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -425,8 +409,6 @@ class WatchlistCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radii.small),
-                // Clip.hardEdge under Performant mode — see
-                // FrostedContainer's doc comment for the rationale.
                 clipBehavior: uiPerformanceMode
                     ? Clip.hardEdge
                     : Clip.antiAlias,
@@ -570,8 +552,6 @@ class _PlayOverlay extends StatelessWidget {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1.0 : 0.0,
-        // Zero-duration under Performant mode — snaps in/out instead of
-        // fading, avoiding the saveLayer an interpolated opacity forces.
         duration: perfDuration(
           uiPerformanceMode,
           const Duration(milliseconds: 200),
@@ -593,11 +573,8 @@ class _PlayOverlay extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: AppPalette.primary,
-                  // Fully-rounded stadium/pill button — 24 exceeds half
-                  // this container's height to guarantee a full pill
-                  // curve regardless of exact size, a different visual
-                  // role than any of the tag/small/large tiers, so left
-                  // as a plain literal.
+                  // 24 exceeds half this container's height, guaranteeing a
+                  // full pill curve regardless of exact size (DESIGN.md § 1.3).
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: uiPerformanceMode
                       ? null
@@ -610,8 +587,6 @@ class _PlayOverlay extends StatelessWidget {
                 ),
                 child: Text(
                   label,
-                  // Left as a plain literal (12/w700/0.2 spacing) —
-                  // doesn't match metaLabel or badgeLabel.
                   style: const TextStyle(
                     color: AppPalette.white,
                     fontSize: 12,

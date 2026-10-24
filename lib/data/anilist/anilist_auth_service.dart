@@ -14,11 +14,10 @@ class AnilistAuthService {
 
   final _prefs = SharedPreferencesAsync();
 
-  // Set only while a login() call is actually awaiting the browser/loopback
-  // round-trip, cleared in login()'s own `finally` block. This is what
-  // lets cancel() reach into and unblock a login() call already in
-  // progress from a completely different call stack — e.g. AppShell
-  // retapping the login button before a previous attempt has resolved.
+  // Set only while a `login()` call awaits the browser/loopback round-trip,
+  // cleared in its own `finally` block — this is what lets `cancel()` unblock a
+  // `login()` call already in progress from a different call stack (e.g. a
+  // retap of the login button).
   Completer<String?>? _pendingCompleter;
 
   Future<String?> getStoredToken() async {
@@ -40,14 +39,11 @@ class AnilistAuthService {
   }
 
   Future<String?> login() async {
-    // A stale attempt left running — the browser tab was closed, AniList
-    // denied the request, or the user just gave up — would otherwise hold
-    // _pendingCompleter for its own full 5-minute timeout, so a second
-    // login() call would have nothing to distinguish "actually in
-    // progress" from "abandoned ages ago." Cancelling first rather than
-    // refusing to proceed is what keeps retapping the login button always
-    // working immediately instead of going unresponsive until the old
-    // attempt times out on its own.
+    // A stale attempt (closed tab, denied request, abandoned flow) would
+    // otherwise hold `_pendingCompleter` for its own 5-minute timeout, with
+    // nothing to distinguish "in progress" from "abandoned." Cancelling first
+    // is what keeps retapping login always responsive instead of stuck behind
+    // the old timeout.
     cancel();
 
     HttpServer server;
@@ -105,10 +101,9 @@ class AnilistAuthService {
     } finally {
       await serverSub.cancel();
       await server.close(force: true);
-      // Only clears the field if it's still pointing at this exact call's
-      // completer — a cancel() that raced against a brand-new login() call
-      // (see the guard at the top of this method) must not clobber that
-      // new call's own _pendingCompleter.
+      // Only clears the field if it still points at this call's own completer —
+      // a `cancel()` racing a brand-new `login()` call must not clobber that
+      // new call's `_pendingCompleter`.
       if (identical(_pendingCompleter, tokenCompleter)) {
         _pendingCompleter = null;
       }

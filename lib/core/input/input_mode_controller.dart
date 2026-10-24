@@ -2,28 +2,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Tracks whether the app should currently present itself as a TV / D-Pad
-/// remote-control interface — visible focus rings, directional focus
-/// traversal inside the theater controls, remote-style key shortcuts —
-/// versus a normal mouse/touch/keyboard interface (desktop, phone, tablet).
-///
-/// [isTvPlatform] is a one-time platform check (Android TV / Google TV
-/// "leanback" mode, via a MethodChannel to native Android — see the
-/// accompanying MainActivity.kt snippet below). Sticky for the process
-/// lifetime: a TV's remote is its only input, so there's nothing to
-/// "detect switching away from."
-///
-/// Desktop, Android phone, and iOS never report true here, regardless of
-/// connected keyboards, gamepads, or Bluetooth remotes — a directional key
-/// or gamepad button is ordinary keyboard/pointer input on those
-/// platforms, not a TV navigation signal, and is never treated as one.
-///
-/// This intentionally does NOT reuse [FocusManager.instance.highlightMode]
-/// — that value defaults to "traditional" (rings visible) on desktop
-/// platforms from the very first frame, before any real input has
-/// happened, which is exactly the "D-Pad bleeding onto PC" bug this class
-/// exists to fix. [isTvPlatform] is `true` if and only if the app is
-/// running on a confirmed TV.
+/// Tracks whether the app presents as a TV / D-Pad interface (focus rings,
+/// directional traversal, remote shortcuts) or an ordinary mouse/touch/keyboard
+/// one; a connected keyboard, gamepad, or Bluetooth remote on desktop, phone,
+/// or iOS never sets it. [isTvPlatform] is a one-time, sticky check for Android
+/// TV / Google TV leanback mode (ARCHITECTURE.md § 4) — deliberately not
+/// [FocusManager.instance.highlightMode] (DESIGN.md § 4).
 class InputModeController extends ChangeNotifier {
   InputModeController._();
   static final InputModeController instance = InputModeController._();
@@ -53,9 +37,8 @@ class InputModeController extends ChangeNotifier {
       final result = await _channel.invokeMethod<bool>('isTelevision');
       return result ?? false;
     } on MissingPluginException {
-      // Native side isn't wired up on this build — fail safe to "not a TV"
-      // rather than forcing D-Pad UI on every Android device just because
-      // the channel is missing.
+      // Native side not wired up on this build — fails safe to "not a TV"
+      // rather than forcing D-Pad UI everywhere.
       return false;
     } on PlatformException {
       return false;

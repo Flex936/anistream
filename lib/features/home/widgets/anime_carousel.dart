@@ -188,17 +188,15 @@ class _AnimeCarouselState extends State<AnimeCarousel> {
                 onExit: (_) => setState(() => _isHovered = false),
                 child: Stack(
                   children: [
-                    // DpadRegion: this shelf is its own visual section
-                    // per dpad's "one region per section" convention.
-                    // memoryKey (widget.memoryKey) makes the
-                    // last-focused card survive not just a rebuild of
-                    // this widget, but a fresh HomeScreen instance
-                    // entirely, which is what makes "leave and come
-                    // back" land where you left off. No edge-behavior
-                    // overrides: default `leave` on the vertical axis is
-                    // what lets Up from row 1 escape to the navbar, and
-                    // Up/Down between shelves cascade through each
-                    // other's regions the same way.
+                    // `DpadRegion`: this shelf is its own visual section per
+                    // dpad's "one region per section" convention (DESIGN.md §
+                    // 4). `memoryKey` (`widget.memoryKey`) makes the
+                    // last-focused card survive not just a rebuild of this
+                    // widget but a fresh `HomeScreen` instance entirely — what
+                    // makes "leave and come back" land where it was left; no
+                    // edge-behavior overrides, since default `leave` on the
+                    // vertical axis is what lets Up from row 1 escape to the
+                    // navbar, cascading through shelves the same way.
                     DpadRegion(
                       memoryKey: widget.memoryKey,
                       child: ScrollConfiguration(

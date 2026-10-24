@@ -13,20 +13,12 @@ import 'frosted_container.dart';
 class AnimeCard extends StatelessWidget {
   final Anime anime;
 
-  /// Called when the card is selected. Every current call site
-  /// (`AnimeCarousel`, `SearchResultsScreen`) supplies this, tracing back
-  /// to `AppShell._handleSelectAnime` — selecting the card is a safe
-  /// no-op if it's ever omitted, rather than navigating anywhere on its
-  /// own.
+  /// Called when the card is selected; omitting it makes selection a no-op.
   final ValueChanged<Anime>? onSelect;
   final bool autofocus;
 
-  /// Fixed height of the text block below the poster — the title line
-  /// (cardTitleCompact) plus its surrounding spacing, plus the
-  /// episode-count line. Grid callers that size their own
-  /// `SliverGridDelegateWithMaxCrossAxisExtent` (SearchResultsScreen) need
-  /// this on top of the width-driven poster height to size the cell
-  /// without clipping the text.
+  /// Fixed height of the title and episode-count lines below the poster; grid
+  /// callers add it to the width-driven poster height.
   static const double kTextBlockHeight = 48;
 
   const AnimeCard({
@@ -48,14 +40,7 @@ class AnimeCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AspectRatio(
-          // Matches AniList's own coverImage art (2:3) — see
-          // AppCardSizes's doc comment for why this is the shared
-          // canonical ratio rather than a per-screen crop.
           aspectRatio: cardSizes.posterAspectRatio,
-          // The poster's hover overlay (_HoverOverlay) depends on focus
-          // state, so there's no focus-independent subtree worth passing
-          // through `child` — builder rebuilds the whole visual tree,
-          // keyed off state.focused.
           child: DpadFocusable(
             autofocus: autofocus,
             onSelect: () => onSelect?.call(anime),
@@ -81,24 +66,14 @@ class AnimeCard extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radii.small),
-                // Clip.hardEdge under Performant mode instead of the
-                // ClipRRect default (Clip.antiAlias) — a sampled,
-                // anti-aliased clip on every single poster in every
-                // carousel/grid is exactly the kind of complex clipping
-                // path Performant mode exists to strip.
                 clipBehavior: uiPerformanceMode
                     ? Clip.hardEdge
                     : Clip.antiAlias,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // This is the single most-instantiated poster widget
-                    // in the app (every carousel and grid), so
-                    // cacheWidth matters: 450 covers up to ~2.6x device
-                    // pixel ratio at the widest width this card is
-                    // actually used at, rather than decoding AniList's
-                    // full-resolution `extraLarge` variant for a ~170dp
-                    // card.
+                    // 450px covers ~2–2.6x pixel density at this card's
+                    // 170–220dp widths.
                     AppNetworkImage(
                       url: anime.coverImage?.extraLarge,
                       cacheWidth: 450,
@@ -133,9 +108,8 @@ class AnimeCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        // Plain Text, not a second focusable — nothing below the poster
-        // is interactive, so nothing below it should be a D-Pad focus
-        // target or show a focus ring.
+        // Plain Text: nothing below the poster is interactive, so it is not a
+        // D-Pad target.
         Text(
           anime.title.display,
           maxLines: 1,
@@ -182,8 +156,6 @@ class _PosterGradient extends StatelessWidget {
         children: [
           const Icon(Icons.star_rounded, color: AppPalette.accent, size: 14),
           const SizedBox(width: 3),
-          // Left as a plain literal — distinct from metaLabel (w600);
-          // this rating badge is deliberately heavier.
           Text(
             (score! / 10).toStringAsFixed(1),
             style: const TextStyle(
@@ -245,10 +217,6 @@ class _HoverOverlay extends StatelessWidget {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1.0 : 0.0,
-        // Zero-duration under Performant mode: the overlay still shows
-        // on hover/focus (TV remotes "hover" via D-Pad focus), it just
-        // snaps in instead of fading, skipping the saveLayer an
-        // interpolated opacity <1.0 would otherwise force every frame.
         duration: perfDuration(
           uiPerformanceMode,
           const Duration(milliseconds: 150),

@@ -2,32 +2,17 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-/// Design-system translucent-material tiers for `FrostedContainer`'s
-/// `sigma` parameter. Three named tiers, following the "bigger surface ->
-/// higher blur" pattern DESIGN.md § 1.4 describes.
-///
-/// Accessed via `context.appMaterials` (see build_context_extensions.dart).
+/// Blur-sigma tiers for `FrostedContainer` (subtle / standard / prominent); see
+/// DESIGN.md § 1.4.
 @immutable
 class AppMaterials extends ThemeExtension<AppMaterials> {
-  /// Small controls — badges, icon buttons, floating pill buttons. Used by
-  /// `anime_card.dart`'s `_StatusBadge`, `theater_player.dart`'s
-  /// `FrostedIconButton`, `watchlist_cards.dart`'s `WatchlistCard` badge,
-  /// `anime_carousel.dart`'s `_NavArrow`, and `hero_banner.dart`'s
-  /// `_FloatingNavBar`.
+  /// Small controls: badges, icon buttons, floating pill buttons.
   final double subtle;
 
-  /// Content surfaces — dropdowns, popups, menus, full-screen loading
-  /// overlays. Used by `search_input.dart`'s dropdown,
-  /// `theater_settings.dart`'s `TheaterSettingsMenu`,
-  /// `anime_details_screen.dart`'s loading overlay, `navbar.dart`'s
-  /// scroll-driven animated blur, and `playback_stall_indicator.dart`'s
-  /// mid-playback buffering indicator.
+  /// Content surfaces: dropdowns, popups, menus, loading overlays.
   final double standard;
 
-  /// Large panels — side drawers, control bars. Used by
-  /// `search_filter_panel.dart`, `theater_controls.dart`'s control bar,
-  /// `navbar.dart`'s `_MobileMenu`, `settings_menu.dart`, and
-  /// `glass_toast_content.dart`'s toast.
+  /// Large panels: side drawers, control bars, toasts.
   final double prominent;
 
   const AppMaterials({
@@ -36,10 +21,9 @@ class AppMaterials extends ThemeExtension<AppMaterials> {
     required this.prominent,
   });
 
-  /// 3-tier scale: 10 / 16 / 40. Named `standardTiers` rather than
-  /// `standard` (unlike `AppRadii.standard`/`AppTypography.standard`)
-  /// because `standard` is already taken by the medium tier field above —
-  /// Dart doesn't allow a static and instance member to share a name.
+  /// Tiers 10 / 16 / 40. Named `standardTiers` because the medium-tier field
+  /// already takes `standard`, and Dart forbids a static and an instance member
+  /// sharing a name.
   static const AppMaterials standardTiers = AppMaterials(
     subtle: 10,
     standard: 16,

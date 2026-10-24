@@ -10,25 +10,12 @@ class TorrentMetadata {
 }
 
 abstract final class TorrentParser {
-  // The one regex this parser uses. Matches: [01-24], 01~24, ep01-12,
-  // e01-e24. It needs lookahead-style boundary checks on both sides
-  // (bracket / whitespace / punctuation / start-or-end-of-string), which
-  // is exactly the kind of thing a regex engine is good at and a
-  // hand-rolled scanner is not. It also runs once per filename (not once
-  // per token), so there's no hot loop to win back by removing it — see
-  // _tokenize's doc comment for the cases that do get a manual scan
-  // instead, and why.
-  //
-  // The {2,4} digit-count floor is deliberate and load-bearing, not just
-  // a sane-length guess — do not relax it to {1,4} to catch rare
-  // single-digit batch ranges (e.g. a 6-episode OVA batched as "1-6").
-  // Doing so would also make this regex match "Series 2 - 05" — a bare
-  // sequel-cour digit baked into the title, followed by a dash then the
-  // real episode — as if it were a batch range "2-5". Verified by running
-  // both shapes through this pattern side-by-side: {1,4} turns "Shingeki
-  // no Kyojin 2 - 05" into a false batch classification; {2,4} correctly
-  // leaves it alone and lets the token loop below (see
-  // `episodeIsConfident`) resolve it as episode 5.
+  // The one regex kept — lookahead-style boundary checks (bracket, whitespace,
+  // punctuation, start-or-end) are what a regex is good at and a hand-scanner
+  // isn't, and it runs once per filename, not per token, so there's no hot-loop
+  // cost to removing it. The {2,4} digit floor is load-bearing, not a length
+  // guess (API.md § 3): relaxing it misreads an embedded sequel/cour digit
+  // ("Series 2 - 05") as a batch range instead of episode 5.
   static final _batchRangeRegex = RegExp(
     r'(?:^|[\[\(\s_.,-])(?:e|ep)?(\d{2,4})\s*[-~]\s*(?:e|ep)?(\d{2,4})(?=[\]\)\s_.,-]|$)',
   );
@@ -36,13 +23,11 @@ abstract final class TorrentParser {
   static const _knownExtensions = {'mkv', 'mp4', 'avi', 'mp3', 'flac'};
   static const _seasonPrefixes = ['season', 'cour', 'part', 's'];
 
-  // Bare (unbracketed) numbers that are never treated as episode
-  // candidates because they're almost certainly a resolution tag instead
-  // — e.g. "Show.Name.540.05.WEB-DL.mkv" from a scene-style release that
-  // skips brackets entirely. This is deliberately broader than the set
-  // _applyEnclosureResolution surfaces into meta.resolution: it only
-  // needs to keep these values from being mistaken for an episode, not
-  // to make every one of them user-visible.
+  // Bare (unbracketed) numbers are never episode candidates because they're
+  // almost certainly a resolution tag instead (e.g.
+  // "Show.Name.540.05.WEB-DL.mkv"). Broader than what
+  // `_applyEnclosureResolution` surfaces into `meta.resolution`: this only
+  // needs to rule these out as episodes, not make every one user-visible.
   static const _knownResolutionValues = {
     360,
     480,
@@ -95,23 +80,15 @@ abstract final class TorrentParser {
     final stripped = _stripKnownExtension(lowerFilename);
     final tokens = _tokenize(stripped, meta);
 
-    // 5. Token iteration — state machine.
-    //
-    // `episodeIsConfident` tracks whether the current meta.episode came
-    // from an unambiguous marker (S01E06, a bare E06/EP12 tag, or the
-    // "episode"/"ep"/"e" keyword followed by a number) as opposed to a
-    // bare, structurally-unmarked digit. Only a confident match is
-    // allowed to stick once something later tries to overwrite it — a
-    // bare digit is always still just a guess and can be superseded by a
-    // better signal found later in the same filename.
-    //
-    // `foundDash` tracks whether a literal `-` token has been seen yet: a
-    // number appearing after a dash overwrites a tentative pre-dash
-    // guess, since the dash is the strongest positional signal fansub
-    // naming gives for "this is the real episode" — this is what
-    // correctly resolves titles with their own embedded sequel/cour digit
-    // before the real episode marker, such as "Shingeki no Kyojin 2 - 05"
-    // or "Symphogear 2 - 12", to episode 5/12 rather than 2.
+    // 5. Token iteration state machine: `episodeIsConfident` tracks whether the
+    // current `meta.episode` came from an unambiguous marker (S01E06, a bare
+    // E06/EP12, or an "episode"/"ep"/"e" keyword) versus a bare, unmarked
+    // digit, so only a confident match can be overwritten by a later guess.
+    // `foundDash` tracks whether a literal `-` token has been seen — a number
+    // after a dash overwrites a tentative pre-dash guess, since a dash is
+    // fansub naming's strongest signal for "this is the real episode,"
+    // resolving a title's own embedded sequel digit ("Shingeki no Kyojin 2 -
+    // 05") to episode 5 rather than 2.
     bool foundDash = false;
     bool episodeIsConfident = false;
 
@@ -251,21 +228,13 @@ abstract final class TorrentParser {
   }
 
   /// Single forward pass over the (already-lowercased, extension-stripped)
-  /// filename that:
-  ///  1. blanks `[...]` / `(...)` enclosures while still inspecting their
-  ///     contents for a resolution tag,
-  ///  2. strips `_.+~,` punctuation,
-  ///  3. pads every `-` into its own isolated token,
-  ///  4. splits on whitespace,
-  /// all in one traversal, building the token list directly rather than
-  /// via several intermediate string copies.
-  ///
-  /// Verified against ~30 representative filenames, including:
-  /// nested/nearby brackets, unmatched/unclosed brackets (a non-greedy
-  /// bracket match doesn't require matching bracket types, so `[foo)`
-  /// blanks just like `[foo]` would — this scanner intentionally
-  /// preserves that quirk rather than "fixing" it), dash-separated batch
-  /// ranges, S01E01-style tags, and non-ASCII titles.
+  /// filename that: 1) blanks `[...]`/`(...)` enclosures while still inspecting
+  /// their contents for a resolution tag, 2) strips `_.+~,` punctuation, 3)
+  /// pads every `-` into its own isolated token, 4) splits on whitespace — all
+  /// in one traversal, building the token list directly rather than via several
+  /// intermediate string copies. Verified against ~30 representative filenames
+  /// (API.md § 3), including the deliberately-preserved quirk that an unclosed
+  /// `[foo)` blanks the same as a matched pair.
   static List<String> _tokenize(String text, TorrentMetadata meta) {
     final tokens = <String>[];
     final buffer = StringBuffer();

@@ -51,6 +51,7 @@
 | Ordinary implementation detail | 1 line | `//` inline |
 | Non-obvious mechanism (regex/FFI/focus/isolate) | ≤2 sentences | `//`/`///` inline |
 | Design rationale, cross-file pattern, incident history | 0 — no inline prose | Canonical doc + `// See Doc.md § N.` pointer |
+| Idiom repeated across call sites (blur/clip/perf gating, `unawaited`, lint-driven casts) | 0 at every repeat — no comment, no pointer | Canonical doc; one `// See Doc.md § N.` at the canonical implementation only |
 
 - NEVER hallucinate APIs. Maintain the existing architecture — [ARCHITECTURE.md](ARCHITECTURE.md) § 2 has the full `lib/` folder tree (`core/`, `data/`, `shared/`, `features/<name>/`) and where new code belongs.
 - Reject unnecessary external dependencies. Prioritize native-only solutions and SOLID/DRY principles.
@@ -62,4 +63,4 @@ This file is Flutter/Dart only — the optional companion server (`anistream_ser
 Before considering any non-trivial change finished, check it against [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule — a change that adds a dependency, a folder, a cache, a native bridge, or a design token isn't done until the matching doc is updated (or flagged) alongside it.
 
 ---
-*Governed by [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule. Last reviewed against the codebase: 2026-09-07. Changed a performance rule, a caching guideline, or a code-quality directive? Update this file — and check whether [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist needs the same update.*
+*Governed by [CLAUDE.md](CLAUDE.md) § 2's Living Documentation Rule. Last reviewed against the codebase: 2026-09-20. Changed a performance rule, a caching guideline, or a code-quality directive? Update this file — and check whether [CONTRIBUTING.md](CONTRIBUTING.md) § 6's PR checklist needs the same update.*

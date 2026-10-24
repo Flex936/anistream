@@ -5,21 +5,8 @@ import '../../core/extensions/build_context_extensions.dart';
 import '../../core/theme/app_palette.dart';
 import 'frosted_container.dart';
 
-/// Shared centered-card modal shell for AniStream's transactional
-/// overlays — backdrop, bordered card, header (icon + title + optional
-/// close button), subtitle line, divider, and a scrollable [body] region.
-///
-/// This is the concrete implementation of DESIGN.md § 1.4's "full-screen
-/// glassmorphic backdrop behind a centered-card modal" pattern.
-/// `TorrentSearchModal` and `BatchEpisodePickerOverlay` both build one of
-/// these internally instead of each hand-rolling the same chrome. The two
-/// differ only in how they're mounted (a pushed route vs. an inline branch
-/// of TheaterScreen's own state machine), whether the backdrop dismisses
-/// on tap, whether the glass/blur treatment applies, and what [body]
-/// actually renders. [useGlassEffect] intentionally stays `false` for the
-/// batch picker rather than silently adopting the blur treatment here —
-/// migrating it onto `AppMaterials` is tracked as its own design-debt item
-/// (DESIGN.md § 5.3) and isn't folded into this structural consolidation.
+/// Centered-card modal shell: backdrop, header, subtitle, and a scrollable
+/// [body] (DESIGN.md § 1.4).
 class SelectionModal extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -107,16 +94,9 @@ class SelectionModal extends StatelessWidget {
       ),
     );
 
-    // Material(color: Colors.transparent): not a visual change — cardContent's
-    // own BoxDecoration already paints the real surface — but it gives every
-    // Text under this card, including whatever `body` renders, a genuine
-    // DefaultTextStyle. Without it, Text falls back to the un-Material'd
-    // WidgetsApp default, which paints with a double underline. Established
-    // here rather than left to the caller because SelectionModal is reached
-    // from two different ancestries: TorrentSearchModal pushes it via
-    // showGeneralDialog (no Material of its own), while
-    // BatchEpisodePickerOverlay mounts inline inside TheaterScreen's
-    // existing Scaffold.
+    // The transparent Material gives every Text in the card a real
+    // DefaultTextStyle; without an ancestor Material, Text paints with the
+    // WidgetsApp default double underline.
     final card = Center(
       child: Material(
         color: Colors.transparent,

@@ -28,11 +28,10 @@ class AnilistTrackerService {
 
   final VoidCallback? onSuccess;
 
-  /// Called with a short, user-facing message whenever a commit attempt
-  /// fails — either the request itself failed, or AniList accepted it
-  /// but returned a GraphQL-level `errors` array (an expired token
-  /// mid-session, a validation failure), which a bare HTTP-200 check
-  /// can't distinguish from a genuine success.
+  /// Called with a short, user-facing message on a failed commit attempt — the
+  /// request itself failed, or AniList returned HTTP 200 with a GraphQL
+  /// `errors` array (an expired token, a validation failure) a bare status
+  /// check can't catch.
   final void Function(String message)? onFailure;
 
   AnilistTrackerService({this.onSuccess, this.onFailure});
@@ -74,9 +73,9 @@ class AnilistTrackerService {
         _status = listData['status'] as String?;
         _progress = (listData['progress'] as num?)?.toInt() ?? 0;
       } else {
-        // A genuinely missing entry — this anime isn't on the viewer's
-        // list yet. Distinct from the catch block below, which means the
-        // lookup itself failed rather than confirming "nothing found".
+        // A genuinely missing entry means this anime isn't on the viewer's list
+        // yet — distinct from the catch block below, where the lookup itself
+        // failed rather than confirming "nothing found."
         _status = 'PLANNING';
         _progress = 0;
       }
@@ -87,13 +86,11 @@ class AnilistTrackerService {
         }
       }
     } catch (e, st) {
-      // A failed lookup leaves _isEligible at its default (false) rather
-      // than falling into the PLANNING/0 branch above — treating a
-      // network or GraphQL error as "never watched" could wrongly arm
-      // tracking for someone already partway through, or let a later
-      // commit overwrite real progress with a guessed status. Tracking
-      // simply doesn't arm for this session; the next episode's
-      // TheaterScreen instance tries the lookup again fresh.
+      // A failed lookup leaves `_isEligible` false rather than falling into the
+      // PLANNING/0 branch above — treating a network error as "never watched"
+      // could wrongly arm tracking for someone already partway through, or let
+      // a later commit overwrite real progress. Tracking simply doesn't arm
+      // this session; the next episode's `TheaterScreen` retries fresh.
       AppLogger.e('AnilistTrackerService', 'Fetch status error', e, st);
     }
   }
@@ -144,10 +141,9 @@ class AnilistTrackerService {
       });
       onSuccess?.call();
     } catch (e, st) {
-      // Reset so the next qualifying position tick re-arms a fresh
-      // 5-second timer and tries again — a transient failure here
-      // shouldn't permanently disable tracking for the rest of the
-      // episode.
+      // Reset so the next qualifying position tick re-arms a fresh timer and
+      // retries — a transient failure here shouldn't permanently disable
+      // tracking for the episode.
       _hasTracked = false;
       onFailure?.call('Could not save progress to AniList');
       AppLogger.e('AnilistTrackerService', 'Commit progress error', e, st);
@@ -158,21 +154,9 @@ class AnilistTrackerService {
     _delayTimer?.cancel();
   }
 
-  /// Immediately attempts a commit if one is currently armed
-  /// (`_delayTimer` active) but hasn't fired yet — call this before
-  /// [dispose] on any exit path, so backing out right after crossing the
-  /// 90% threshold doesn't silently drop that episode's sync the way
-  /// letting [dispose] cancel the timer outright would.
-  ///
-  /// Bounded to [_kFlushTimeout] rather than left to the request's normal
-  /// completion time: unlike a commit armed mid-playback (which can just
-  /// retry on the next qualifying position tick if it fails), there's no
-  /// "next tick" once the screen is closing, so this can't be allowed to
-  /// block an exit indefinitely on a slow or hung connection. The
-  /// underlying request isn't cancelled on timeout — Dart futures can't
-  /// be cancelled — it's left to complete in the background and still
-  /// calls [onSuccess]/[onFailure] if it resolves after this method has
-  /// already returned; this only stops waiting on it.
+  /// Fires an armed-but-uncommitted sync immediately on any exit path, bounded
+  /// to [_kFlushTimeout] — see API.md § 2 for why the bound exists and why the
+  /// request keeps running in the background rather than being cancelled.
   Future<void> flushPendingCommit() async {
     if (_delayTimer == null || !_delayTimer!.isActive) return;
     _delayTimer!.cancel();

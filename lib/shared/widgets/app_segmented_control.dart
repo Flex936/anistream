@@ -18,18 +18,8 @@ class AppSegmentedControlItem<T> {
   });
 }
 
-/// Shared segmented-control widget — a Material 3 [SegmentedButton] wrapped
-/// with a hand-rolled Left/Right D-Pad key handler, the same fix shape as
-/// `search_filter_panel.dart`'s slider focus nodes (see that file's own
-/// doc comment for the underlying "Material widget swallows arrow keys"
-/// problem this pattern works around).
-///
-/// This is the app's canonical mutually-exclusive option-group control —
-/// see DESIGN.md § 1.1 ("every interactive control is a Material widget
-/// underneath") for why this replaces CupertinoSlidingSegmentedControl and
-/// other hand-rolled tab-row widgets wherever one is needed
-/// (`search_filter_panel.dart`'s status filter, `watchlist_screen.dart`'s
-/// CURRENT/PLANNING/COMPLETED tabs).
+/// The app's mutually-exclusive option-group control: a [SegmentedButton] with
+/// a Left/Right D-Pad key handler.
 class AppSegmentedControl<T> extends StatefulWidget {
   final List<AppSegmentedControlItem<T>> items;
   final T groupValue;
@@ -64,11 +54,9 @@ class _AppSegmentedControlState<T> extends State<AppSegmentedControl<T>> {
     super.dispose();
   }
 
-  // Left/Right always move the selection, even at the first/last item — a
-  // fixed enumerated control has no "content" to keep moving through, so
-  // there's no case where handing off to spatial traversal on this axis
-  // makes sense. Up/Down are always ignored, letting the ambient focus
-  // traversal move focus elsewhere.
+  // Left/Right are always handled, even at the ends, since a fixed option set
+  // has no content to move through; Up/Down are ignored so traversal takes
+  // over.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -117,16 +105,8 @@ class _AppSegmentedControlState<T> extends State<AppSegmentedControl<T>> {
       child: Focus(
         focusNode: _focusNode,
         autofocus: widget.autofocus,
-        // SegmentedButton renders each segment as its own independently
-        // focusable Material button, with no public API to hand it a
-        // neutered per-segment FocusNode the way Slider's own `focusNode:`
-        // parameter allows (see search_filter_panel.dart's
-        // `_minScoreSliderInternalFocusNode` for that alternate fix).
-        // descendantsAreFocusable: false is the equivalent guardrail here
-        // — every segment stays tappable by mouse/touch, but this outer
-        // node is guaranteed to be the only one keyboard/D-Pad focus can
-        // ever land on, so the focus ring and _handleKey above both stay
-        // anchored to the same node.
+        // Segments stay tappable, but this outer node is the only
+        // keyboard/D-Pad focus target (DESIGN.md § 4).
         descendantsAreFocusable: false,
         child: SegmentedButton<T>(
           segments: [

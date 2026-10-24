@@ -31,25 +31,14 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
   late String _selectedStatus;
   late double _selectedYear;
 
-  // Bug fix: Material's stock Slider binds
-  // ALL FOUR arrow keys internally via its own Shortcuts/Actions
-  // (Up/Right = increase, Down/Left = decrease) and always returns
-  // `handled` — there's no boundary case where it lets an event bubble,
-  // unlike TextField's cursor-position-gated key handling. That made
-  // Up/Down permanently "stick" on whichever slider first received
-  // keyboard/D-Pad focus, since no ancestor Focus.onKeyEvent ever got a
-  // turn — the Slider itself was the focused node, not an ancestor of it.
-  // `Seekbar` (the theater scrubber) sidesteps this entirely by not using
-  // Slider at all — a fully custom Focus + GestureDetector with
-  // Left/Right-only key handling. Rebuilding two sliders from scratch for
-  // this simpler panel isn't warranted, so instead: each Slider gets its
-  // own FocusNode with canRequestFocus: false, removing it from
-  // keyboard/D-Pad focus entirely (mouse/touch drag is untouched — that's
-  // pointer-based, not focus-based). A thin outer Focus becomes the real
-  // reachable target, handling Left/Right locally and ignoring everything
-  // else so Up/Down bubble past this slider instead of being swallowed —
-  // same shape as AppSegmentedControl's own key handler
-  // (shared/widgets/app_segmented_control.dart).
+  // `Slider` binds all four arrow keys and always reports `handled`, so Up/Down
+  // would stick on whichever slider first got keyboard/D-Pad focus; each
+  // `Slider` therefore gets its own `FocusNode(canRequestFocus: false)`, and a
+  // thin outer `Focus` becomes the real target, handling Left/Right locally and
+  // ignoring the rest so Up/Down bubble past (DESIGN.md § 4). Rebuilding both
+  // sliders from scratch like `Seekbar` isn't warranted for this simpler panel,
+  // and mouse/touch drag is unaffected since it's pointer-based, not
+  // focus-based.
   late final FocusNode _minScoreFocusNode;
   late final FocusNode _minScoreSliderInternalFocusNode;
   late final FocusNode _yearFocusNode;
@@ -90,10 +79,10 @@ class _SearchFilterPanelState extends State<SearchFilterPanel> {
     super.dispose();
   }
 
-  // Left/Right nudge the score by 1, clamped to [0, 100] — the same
-  // step Slider's own divisions: 100 would produce via drag. Up/Down are
-  // ignored, so they bubble past this slider entirely instead of being
-  // swallowed the way stock Slider's internal Shortcuts used to.
+  // Left/Right nudge the score by 1, clamped to [0, 100] — the same step
+  // `divisions: 100` would produce via drag. Up/Down are ignored so they bubble
+  // past this slider rather than being swallowed by `Slider`'s internal
+  // Shortcuts.
   KeyEventResult _handleMinScoreKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;

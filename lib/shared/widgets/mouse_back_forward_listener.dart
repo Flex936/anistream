@@ -1,15 +1,9 @@
-// lib/shared/widgets/mouse_back_forward_listener.dart
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
-/// Wraps [child] and reports presses of the dedicated back/forward buttons
-/// found on most mice — the same buttons browsers use for history
-/// navigation. Maps to [kBackMouseButton] / [kForwardMouseButton] in
-/// Flutter's pointer event model.
-///
-/// Purely an observer: it never consumes the pointer event, so it's safe to
-/// wrap large areas (even a whole screen) without affecting taps or drags
-/// underneath it.
+/// Reports presses of the mouse back/forward buttons ([kBackMouseButton] and
+/// [kForwardMouseButton]) on [child]. It only observes, never consuming the
+/// pointer event, so wrapping a whole screen is safe.
 class MouseBackForwardListener extends StatelessWidget {
   final Widget child;
   final VoidCallback? onBack;
