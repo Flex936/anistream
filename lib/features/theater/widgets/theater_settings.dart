@@ -12,11 +12,8 @@ import '../services/track_name_parser.dart';
 
 enum _MenuPage { main, subtitles, audio }
 
-/// One selectable row inside [TheaterSettingsMenu]'s subtitle/audio list
-/// pages — deliberately player-agnostic, so the same menu shell renders
-/// media_kit's tracks (via [DesktopTheaterSettingsMenu]) and this app's
-/// own `RemoteSubtitleTrack`/audio-track models (via `ExoTheaterScreen`)
-/// with no knowledge of either engine.
+/// One selectable subtitle/audio row; engine-agnostic, so any player's
+/// tracks fit.
 class SettingsTrackOption {
   final String mainTitle;
   final String? subTitle;
@@ -31,13 +28,9 @@ class SettingsTrackOption {
   });
 }
 
-/// Popup settings shell shared by the desktop and mobile theater
-/// screens. Owns only page navigation (main -> subtitles/audio) as local
-/// state; the actual track data is supplied by the caller as plain
-/// props, so this widget has no dependency on any particular playback
-/// engine. [audioOptions] left null omits the Audio tile entirely —
-/// used while no audio tracks have been fetched yet (or the container
-/// genuinely only has one).
+/// Settings popup shared by both theater screens: owns only page navigation,
+/// with track data supplied as props. A null [audioOptions] omits the Audio
+/// tile.
 class TheaterSettingsMenu extends StatefulWidget {
   final String subtitlePreview;
   final List<SettingsTrackOption> subtitleOptions;
@@ -46,18 +39,12 @@ class TheaterSettingsMenu extends StatefulWidget {
   final VoidCallback onClose;
   final bool uiPerformanceMode;
 
-  /// Current libass state, purely to seed the toggle row's visual
-  /// state — `TheaterScreen` owns the real value (see
-  /// `AppSettings.libassEnabled`'s doc comment for why toggling it
-  /// restarts the player rather than mutating it live). Null hides the
-  /// Libass tile entirely — used on the ExoPlayer path
-  /// (`ExoTheaterScreen`), which doesn't use libass at all.
+  /// Seeds the Libass toggle row; null hides it (the ExoPlayer path has no
+  /// libass).
   final bool? libassEnabled;
 
-  /// Fired with the new value when the Libass row is tapped.
-  /// `TheaterScreen._handleLibassToggle` is what actually persists it
-  /// and restarts playback — this widget stays dumb. Paired with
-  /// [libassEnabled]: both null, or both provided.
+  /// Fired with the toggled value; `TheaterScreen._handleLibassToggle`
+  /// persists it and restarts playback.
   final ValueChanged<bool>? onToggleLibass;
 
   const TheaterSettingsMenu({
@@ -114,10 +101,6 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
       uiPerformanceMode: widget.uiPerformanceMode,
       sigma: context.appMaterials.standard,
       borderRadius: BorderRadius.circular(12),
-      // DpadRegion keeps focus contained within this popup, with a
-      // memoryKey so returning to the same page (main/subtitles/audio)
-      // remembers where focus was, plus dpad's own beam-based traversal
-      // between the rows on each page.
       child: DpadRegion(
         memoryKey: 'theater.settingsMenu.${_currentPage.name}',
         child: menuContent,
@@ -146,10 +129,7 @@ class _TheaterSettingsMenuState extends State<TheaterSettingsMenu> {
         if (widget.onToggleLibass != null)
           _ToggleTile(
             icon: Icons.text_fields_rounded,
-            // Kept terse (unlike AppSettings.libassEnabled's own longer
-            // doc-comment phrasing) to comfortably fit this popup's fixed
-            // 280px width alongside the icon and switch, matching the
-            // Subtitles/Audio tiles' own short titles above.
+            // Terse to fit the popup's fixed 280px width.
             title: 'Libass Subtitles',
             value: widget.libassEnabled ?? true,
             onChanged: (v) {
@@ -210,9 +190,7 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Built as a plain Container+Row rather than wrapping ListTile —
-    // ListTile manages its own focus/tap mechanics internally, which
-    // would otherwise need reconciling with DpadFocusable's.
+    // Not ListTile, whose focus/tap handling would clash with DpadFocusable.
     return DpadFocusable(
       autofocus: autofocus,
       onSelect: onTap,
@@ -250,10 +228,8 @@ class _Tile extends StatelessWidget {
   }
 }
 
-/// Same plain Container+Row shape as [_Tile]/[_Back] — a binary toggle
-/// row for [TheaterSettingsMenu]'s main page. Unlike [_Tile], selecting
-/// this doesn't navigate to a sub-page; it fires [onChanged] with the
-/// flipped value directly.
+/// Binary toggle row: selecting it fires [onChanged] with the flipped value
+/// instead of navigating.
 class _ToggleTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -404,19 +380,14 @@ class _TrackTile extends StatelessWidget {
   }
 }
 
-/// Wires [TheaterSettingsMenu] to media_kit's `Player` — subscribes to
-/// its track list and active-track streams and turns them into the
-/// plain [SettingsTrackOption] rows the shared menu shell renders. The
-/// one place in the settings popup that depends on media_kit directly;
-/// everything above is player-agnostic.
+/// Adapts media_kit's `Player` tracks into [SettingsTrackOption]s for
+/// [TheaterSettingsMenu].
 class DesktopTheaterSettingsMenu extends StatefulWidget {
   final Player player;
   final VoidCallback onClose;
   final bool uiPerformanceMode;
 
-  /// Forwarded to [TheaterSettingsMenu] unchanged — see that widget's
-  /// own doc comments. `TheaterScreen` (media_kit path) always supplies
-  /// both; nothing else constructs this wrapper.
+  /// Forwarded to [TheaterSettingsMenu]; `TheaterScreen` always supplies both.
   final bool? libassEnabled;
   final ValueChanged<bool>? onToggleLibass;
 

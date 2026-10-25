@@ -24,10 +24,7 @@ class FrostedIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The ring is driven directly by DpadFocusable's state.focused. No
-    // nested InkWell: DpadFocusable already provides tap + Select-key
-    // activation via onSelect, so an inner InkWell with its own onTap
-    // would double-handle the same press.
+    // DpadFocusable handles tap and Select, so no inner InkWell.
     final wrapped = FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
       sigma: context.appMaterials.subtle,
@@ -63,22 +60,14 @@ class FrostedIconButton extends StatelessWidget {
 }
 
 class TheaterTopBar extends StatelessWidget {
-  /// "Episode N" for a normal AniList-tracked session, or a custom
-  /// label (e.g. "Custom Stream") for a session with no episode context
-  /// — see `TheaterScreen.displayTitle`.
+  /// "Episode N" or a custom label; see `TheaterScreen.displayTitle`.
   final String title;
   final VoidCallback onBack;
   final bool uiPerformanceMode;
 
-  /// Gated by `AppSettings.showFreezeRecoveryButton` — the restart
-  /// button next to [onBack] is only rendered when this is true, so
-  /// unaffected users never see it. See that setting's doc comment and
-  /// ARCHITECTURE.md § 7 for what it recovers from.
+  /// Shows the restart button; ARCHITECTURE.md § 7 describes the freeze it
+  /// recovers from.
   final bool showFreezeRecoveryButton;
-
-  /// Always provided regardless of [showFreezeRecoveryButton], matching
-  /// [onBack]'s always-required shape — only whether the button renders
-  /// is conditional, not whether the callback exists.
   final VoidCallback onRestart;
 
   const TheaterTopBar({
@@ -124,34 +113,18 @@ class TheaterTopBar extends StatelessWidget {
   }
 }
 
-/// Theater's own in-flow status toast — the AniList "Progress saved"
-/// confirmation and the auto-skip "Skipping Opening in 2s..." countdown
-/// both render through this widget, fed by a shared
-/// `TopNotificationController` (services/top_notification_controller.dart)
-/// on both `TheaterScreen` (media_kit) and `ExoTheaterScreen`
-/// (video_player). It's a plain sibling of [TheaterTopBar] inside each
-/// screen's own `Stack`, positioned [kTopBarClearance] below the top bar
-/// rather than over it, and wrapped in [IgnorePointer] since a transient
-/// status message is never itself an interactive target — between the
-/// two, the back button in [TheaterTopBar] stays reachable regardless of
-/// whether a notification is currently showing.
-///
-/// [message] is null when nothing is currently showing; [icon]/
-/// [iconColor] are only meaningful while it's non-null and fall back to a
-/// neutral value otherwise, since they're invisible at that point anyway
-/// (the same fallback approach `theater_controls.dart`'s skip-chip takes
-/// for its own label text).
+/// In-flow status toast (AniList "Progress saved", auto-skip countdown) fed
+/// by `TopNotificationController`. A null [message] hides it; [icon] and
+/// [iconColor] fall back to neutral values then.
 class TheaterTopNotification extends StatelessWidget {
   final String? message;
   final IconData? icon;
   final Color? iconColor;
   final bool uiPerformanceMode;
 
-  /// Vertical clearance this notification reserves below a screen's own
-  /// top-bar offset (`24 + MediaQuery.paddingOf(context).top`) — enough
-  /// to sit below [TheaterTopBar] rather than over it, regardless of
-  /// whether the controls overlay is currently shown or hidden. Shared by
-  /// both consumers so neither hardcodes its own copy of this offset.
+  /// Clearance below a screen's top-bar offset
+  /// (`24 + MediaQuery.paddingOf(context).top`), so the toast clears
+  /// [TheaterTopBar].
   static const double kTopBarClearance = 64.0;
 
   const TheaterTopNotification({
@@ -195,13 +168,9 @@ class TheaterTopNotification extends StatelessWidget {
   }
 }
 
-/// Loading overlay shown while the torrent is buffering. No
-/// interactive/focusable elements live here, so D-Pad mode doesn't
-/// affect it.
+/// Loading overlay shown while the torrent buffers; nothing in it is focusable.
 class TheaterLoadingOverlay extends StatelessWidget {
-  /// "Episode N" for a normal AniList-tracked session, or a custom
-  /// label (e.g. "Custom Stream") for a session with no episode context
-  /// — see `TheaterScreen.displayTitle`.
+  /// "Episode N" or a custom label; see `TheaterScreen.displayTitle`.
   final String title;
   final BaseStreamingController controller;
 

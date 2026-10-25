@@ -11,32 +11,22 @@ import '../services/theater_data.dart';
 import 'seekbar.dart';
 import 'skip_chip.dart';
 
-/// Mobile-oriented control bar for `ExoTheaterScreen`. Visually mirrors
-/// `TheaterControls`' tone (frosted gradient, same icon/skip-chip/
-/// seekbar styling via the shared `SkipChip`/`Seekbar` widgets) but is a
-/// separate layout tuned for a single narrow column rather than
-/// `TheaterControls`' wide desktop row, and is driven by a
-/// [PlaybackHandle] instead of a concrete player type. No D-Pad focus
-/// wiring — this screen doesn't participate in TV/remote navigation.
+/// Touch-oriented control bar for `ExoTheaterScreen` and for `TheaterScreen`
+/// on non-desktop platforms, driven by a [PlaybackHandle]. Has no D-pad
+/// focus wiring.
 class MobileTheaterControls extends StatefulWidget {
   final PlaybackHandle playback;
   final VoidCallback onInteract;
   final VoidCallback onInteractionStart;
   final VoidCallback onInteractionEnd;
 
-  /// Null hides the settings button entirely — used while there's
-  /// nothing yet for it to open (e.g. neither subtitle nor audio tracks
-  /// have loaded).
+  /// Null hides the settings button (nothing to open yet).
   final VoidCallback? onToggleSettings;
   final bool isSettingsOpen;
   final List<Chapter> chapterMetadata;
   final bool uiPerformanceMode;
 
-  /// Reports whether the seekbar currently holds keyboard focus, up to
-  /// `exo_theater_screen.dart`'s global keyboard dispatcher — mirrors
-  /// `TheaterControls.onSeekbarFocusChange`'s exact purpose: letting the
-  /// screen defer to Seekbar's own Left/Right handling instead of
-  /// double-seeking on the same keypress.
+  /// Reports Seekbar focus so the screen's global key handler can defer to it.
   final ValueChanged<bool>? onSeekbarFocusChange;
 
   const MobileTheaterControls({
@@ -86,10 +76,7 @@ class _MobileTheaterControlsState extends State<MobileTheaterControls> {
     super.dispose();
   }
 
-  // Mirrors TheaterControls' _toggleMute exactly, including the shared
-  // 'theater_volume' preference key, so a muted/adjusted volume carries
-  // over between this screen and TheaterScreen regardless of which one
-  // the user opens next.
+  // Shares the 'theater_volume' key with TheaterControls.
   Future<void> _toggleMute() async {
     if (widget.playback.volume == 0) {
       double savedVolume = await _prefs.getDouble('theater_volume') ?? 100.0;
@@ -102,15 +89,8 @@ class _MobileTheaterControlsState extends State<MobileTheaterControls> {
     widget.onInteract();
   }
 
-  // Reads position/duration synchronously at tap time rather than
-  // subscribing to their streams — this row only ever needs the value at
-  // the moment of the tap, so adding a subscription here would tick (and
-  // rebuild) this State on every position update, defeating the rebuild
-  // isolation `_MobilePlaybackTimelineState` exists for (see that
-  // class's own doc comment). Clamping mirrors
-  // `ExoTheaterScreen._seekBy` exactly, so the touch buttons here and
-  // that screen's J/L and Left/Right keyboard shortcuts always move by
-  // the same amount and clamp the same way.
+  // Reads position/duration at tap time; subscribing would rebuild this State
+  // every tick. Clamping matches `ExoTheaterScreen._seekBy`.
   void _seekBy(Duration delta) {
     final target = widget.playback.position + delta;
     final duration = widget.playback.duration;
@@ -154,12 +134,8 @@ class _MobileTheaterControlsState extends State<MobileTheaterControls> {
             onSeekbarFocusChange: widget.onSeekbarFocusChange,
           ),
           const SizedBox(height: 8),
-          // Mute sits in the left Expanded region, settings in the right
-          // one — both regions carry equal flex regardless of whether
-          // settings is actually rendered, so the fixed
-          // skip-back/play/skip-forward group between them always sits
-          // on the row's true center rather than drifting toward
-          // whichever side has less content.
+          // Equal-flex side regions keep the skip/play group centered whether
+          // or not settings is shown.
           Row(
             children: [
               Expanded(
@@ -234,10 +210,7 @@ class _MobileTheaterControlsState extends State<MobileTheaterControls> {
   }
 }
 
-/// Owns position/duration/buffer and renders the skip-chip, [Seekbar],
-/// and time label — the parts of the control bar that redraw on every
-/// tick. Kept separate from [_MobileTheaterControlsState] so a position
-/// tick doesn't also rebuild the play/mute/skip/settings row.
+/// Per-tick subtree: skip chip, [Seekbar], and time label.
 class _MobilePlaybackTimeline extends StatefulWidget {
   final PlaybackHandle playback;
   final List<Chapter> chapterMetadata;
@@ -349,10 +322,7 @@ class _MobilePlaybackTimelineState extends State<_MobilePlaybackTimeline> {
   }
 }
 
-/// Plain Material `IconButton` rather than `TheaterControls`'
-/// `DpadFocusable`-wrapped equivalent — this screen has no D-Pad focus
-/// system to draw a ring for. `constraints` enforces DESIGN.md § 3's
-/// 48x48 minimum mobile touch target explicitly.
+/// Plain `IconButton` with a 48x48 minimum touch target; see DESIGN.md § 3.
 class _MobileIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;

@@ -3,10 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'native_subtitle_parser.dart';
 
 /// A single video file inside a batch (multi-episode) torrent.
-///
-/// Defined here rather than in [StreamingController] so that
-/// [RemoteStreamingController] and [BatchEpisodePickerOverlay] can reference
-/// it without creating a circular dependency.
 class BatchFileOption {
   final int index;
   final String name;
@@ -21,16 +17,9 @@ class BatchFileOption {
   });
 }
 
-/// Metadata for one embedded subtitle track, as reported by the AniStream
-/// Go server's `GET /api/stream/:id/subtitles` endpoint. Field names match
-/// that endpoint's JSON shape directly (see anistream_server's
-/// subtitle_extractor.go).
-///
-/// Only ever populated via [RemoteStreamingController] today — the
-/// on-device libtorrent path has no subtitle-extraction step of its own;
-/// that would need either a native Media3 bridge that probes and demuxes
-/// a local file directly, or a ported MKV-subtitle parser, neither of
-/// which exists yet.
+/// One embedded subtitle track from the Go server's
+/// `GET /api/stream/:id/subtitles`; field names match its JSON. Only the
+/// remote controller populates it (ARCHITECTURE.md § 10).
 class RemoteSubtitleTrack {
   final int streamIndex;
   final String codec;
@@ -52,11 +41,7 @@ class RemoteSubtitleTrack {
         title: json['title'] as String?,
       );
 
-  /// Best-effort human-readable label — deliberately simple (not the full
-  /// TrackNameParser treatment media_kit tracks get on the desktop/mpv
-  /// path) since this is a newer, still-evolving path. Worth unifying
-  /// with TrackNameParser's naming conventions later if this graduates
-  /// past validation.
+  /// Best-effort label; simpler than TrackNameParser's media_kit track naming.
   String get label {
     if (title != null && title!.trim().isNotEmpty) return title!;
     if (language != null && language!.trim().isNotEmpty) {
@@ -66,20 +51,15 @@ class RemoteSubtitleTrack {
   }
 }
 
-/// Common interface implemented by both:
-///  • [StreamingController]       — runs libtorrent_flutter on-device
-///  • [RemoteStreamingController] — delegates to the AniStream Go server
-///
-/// [TheaterScreen] and [ExoTheaterScreen] only talk to this contract, so
-/// neither needs to know which mode is active.
+/// Contract implemented by [StreamingController] (on-device libtorrent) and
+/// [RemoteStreamingController] (Go server); the theater screens depend only
+/// on it. See ARCHITECTURE.md § 5.
 abstract class BaseStreamingController extends ChangeNotifier {
   /// Human-readable status shown in the loading overlay.
   String get statusText;
 
-  /// The URL handed to whichever player is active once the stream is
-  /// ready — media_kit, or video_player on the ExoPlayer path.
-  /// Local mode: `http://127.0.0.1:<port>/...`
-  /// Server mode: `http://<server-ip>:7878/api/stream/<id>/video`
+  /// URL handed to the active player once ready: loopback in local mode, the
+  /// server's `/api/stream/<id>/video` in server mode.
   String? get streamUrl;
 
   /// True once enough data has been buffered to hand the URL to the player.
@@ -100,50 +80,28 @@ abstract class BaseStreamingController extends ChangeNotifier {
   /// Called when the user picks a file from the batch picker.
   void selectBatchFile(int fileIndex);
 
-  // Concrete (non-abstract) with no-op defaults rather than added to the
-  // abstract contract above — StreamingController (on-device) has no
-  // subtitle-extraction path yet, and forcing it to implement a feature
-  // it structurally can't support yet would be worse than just defaulting
-  // to "not available" until that changes.
+  // No-op defaults: only RemoteStreamingController can extract subtitles.
 
-  /// True once subtitle tracks can be queried — i.e. [fetchSubtitleTracks]
-  /// is meaningful to call. Defaults to false; only
-  /// [RemoteStreamingController] currently overrides it.
+  /// True once [fetchSubtitleTracks] is meaningful to call; false by default.
   bool get subtitlesAvailable => false;
 
-  /// Embedded subtitle tracks found in the active file, once fetched via
-  /// [fetchSubtitleTracks]. Empty until then, and always empty on
-  /// controllers that don't support subtitles at all.
+  /// Embedded tracks of the active file; empty until fetched or if unsupported.
   List<RemoteSubtitleTrack> get subtitleTracks => const [];
 
-  /// Fetches the subtitle track list from wherever this controller's data
-  /// source is. No-op on controllers that don't support subtitles.
+  /// Fetches the track list; no-op where subtitles are unsupported.
   Future<void> fetchSubtitleTracks() async {}
 
-  /// Fetches a subtitle track's current WebVTT content. While the
-  /// underlying file is still downloading, repeated calls can return
-  /// progressively more content each time — see [isSubtitleTrackComplete]
-  /// to know when it's no longer worth calling again. Returns null on
-  /// failure or if this controller doesn't support subtitles at all.
+  /// A track's current WebVTT, or null on failure or if unsupported. Content
+  /// grows across calls while the file downloads ([isSubtitleTrackComplete]).
   Future<String?> fetchSubtitleContent(int streamIndex) async => null;
 
-  /// True once [fetchSubtitleContent] for this track is known to have
-  /// returned its final content — i.e. further calls won't return
-  /// anything new, so it's safe to stop re-fetching. Defaults to true
-  /// (the safe "don't bother retrying" answer) on controllers that don't
-  /// support subtitles, or for a track that's never been fetched.
+  /// True once this track's last fetch returned final content, so re-fetching
+  /// is pointless. Defaults to true where subtitles are unsupported.
   bool isSubtitleTrackComplete(int streamIndex) => true;
 
-  /// Fetches a subtitle track's raw bytes in [format] — the
-  /// native-parser counterpart to [fetchSubtitleContent], which only
-  /// ever returns WebVTT text for video_player's Dart-side
-  /// ClosedCaptionFile mechanism. Consumed by [NativeSubtitleParser] to
-  /// get real timing, positioning, and per-run styling out of Media3's
-  /// own TtmlParser/SsaParser — see ExoTheaterScreen. Same growing-file
-  /// semantics as [fetchSubtitleContent] apply: while the underlying
-  /// file is still downloading, repeated calls can return progressively
-  /// more complete bytes — see [isSubtitleTrackComplete]. Returns null
-  /// on failure or if this controller doesn't support subtitles at all.
+  /// A track's raw bytes in [format] for [NativeSubtitleParser], with the same
+  /// growing-file semantics as [fetchSubtitleContent]. Null on failure or if
+  /// unsupported.
   Future<Uint8List?> fetchSubtitleBytes(
     int streamIndex,
     NativeSubtitleFormat format,

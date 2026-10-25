@@ -6,10 +6,7 @@ import '../../../data/anilist/models/anime.dart';
 import '../../../shared/widgets/app_network_image.dart';
 import 'external_link_buttons.dart';
 
-/// The background art layer of the collapsing hero header — banner image
-/// + darkening gradient only. The header's overall height is owned by
-/// HeroHeaderDelegate's `maxExtentValue`; HeroBanner just fills whatever
-/// height a Stack.expand parent hands it.
+/// Banner image under a darkening gradient, filling its Stack parent.
 class HeroBanner extends StatelessWidget {
   final Anime anime;
   final bool uiPerformanceMode;
@@ -50,20 +47,8 @@ class HeroBanner extends StatelessWidget {
   }
 }
 
-/// The full-state metadata group that sits below the (delegate-owned,
-/// title-morphing) title block: the English subtitle, the episode-count
-/// chip, and the AniList/MyAnimeList link row. Fades in place as a single
-/// unit — no motion of its own, unlike the title or the status indicator
-/// (HeroStatusIndicator), which both interpolate position across the
-/// scroll instead of just opacity.
-///
-/// The status pill itself is deliberately NOT rendered here — it's owned
-/// directly by HeroHeaderDelegate as an independently-positioned,
-/// continuously-morphing widget (full pill -> bare dot next to the
-/// title), the same way the title itself already works. [leadingGap]
-/// reserves the horizontal space that pill occupies in its full-state
-/// position, so this block's own row lines up beside it rather than
-/// overlapping it.
+/// Subtitle, episode chip, and link row below the title. [leadingGap]
+/// reserves the width of the status pill HeroHeaderDelegate places beside it.
 class HeroBannerMetaBlock extends StatelessWidget {
   final Anime anime;
   final double leadingGap;

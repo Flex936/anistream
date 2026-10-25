@@ -3,11 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_palette.dart';
 import '../services/theater_data.dart';
 
-/// The "Skip Opening/Ending/Preview" pill that floats above the seekbar
-/// while playback is inside a skippable chapter. Player-agnostic —
-/// [position] is supplied by whichever screen owns the actual player, so
-/// this renders identically for `TheaterScreen` (media_kit) and
-/// `MobileTheaterControls` (video_player).
+/// "Skip Opening/Ending/Preview" pill shown while [position] is inside a
+/// skippable chapter, for both `TheaterControls` and `MobileTheaterControls`.
 class SkipChip extends StatelessWidget {
   final List<Chapter> chapters;
   final Duration position;

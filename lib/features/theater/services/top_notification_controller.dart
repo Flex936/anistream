@@ -2,10 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-/// Message/icon/color for one in-flow status toast — see
-/// [TopNotificationController], and `TheaterTopNotification`
-/// (widgets/theater_player.dart), the widget both `TheaterScreen` and
-/// `ExoTheaterScreen` render this through.
+/// Content of one status toast; see [TopNotificationController].
 @immutable
 class TopNotificationData {
   final String message;
@@ -19,21 +16,8 @@ class TopNotificationData {
   });
 }
 
-/// Owns Theater's own in-flow status toast — the AniList "Progress saved"
-/// confirmation and the auto-skip "Skipping Opening in 2s..." countdown
-/// both go through this controller on both `TheaterScreen` (media_kit)
-/// and `ExoTheaterScreen` (video_player), instead of either screen
-/// hand-rolling its own timer/state for the same behavior. Neither
-/// `AutoSkipController` nor `AnilistTrackerService` needs to know this
-/// class exists — both are already player-agnostic and only ever report
-/// arming/success/failure via a plain callback, which each screen wires
-/// straight into [show].
-///
-/// [notification] is a `ValueNotifier`, the same shape
-/// `ControlsVisibilityController.visible` and
-/// `PlaybackStallController.visible` already use — a caller wraps only
-/// the small notification subtree in a `ValueListenableBuilder` instead
-/// of rebuilding the whole screen on every toast.
+/// Theater's in-flow status toast (AniList sync, auto-skip countdown), shared
+/// by both theater screens.
 class TopNotificationController {
   static const Duration _kDuration = Duration(seconds: 4);
 
@@ -42,10 +26,7 @@ class TopNotificationController {
 
   Timer? _timer;
 
-  /// Shows [message] with [icon]/[iconColor], auto-clearing after a fixed
-  /// duration. A second call while one is already showing replaces it
-  /// outright (and restarts the auto-clear countdown) rather than
-  /// queuing.
+  /// Shows an auto-clearing toast; a new call replaces it instead of queuing.
   void show({
     required String message,
     required IconData icon,
@@ -62,13 +43,8 @@ class TopNotificationController {
     });
   }
 
-  /// Cancels whatever auto-clear timer is currently pending without
-  /// touching [notification]'s current value or disposing it. Used
-  /// during a screen's teardown to stop a stray timer from firing after
-  /// teardown has started, while still allowing a late-arriving [show]
-  /// call (e.g. `AnilistTrackerService.flushPendingCommit`, awaited
-  /// during that same teardown) to display normally right up until
-  /// [dispose].
+  /// Cancels the pending auto-clear but leaves [notification] intact, so a
+  /// [show] during teardown (e.g. `flushPendingCommit`) still displays.
   void cancelPendingHide() {
     _timer?.cancel();
   }

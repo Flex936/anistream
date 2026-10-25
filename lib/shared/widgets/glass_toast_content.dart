@@ -27,8 +27,7 @@ class GlassToastContent extends StatelessWidget {
     return FrostedContainer(
       uiPerformanceMode: uiPerformanceMode,
       sigma: materials.prominent,
-      // 50 exceeds half the height, so the capsule stays fully rounded at any
-      // size.
+      // See DESIGN.md § 1.3.
       borderRadius: BorderRadius.circular(50),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),

@@ -59,16 +59,8 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     return widget.anime.episodes ?? 12;
   }
 
-  /// Returns the memoized search Future for [ep], or forces a brand-new
-  /// one when [forceRefresh] is true — overwriting whatever entry already
-  /// sits in [_torrentFutures] rather than reusing it. A completed Future
-  /// can only ever resolve once, so without this a retry after a
-  /// failed/empty search would just replay the same already-settled
-  /// error/empty result forever within this screen instance.
-  /// [TorrentScraperService]'s own TTL cache only ever stores a
-  /// successful, non-empty result, so a forced refetch here — only ever
-  /// reachable from a state where that never happened — always reaches
-  /// the network fresh.
+  /// A settled Future never re-resolves, so [forceRefresh] replaces the
+  /// memoized entry to make a retry reach the network.
   Future<List<Torrent>> _futureFor(int ep, {bool forceRefresh = false}) {
     if (forceRefresh) {
       return _torrentFutures[ep] = _scraper.fetchTorrents(widget.anime, ep);
@@ -79,12 +71,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     );
   }
 
-  /// Tap entry point for an episode row. With auto-torrent-selection off,
-  /// this always opens [TorrentSearchModal]. With it on, it silently
-  /// tries the top result first, falling back to the same modal on either
-  /// an empty result or a thrown exception. Governs torrent *selection*
-  /// only — see `AppSettings.autoTorrentEnabled`'s doc comment for how
-  /// this is distinct from episode-to-episode autoplay.
+  /// Episode-row tap: opens the torrent modal, or auto-streams the top result.
   void _toggleEpisode(int ep) {
     if (_isFetchingSource) return;
 
@@ -101,12 +88,7 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     unawaited(_autoSelectTopTorrentAndStream(ep));
   }
 
-  /// Fetches sources for [ep] and streams the top-scored result directly,
-  /// falling back to [_openTorrentModal] on an empty result or a thrown
-  /// exception. Reused by both [_toggleEpisode] (a fresh tap on an
-  /// episode row with auto-torrent-selection on) and the episode-autoplay
-  /// transition flow, which resolves next-episode sources exactly the
-  /// same way once it decides to auto-advance.
+  /// Streams [ep]'s top-scored torrent, or opens the modal on empty or error.
   Future<void> _autoSelectTopTorrentAndStream(int ep) async {
     setState(() {
       _isFetchingSource = true;
@@ -138,22 +120,9 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     }
   }
 
-  /// Opens [TorrentSearchModal] for [ep], reusing the same memoized
-  /// [Future] `_futureFor` already produces — including one that's
-  /// already settled by the time this is called (e.g.
-  /// [_autoSelectTopTorrentAndStream]'s fallback path), so the modal
-  /// never triggers a second network request for a search that already
-  /// ran. [TorrentSearchModal]'s own retry button re-enters `_futureFor`
-  /// with `forceRefresh: true` for a genuinely fresh search, independent
-  /// of whichever future this call originally opened it with.
-  ///
-  /// Awaits the modal's own pop result rather than handing it a callback
-  /// that pops and immediately pushes TheaterScreen: [TorrentSearchModal]
-  /// is an animated route, so popping it doesn't remove it from the
-  /// Overlay synchronously. Pushing TheaterScreen in the same call stack
-  /// as that pop races the two routes' Overlay entries against each
-  /// other. Awaiting [TorrentSearchModal.show] defers the push to a later
-  /// microtask, after the modal's own exit has actually resolved.
+  /// Awaits the modal's pop result instead of pushing from a callback: an
+  /// animated route leaves the Overlay asynchronously, so a same-stack push
+  /// of the player screen would race it.
   Future<void> _openTorrentModal(int ep) async {
     final bool uiPerformanceMode = SettingsScope.of(
       context,
@@ -173,53 +142,15 @@ class _AnimeDetailsScreenState extends State<AnimeDetailsScreen> {
     }
   }
 
-  /// Pushes TheaterScreen or ExoTheaterScreen and refreshes AniList progress
-  /// once the whole viewing session ends. Deliberately does NOT pop anything
-  /// itself — it's called both from [_openTorrentModal] (once the modal's
-  /// own pop has already resolved) AND from
-  /// [_autoSelectTopTorrentAndStream]'s direct success path (where no modal
-  /// was ever opened).
-  ///
-  /// [AppSettings.useExoPlayer] picks which player screen this pushes:
-  ///
-  ///  - **true**: a single push/pop against [ExoTheaterScreen]. No restart
-  ///    loop and no episode-transition contract on this path — ExoPlayer
-  ///    doesn't have media_kit's Linux/NVIDIA freeze bug the restart loop
-  ///    exists for, and episode-autoplay/Next Episode/background
-  ///    prefetching are scoped to [TheaterScreen] only for now.
-  ///  - **false** (default): [TheaterScreen], via a loop. It normally pops
-  ///    with `null` (a real exit), but pops with a [TheaterExitResult]
-  ///    instead in two cases — [TheaterRestartRequest] (the freeze-recovery
-  ///    restart button; loops back against the same still-buffered
-  ///    controller rather than starting the torrent over from scratch) and
-  ///    [TheaterNextEpisodeRequest] in
-  ///    [NextEpisodeTransitionMode.instantHandoff] (a prefetched next-episode
-  ///    controller is already buffered; loops the same way against it
-  ///    instead). A [TheaterNextEpisodeRequest] in `autoFetch`/`manualPick`
-  ///    instead exits the loop and is handled exactly like a fresh tap on
-  ///    that episode row, via [_autoSelectTopTorrentAndStream] or
-  ///    [_openTorrentModal] respectively.
-  ///
-  /// Either way, `_fetchProgress()` only runs once the push actually
-  /// completes (or, on the TheaterScreen path, once the loop exits via a
-  /// genuine `null` or a delegated next-episode request), so a restart or
-  /// an instant handoff never triggers a premature progress refresh
-  /// mid-episode the way popping AnimeDetailsScreen's own route early
-  /// would.
+  /// Pushes the player screen, then refreshes AniList progress; never pops
+  /// anything itself. See ARCHITECTURE.md § 9.
   Future<void> _streamTorrent(int ep, Torrent torrent) async {
     final bool useExoPlayer = SettingsScope.of(
       context,
       listen: false,
     ).settings.useExoPlayer;
 
-    // Set only when the TheaterScreen loop below exits needing this
-    // screen to resolve the next episode itself (autoFetch or
-    // manualPick) — a restart or an instantHandoff next-episode request
-    // both loop straight back into another push instead, without this
-    // ever being set. Declared here, above the useExoPlayer branch,
-    // rather than inside the `else` block below, since it's read after
-    // the branch closes — the ExoPlayer path simply never sets it, so
-    // the check below correctly no-ops for those sessions.
+    // Next-episode request (autoFetch/manualPick) this screen resolves itself.
     (int, NextEpisodeTransitionMode)? pendingDelegate;
 
     if (useExoPlayer) {

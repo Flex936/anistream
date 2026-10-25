@@ -104,6 +104,22 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 - [ ] Migrate remaining `MediaQuery.sizeOf(context).width < 600` call sites to `context.isMobile`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `navbar.dart`
 - [ ] `navbar.dart`: bump `_NavIconButton` from 44×44 to the documented 48×48 minimum
 
+---
+
+### 15. Reconcile performance-mode alpha swaps with `DESIGN.md` § 2
+
+**Priority:** Low · **Size:** Medium (spans 18 files) · **Ref:** `DESIGN.md` § 5.3
+
+**Context:** At least 22 sites pass `uiPerformanceMode ? a : b` as a `withValues(alpha: ...)` value on scrims, toasts, tooltips, and control-bar gradients. § 2 says not to gate a static value behind performance mode, and records neither this practice nor why it exists.
+
+**Acceptance criteria:**
+
+- [ ] Decision made: allow raising a surface's alpha when performance mode drops its blur, or remove the gating
+- [ ] If allowed, § 2 gains one bullet naming the exception and its rationale; if removed, each site uses a single alpha
+- [ ] The matching `DESIGN.md` § 5.3 entry removed
+
+**Affected files:** `selection_modal.dart`, `anime_card.dart`, `glass_toast_content.dart`, `anime_details_screen.dart`, `hero_header_compact.dart`, `watchlist_cards.dart`, `search_filter_panel.dart`, `navbar.dart`, `search_input.dart`, `settings_menu.dart`, `anime_carousel.dart`, `calendar_card.dart`, `theater_settings.dart`, `theater_controls.dart`, `theater_player.dart`, `mobile_theater_controls.dart`, `seekbar.dart`, `playback_stall_indicator.dart`
+
 ## Platform & Playback
 
 *Unlike the sections above, this one isn't drawn from the design-system audit — it doesn't reference a `DESIGN.md` § 5 entry, since the issue lives in native playback internals, not the design system. Tracked here per explicit request rather than in a separate document; refs point to `ARCHITECTURE.md` § 7 instead.*
@@ -111,6 +127,22 @@ Generated from the design-system audit tying the codebase to the four-layer mode
 *(#9 shipped — see ARCHITECTURE.md § 7. Filing the upstream
 media-kit/media-kit issue is still open — candidate for a future
 item.)*
+
+---
+
+### 11. Flush `ExoTheaterScreen`'s pending AniList sync on exit
+
+**Priority:** Medium · **Size:** Small · **Ref:** `ARCHITECTURE.md` § 7
+
+**Context:** `AnilistTrackerService` arms a 5 s commit timer once playback passes 90%. `TheaterScreen._exitTheater` calls `flushPendingCommit()` before `dispose()`; `ExoTheaterScreen` only calls `dispose()`, which cancels the armed timer, so leaving within 5 s of crossing 90% loses the AniList sync.
+
+**Acceptance criteria:**
+
+- [ ] `ExoTheaterScreen._exitTheater` awaits `_tracker.flushPendingCommit()` before `Navigator.pop`, matching `TheaterScreen._exitTheater`
+- [ ] Back button, Esc, and `PopScope` exits all confirmed to route through `_exitTheater`
+- [ ] The matching `ARCHITECTURE.md` § 7 entry removed
+
+**Affected files:** `exo_theater_screen.dart`
 
 ## Code Quality
 
@@ -134,3 +166,84 @@ Refs point to CODING_RULES.md instead of DESIGN.md § 5.*
 - [ ] Work file-by-file or feature-by-feature, not one sweeping PR, matching item #1's convention for large multi-file items
 
 **Affected files:** effectively all of `lib/` — highest-density files: `theater_screen.dart`, `torrent_parser.dart`, `remote_streaming_controller.dart`, `theater_controls.dart`, `torrent_scraper_service.dart`, `styled_subtitle_view.dart`
+
+---
+
+### 12. Remove the dead `screenHPad` getter
+
+**Priority:** Low · **Size:** Small · **Ref:** `ARCHITECTURE.md` § 7
+
+**Context:** `ResponsiveContext.screenHPad` (`build_context_extensions.dart`) has no references anywhere in the repo.
+
+**Acceptance criteria:**
+
+- [ ] The getter and its doc comment deleted
+- [ ] The matching `ARCHITECTURE.md` § 7 entry removed
+
+**Affected files:** `build_context_extensions.dart`
+
+---
+
+### 13. Cancel `PlaybackStallController`'s post-drag grace timer on dispose
+
+**Priority:** Low · **Size:** Small · **Ref:** `ARCHITECTURE.md` § 7
+
+**Context:** `endInteraction` starts an untracked `Timer` (`_kPostInteractionGrace`); `dispose()` cancels only `_showTimer`. If the grace timer fires after disposal while playback is stalled, `_reevaluate` arms a show timer whose callback writes to the disposed `visible` notifier — a debug-mode assertion, harmless in release.
+
+**Acceptance criteria:**
+
+- [ ] The grace timer held in a field, replaced (not stacked) on repeat `endInteraction` calls, and cancelled in `dispose()`
+- [ ] The matching `ARCHITECTURE.md` § 7 entry removed
+
+**Affected files:** `playback_stall_controller.dart`
+
+---
+
+### 14. Merge `SkipChip` into `PlaybackActionChip`
+
+**Priority:** Low · **Size:** Small · **Ref:** `ARCHITECTURE.md` § 7
+
+**Context:** `SkipChip` and `PlaybackActionChip` both hand-build the same `Material`+`InkWell` pill with the same fade/slide animation, and `SkipChip._activeChapter` repeats `_PlaybackTimelineState._activeSkipChapter`'s chapter lookup. Only the Next Episode chip uses `PlaybackActionChip`.
+
+**Acceptance criteria:**
+
+- [ ] `SkipChip` renders through `PlaybackActionChip` (`visible` driven by the active chapter), leaving one copy of the pill and its animation
+- [ ] One skippable-chapter lookup shared by `SkipChip` and `_PlaybackTimelineState`
+- [ ] Both chips keep their current look and animation
+- [ ] The matching `ARCHITECTURE.md` § 7 entry removed
+
+**Affected files:** `skip_chip.dart`, `playback_action_chip.dart`, `theater_controls.dart`
+
+---
+
+### 16. Fix `HeroHeaderDelegate`'s at-rest title layer
+
+**Priority:** Low-Medium · **Size:** Small · **Ref:** `ARCHITECTURE.md` § 7
+
+**Context:** `_kAtRestFadeRange` is `0.00`, so `crossfadeT` is `1.0` at every scroll offset (`t / 0.00` is `Infinity` for `t > 0` and `NaN` at `t == 0`, which `num.clamp` treats as the maximum). Outside performance mode `atRestOpacity` is therefore always `0`, and the `maxLines: 1` scrolling layer draws the title at rest. A two-line title likely truncates to one line while the meta block still leaves room for two. Not confirmed on-device.
+
+**Acceptance criteria:**
+
+- [ ] Reproduced on a long-titled anime outside performance mode (one line with an ellipsis at rest)
+- [ ] At `t == 0` the at-rest layer is fully opaque, and the scrolling layer takes over from the first scrolled pixel (or across a nonzero range)
+- [ ] Performance-mode behavior unchanged
+- [ ] The matching `ARCHITECTURE.md` § 7 entry removed
+
+**Affected files:** `hero_header_delegate.dart`
+
+---
+
+### 17. Fix `StreamingController`'s batch-detected logging
+
+**Priority:** Low · **Size:** Small · **Ref:** `ARCHITECTURE.md` § 7
+
+**Context:** `StreamingController.initialize` logs "Batch torrent detected — N files" before `_batchFiles` is populated, so it always reports `0`, single-file torrents included. `selectBatchFile` repeats the line at selection time. `RemoteStreamingController` logs it after the list arrives.
+
+**Acceptance criteria:**
+
+- [ ] The `initialize` log removed
+- [ ] The batch log emitted once, right after `_resolveFilesAndStartStream` populates `_batchFiles`
+- [ ] `selectBatchFile` logs the selected file index instead, or nothing
+- [ ] The matching `ARCHITECTURE.md` § 7 entry removed
+
+**Affected files:** `streaming_controller.dart`

@@ -2,19 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_palette.dart';
 
-/// Floating pill-shaped action chip used in Theater's control bar for a
-/// transient, dismissible playback action — the OP/ED/preview skip chip
-/// (`_PlaybackTimeline` in `theater_controls.dart`) and the Next Episode
-/// chip both build on this shared visual rather than each hand-rolling
-/// their own `Material`+`InkWell`+show/hide animation.
-///
-/// Purely presentational: [visible] drives the show/hide animation and
-/// hit-testing: it fades and slides in as it becomes true, and
-/// [IgnorePointer] keeps it untappable — [onTap] is never invoked —
-/// while false, matching the mutually-exclusive "only one chip in this
-/// slot at a time" convention its callers share. Callers own their own
-/// domain logic (what to seek to, what episode to advance to); this
-/// widget only knows how to render and animate the chip itself.
+/// Pill-shaped action chip (the Next Episode chip) that fades and slides in
+/// while [visible]; while hidden it ignores taps, so [onTap] never fires.
 class PlaybackActionChip extends StatelessWidget {
   final bool visible;
   final String label;
@@ -47,10 +36,6 @@ class PlaybackActionChip extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               child: InkWell(
                 borderRadius: BorderRadius.circular(20),
-                // Doubled up with the IgnorePointer above rather than
-                // relying on it alone — matches the defensive guard the
-                // original inline skip-chip already had around its own
-                // seek call.
                 onTap: visible ? onTap : null,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(

@@ -7,13 +7,8 @@ import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/frosted_container.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 
-/// Small, static building block for the back button — positioned
-/// directly by HeroHeaderDelegate and, unlike the title or the status
-/// indicator, doesn't change position across the collapse. Kept as the
-/// last child in HeroHeaderDelegate's Stack so it always has top
-/// paint/hit-test priority over the fading interactive siblings above it
-/// — see HeroHeaderDelegate's class doc for the matching `IgnorePointer`
-/// on those siblings.
+/// Back button, last in HeroHeaderDelegate's Stack so it keeps paint and
+/// hit-test priority over the fading siblings.
 class HeroHeaderBackButton extends StatelessWidget {
   final VoidCallback? onBack;
   final bool uiPerformanceMode;
@@ -61,8 +56,6 @@ class HeroHeaderBackButton extends StatelessWidget {
 
         return FrostedContainer(
           uiPerformanceMode: uiPerformanceMode,
-          // AppMaterials' subtle tier (10px) — the small-control blur
-          // used for icon buttons and pill-shaped floating controls.
           sigma: context.appMaterials.subtle,
           borderRadius: BorderRadius.circular(20),
           child: content,
@@ -72,13 +65,7 @@ class HeroHeaderBackButton extends StatelessWidget {
   }
 }
 
-/// Renders EITHER a bare dot or a dot+label pill depending on
-/// [labelOpacity]. HeroHeaderDelegate morphs this between a full-state
-/// pill position and a compact-state dot position via an Offset lerp,
-/// while [labelOpacity] fades the label text (and the pill's own
-/// background/border alpha) out on a faster timeline than the position
-/// lerp — see build() below — so only the bare dot survives into the
-/// fully collapsed state.
+/// A dot that grows into a dot+label pill as [labelOpacity] rises to 1.
 class HeroStatusIndicator extends StatelessWidget {
   final Color color;
   final String label;

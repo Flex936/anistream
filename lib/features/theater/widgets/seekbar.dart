@@ -14,11 +14,8 @@ class Seekbar extends StatefulWidget {
   final bool uiPerformanceMode;
   final bool isTvPlatform;
 
-  /// Reports Seekbar's own keyboard-focus state to an ancestor, in
-  /// addition to driving the widget's own internal focus-ring styling.
-  /// `theater_screen.dart`'s global keyboard dispatcher uses this to defer
-  /// to Seekbar's own Left/Right handling below (see [_handleKey]) rather
-  /// than double-seeking on the same keypress.
+  /// Reports keyboard focus so the screen's global key handler can defer to
+  /// [_handleKey].
   final ValueChanged<bool>? onFocusChange;
 
   const Seekbar({
@@ -49,10 +46,8 @@ class _SeekbarState extends State<Seekbar> {
   late final FocusNode _focusNode;
   static const Duration _keyboardSeekStep = Duration(seconds: 10);
 
-  // Hover/focus tooltip sizing — the tooltip box is measured to fit
-  // whichever of its two possible lines (chapter title, timestamp) is
-  // wider, clamped to this floor so a bare timestamp with no chapter
-  // still gets the same minimum width it always has.
+  // The tooltip fits the wider of its title and timestamp lines, floored at
+  // _kTooltipMinWidth.
   static const double _kTooltipMinWidth = 60.0;
   static const double _kTooltipHPad = 10.0;
   static const double _kTooltipVPad = 4.0;
@@ -65,9 +60,6 @@ class _SeekbarState extends State<Seekbar> {
     fontFeatures: [FontFeature.tabularFigures()],
   );
 
-  // Primary/bold rather than the timestamp's plain white, so the two
-  // lines read as distinct pieces of information (which chapter, versus
-  // what time) instead of blurring together.
   static const TextStyle _kTooltipChapterStyle = TextStyle(
     color: AppPalette.primary,
     fontSize: 11,
@@ -94,11 +86,8 @@ class _SeekbarState extends State<Seekbar> {
     return '$minutes:$seconds';
   }
 
-  /// The chapter (if any) containing [position], for the hover/focus
-  /// tooltip's title line. Any chapter with a non-empty title counts —
-  /// not just skippable ones (OP/ED/preview) — since this is purely
-  /// informational, unlike SkipChip's own chapter check, which only
-  /// cares about chapters it can act on.
+  /// The titled chapter (skippable or not) containing [position], for the
+  /// tooltip.
   Chapter? _chapterAt(Duration position) {
     for (final c in widget.chapters) {
       if (c.title.trim().isEmpty) continue;
@@ -107,11 +96,7 @@ class _SeekbarState extends State<Seekbar> {
     return null;
   }
 
-  /// Widest of [timeText] and [chapterTitle] (if present) at their
-  /// respective tooltip styles — the same "measure it, don't guess"
-  /// approach HeroHeaderDelegate uses for its status pill — so the
-  /// tooltip sizes itself to whatever it's actually showing instead of
-  /// assuming a bare timestamp.
+  /// Widest of [timeText] and [chapterTitle] at their tooltip styles.
   double _measureTooltipContentWidth(
     BuildContext context,
     String timeText,
@@ -159,20 +144,9 @@ class _SeekbarState extends State<Seekbar> {
     widget.onSeek(seekTo);
   }
 
-  // Left/Right seek the focused seekbar directly — a keyboard
-  // accessibility affordance independent of D-Pad mode (someone who tabs
-  // here on a plain desktop keyboard expects arrow keys to scrub, same as
-  // a native <input type="range">). Anything else (Up/Down/Tab) is left
-  // `ignored` so it bubbles up to whatever FocusTraversalPolicy is in
-  // charge and moves focus elsewhere instead of getting stuck here.
-  //
-  // Ctrl+Left/Right is deliberately excluded from that scrubbing
-  // behavior: TheaterScreen's own global exact-skip shortcut (Ctrl+→,
-  // see that file's _onKeyEvent/_exactSkipForward) also receives every
-  // key event regardless of which widget holds focus — this widget's
-  // Focus.onKeyEvent firing too would perform a second, ordinary ±10s
-  // seek on the same keypress. Ignoring Ctrl-held arrows here means
-  // exactly one seek happens, driven entirely by TheaterScreen.
+  // Left/Right scrub directly; other keys bubble up to focus traversal.
+  // Ctrl-held arrows are ignored so TheaterScreen's global Ctrl+→ skip
+  // isn't doubled by a second seek.
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
@@ -239,18 +213,14 @@ class _SeekbarState extends State<Seekbar> {
               milliseconds: (hoverPercentage * maxMs).toInt(),
             );
 
-            // D-Pad focus expands the track exactly like a mouse hover
-            // would — a remote-only user still gets the easier-to-hit,
-            // easier-to-read expanded state.
+            // D-pad focus expands the track like hover.
             final bool showDpadFocus = _isFocused && widget.isTvPlatform;
             final bool isExpanded = _isHovering || _isDragging || showDpadFocus;
             final double trackHeight = isExpanded ? 8.0 : 4.0;
             final double thumbSize = isExpanded ? 16.0 : 0.0;
 
-            // The tooltip shows whichever position is "active" right now
-            // — the live hover/drag position, or (D-Pad-focused with
-            // neither in progress) the current playhead — and whichever
-            // chapter (if any) that position falls inside.
+            // The tooltip shows the hover/drag position, or the playhead when
+            // only D-pad focused.
             final Duration displayedDuration =
                 showDpadFocus && !_isHovering && !_isDragging
                 ? widget.position
@@ -308,8 +278,7 @@ class _SeekbarState extends State<Seekbar> {
                   alignment: Alignment.centerLeft,
                   clipBehavior: Clip.none,
                   children: [
-                    // 0. D-Pad focus ring — behind everything else, only
-                    // ever visible in D-Pad mode.
+                    // 0. D-pad focus ring (D-pad mode only).
                     if (showDpadFocus)
                       Positioned.fill(
                         child: Align(
@@ -421,15 +390,7 @@ class _SeekbarState extends State<Seekbar> {
                       ),
                     ),
 
-                    // 7. Hover/focus tooltip — shows the active chapter's
-                    // title (if the displayed position falls inside one)
-                    // above the timestamp, falling back to the current
-                    // position (not the stale hover position, which
-                    // would default to 0:00) when D-Pad-focused without
-                    // the mouse ever having moved. Sized to whichever
-                    // line is wider (see _measureTooltipContentWidth)
-                    // rather than a fixed width that only ever fit a
-                    // bare timestamp.
+                    // 7. Hover/focus tooltip.
                     if (isExpanded)
                       Positioned(
                         top: displayedChapter != null ? -26 : -10,

@@ -10,9 +10,7 @@ import 'streaming_controller_base.dart';
 export 'streaming_controller_base.dart' show BatchFileOption;
 
 class StreamingController extends BaseStreamingController {
-  // Minimum sequential buffer percentage before the URL is handed to the
-  // player. 2% gives MPV a solid head-start without making the user wait
-  // long. Raise it if black-frames persist on very slow connections.
+  // Sequential buffer percentage required before the URL goes to the player.
   static const double _kPreBufferThreshold = 0.1;
 
   String _statusText = 'Initializing Native Engine...';
@@ -46,23 +44,12 @@ class StreamingController extends BaseStreamingController {
   int? _requestedEpisode;
   bool _filesResolved = false;
 
-  // Guards the window between a batch-file selection being requested and
-  // its stream actually reaching `_isReadyToPlay` — `selectBatchFile`'s
-  // existing `_isReadyToPlay` check only closes the window *after* that
-  // point, not during it, so a stray repeat tap (D-pad double-fire, a
-  // second pointer event) in between could otherwise call `_beginStream`
-  // twice and leave the first call's local stream/subscription orphaned.
+  // Set from a batch-file selection until the stream is ready, so a repeat tap
+  // (D-pad double-fire) can't call `_beginStream` twice and orphan a stream.
   bool _isMountingStream = false;
 
-  // Ceiling on each phase of reaching `_isReadyToPlay` — started in
-  // `initialize()` to cover metadata resolution (no peers hold this info
-  // hash), then restarted fresh in `_beginStream` to cover the buffering
-  // phase separately (a dried-up swarm after file selection), so time
-  // spent on the batch picker in between never eats into the buffering
-  // budget. Matches the companion Go server's own documented 3-minute
-  // metadata timeout (ARCHITECTURE.md § 6) so an on-device session fails
-  // out on a comparable timescale instead of spinning on the loading
-  // overlay forever with no path to `_hasError`.
+  // Ceiling per phase: metadata resolution, then buffering (restarted in
+  // `_beginStream`). See ARCHITECTURE.md § 5.
   static const Duration _kStreamTimeout = Duration(minutes: 3);
   Timer? _streamTimeoutTimer;
 
@@ -181,38 +168,19 @@ class StreamingController extends BaseStreamingController {
   }
 
   void _beginStream(LibtorrentFlutter engine, {int? fileIndex}) {
-    // Restarts the ceiling fresh for the buffering phase. The timer
-    // `initialize()` started only needs to cover metadata resolution —
-    // for a batch torrent, the user may spend any amount of time
-    // browsing BatchEpisodePickerOverlay before selecting a file, and
-    // that decision time shouldn't eat into the budget the swarm gets to
-    // actually deliver sequential bytes afterward.
+    // Restart the ceiling: batch-picker time must not eat the buffering budget.
     _streamTimeoutTimer?.cancel();
     _streamTimeoutTimer = Timer(_kStreamTimeout, _handleStreamTimeout);
 
-    // Tears down any previous subscription before mounting a new one —
-    // defensive even though `_isMountingStream`/`_isReadyToPlay` above
-    // already keep `selectBatchFile` from re-entering this method while
-    // one mount is in flight, since `_beginStream` also has the
-    // auto-resolved single-file call path in `_resolveFilesAndStartStream`.
+    // Cancel any previous subscription; the single-file path also lands here.
     unawaited(_streamSub?.cancel() ?? Future<void>.value());
 
     try {
-      // maxCacheBytes bounds the engine's own RAM piece cache — left
-      // unbounded normally, capped under uiPerformanceMode (the flag
-      // this app already uses to mean "treat this device as
-      // memory-constrained", most commonly an Android TV box; see
-      // DESIGN.md § 2). Read via SettingsCache rather than SettingsScope:
-      // StreamingController has no BuildContext of its own to walk up to
-      // SettingsScope, the same reason AnilistQueryService reads
-      // filterEcchi this way — see settings_service.dart.
+      // Caps the engine's RAM piece cache under uiPerformanceMode; read via
+      // SettingsCache because this class has no BuildContext.
       final uiPerformanceMode = SettingsCache.current.uiPerformanceMode;
 
-      // fileIndex and maxCacheBytes are both non-nullable int parameters
-      // on startStream() — passing null for either is a type error.
-      // Getting default behavior (auto-selected file, unbounded cache)
-      // requires omitting the named argument entirely, hence branching
-      // on inclusion here rather than passing a null/sentinel value.
+      // Both params are non-nullable, so defaults mean omitting the argument.
       final StreamInfo streamInfo;
       if (fileIndex != null) {
         streamInfo = uiPerformanceMode
@@ -273,11 +241,7 @@ class StreamingController extends BaseStreamingController {
     return meta.episode != -1 ? meta.episode : null;
   }
 
-  /// Fires after [_kStreamTimeout] if the stream still isn't playable —
-  /// no-ops if it already succeeded or failed for some other reason in
-  /// the meantime (the timer isn't reliably cancelable from every one of
-  /// those paths, so this checks state directly rather than assuming the
-  /// timer was already stopped).
+  /// Errors after [_kStreamTimeout] unless already succeeded or failed.
   void _handleStreamTimeout() {
     if (_isReadyToPlay || _hasError) return;
     _handleError(

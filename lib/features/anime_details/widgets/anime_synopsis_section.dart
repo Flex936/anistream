@@ -8,11 +8,7 @@ import '../../../shared/utils/html_utils.dart';
 import '../../../shared/utils/perf_animations.dart';
 import '../../../shared/widgets/hover_focus_builder.dart';
 
-/// The synopsis section that lives directly below the pinned hero header
-/// (see HeroHeaderDelegate). Renders only the synopsis text and its
-/// "Show more"/"Show less" toggle — the English subtitle and the
-/// AniList/MyAnimeList link row render inside the hero banner itself
-/// (see HeroBannerMetaBlock in hero_banner.dart), below the title.
+/// Synopsis text with a "Show more"/"Show less" toggle, below the hero header.
 class AnimeSynopsisSection extends StatefulWidget {
   final Anime anime;
 

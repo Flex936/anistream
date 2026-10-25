@@ -5,20 +5,9 @@ import '../../../core/theme/app_palette.dart';
 import '../../../shared/widgets/selection_modal.dart';
 import '../services/streaming_controller.dart';
 
-/// Overlay shown inline by TheaterScreen when a torrent contains multiple
-/// video files and the requested episode couldn't be resolved
-/// automatically — one branch of TheaterScreen's own loading/selection/
-/// ready state machine (see theater_screen.dart's AnimatedSwitcher), not a
-/// pushed route. [onBack] therefore exits Theater entirely rather than
-/// popping a route — there's no partial "cancelled" state to fall back
-/// into once streaming hasn't started yet.
-///
-/// Built on [SelectionModal] — see that widget's doc comment for the
-/// shared chrome this and [TorrentSearchModal] both use.
-/// [SelectionModal.useGlassEffect] is left at its default `false` here:
-/// this overlay has never had a blur treatment, and migrating it onto
-/// `AppMaterials` is tracked separately (DESIGN.md § 5.3) rather than
-/// folded into this structural consolidation.
+/// Inline `TheaterScreen` state branch (not a route) for picking a file when
+/// a multi-file torrent can't resolve the requested episode; [onBack] exits
+/// Theater. Built on [SelectionModal].
 class BatchEpisodePickerOverlay extends StatelessWidget {
   final List<BatchFileOption> files;
   final int? requestedEpisode;
@@ -54,8 +43,7 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
           ? "We couldn't confidently match Episode $requestedEpisode inside it — pick the right file below."
           : 'Multiple episodes were found inside this torrent — pick one to start streaming.',
       regionMemoryKey: 'theater.batchPicker',
-      // Always false: this overlay has no glass/blur to gate — see the
-      // class doc comment above.
+      // See DESIGN.md § 5.3.
       uiPerformanceMode: false,
       useGlassEffect: false,
       onClose: onBack,
@@ -69,10 +57,6 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
               requestedEpisode != null && f.guessedEpisode == requestedEpisode;
           final hasDistinctTitle = f.guessedEpisode != null;
 
-          // Built as a plain Container+Row instead of wrapping ListTile,
-          // same reasoning as theater_settings.dart's _Tile — avoids
-          // reconciling ListTile's own internal focus/tap mechanics with
-          // DpadFocusable's.
           return DpadFocusable(
             autofocus: i == 0,
             onSelect: () => onSelect(f.index),
@@ -108,9 +92,7 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // No maxLines/overflow — long release filenames
-                        // wrap to as many lines as they need instead of
-                        // being cut off.
+                        // Long filenames wrap rather than truncate.
                         Text(
                           hasDistinctTitle
                               ? 'Episode ${f.guessedEpisode}'
@@ -121,11 +103,7 @@ class BatchEpisodePickerOverlay extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        // Only shown when the title above is the derived
-                        // "Episode N" label. When there's no guessed
-                        // episode, the title already is f.name, so
-                        // repeating it here would just duplicate the
-                        // line above.
+                        // Skipped when the title above already is f.name.
                         if (hasDistinctTitle) ...[
                           const SizedBox(height: 2),
                           Text(

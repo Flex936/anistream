@@ -9,29 +9,8 @@ import '../../../data/torrent/services/torrent_parser.dart';
 import 'native_subtitle_parser.dart';
 import 'streaming_controller_base.dart';
 
-/// Connects to the AniStream Go server instead of running libtorrent
-/// locally.
-///
-/// Usage is identical to [StreamingController] — TheaterScreen and
-/// ExoTheaterScreen both receive this as a [BaseStreamingController] and
-/// never touch server-specific details.
-///
-/// Flow:
-///  1. [initialize] POSTs the magnet link to the server → gets a session ID.
-///  2. A 500 ms poll timer calls GET /api/stream/:id and maps the JSON state
-///     to the same bool flags that [StreamingController] exposes.
-///  3. When the server reports "ready", [streamUrl] is set to the server's
-///     /video endpoint. MPV opens that URL directly; all range requests
-///     (seeking) are handled server-side via http.ServeContent.
-///  4. On dispose, DELETE /api/stream/:id frees server resources.
-///
-/// A separate, slower poll starts once step 3 completes, checking
-/// subtitles_available independently — the main poll above stops the
-/// instant state first reports "ready" (stream_url never changes
-/// again), but subtitles_available is computed fresh per request rather
-/// than cached, so anything that would still flip it true needs its own
-/// poll instead of reusing a loop that's already stopped. See
-/// _startSubtitleAvailabilityPoll.
+/// Streaming backend that delegates the torrent engine to the AniStream Go
+/// server over LAN. See ARCHITECTURE.md § 5.
 class RemoteStreamingController extends BaseStreamingController {
   final String serverUrl; // e.g. "http://192.168.1.5:7878"
   final http.Client _http;
@@ -44,11 +23,7 @@ class RemoteStreamingController extends BaseStreamingController {
   bool _needsManualSelection = false;
   List<BatchFileOption> _batchFiles = [];
 
-  // Raw (undecoded-to-BatchFileOption) file list from the last poll that
-  // was actually reparsed. While the batch picker is open, the server
-  // returns the identical file list on every 500ms tick, so this cache
-  // lets the poll skip re-running TorrentParser.parse() over every
-  // filename when nothing has actually changed.
+  // Raw files from the last reparse; skips TorrentParser while unchanged.
   List<dynamic>? _lastRawFiles;
 
   String? _sessionId;
@@ -59,19 +34,11 @@ class RemoteStreamingController extends BaseStreamingController {
   List<RemoteSubtitleTrack> _subtitleTracks = [];
   bool _fetchingSubtitleTracks = false;
   Timer? _subtitlePollTimer;
-  // Per-track "was the last fetch already final" — see
-  // fetchSubtitleContent/isSubtitleTrackComplete. Absent key means "never
-  // fetched", read as false (not known complete, worth trying).
+  // Whether each track's last fetch returned final content (absent: never).
   final Map<int, bool> _subtitleTrackComplete = {};
 
-  // Consecutive failed polls (a non-200 status, a timeout, or any other
-  // exception) before giving up and surfacing an error instead of
-  // polling forever. At the existing 500ms poll interval this is ~5
-  // seconds of continuous failure — enough to ride out a brief Wi-Fi
-  // drop or a momentary server hiccup without erroring out, but short
-  // enough that a genuinely dead server (process crashed, host rebooted)
-  // surfaces promptly instead of leaving the last-known status frozen on
-  // screen indefinitely.
+  // Consecutive failed polls (~5s at the 500ms interval) before erroring:
+  // rides out a brief drop, but not a dead server.
   static const int _kMaxConsecutiveFailures = 10;
   int _consecutiveFailures = 0;
 
@@ -139,15 +106,7 @@ class RemoteStreamingController extends BaseStreamingController {
     }
   }
 
-  /// Builds the error message for a non-200 response to `POST
-  /// /api/stream`. The server's own error handlers (`http.Error` in
-  /// anistream-server's main.go) write a plain-text, human-readable
-  /// reason as the response body — e.g. "storage limit reached (15.2 GB
-  /// used of 15.0 GB limit)" — so that's surfaced directly whenever
-  /// present. Falls back to the generic status-code message only when
-  /// the body is empty, which previously read as a URL/connectivity
-  /// problem even on responses where the server was reachable and had
-  /// already explained exactly what was wrong.
+  /// The server's plain-text error body, or a generic HTTP-status message.
   String _describeStreamError(http.Response resp) {
     final body = resp.body.trim();
     if (body.isNotEmpty) return body;
@@ -162,8 +121,6 @@ class RemoteStreamingController extends BaseStreamingController {
     _needsManualSelection = false;
     notifyListeners();
 
-    // Fire-and-forget: best-effort request, teardown of this overlay
-    // doesn't depend on the server acknowledging it.
     unawaited(
       _fireAndForget(
         _http
@@ -212,9 +169,7 @@ class RemoteStreamingController extends BaseStreamingController {
         'RemoteStreamingController',
         'Failed to fetch subtitle tracks: $e',
       );
-      // Best-effort — leave _subtitleTracks empty; the caller (the
-      // theater screen) can call fetchSubtitleTracks() again later,
-      // since the guard above only skips while tracks are still empty.
+      // Best-effort: tracks stay empty, so a later call retries.
     } finally {
       _fetchingSubtitleTracks = false;
     }
@@ -234,10 +189,7 @@ class RemoteStreamingController extends BaseStreamingController {
 
       if (resp.statusCode != 200) return null;
 
-      // The server re-extracts as more of the file downloads and tells
-      // us via this header whether THIS response is final — tracked per
-      // track since the user could have multiple tracks in flight
-      // across track switches within one session.
+      // x-subtitle-complete marks this response as final; tracked per track.
       final completeHeader = resp.headers['x-subtitle-complete'];
       _subtitleTrackComplete[streamIndex] = completeHeader == 'true';
 
@@ -251,14 +203,8 @@ class RemoteStreamingController extends BaseStreamingController {
     }
   }
 
-  /// Fetches a subtitle track's raw bytes in [format] ('ass'/'ttml') via
-  /// the server's `?format=` query param (see anistream_server's
-  /// subtitle_extractor.go / main.go) — the native-parser counterpart to
-  /// [fetchSubtitleContent] above, which only ever asks for (and
-  /// returns) WebVTT text. Same growing-file polling contract: the
-  /// x-subtitle-complete header and [_subtitleTrackComplete] map are
-  /// shared with the WebVTT path above, since a given track is only ever
-  /// fetched in one format per session.
+  /// Raw track bytes in [format] via the server's `?format=` param; shares
+  /// [_subtitleTrackComplete] with [fetchSubtitleContent].
   @override
   Future<Uint8List?> fetchSubtitleBytes(
     int streamIndex,
@@ -294,14 +240,8 @@ class RemoteStreamingController extends BaseStreamingController {
   bool isSubtitleTrackComplete(int streamIndex) =>
       _subtitleTrackComplete[streamIndex] ?? false;
 
-  /// Starts a slow (5s), self-stopping poll purely for subtitles_available.
-  /// Deliberately separate from the main 500ms _pollTimer above, which
-  /// intentionally stops once state first reaches "ready" — stream_url
-  /// never changes after that, so there's nothing left for it to watch.
-  /// subtitles_available is different: it's computed fresh on every
-  /// request rather than cached or pushed, so this poll exists purely to
-  /// keep asking after the main loop has already stopped. Idempotent —
-  /// safe to call more than once, only ever arms one timer.
+  /// Slow (5s), self-stopping poll for `subtitles_available`, which the server
+  /// computes per request; the main poll stops at "ready" and can't watch it.
   void _startSubtitleAvailabilityPoll() {
     _subtitlePollTimer ??= Timer.periodic(
       const Duration(seconds: 5),
@@ -336,9 +276,7 @@ class RemoteStreamingController extends BaseStreamingController {
 
   // Internal.
 
-  /// Awaits [future] and silently discards any error. Used for best-effort
-  /// network calls (batch-file selection, session teardown) where the
-  /// caller has already moved on regardless of the outcome.
+  /// Awaits [future] and discards any error, for best-effort calls.
   Future<void> _fireAndForget(Future<http.Response> future) async {
     try {
       await future;
@@ -369,11 +307,8 @@ class RemoteStreamingController extends BaseStreamingController {
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       final serverState = data['state'] as String? ?? 'error';
 
-      // Snapshots every field this controller exposes before mutating,
-      // so notifyListeners() only fires when something actually changed
-      // — avoids rebuilding BatchEpisodePickerOverlay's ListView.builder
-      // on every 500ms tick while the picker sits open with nothing new
-      // to show.
+      // Snapshot first so notifyListeners() fires only on a real change, not
+      // on every 500ms tick the picker is open.
       final prevStatusText = _statusText;
       final prevReady = _isReadyToPlay;
       final prevNeedsSelection = _needsManualSelection;
@@ -396,14 +331,9 @@ class RemoteStreamingController extends BaseStreamingController {
 
           if (!_sameRawFileList(rawFiles, _lastRawFiles)) {
             _lastRawFiles = rawFiles;
-            // `rawFiles` is `List<dynamic>`, so each element is cast once
-            // up front to keep every field access below statically typed
-            // (avoid_dynamic_calls).
             _batchFiles = rawFiles.map((f) {
               final map = f as Map<String, dynamic>;
               final name = (map['name'] as String?) ?? '';
-              // Reuses the existing Dart parser to guess the episode
-              // number from the filename — no duplicated logic server-side.
               final meta = TorrentParser.parse(name);
               return BatchFileOption(
                 index: (map['index'] as num?)?.toInt() ?? 0,
@@ -417,9 +347,8 @@ class RemoteStreamingController extends BaseStreamingController {
               'Batch torrent detected — ${_batchFiles.length} files',
             );
           }
-        // else: server sent the exact same list — _batchFiles is left
-        // untouched (same reference), which also lets the change-check
-        // below correctly see "no change" via identical().
+        // An unchanged list keeps the same _batchFiles reference, so the
+        // identical() check below sees no change.
 
         case 'ready':
           final url = data['stream_url'] as String?;
@@ -429,10 +358,6 @@ class RemoteStreamingController extends BaseStreamingController {
             // Stop polling — the stream URL won't change again.
             _pollTimer?.cancel();
             _pollTimer = null;
-            // Handed off to its own slower, self-stopping poll rather
-            // than keeping this 500ms loop alive for a value that's
-            // computed fresh per request (not cached) and might not yet
-            // be true in this exact response.
             if (!_subtitlesAvailable) {
               _startSubtitleAvailabilityPoll();
             }
@@ -453,8 +378,7 @@ class RemoteStreamingController extends BaseStreamingController {
         notifyListeners();
       }
     } on TimeoutException {
-      // Network hiccup — counted, but not immediately fatal; see
-      // _registerPollFailure.
+      // Counted toward _kMaxConsecutiveFailures.
       _registerPollFailure();
     } catch (_) {
       // Any other transient error — same treatment as a timeout.
@@ -462,11 +386,7 @@ class RemoteStreamingController extends BaseStreamingController {
     }
   }
 
-  /// Tracks a transient poll failure and gives up once
-  /// [_kMaxConsecutiveFailures] is reached in a row — see that constant's
-  /// doc comment for the reasoning behind the threshold. Reset to zero on
-  /// every successful poll in [_poll] above, so an isolated blip never
-  /// accumulates toward a cap it wouldn't otherwise be anywhere near.
+  /// Errors out after [_kMaxConsecutiveFailures] consecutive poll failures.
   void _registerPollFailure() {
     _consecutiveFailures++;
     if (_consecutiveFailures >= _kMaxConsecutiveFailures) {
@@ -477,11 +397,7 @@ class RemoteStreamingController extends BaseStreamingController {
     }
   }
 
-  /// Cheap content-equality check between two raw (still-JSON, not yet
-  /// parsed into [BatchFileOption]) file lists from consecutive polls.
-  /// Compares only the fields actually consumed (`index`/`name`/`size`),
-  /// which is enough to tell an identical list from a genuinely changed
-  /// one without a full deep-equals.
+  /// Cheap equality on the consumed fields (index/name/size), not a deep one.
   bool _sameRawFileList(List<dynamic> a, List<dynamic>? b) {
     if (b == null || a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
@@ -513,8 +429,6 @@ class RemoteStreamingController extends BaseStreamingController {
     _pollTimer?.cancel();
     _subtitlePollTimer?.cancel();
     if (_sessionId != null) {
-      // Best-effort cleanup; errors don't need to bubble up during
-      // disposal — see _fireAndForget above.
       unawaited(
         _fireAndForget(
           _http

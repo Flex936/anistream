@@ -3,16 +3,8 @@ import 'dart:async';
 import 'package:media_kit/media_kit.dart';
 import 'package:video_player/video_player.dart';
 
-/// Minimal, player-engine-agnostic surface a control-bar widget needs:
-/// current playing/position/duration/buffer/volume, plus the methods
-/// that change them. `TheaterControls` (desktop) stays wired directly to
-/// media_kit's `Player`, unaffected by this — the interface exists so
-/// `MobileTheaterControls` doesn't depend on either player package
-/// directly. `PlayerPlaybackHandle` below is the media_kit-backed
-/// implementation this was originally built to allow for.
-///
-/// Streams mirror media_kit's own `Player.stream.*` shape for exactly
-/// that reason.
+/// Engine-agnostic playback surface for `MobileTheaterControls`; streams mirror
+/// media_kit's `Player.stream.*`.
 abstract class PlaybackHandle {
   bool get isPlaying;
   Stream<bool> get playingStream;
@@ -26,9 +18,7 @@ abstract class PlaybackHandle {
   Duration get buffer;
   Stream<Duration> get bufferStream;
 
-  /// 0-100, matching the scale `TheaterControls`' volume slider already
-  /// uses — callers never need to know the underlying engine's native
-  /// scale.
+  /// 0-100; implementations convert from the engine's native scale.
   double get volume;
   Stream<double> get volumeStream;
 
@@ -38,34 +28,20 @@ abstract class PlaybackHandle {
   Future<void> seek(Duration position);
   Future<void> setVolume(double volume);
 
-  /// Available audio tracks for this session, or an empty list on an
-  /// engine that doesn't expose audio-track switching. Concrete with a
-  /// safe default — like `BaseStreamingController`'s subtitle methods —
-  /// since only `VideoPlayerPlaybackHandle` implements it today. A plain
-  /// one-shot `Future`, not a stream: video_player's tracks API has no
-  /// change-notification of its own, so a caller fetches this once after
-  /// the player is ready and caches the result, the same way
-  /// `ExoTheaterScreen` already does for subtitles.
+  /// Audio tracks for this session; empty on engines without track switching.
+  /// A one-shot Future because video_player's tracks API has no change events.
   Future<List<VideoAudioTrack>> getAudioTracks() async => const [];
 
-  /// Selects an audio track by the id [getAudioTracks] reported for it.
-  /// No-op on an engine that doesn't support audio-track switching.
+  /// Selects a track by its [getAudioTracks] id; no-op if unsupported.
   Future<void> selectAudioTrack(String trackId) async {}
 
-  /// Releases this handle's own listeners/stream controllers. Never
-  /// disposes the underlying player/controller — the caller that
-  /// constructed it still owns that lifecycle.
+  /// Releases this handle's listeners and streams, not the underlying player.
   void dispose();
 }
 
-/// [PlaybackHandle] backed by `video_player`'s [VideoPlayerController].
-///
-/// `VideoPlayerController` is itself a `ValueNotifier<VideoPlayerValue>`
-/// with no per-field streams of its own, so this listens once and fans
-/// out into the separate broadcast streams [PlaybackHandle] exposes,
-/// each only emitting when that specific field actually changed —
-/// unlike a single combined listener, which would notify on every
-/// unrelated field change too.
+/// [PlaybackHandle] over `video_player`'s [VideoPlayerController], which has no
+/// per-field streams: one listener fans out into streams that emit only when
+/// their own field changes.
 class VideoPlayerPlaybackHandle implements PlaybackHandle {
   final VideoPlayerController _controller;
 
@@ -171,7 +147,8 @@ class VideoPlayerPlaybackHandle implements PlaybackHandle {
       _controller.setVolume((volume / 100).clamp(0.0, 1.0));
 
   @override
-  Future<List<VideoAudioTrack>> getAudioTracks() => _controller.getAudioTracks();
+  Future<List<VideoAudioTrack>> getAudioTracks() =>
+      _controller.getAudioTracks();
 
   @override
   Future<void> selectAudioTrack(String trackId) =>
@@ -188,28 +165,9 @@ class VideoPlayerPlaybackHandle implements PlaybackHandle {
   }
 }
 
-/// [PlaybackHandle] backed by media_kit's [Player] — used by
-/// [MobileTheaterControls] when `TheaterScreen` renders its
-/// touch-oriented control bar (Android/iOS, Android TV included) instead
-/// of the desktop-only `TheaterControls`, which stays wired to [Player]
-/// directly and never touches this class.
-///
-/// A genuinely thin pass-through, more so than [VideoPlayerPlaybackHandle]
-/// above: [Player] already exposes a broadcast stream per field
-/// (`stream.playing`, `.position`, `.duration`, `.buffer`, `.volume`), so
-/// every stream getter below just forwards the matching [Player] stream
-/// directly, with no owned [StreamController] needed to fan a single
-/// listener out into several — unlike [VideoPlayerController], which is
-/// a single [ValueNotifier] with no per-field streams of its own. Volume
-/// needs no rescaling either: both [Player] and [PlaybackHandle] use a
-/// 0-100 scale, unlike [VideoPlayerController]'s 0-1.
-///
-/// `extends` rather than `implements` — unlike [VideoPlayerPlaybackHandle]
-/// — specifically so [getAudioTracks]/[selectAudioTrack] inherit
-/// [PlaybackHandle]'s own no-op default instead of this class repeating
-/// it: `TheaterScreen`'s settings popup (`DesktopTheaterSettingsMenu`)
-/// already talks to [Player]'s own `Tracks`/`setAudioTrack` directly and
-/// has no reason to route audio-track selection through this handle.
+/// [PlaybackHandle] over media_kit's [Player], used by [MobileTheaterControls].
+/// A pass-through ([Player] already exposes per-field streams and 0-100 volume)
+/// that extends, so the audio-track methods inherit the no-op default.
 class PlayerPlaybackHandle extends PlaybackHandle {
   final Player _player;
 
@@ -257,10 +215,6 @@ class PlayerPlaybackHandle extends PlaybackHandle {
 
   @override
   void dispose() {
-    // No owned subscriptions or controllers to tear down — every stream
-    // above forwards Player's own broadcast stream directly rather than
-    // deriving a new one. Player's lifecycle belongs to whoever
-    // constructed it (TheaterScreen), matching this method's contract
-    // per PlaybackHandle's own doc comment above.
+    // Nothing owned: streams forward Player's; TheaterScreen owns Player.
   }
 }

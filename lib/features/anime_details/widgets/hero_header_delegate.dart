@@ -10,11 +10,8 @@ import 'hero_header_compact.dart';
 
 const double kHeroHeaderNavBarClearance = 96;
 
-/// Precisely measured (not guessed) geometry for the full-state status
-/// pill. Deterministic: given the same label text and the fixed style
-/// constants HeroStatusIndicator renders with, this always returns the
-/// exact size HeroStatusIndicator would actually occupy at
-/// labelOpacity == 1, without needing a RenderBox/post-frame round-trip.
+/// Size HeroStatusIndicator occupies at `labelOpacity == 1`, measured with a
+/// TextPainter so no post-frame round-trip is needed.
 typedef _PillMetrics = ({double width, double height});
 
 _PillMetrics _measureStatusPill(String label, BuildContext context) {
@@ -41,20 +38,9 @@ _PillMetrics _measureStatusPill(String label, BuildContext context) {
   return (width: contentWidth + hPad * 2, height: contentHeight + vPad * 2);
 }
 
-/// Pinned, shrink-driven hero header for AnimeDetailsScreen.
-///
-/// The title has two representations that crossfade into each other as
-/// the header collapses: an at-rest layer (wrap-enabled, up to 2 lines,
-/// positioned at its natural spot) and a scrolling layer (single-line,
-/// with its `Rect` and font size interpolated across the scroll range).
-/// `crossfadeT` — derived from `_kAtRestFadeRange` — controls how much of
-/// each layer is visible at a given scroll position; their opacities
-/// always sum to 1, so the two are never both fully visible at once.
-/// `fullTitleRect` uses the at-rest layer's actual measured height
-/// (`titlePainter.height`, 1 or 2 lines depending on the title), and
-/// both layers anchor their text the same way during the crossfade (see
-/// `titleAlignment` below), which is what keeps the handoff between them
-/// visually clean.
+/// Pinned, shrink-driven hero header for AnimeDetailsScreen. The title is an
+/// at-rest layer and a scrolling layer whose opacities sum to 1 across
+/// `_kAtRestFadeRange`. See DESIGN.md § 1.2.
 class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Anime anime;
   final VoidCallback? onBack;
@@ -138,9 +124,6 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         ? (t >= 0.35 ? 0.0 : 1.0)
         : 1.0 - labelT;
 
-    // atRestOpacity and lerpOpacity (below) sum to exactly 1 throughout,
-    // so the at-rest and scrolling title layers dissolve into each other
-    // without ever fully overlapping or leaving a gap.
     final double crossfadeT = (t / _kAtRestFadeRange).clamp(0.0, 1.0);
     final double atRestOpacity = uiPerformanceMode
         ? (t > 0 ? 0.0 : 1.0)
@@ -149,17 +132,14 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         ? (t > 0 ? 1.0 : 0.0)
         : crossfadeT;
 
-    // Matches the at-rest layer's measured content (titlePainter.height
-    // — 1 or 2 lines, whichever this title needs).
+    // Height follows the at-rest layer's measured line count (1 or 2).
     final Rect fullTitleRect = Rect.fromLTWH(
       20,
       atRestTop,
       contentMaxWidth,
       titlePainter.height,
     );
-    // Derived from the dot's real position plus its fixed 8px diameter
-    // and a 12px breathing gap — the same "measure it, don't guess"
-    // principle applied to the full-state leadingGap.
+    // The dot's x plus its 8px diameter and a 12px gap.
     final double compactTitleLeft = compactStatusOffset.dx + 8 + 12;
     final Rect compactTitleRect = Rect.fromLTWH(
       compactTitleLeft,
@@ -174,9 +154,8 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
         ? (t >= 0.5 ? 17.0 : 32.0)
         : lerpDouble(32.0, 17.0, t)!;
 
-    // 0 for the entire crossfade window (topLeft — matches the at-rest
-    // layer's own anchor), then eases to 1 (centerLeft) across the rest
-    // of the scroll range as t continues toward full collapse.
+    // topLeft through the crossfade to match the at-rest layer, then eases to
+    // centerLeft to line up with the back button and dot when collapsed.
     final double titleAlignmentT = uiPerformanceMode
         ? (t >= 0.5 ? 1.0 : 0.0)
         : ((t - _kAtRestFadeRange) / (1.0 - _kAtRestFadeRange)).clamp(0.0, 1.0);
@@ -227,13 +206,6 @@ class HeroHeaderDelegate extends SliverPersistentHeaderDelegate {
               rect: titleRect,
               child: Opacity(
                 opacity: lerpOpacity,
-                // Lerps topLeft -> centerLeft across the remaining scroll
-                // range after the crossfade completes (titleAlignmentT
-                // stays 0 until crossfadeT reaches 1). topLeft keeps the
-                // crossfade dissolving cleanly against the at-rest
-                // layer's own top-anchored text; centerLeft lines the
-                // fully-collapsed title up against compactTitleRect's
-                // back-button/dot vertical center.
                 child: Align(
                   alignment: titleAlignment,
                   child: Text(

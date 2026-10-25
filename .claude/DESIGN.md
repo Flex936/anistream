@@ -51,6 +51,7 @@ Visual restraint, typographic rhythm, and motion quality, in Apple's design spir
   `HeroCard`'s 16:9 landscape treatment is a deliberate exception — it renders banner art, not cover art, and doesn't use `posterAspectRatio`.
 - Prioritize clean layouts, deep contrast, and seamless transitions in every new component.
 - A control that needs a full pill/capsule shape (a toast, a floating badge, a play-overlay button) uses a radius literal larger than half its own height, rather than routing through `.tag`/`.small`/`.large` — none of those tiers serve that role, and the exact value is container-specific, not one of the three tiers by coincidence.
+- NEVER use color as decoration, only to encode state: a status pill takes its status color, while a link button (`ExternalLinkButton`) keeps neutral `AppPalette.white`-alpha chrome (as `SettingsDropdown` does) and tints only its icon — raw brand colors: § 5.3.
 
 ### 1.4 Accent — translucent materials
 
@@ -134,9 +135,9 @@ Documented as-is per the Living Documentation Rule — NEVER silently rename, re
 
 - **Hand-built focusables lack accessibility semantics.** `AnimeCard`, `CalendarCard`, `EpisodeTile`'s header, `TorrentTile`, and similar widgets are `AnimatedContainer` + `DpadFocusable`/`GestureDetector` compositions, not real Material controls — `dpad` gives them correct focus behavior, but none carry a `Semantics(button: true, label: ...)`, so screen readers (TalkBack/VoiceOver) announce nothing on focus.
 - **System text-scaling is unverified.** No `MediaQuery`/`TextScaler` override exists, so the OS text-size setting is likely respected by default — not confirmed on-device across Settings, Watchlist, and Anime Details.
-- **The `< 600` → `context.isMobile`/`Breakpoints` migration (§ 3) is incomplete.** Still inline `MediaQuery.sizeOf(context).width < 600`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `navbar.dart`. Already on `context.isMobile`: `episode_tile.dart`, `hero_banner.dart`, `torrent_tile.dart`, `search_results_screen.dart`, `settings_menu.dart`, `watchlist_cards.dart`'s `ListCard`. Migrate remaining call sites opportunistically, not in one sweeping PR.
+- **The `< 600` → `context.isMobile`/`Breakpoints` migration (§ 3) is incomplete.** Still inline `MediaQuery.sizeOf(context).width < 600`: `anime_details_screen.dart`, `anime_carousel.dart`, `scheduled_screen.dart`, `navbar.dart`. Already on `context.isMobile`: `episode_tile.dart`, `anime_synopsis_section.dart`, `torrent_tile.dart`, `search_results_screen.dart`, `settings_menu.dart`, `watchlist_cards.dart`'s `ListCard`. Migrate remaining call sites opportunistically, not in one sweeping PR.
 - **`navbar.dart`'s `_NavIconButton`** (the mobile Search/Menu buttons) is a fixed 44×44, short of § 3's 48×48 minimum mobile touch target.
-- **Theater's playback-action chips aren't D-pad reachable.** `PlaybackActionChip` (`features/theater/widgets/playback_action_chip.dart` — both the OP/ED/preview skip chip and the Next Episode chip) is a plain `Material`+`InkWell`, mouse/touch only, no `DpadFocusable`. A TV remote user can't trigger either; playback just continues naturally instead. Pre-existing for the skip chip, deliberately carried forward into the Next Episode chip rather than fixed as an unrelated side effect.
+- **Theater's playback-action chips aren't D-pad reachable.** `SkipChip` (`skip_chip.dart`, the OP/ED/preview chip) and `PlaybackActionChip` (`playback_action_chip.dart`, the Next Episode chip) are each a plain `Material`+`InkWell`, mouse/touch only, no `DpadFocusable`. A TV remote user can't trigger either; playback just continues naturally instead.
 
 ### 5.2 Structure
 
@@ -159,6 +160,7 @@ Documented as-is per the Living Documentation Rule — NEVER silently rename, re
   - One-off styles stay plain `TextStyle` literals where no token matches size, weight, or height — 11pt captions, form-field labels, primary CTA text, the poster score badge (deliberately heavier than `metaLabel`), and wrapped error/empty-state text, where `cardSummary`'s `height` would visibly change line spacing. Accepted, not drift.
 - **`episode_tile.dart`** hardcodes its header `AnimatedContainer`'s duration (150ms) instead of routing it through `perfDuration(uiPerformanceMode, ...)` per § 2's Animation duration rule.
 - **`BatchEpisodePickerOverlay` has no glass/blur treatment** (§ 1.4) — flat scrim, flat card, via `useGlassEffect: false` on the shared `SelectionModal` both it and `TorrentSearchModal` build on. Migrating it onto `AppMaterials`'s tiers is still open.
+- **Performance mode swaps overlay alpha at 22+ sites, against § 2's "don't gate a *static* value" bullet.** Scrims, toasts, tooltips, and control-bar gradients pass `uiPerformanceMode ? a : b` as a `withValues(alpha: ...)` value — at least 22 sites across 18 files, e.g. `selection_modal.dart`, `navbar.dart`, `settings_menu.dart`, `theater_controls.dart`. § 2 records neither the practice nor its rationale.
 
 ### 5.4 Accent
 

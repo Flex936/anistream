@@ -6,21 +6,9 @@ import '../../../data/torrent/models/torrent.dart';
 import '../../../shared/widgets/selection_modal.dart';
 import 'torrent_tile.dart';
 
-/// Centered-card modal showing torrent search results for one episode.
-///
-/// Built on [SelectionModal] — see that widget's doc comment for the
-/// shared chrome this and [BatchEpisodePickerOverlay] both use. Mounted
-/// as a real pushed route via [show]; the resolved [Future] carries the
-/// user's chosen [Torrent], or `null` if the modal was dismissed without
-/// a selection (backdrop tap, close button, or the error state's Close
-/// button) — the standard `showDialog<T>`-style contract, rather than a
-/// callback invoked while the route is still open.
-///
-/// Holds the currently-active search [Future] as local state rather than
-/// as a plain constructor field: [onRetry] lets the error/empty state
-/// swap in a freshly-fetched Future without popping and re-pushing this
-/// route, which would replay [SelectionModal]'s entrance transition for
-/// what should read as a seamless in-place refresh instead.
+/// Torrent results for one episode in a [SelectionModal]; [show] resolves to
+/// the chosen [Torrent], or `null` if dismissed. [onRetry] swaps the active
+/// search Future in place so the route's entrance transition doesn't replay.
 class TorrentSearchModal extends StatefulWidget {
   final int episodeNumber;
   final Future<List<Torrent>> torrentsFuture;
@@ -46,9 +34,7 @@ class TorrentSearchModal extends StatefulWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Episode $episodeNumber sources',
-      // Transparent — the darkening lives entirely in SelectionModal's
-      // own full-screen backdrop. See that widget's doc for why the
-      // dismiss gesture lives there too.
+      // Transparent: SelectionModal owns the backdrop. See DESIGN.md § 1.4.
       barrierColor: AppPalette.transparent,
       transitionBuilder: (context, animation, _, child) {
         final curved = CurvedAnimation(
@@ -91,11 +77,7 @@ class _TorrentSearchModalState extends State<TorrentSearchModal> {
     _activeFuture = widget.torrentsFuture;
   }
 
-  // Swaps in a freshly-fetched Future from widget.onRetry — FutureBuilder
-  // resets to its loading branch the instant the Future instance it's
-  // given changes, so this alone is what takes the body from _ErrorState
-  // back through _LoadingState to either _ErrorState or _ResultsList
-  // again, with no route pop/push involved.
+  // A new Future instance resets FutureBuilder to its loading branch.
   void _handleRetry() {
     setState(() => _activeFuture = widget.onRetry());
   }
@@ -108,7 +90,6 @@ class _TorrentSearchModalState extends State<TorrentSearchModal> {
       subtitle: 'Choose a release to stream, sorted by best match.',
       regionMemoryKey: 'animeDetails.torrentModal.${widget.episodeNumber}',
       uiPerformanceMode: widget.uiPerformanceMode,
-      // Both pop with no result (null) — a plain dismiss, not a selection.
       onClose: () => Navigator.of(context).pop(),
       onBackdropTap: () => Navigator.of(context).pop(),
       body: FutureBuilder<List<Torrent>>(
@@ -197,9 +178,7 @@ class _ErrorState extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Primary action — holds the autofocus the Close button
-              // used to hold, since retrying is the more useful default
-              // than dismissing once a search has failed or come up empty.
+              // Autofocused: retry beats Close after a failed or empty search.
               DpadFocusable(
                 autofocus: true,
                 onSelect: onRetry,
@@ -298,10 +277,6 @@ class _ResultsList extends StatelessWidget {
           isRecommended: i == 0,
           autofocus: i == 0,
           uiPerformanceMode: uiPerformanceMode,
-          // Pops the route with the chosen torrent as its result, rather
-          // than invoking a callback while still on-screen — the caller
-          // (AnimeDetailsScreen._openTorrentModal) awaits `show()` and
-          // acts on the returned value after the modal is already gone.
           onStream: () => Navigator.of(context).pop(torrents[i]),
         );
       },

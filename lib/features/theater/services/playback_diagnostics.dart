@@ -4,33 +4,8 @@ import 'package:media_kit/media_kit.dart';
 
 import '../../../core/logging/app_logger.dart';
 
-/// Read-only diagnostic instrumentation for an mpv permanent-freeze bug
-/// reported after ~5-10 minutes of paused playback, where scrubbing
-/// afterward fails to resume frame rendering.
-///
-/// This class makes no playback decisions and never mutates player
-/// state — it only logs mpv's own cache/idle properties via [AppLogger],
-/// on a timer while paused and immediately around resume/seek, so the
-/// working hypothesis behind [PlayerConfigurator]'s reconnect tuning (a
-/// long pause outlives the underlying HTTP connection's keep-alive
-/// window — either the local loopback server's own idle handling for
-/// [StreamingController], or an intermediate NAT/router on the LAN path
-/// for [RemoteStreamingController] — and mpv's demuxer has no built-in
-/// awareness the socket died, so it never proactively reissues the
-/// ranged GET on resume) can be checked against real device logs rather
-/// than asserted from symptoms alone.
-///
-/// See [AppLogger.logsDirectoryPath] for where these lines end up on
-/// disk. These logs are what distinguish two very different root causes:
-/// whether `demuxer-cache-idle`/`core-idle` are already `yes` well before
-/// the freeze is externally observed (pointing at a genuinely dead
-/// connection mpv itself gave up retrying) versus `no` (pointing
-/// elsewhere entirely — a UI-thread issue, not an mpv/network one).
-///
-/// Deliberately only active while genuinely paused — polling mpv
-/// properties every second during normal playback would be wasted IPC
-/// chatter for a bug that, per the report, only manifests after an
-/// extended pause.
+/// Read-only mpv logger for the pause-freeze: logs cache and idle properties
+/// while paused and around resume and seek. See ARCHITECTURE.md § 5.
 class PlaybackDiagnostics {
   final Player player;
 
@@ -41,10 +16,7 @@ class PlaybackDiagnostics {
 
   static const Duration _pollInterval = Duration(seconds: 15);
 
-  // A jump larger than this between two consecutive position-stream
-  // ticks is treated as a seek (scrub, skip-chip, chapter-jump shortcut)
-  // rather than ordinary forward playback progress — normal ticks move
-  // by well under a second.
+  // A position jump above this between ticks counts as a seek.
   static const Duration _seekJumpThreshold = Duration(seconds: 2);
 
   static const _tag = 'PlaybackDiagnostics';
@@ -59,9 +31,7 @@ class PlaybackDiagnostics {
     if (playing) {
       _pollTimer?.cancel();
       _pollTimer = null;
-      // Resume: logs immediately, then again after a short delay so the
-      // pair of lines shows whether position is actually advancing or
-      // the freeze reproduces on this specific resume.
+      // Logs immediately and again after 2s, showing whether position advances.
       unawaited(_logSnapshot('resume'));
       unawaited(
         Future.delayed(const Duration(seconds: 2), () {

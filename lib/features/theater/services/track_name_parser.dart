@@ -27,19 +27,8 @@ class TrackNameParser {
     };
   }
 
-  /// Prettifies an audio track's raw title/language into a display-ready
-  /// [ParsedTrack]. Takes plain strings rather than a concrete track
-  /// type so both the desktop/mpv path (`AudioTrack.title`/`.language`)
-  /// and the ExoPlayer path (`VideoAudioTrack.label`/`.language`) share
-  /// this exact naming logic, instead of `ExoTheaterScreen` carrying a
-  /// second copy of it.
-  ///
-  /// Deliberately says nothing about "no track selected yet" — that's a
-  /// selection-state concern each caller already handles for its own
-  /// engine (mpv genuinely has an "auto" track mode; ExoPlayer's
-  /// reported tracks always have exactly one selected once loaded), not
-  /// something a track-naming helper should guess at from a track that
-  /// might legitimately just have no title or language of its own.
+  /// Prettifies an audio track's title and language into a [ParsedTrack]. Takes
+  /// plain strings so the mpv and ExoPlayer paths share one naming logic.
   static ParsedTrack parseAudio({String? title, String? language}) {
     String trimmedTitle = title?.trim() ?? '';
     final lang = _normalizeLanguage(language?.trim() ?? '');
@@ -55,7 +44,7 @@ class TrackNameParser {
 
       sub = sub.replaceAll(RegExp(r'\s+'), ' ').replaceAll(' / ', ' • ');
 
-      // If the main title isn't a language (e.g. "Inner Silence"), bump it to the subtitle
+      // A non-language main title (e.g. "Inner Silence") moves to the subtitle.
       if (lang.isNotEmpty && _normalizeLanguage(main) != lang) {
         sub = '$main • $sub';
         main = lang;
@@ -82,7 +71,9 @@ class TrackNameParser {
 
     // 4. Default fallback
     return ParsedTrack(
-      mainTitle: lang.isEmpty ? (trimmedTitle.isEmpty ? 'Audio Track' : trimmedTitle) : lang,
+      mainTitle: lang.isEmpty
+          ? (trimmedTitle.isEmpty ? 'Audio Track' : trimmedTitle)
+          : lang,
       subTitle: lang.isEmpty || trimmedTitle.toLowerCase() == lang.toLowerCase()
           ? null
           : trimmedTitle,

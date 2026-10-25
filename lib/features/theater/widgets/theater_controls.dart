@@ -16,27 +16,19 @@ import 'skip_chip.dart';
 class TheaterControls extends StatefulWidget {
   final Player player;
 
-  /// Discrete-interaction ping — a button press, a slider value tick, the
-  /// skip-chip tap. Resets the auto-hide countdown without suspending it.
+  /// Discrete-interaction ping (button press, slider tick); restarts the
+  /// auto-hide countdown.
   final VoidCallback onInteract;
 
-  /// Continuous-interaction brackets — fired at the start/end of a
-  /// seekbar or volume-slider drag. Suspends the auto-hide countdown for
-  /// the full duration of the drag rather than relying on the drag's own
-  /// per-update callback (`onInteract`, above) to keep re-pinging it
-  /// often enough on its own.
+  /// Brackets a seekbar or volume-slider drag, suspending auto-hide throughout.
   final VoidCallback onInteractionStart;
   final VoidCallback onInteractionEnd;
 
   final VoidCallback onToggleSettings;
   final VoidCallback onToggleFullscreen;
 
-  /// Fixed 90-second forward seek for OP/ED skipping — the button this
-  /// wires up is the Mobile/TV-reachable equivalent of desktop's Ctrl+→
-  /// shortcut (`TheaterScreen._onKeyEvent`/`_exactSkipForward`, which
-  /// this same callback also is). Always required, unlike
-  /// `onToggleFullscreen` — every platform gets this control, just via a
-  /// button instead of a keyboard chord on Mobile/TV.
+  /// Fixed 90 s forward seek for skipping an OP/ED; the button equivalent of
+  /// desktop's Ctrl+→ (`TheaterScreen._exactSkipForward`).
   final VoidCallback onExactSkip;
 
   final bool isSettingsOpen;
@@ -45,31 +37,19 @@ class TheaterControls extends StatefulWidget {
   final bool uiPerformanceMode;
   final bool isTvPlatform;
 
-  /// True only on Windows/Linux/macOS. Gates the fullscreen toggle per
-  /// DESIGN.md § 3 ("Hide PC-specific UI controls ... on Mobile/TV
-  /// builds") — Mobile has no windowed state to escape, and TV is
-  /// already permanently fullscreen, so there's no reachable "windowed"
-  /// counterpart for the button to toggle back to on either platform.
-  /// Also used to vary the exact-skip button's tooltip, since Ctrl+→ is
-  /// only ever reachable on this platform.
+  /// True on Windows/Linux/macOS; gates the fullscreen toggle and the
+  /// Ctrl+→ hint in the skip tooltip.
   final bool isDesktop;
 
-  /// Reports whether Seekbar/the volume slider currently holds keyboard
-  /// focus, up to `theater_screen.dart`'s global keyboard dispatcher — so
-  /// it can defer to that widget's own local Left/Right handling instead
-  /// of double-seeking or unexpectedly seeking while the user is nudging
-  /// volume. Both optional: nothing breaks if a caller doesn't care.
+  /// Reports Seekbar/volume-slider focus so the screen's global key handler
+  /// can defer to them.
   final ValueChanged<bool>? onSeekbarFocusChange;
   final ValueChanged<bool>? onVolumeFocusChange;
 
-  /// False once `episode >= totalEpisodes` — see `TheaterScreen`'s own
-  /// `totalEpisodes` doc comment. Hides the Next Episode chip entirely
-  /// and (via `_PlaybackTimeline`) leaves completion with nothing to
-  /// trigger.
+  /// False once `episode >= totalEpisodes`; hides the Next Episode chip.
   final bool hasNextEpisode;
 
-  /// Fired by both the Next Episode chip's tap and, independently,
-  /// `TheaterScreen`'s own `Player.stream.completed` listener — see
+  /// Fired by the Next Episode chip; see
   /// `TheaterScreen._requestNextEpisodeTransition`.
   final VoidCallback onNextEpisode;
 
@@ -98,16 +78,6 @@ class TheaterControls extends StatefulWidget {
   State<TheaterControls> createState() => _TheaterControlsState();
 }
 
-// Rebuild isolation: this State owns only _isPlaying and _volume, both of
-// which change on discrete user actions (a play/pause press, a volume
-// drag), not continuously. _PlaybackTimeline and _PlaybackTimeLabel below
-// are separate StatefulWidgets with their own State objects and stream
-// subscriptions for the fields that tick several times a second
-// (position/duration/buffer). Widget rebuilds only ever propagate down
-// from whichever State calls setState, so isolating the ticking fields
-// into their own State objects means a position tick only rebuilds those
-// two small subtrees, not the play button, volume slider, or settings/
-// fullscreen buttons alongside them in this Row.
 class _TheaterControlsState extends State<TheaterControls> {
   bool _isPlaying = false;
   double _volume = 100.0;
@@ -191,10 +161,6 @@ class _TheaterControlsState extends State<TheaterControls> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Owns _position/_duration/_buffer and the skip-chip/Seekbar
-          // visuals that depend on them, ticking in isolation.
-          // isTvPlatform flows through to Seekbar, which keeps its own
-          // Focus-based key handling — see seekbar.dart.
           _PlaybackTimeline(
             player: widget.player,
             chapterMetadata: widget.chapterMetadata,
@@ -217,16 +183,9 @@ class _TheaterControlsState extends State<TheaterControls> {
                     : Icons.play_arrow_rounded,
                 tooltip: _isPlaying ? 'Pause' : 'Play',
                 size: 34,
-                // The sensible default D-Pad landing spot the first time
-                // the control bar appears — matches "one autofocus per
-                // screen." Harmless on re-shows too: DpadRegion's
-                // memoryKey on the wrapping region in theater_screen.dart
-                // restores whatever was last focused instead.
+                // See DESIGN.md § 4.
                 autofocus: true,
                 onPressed: () {
-                  // Player.pause()/play() return Future<void> — onPressed
-                  // is a synchronous VoidCallback, so the fire-and-forget
-                  // intent is made explicit (unawaited_futures).
                   unawaited(
                     _isPlaying ? widget.player.pause() : widget.player.play(),
                   );
@@ -235,18 +194,10 @@ class _TheaterControlsState extends State<TheaterControls> {
               ),
               const SizedBox(width: 16),
 
-              // Owns its own position/duration subscription, renders just
-              // the "00:00 / 00:00" text. Ticks in isolation.
               _PlaybackTimeLabel(player: widget.player),
               const SizedBox(width: 16),
 
-              // Fixed-duration OP/ED skip — Mobile/TV's reachable
-              // equivalent of desktop's Ctrl+→ shortcut (both call the
-              // same TheaterScreen._exactSkipForward via this one
-              // callback). Placed here, ahead of the trailing Spacer,
-              // rather than alongside the mute/settings/fullscreen
-              // cluster on the right — keeps this cluster's own fixed
-              // 44dp targets from getting any more crowded.
+              // Left of the Spacer to keep the right-hand cluster uncrowded.
               _TheaterIconButton(
                 icon: Icons.fast_forward_rounded,
                 tooltip: widget.isDesktop ? 'Skip 1:30 (Ctrl+→)' : 'Skip 1:30',
@@ -267,12 +218,6 @@ class _TheaterControlsState extends State<TheaterControls> {
                   120.0,
                 ),
                 child: SliderTheme(
-                  // Not const: inactiveTrackColor calls
-                  // AppPalette.white.withValues(alpha: 0.3), a method
-                  // invocation the compiler rejects in a const expression
-                  // (const_eval_method_invocation). Only the two shape
-                  // constructors below (no method calls in their
-                  // arguments) can be const.
                   data: SliderThemeData(
                     activeTrackColor: AppPalette.white,
                     inactiveTrackColor: AppPalette.white.withValues(alpha: 0.3),
@@ -285,24 +230,14 @@ class _TheaterControlsState extends State<TheaterControls> {
                       overlayRadius: 14,
                     ),
                   ),
-                  // Left as a plain Material Slider — it already has its
-                  // own working keyboard-arrow-when-focused behavior as a
-                  // standard Flutter form control, the same reasoning as
-                  // Seekbar: a plain Focus-participating widget that
-                  // interops with dpad's traversal without needing
-                  // DpadFocusable wrapping. Given an explicit focusNode so
-                  // this State can observe its focus state and report it
-                  // upstream via onVolumeFocusChange. onChangeStart/End
-                  // bracket a drag the same way Seekbar's onSeekStart/End
-                  // do.
+                  // A plain Slider handles arrow keys and interops with dpad
+                  // traversal. The explicit focusNode lets this State report
+                  // focus upstream.
                   child: Slider(
                     focusNode: _volumeFocusNode,
                     max: 100,
                     value: _volume.clamp(0.0, 100.0),
                     onChanged: (v) {
-                      // _handleVolumeChanged is Future<void> — onChanged
-                      // is a synchronous callback, so wrapping makes the
-                      // fire-and-forget intent explicit.
                       unawaited(_handleVolumeChanged(v));
                       widget.onInteract();
                     },
@@ -321,9 +256,7 @@ class _TheaterControlsState extends State<TheaterControls> {
                 onPressed: widget.onToggleSettings,
               ),
 
-              // Desktop-only per DESIGN.md § 3 — Mobile has no windowed
-              // state for this button to toggle back out of, and TV is
-              // permanently fullscreen.
+              // See DESIGN.md § 3.
               if (widget.isDesktop)
                 _TheaterIconButton(
                   icon: widget.isFullscreen
@@ -362,11 +295,8 @@ class _TheaterControlsState extends State<TheaterControls> {
   }
 }
 
-/// Owns [Player.stream.position]/[duration]/[buffer] and renders the
-/// skip-chip + [Seekbar] — the parts of the control bar that redraw
-/// every tick. Kept separate from [_TheaterControlsState] so its
-/// setState() calls only rebuild this subtree, not the play/volume/
-/// settings buttons alongside it in the parent's Row.
+/// Per-tick subtree: the skip/next chip and [Seekbar], with their own
+/// position, duration and buffer subscriptions. See ARCHITECTURE.md § 3.
 class _PlaybackTimeline extends StatefulWidget {
   final Player player;
   final List<Chapter> chapterMetadata;
@@ -432,14 +362,8 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
   }
 
   void _onSeek(Duration time) {
-    // Player.seek returns Future<void> — this is wired to Seekbar's
-    // synchronous onSeek callback, so the fire-and-forget intent is made
-    // explicit (unawaited_futures). Fires on every drag update, not just
-    // start/end, so it's mapped to onInteract (not onInteractionStart/
-    // End): it's a per-tick ping, and
-    // ControlsVisibilityController.registerActivity() already no-ops the
-    // timer schedule while an interaction is in progress, so this can't
-    // fight with the explicit begin/end bracket below.
+    // Fires on every drag update, so it pings onInteract; registerActivity()
+    // skips arming the hide timer while a drag is in progress.
     unawaited(widget.player.seek(time));
     widget.onInteract();
   }
@@ -455,16 +379,11 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
     return null;
   }
 
-  // Deliberately tighter than NextEpisodePrefetchController's 85%
-  // background-prefetch arm threshold (Stage 4) — prefetching starts
-  // quietly first, well before this chip has any reason to appear;
-  // showing it only once the episode is genuinely almost over keeps it
-  // from crowding the OP/ED/preview skip chip's own usual window.
+  // Above NextEpisodePrefetchController's 0.85 arm threshold, so prefetch
+  // starts first.
   static const double _kNextEpisodeChipThreshold = 0.95;
 
-  // Never true at the same time as _activeSkipChapter != null — the two
-  // chips share one slot below (see build()), so this and the skip
-  // check together are what keeps them mutually exclusive.
+  // Mutually exclusive with the skip chip: both share one slot in build().
   bool get _showNextEpisodeChip {
     if (!widget.hasNextEpisode) return false;
     if (_activeSkipChapter != null) return false;
@@ -513,12 +432,8 @@ class _PlaybackTimelineState extends State<_PlaybackTimeline> {
   }
 }
 
-/// Owns its own (duplicate, but cheap — the stream is broadcast)
-/// subscription to [Player.stream.position]/[duration] and renders just
-/// the "00:00 / 00:00" label. Kept as a separate State from
-/// [_PlaybackTimeline] so the label — which sits in the parent's icon
-/// Row, not inside the timeline's Column — ticks independently without
-/// either widget reaching into the other's state.
+/// The "00:00 / 00:00" label, subscribed to position and duration itself so
+/// it ticks apart from [_PlaybackTimeline].
 class _PlaybackTimeLabel extends StatefulWidget {
   final Player player;
   const _PlaybackTimeLabel({required this.player});
@@ -576,9 +491,7 @@ class _PlaybackTimeLabelState extends State<_PlaybackTimeLabel> {
   }
 }
 
-/// Small reusable icon button for the control bar. state.focused drives
-/// the ring directly, with no local state to manage, so this is a
-/// StatelessWidget.
+/// Control-bar icon button; `state.focused` drives the focus ring.
 class _TheaterIconButton extends StatelessWidget {
   final IconData icon;
   final Color color;

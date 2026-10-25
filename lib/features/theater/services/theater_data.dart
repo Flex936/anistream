@@ -13,11 +13,8 @@ class Chapter {
     this.skipLabel,
   });
 
-  /// Builds a [Chapter] with [isSkippable]/[skipLabel] derived from
-  /// [title] via the shared classification heuristic below — the single
-  /// place every chapter source (mpv's native chapter-list property,
-  /// Media3's Chapter metadata entries) goes through, so the same title
-  /// is classified identically regardless of which engine found it.
+  /// Builds a [Chapter] with skippability and label derived from [title], so
+  /// every chapter source classifies identically.
   factory Chapter.fromTitle({
     required String title,
     required Duration start,
@@ -63,17 +60,17 @@ List<Chapter> fixIntroSkip(List<Chapter> allTags) {
 bool _isChapterSkippable(String title) {
   final t = title.toLowerCase().trim();
 
-  // 1. Do not skip story segments (release groups often name the Prologue "Intro")
+  // Story segments are never skipped.
   if (t == 'avant' || t == 'prologue' || t == 'epilogue') {
     return false;
   }
 
-  // 2. Do skip theme songs (strict equality for short codes to prevent false positives like "Operation" or "Wedding")
+  // Theme songs; short codes match exactly to avoid "Operation"/"Wedding".
   if (t == 'op' || t.contains('opening') || t == 'ncop' || t == 'intro') {
     return true;
   }
 
-  // 3. Do skip next-episode previews
+  // Next-episode previews.
   if (t == 'pv' || t.contains('preview') || t.contains('next episode')) {
     return true;
   }
@@ -103,11 +100,8 @@ String _getSkipLabel(String title) {
   return 'Skip';
 }
 
-/// One raw (title, start) marker as reported by whichever engine found
-/// it — mpv's own `chapter-list` property, or Media3's Chapter metadata
-/// entries. Deliberately carries no end time — see
-/// [buildChaptersFromRaw]'s doc comment for why that's derived centrally
-/// instead of by each source individually.
+/// A raw (title, start) marker from mpv or Media3; ends are derived by
+/// [buildChaptersFromRaw].
 class RawChapterMarker {
   final String title;
   final Duration start;
@@ -115,21 +109,9 @@ class RawChapterMarker {
   const RawChapterMarker({required this.title, required this.start});
 }
 
-/// Turns a set of (title, start) markers into fully-classified [Chapter]s
-/// with real end times, regardless of which engine supplied [raw].
-///
-/// Neither mpv's chapter-list property nor Media3's Chapter metadata
-/// entries reliably report an end time — most real-world releases only
-/// set a chapter's start, leaving players to infer the end from whichever
-/// chapter comes next (or the video's own duration, for the last one).
-///
-/// [raw] is explicitly NOT assumed to already be sorted by start time —
-/// confirmed against a real Media3 probe that `Format.metadata` does not
-/// come back in chronological order — so this always sorts first. Both
-/// chapter sources share this same latent bug if the sort is ever
-/// dropped: an unsorted list would pair each marker with whatever
-/// happens to sit next to it in the original order, not its real
-/// chronological neighbor.
+/// Turns (title, start) markers into classified [Chapter]s, inferring each end
+/// from the next start (or [totalDuration]). Sorts [raw] first, since Media3's
+/// `Format.metadata` doesn't arrive in chronological order.
 List<Chapter> buildChaptersFromRaw(
   List<RawChapterMarker> raw,
   Duration totalDuration,

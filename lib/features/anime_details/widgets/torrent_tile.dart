@@ -29,11 +29,8 @@ class TorrentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Routed through the shared ResponsiveContext.isMobile extension.
     final isMobile = context.isMobile;
 
-    // Pulled once at the top of build() rather than repeating
-    // `context.appTypography`/`context.appRadii` at each call site below.
     final typography = context.appTypography;
     final radii = context.appRadii;
 
@@ -49,8 +46,6 @@ class TorrentTile extends StatelessWidget {
               : isRecommended
               ? AppPalette.primary.withValues(alpha: 0.06)
               : AppPalette.overlay,
-          // Matches AppRadii.small — this is a card/list-item shape per
-          // DESIGN.md's "12px for list items" rule.
           borderRadius: BorderRadius.circular(radii.small),
           border: Border.all(
             color: hovered
@@ -70,8 +65,6 @@ class TorrentTile extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(radii.small),
-          // Clip.hardEdge under Performant mode — see FrostedContainer's
-          // doc comment for the rationale.
           clipBehavior: uiPerformanceMode ? Clip.hardEdge : Clip.antiAlias,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -138,9 +131,6 @@ class TorrentTile extends StatelessWidget {
                                     color: AppPalette.textMuted,
                                   ),
                                   const SizedBox(width: 4),
-                                  // Left as a plain literal — a muted,
-                                  // regular-weight 12px label, distinct
-                                  // from metaLabel (which is w600).
                                   Text(
                                     torrent.size,
                                     style: const TextStyle(
@@ -172,7 +162,6 @@ class TorrentTile extends StatelessWidget {
                         color: hovered
                             ? AppPalette.primary
                             : AppPalette.primary.withValues(alpha: 0.1),
-                        // Drops the hover glow under performance mode.
                         boxShadow: (hovered && !uiPerformanceMode)
                             ? [
                                 BoxShadow(
@@ -214,8 +203,6 @@ class _Pill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: AppPalette.primary.withValues(alpha: 0.12),
-        // Uses AppRadii.tag, the approved tier for small decorative
-        // badges/pills.
         borderRadius: BorderRadius.circular(radii.tag),
         border: Border.all(color: AppPalette.primary.withValues(alpha: 0.28)),
       ),
