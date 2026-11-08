@@ -259,6 +259,7 @@ Documented per the Living Documentation Rule ([CLAUDE.md](CLAUDE.md) § 2) rathe
 - **`SkipChip` duplicates `PlaybackActionChip`.** Both hand-build the same `Material`+`InkWell` pill with the same fade/slide animation, and `SkipChip._activeChapter` repeats `_PlaybackTimelineState._activeSkipChapter`'s chapter lookup. Only the Next Episode chip uses `PlaybackActionChip`.
 - **`HeroHeaderDelegate`'s at-rest title layer likely never renders outside performance mode.** `_kAtRestFadeRange` is `0.00`, so `crossfadeT` is `1.0` at every scroll offset — `t / 0.00` is `Infinity` for `t > 0`, and `NaN` at `t == 0`, which `num.clamp` treats as the maximum — and `atRestOpacity` stays `0`. The `maxLines: 1` scrolling layer then draws the title at rest, so a two-line title likely truncates to one line while the meta block still leaves room for two. Unconfirmed on-device.
 - **`StreamingController.initialize` logs "Batch torrent detected — 0 files" for every torrent.** It runs before `_batchFiles` is populated, so the count is always `0`, single-file torrents included; `selectBatchFile` repeats the line at selection time. `RemoteStreamingController` logs it correctly, after the list arrives.
+- **`AppSettings` has no `copyWith`.** `TheaterScreen._handleLibassToggle` copies every field by hand from the current settings, and `SettingsMenu._handleSave` builds a new instance from form state. A field added to `AppSettings` but missed at either site resets to its default on the next Libass toggle or Save. Every field is copied today — a latent hazard, not a live bug.
 
 ## 8. Browser Extension Integration
 
@@ -299,6 +300,8 @@ Two callers push `TheaterScreen` and drive its exit results in a loop: `AnimeDet
 - Restarts and episode transitions leave system UI mode and orientation alone since another `TheaterScreen` mounts immediately; only `_exitTheater` restores them.
 - Every teardown path sets `_isClosing` and removes the controller listener first, so a stray `notifyListeners()` can't reopen a `Player` that is being disposed.
 - `ExoTheaterScreen` is a single push with no loop — no restart, autoplay, or prefetch (§ 5).
+- Every `TheaterScreen` teardown path flushes `AnilistTrackerService`'s armed commit before disposing it — a replacement screen builds a fresh tracker, so a cancelled timer is a lost sync (`ExoTheaterScreen` skips this: § 7).
+- A restart discards `_prefetchController`; the replacement screen builds a new one and re-runs Tier 1/Tier 2 (§ 5) for the same next episode.
 
 ## 10. ExoPlayer Subtitle Rendering
 

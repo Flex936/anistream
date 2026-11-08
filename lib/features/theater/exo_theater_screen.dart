@@ -602,7 +602,8 @@ class _ExoTheaterScreenState extends State<ExoTheaterScreen> {
               title: 'Episode ${widget.episode}',
               uiPerformanceMode: _uiPerformanceMode,
               onBack: _exitTheater,
-              onRestart: () => {}, //temporary(?) fix to stop lint
+              // Required by TheaterTopBar; its restart button is hidden here.
+              onRestart: () => {},
             ),
           ),
           Positioned(

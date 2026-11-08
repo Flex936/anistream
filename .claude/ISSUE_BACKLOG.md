@@ -247,3 +247,20 @@ Refs point to CODING_RULES.md instead of DESIGN.md § 5.*
 - [ ] The matching `ARCHITECTURE.md` § 7 entry removed
 
 **Affected files:** `streaming_controller.dart`
+
+---
+
+### 18. Add `AppSettings.copyWith` and use it at both rebuild sites
+
+**Priority:** Low · **Size:** Small · **Ref:** `ARCHITECTURE.md` § 7
+
+**Context:** `AppSettings` has no `copyWith`, so two sites rebuild it field by field. `TheaterScreen._handleLibassToggle` copies every field from the current settings. `SettingsMenu._handleSave` builds a new instance from form state. A field added to `AppSettings` but missed at either site resets to its default on the next Libass toggle or Save. Every field is copied at both sites today, so this is a latent hazard, not a live bug.
+
+**Acceptance criteria:**
+
+- [ ] `AppSettings.copyWith` covers every field
+- [ ] `_handleLibassToggle` reduces to `current.copyWith(libassEnabled: newValue)`
+- [ ] `_handleSave` calls `copyWith` on the current settings and overrides only the form-backed fields
+- [ ] The matching `ARCHITECTURE.md` § 7 entry removed
+
+**Affected files:** `settings_service.dart`, `theater_screen.dart`, `settings_menu.dart`
